@@ -81,11 +81,11 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
           </div>
 
           {/* Error box — only rendered when there is an active error */}
-          {error && (
+          {error ? (
             <div className="login-error" role="alert">
               {error}
             </div>
-          )}
+          ) : null}
 
           <Button type="submit" className="w-full mt-1" disabled={isLoading}>
             {isLoading ? 'Učitavanje...' : 'Prijavite se'}
