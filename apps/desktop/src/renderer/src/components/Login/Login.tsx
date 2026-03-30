@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff, Lock, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import './Login.css'
 
@@ -10,6 +11,7 @@ interface LoginProps {
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -50,34 +52,53 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
             <label htmlFor="username" className="login-label">
               Korisničko ime
             </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Unesite korisničko ime"
-              autoComplete="username"
-              required
-              disabled={isLoading}
-              className="login-input"
-            />
+            <div className="login-input-wrapper">
+              <User className="login-input-icon" />
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Unesite korisničko ime"
+                autoComplete="username"
+                required
+                disabled={isLoading}
+                className="login-input has-icon"
+              />
+            </div>
           </div>
 
           <div className="login-field">
             <label htmlFor="password" className="login-label">
               Lozinka
             </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Unesite lozinku"
-              autoComplete="current-password"
-              required
-              disabled={isLoading}
-              className="login-input"
-            />
+            <div className="login-input-wrapper">
+              <Lock className="login-input-icon" />
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Unesite lozinku"
+                autoComplete="current-password"
+                required
+                disabled={isLoading}
+                className="login-input has-icon has-toggle"
+              />
+              <button
+                type="button"
+                className="login-password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Sakrij lozinku' : 'Prikaži lozinku'}
+              >
+                {showPassword ? (
+                  <EyeOff className="login-input-icon" />
+                ) : (
+                  <Eye className="login-input-icon" />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Error box — only rendered when there is an active error */}
