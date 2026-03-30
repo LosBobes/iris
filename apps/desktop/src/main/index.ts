@@ -8,8 +8,10 @@ import { registerLoginHandlers } from './Login/Login.async'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1280,
+    height: 800,
+    minWidth: 1024,
+    minHeight: 700,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
