@@ -37,14 +37,6 @@
   margin-bottom: 0.75rem;
 }
 
-/* "Dobrodošli" */
-.login-subtitle {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--foreground);
-  margin-bottom: 0.25rem;
-}
-
 /* Secondary description below the subtitle */
 .login-description {
   font-size: 0.875rem;
