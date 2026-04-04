@@ -4,7 +4,7 @@ import { Login } from '@/components/Login/Login'
 interface AuthenticatedUser {
   id: string
   username: string
-  role: string
+  role: 'admin' | 'user'
 }
 
 function App(): React.JSX.Element {
