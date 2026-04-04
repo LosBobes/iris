@@ -29,9 +29,10 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         // error text comes from the main process, already in Serbian
         setError(result.error ?? 'Greška pri prijavljivanju.')
       }
-    } catch {
-      // Network/IPC failure — the main process was unreachable
-      setError('Nije moguće uspostaviti vezu sa serverom.')
+    } catch (err) {
+      // IPC/main-process failure while invoking login
+      const details = err instanceof Error && err.message ? ` (${err.message})` : ''
+      setError(`Greška u komunikaciji sa glavnim procesom aplikacije.${details}`)
     } finally {
       setIsLoading(false)
     }
