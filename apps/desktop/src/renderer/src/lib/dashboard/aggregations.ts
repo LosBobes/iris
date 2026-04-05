@@ -122,6 +122,6 @@ export function topClients(orders: WorkOrder[], n = 10): ClientCount[] {
 
   return Array.from(map.entries())
     .map(([clientName, count]) => ({ clientName, count }))
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.count - a.count || a.clientName.localeCompare(b.clientName))
     .slice(0, n)
 }

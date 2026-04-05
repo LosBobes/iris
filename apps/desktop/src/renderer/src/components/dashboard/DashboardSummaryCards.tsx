@@ -12,7 +12,7 @@ interface SummaryCardProps {
 
 function SummaryCard({ label, value, icon: Icon }: SummaryCardProps): React.JSX.Element {
   return (
-    <div className="rounded-lg border border-border bg-card p-5">
+    <div className="rounded-lg border border-border bg-card p-6">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon size={13} />
         <span className="text-xs uppercase tracking-wide">{label}</span>
@@ -30,7 +30,7 @@ export function DashboardSummaryCards({
   summary,
 }: DashboardSummaryCardsProps): React.JSX.Element {
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-4 gap-5">
       <SummaryCard
         label="Ukupno radnih naloga"
         value={summary.totalOrders}

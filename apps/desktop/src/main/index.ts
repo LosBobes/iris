@@ -40,6 +40,9 @@ function createWindow(): void {
   }
 }
 
+// TODO: check if there is a support for Serbian Latin locale in Electron and set it properly. This is needed for correct date formatting in the dashboard charts.
+app.commandLine.appendSwitch('lang', 'sr-Latn')
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
 

@@ -68,6 +68,7 @@ export function useDashboardData() {
     filters,
     setFilters,
     loading,
-    error
+    error,
+    hasSourceData: allOrders.length > 0,
   }
 }
