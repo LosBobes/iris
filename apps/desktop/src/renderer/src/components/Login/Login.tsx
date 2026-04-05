@@ -5,7 +5,7 @@ import './Login.css'
 
 interface LoginProps {
   // Called when authentication succeeds — parent decides what to render next
-  onLoginSuccess: (user: { id: string; username: string; role: string }) => void
+  onLoginSuccess: (user: AuthenticatedUser) => void
 }
 
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
