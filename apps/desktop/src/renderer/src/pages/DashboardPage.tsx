@@ -1,10 +1,12 @@
 import { AppShell } from '@/components/layout/AppShell'
+import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { DashboardSummaryCards } from '@/components/dashboard/DashboardSummaryCards'
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
-  const { summary, operators, filters, setFilters, loading, error } = useDashboardData()
+  const { summary, monthlyOrders, operators, filters, setFilters, loading, error } =
+    useDashboardData()
 
   return (
     <AppShell>
@@ -17,7 +19,12 @@ function DashboardPage(): React.JSX.Element {
 
         {!loading && error && <p className="text-sm text-destructive">{error}</p>}
 
-        {!loading && !error && <DashboardSummaryCards summary={summary} />}
+        {!loading && !error && (
+          <>
+            <DashboardSummaryCards summary={summary} />
+            <DashboardCharts monthlyOrders={monthlyOrders} summary={summary} />
+          </>
+        )}
       </div>
     </AppShell>
   )
