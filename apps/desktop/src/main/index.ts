@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 
 // Feature-specific IPC handlers — one import per main-process feature folder
 import { registerLoginHandlers } from './Login/Login.async'
+import { registerWorkOrderHandlers } from './WorkOrder/WorkOrder.async'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -48,6 +49,7 @@ app.whenReady().then(() => {
 
   // Register IPC handlers for each feature
   registerLoginHandlers()
+  registerWorkOrderHandlers()
 
   createWindow()
 

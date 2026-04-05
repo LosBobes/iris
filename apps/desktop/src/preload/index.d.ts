@@ -22,6 +22,12 @@ declare global {
         username: string
         password: string
       }) => Promise<LoginResponse>
+
+      getWorkOrders: () => Promise<
+        import('../renderer/src/types/work-order').WorkOrder[]
+      >
+
+      getWorkOrderOperators: () => Promise<string[]>
     }
   }
 }
