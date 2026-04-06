@@ -23,6 +23,253 @@ The server is intentionally small, but it is not collapsed into a single file. T
 - `internal/domain/types.go`: domain types and request/response models
 - `internal/store/fixtures.go`: fixture JSON loading
 
+## Go language primer for this API
+
+This is not a general Go tutorial. It is a short primer for understanding the code in this folder.
+
+### 1. Packages are the unit of organization
+
+Each folder in this API is a Go package:
+
+- `cmd/server`: the runnable program
+- `internal/api`: HTTP routing and handlers
+- `internal/domain`: shared domain types
+- `internal/store`: fixture-backed data access
+
+The first line in a Go file declares the package:
+
+```go
+package api
+```
+
+That means everything in that folder belongs to the same package namespace.
+
+### 2. Imports are explicit and unused imports are not allowed
+
+Go requires every imported package to be used. For example:
+
+```go
+import (
+	"encoding/json"
+	"net/http"
+)
+```
+
+If you import something and never use it, the file will not compile. This keeps files tidy, but it also means the compiler is stricter than TypeScript in this area.
+
+### 3. Capitalization controls visibility
+
+Go does not use `public` or `private`. Instead:
+
+- names starting with an uppercase letter are exported
+- names starting with a lowercase letter are package-private
+
+Examples from this codebase:
+
+- `type Server struct { ... }` is exported
+- `func NewServer(...)` is exported
+- `func writeJSON(...)` is not exported
+
+That is why constructor-style functions usually start with `New...` and type names are capitalized.
+
+### 4. Structs are the main way to model data
+
+Go uses `struct` where you might use interfaces and object literals in TypeScript.
+
+```go
+type User struct {
+	ID       string   `json:"id"`
+	Username string   `json:"username"`
+	Role     UserRole `json:"role"`
+}
+```
+
+Important details:
+
+- fields have explicit static types
+- the backtick syntax is a struct tag, not a comment
+- JSON tags control the encoded property names
+
+### 5. Methods are just functions with a receiver
+
+This API uses methods like:
+
+```go
+func (s *Server) Routes() http.Handler {
+	...
+}
+```
+
+The `(s *Server)` part is the receiver. It means `Routes` is a method on `Server`.
+
+You can read that as: “this function belongs to `Server` and operates on a pointer to it.”
+
+### 6. Pointers are used for mutation and nullable values
+
+You will see pointer syntax in two main places.
+
+Receiver pointers:
+
+```go
+func (s *Server) handleLogin(...) {
+```
+
+That lets the method operate on the same `Server` instance instead of a copied value.
+
+Nullable fields:
+
+```go
+CompletedAt *string `json:"completedAt"`
+Price       *int    `json:"price"`
+```
+
+In JSON, those fields may be `null`. In Go, a pointer can be `nil`, which is how this API represents missing values.
+
+### 7. Slices are dynamic arrays
+
+Go’s common list type is a slice:
+
+```go
+[]domain.WorkOrder
+[]string
+```
+
+You can think of a slice as a resizable view over an array. In practice, for application code, you usually treat it like a dynamic array.
+
+Appending works like this:
+
+```go
+operators = append(operators, workOrder.IssuedBy)
+```
+
+### 8. Maps are key-value stores
+
+The operator collection logic uses a map as a set:
+
+```go
+seen := make(map[string]struct{}, len(workOrders))
+```
+
+Why `struct{}` as the value type?
+
+- it takes effectively no storage for each value
+- only the keys matter
+
+This is a common Go idiom for “I only care whether this key exists.”
+
+### 9. `if err != nil` is the standard error flow
+
+Go does not use exceptions for ordinary application errors. Functions return an `error` value, and callers check it explicitly.
+
+Example:
+
+```go
+users, err := s.store.Users()
+if err != nil {
+	writeServerError(w, err)
+	return
+}
+```
+
+This is one of the most important Go reading patterns. You will see it everywhere.
+
+### 10. Short variable declarations are common
+
+Go often uses `:=` to declare and initialize variables:
+
+```go
+addr := os.Getenv("IRIS_API_ADDR")
+```
+
+Use `:=` when introducing a new variable inside a function. Use `=` when assigning to an already declared variable.
+
+### 11. `for` is Go’s only loop keyword
+
+Go has one loop keyword, `for`, with several styles.
+
+Range loop over a slice:
+
+```go
+for _, user := range users {
+	...
+}
+```
+
+Range loop over a collection while ignoring the index:
+
+- `_` means “ignore this value”
+- `user` is the current element
+
+### 12. Constructors are ordinary functions
+
+Go does not have class constructors. Instead, code often uses plain functions named `New...`:
+
+```go
+func NewFixtureStore(basePath string) *FixtureStore {
+	return &FixtureStore{basePath: basePath}
+}
+```
+
+This is just a convention, but it is used heavily across the Go ecosystem.
+
+### 13. Interfaces are usually small and implicit
+
+This API returns `http.Handler` from `Routes()`:
+
+```go
+func (s *Server) Routes() http.Handler {
+```
+
+`http.Handler` is an interface from the standard library. In Go, a type satisfies an interface implicitly if it has the required methods. There is no `implements` keyword.
+
+That makes Go interfaces lightweight and composable.
+
+### 14. Embedding is a lightweight composition feature
+
+This type:
+
+```go
+type FixtureUser struct {
+	User
+	Password string `json:"password"`
+}
+```
+
+embeds `User` inside `FixtureUser`.
+
+That means:
+
+- `FixtureUser` contains all `User` fields
+- you can access them directly as `user.ID`, `user.Username`, and `user.Role`
+
+This is not inheritance. It is composition with convenient field promotion.
+
+### 15. How to read the API code in order
+
+If you are new to Go, read the project in this order:
+
+1. `cmd/server/main.go`
+2. `internal/api/server.go`
+3. `internal/domain/types.go`
+4. `internal/store/fixtures.go`
+
+That order mirrors the runtime flow:
+
+- start program
+- register routes
+- understand payloads
+- load data
+
+### 16. The five Go habits that matter most here
+
+If you remember only a few things while reading this API, make them these:
+
+1. Uppercase names are exported.
+2. Structs plus JSON tags define payloads.
+3. `if err != nil` is normal control flow.
+4. Pointers often mean either shared state or nullable data.
+5. Packages and small functions matter more than class hierarchies.
+
 ## Why `chi`
 
 This project uses `chi` because it is lightweight, idiomatic, and stays very close to the standard `net/http` model. That makes it a good choice for learning because you can see the core Go HTTP flow without much framework magic.
