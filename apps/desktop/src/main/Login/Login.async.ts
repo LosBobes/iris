@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron'
 import type { User } from '../../../model/user'
+import { loadFixtureJson } from '../shared/load-fixture'
 
-// Hardcoded users for development — replace with a real DB lookup before shipping
-const MOCK_USERS: Array<{ id: string; username: string; password: string; role: User['role'] }> = [
-  { id: '1', username: 'admin', password: 'admin123', role: 'admin' }
-]
+interface FixtureUser extends User {
+  password: string
+}
 
 interface LoginResponse {
   success: boolean
@@ -28,10 +28,11 @@ export function registerLoginHandlers(): void {
       _event,
       credentials: { username: string; password: string }
     ): Promise<LoginResponse> => {
+      const users = loadFixtureJson<FixtureUser[]>('users.json')
       const { username, password } = credentials
 
       // Look up the user — in production this should be an async DB query
-      const match = MOCK_USERS.find(
+      const match = users.find(
         (u) => u.username === username && u.password === password
       )
 
