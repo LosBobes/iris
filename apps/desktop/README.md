@@ -1,34 +1,55 @@
-# desktop
+# Iris Desktop
 
-An Electron application with React and TypeScript
+Electron desktop application built with React and TypeScript.
 
 ## Recommended IDE Setup
 
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+- [VS Code](https://code.visualstudio.com/)
+- [ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+- [Prettier extension](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
 
-## Project Setup
-
-### Install
-
-```bash
-$ npm install
-```
-
-### Development
+## Install
 
 ```bash
-$ npm run dev
+npm install
 ```
 
-### Build
+## Development
 
 ```bash
-# For windows
-$ npm run build:win
-
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
+npm run dev
 ```
+
+## Type Checking
+
+```bash
+npm run typecheck
+```
+
+## Tests
+
+```bash
+npm test
+```
+
+## Build
+
+```bash
+# Windows
+npm run build:win
+
+# macOS
+npm run build:mac
+
+# Linux
+npm run build:linux
+```
+
+## Fixtures
+
+Development fixture data for login and work orders lives in:
+
+- `fixtures/users.json`
+- `fixtures/work-orders.json`
+
+The Electron main process reads those files to provide local mock data during development.

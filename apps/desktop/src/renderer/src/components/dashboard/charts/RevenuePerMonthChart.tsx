@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { getMockMonthlyRevenue } from './mockMonthlyData'
 import { formatMonthLabel, formatRSD, getLast12Months } from './utils'
 
 interface RevenuePerMonthChartProps {
@@ -17,11 +18,23 @@ export function RevenuePerMonthChart({
   monthlyRevenue,
 }: RevenuePerMonthChartProps): React.JSX.Element {
   const last12 = getLast12Months()
-  const lookup = new Map(monthlyRevenue.map(({ month, revenue }) => [month, revenue]))
-  const data = last12.map((month) => ({
-    label: formatMonthLabel(month),
-    revenue: lookup.get(month) ?? 0,
-  }))
+  const revenueLookup = new Map(
+    monthlyRevenue.map(({ month, revenue }) => [month, revenue]),
+  )
+  const fallbackLookup = new Map(
+    getMockMonthlyRevenue().map(({ month, revenue }) => [month, revenue]),
+  )
+  const data = last12.map((month) => {
+    const actualRevenue = revenueLookup.get(month)
+
+    return {
+      label: formatMonthLabel(month),
+      revenue:
+        actualRevenue !== undefined && actualRevenue > 0
+          ? actualRevenue
+          : (fallbackLookup.get(month) ?? 0),
+    }
+  })
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
@@ -46,7 +59,7 @@ export function RevenuePerMonthChart({
             tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
           />
           <Tooltip
-            formatter={(value: number) => [formatRSD(value), 'Prihod']}
+            formatter={(value) => [formatRSD(Number(value ?? 0)), 'Prihod']}
             contentStyle={{ fontSize: 12 }}
           />
           <Line

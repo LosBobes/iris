@@ -14,7 +14,7 @@ import {
 
 const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   id: '0',
-  clientName: 'Test Firma',
+  clientName: 'Test Company',
   documentType: 'invoice',
   deliveryMethod: 'email',
   issuedBy: 'operator.a',
@@ -25,12 +25,12 @@ const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
 })
 
 const ORDERS: WorkOrder[] = [
-  base({ id: '1', clientName: 'Firma A', createdAt: '2024-11-10', completedAt: '2024-11-11', price: 5000, issuedBy: 'operator.a', deliveryMethod: 'email' }),
-  base({ id: '2', clientName: 'Firma B', createdAt: '2024-11-20', completedAt: null, price: null, issuedBy: 'operator.b', deliveryMethod: 'pickup' }),
-  base({ id: '3', clientName: 'Firma A', createdAt: '2024-12-05', completedAt: '2024-12-06', price: 8000, issuedBy: 'operator.a', deliveryMethod: 'courier' }),
-  base({ id: '4', clientName: 'Firma C', createdAt: '2025-01-10', completedAt: null, price: 3000, issuedBy: 'operator.b', deliveryMethod: 'fax' }),
-  base({ id: '5', clientName: 'Firma A', createdAt: '2025-01-25', completedAt: '2025-01-26', price: null, issuedBy: 'operator.a', deliveryMethod: 'email' }),
-  base({ id: '6', clientName: 'Firma D', createdAt: '2025-02-14', completedAt: '2025-02-15', price: 12000, issuedBy: 'operator.b', deliveryMethod: 'email' }),
+  base({ id: '1', clientName: 'Client A', createdAt: '2024-11-10', completedAt: '2024-11-11', price: 5000, issuedBy: 'operator.a', deliveryMethod: 'email' }),
+  base({ id: '2', clientName: 'Client B', createdAt: '2024-11-20', completedAt: null, price: null, issuedBy: 'operator.b', deliveryMethod: 'pickup' }),
+  base({ id: '3', clientName: 'Client A', createdAt: '2024-12-05', completedAt: '2024-12-06', price: 8000, issuedBy: 'operator.a', deliveryMethod: 'courier' }),
+  base({ id: '4', clientName: 'Client C', createdAt: '2025-01-10', completedAt: null, price: 3000, issuedBy: 'operator.b', deliveryMethod: 'fax' }),
+  base({ id: '5', clientName: 'Client A', createdAt: '2025-01-25', completedAt: '2025-01-26', price: null, issuedBy: 'operator.a', deliveryMethod: 'email' }),
+  base({ id: '6', clientName: 'Client D', createdAt: '2025-02-14', completedAt: '2025-02-15', price: 12000, issuedBy: 'operator.b', deliveryMethod: 'email' }),
 ]
 
 const NO_FILTERS: DashboardFilters = { dateFrom: null, dateTo: null, issuedBy: null }
@@ -202,8 +202,8 @@ describe('deliveryDistribution', () => {
 describe('topClients', () => {
   it('returns clients sorted by order count descending', () => {
     const result = topClients(ORDERS)
-    // Firma A has 3 orders, B/C/D have 1 each
-    expect(result[0]).toEqual({ clientName: 'Firma A', count: 3 })
+    // Client A has 3 orders, B/C/D have 1 each
+    expect(result[0]).toEqual({ clientName: 'Client A', count: 3 })
   })
 
   it('respects the n limit', () => {
