@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 
 // Feature-specific IPC handlers — one import per main-process feature folder
 import { registerLoginHandlers } from './Login/Login.async'
+import { registerWorkOrderHandlers } from './WorkOrder/WorkOrder.async'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -39,6 +40,9 @@ function createWindow(): void {
   }
 }
 
+// TODO: check if there is a support for Serbian Latin locale in Electron and set it properly. This is needed for correct date formatting in the dashboard charts.
+app.commandLine.appendSwitch('lang', 'sr-Latn')
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron')
 
@@ -48,6 +52,7 @@ app.whenReady().then(() => {
 
   // Register IPC handlers for each feature
   registerLoginHandlers()
+  registerWorkOrderHandlers()
 
   createWindow()
 

@@ -1,10 +1,15 @@
 import { useCallback, useState } from 'react'
 import { Login } from '@/components/Login/Login'
+import DashboardPage from '@/pages/DashboardPage'
 
-interface AuthenticatedUser {
-  id: string
-  username: string
-  role: 'admin' | 'user'
+function AccessDenied(): React.JSX.Element {
+  return (
+    <main className="flex min-h-screen items-center justify-center">
+      <p className="text-muted-foreground">
+        Nemate dozvolu za pristup ovoj stranici.
+      </p>
+    </main>
+  )
 }
 
 function App(): React.JSX.Element {
@@ -15,16 +20,15 @@ function App(): React.JSX.Element {
     []
   )
 
-  // Show the Login page until a user successfully authenticates
   if (!currentUser) {
     return <Login onLoginSuccess={handleLoginSuccess} />
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="text-muted-foreground">Dobrodošli, {currentUser.username}!</p>
-    </main>
-  )
+  if (currentUser.role !== 'admin') {
+    return <AccessDenied />
+  }
+
+  return <DashboardPage />
 }
 
 export default App

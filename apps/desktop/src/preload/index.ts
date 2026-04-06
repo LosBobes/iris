@@ -7,7 +7,13 @@ const api = {
   // Send login credentials to the main process for validation.
   // Returns a LoginResponse (see index.d.ts for the full type).
   login: (credentials: { username: string; password: string }) =>
-    ipcRenderer.invoke('auth:login', credentials)
+    ipcRenderer.invoke('auth:login', credentials),
+
+  // Fetch all work orders from the main process.
+  getWorkOrders: () => ipcRenderer.invoke('workorders:getAll'),
+
+  // Fetch the sorted list of unique operator usernames.
+  getWorkOrderOperators: () => ipcRenderer.invoke('workorders:getOperators')
 }
 
 if (process.contextIsolated) {
