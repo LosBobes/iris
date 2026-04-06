@@ -1,0 +1,148 @@
+openapi: 3.1.0
+info:
+  title: Iris Desktop Support API
+  version: 0.1.0
+  description: |
+    HTTP API that mirrors the data needs of the Electron desktop application.
+    The desktop app currently needs three capabilities:
+    - authenticate a user
+    - fetch all work orders
+    - fetch the distinct operator usernames used by those work orders
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Auth
+  - name: Work Orders
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate a desktop user
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /work-orders:
+    get:
+      tags: [Work Orders]
+      summary: Return all work orders needed by the dashboard
+      operationId: listWorkOrders
+      responses:
+        '200':
+          description: Ordered collection of work orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkOrder'
+  /work-orders/operators:
+    get:
+      tags: [Work Orders]
+      summary: Return unique operator usernames sorted ascending
+      operationId: listOperators
+      responses:
+        '200':
+          description: Sorted operator usernames
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: admin123
+    LoginResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        error:
+          type: string
+          example: Neispravno korisničko ime ili lozinka.
+        user:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      required: [id, username, role]
+      properties:
+        id:
+          type: string
+          example: '1'
+        username:
+          type: string
+          example: admin
+        role:
+          type: string
+          enum: [admin, user]
+    WorkOrder:
+      type: object
+      required:
+        [id, clientName, documentType, deliveryMethod, issuedBy, createdAt]
+      properties:
+        id:
+          type: string
+          example: '1'
+        clientName:
+          type: string
+          example: Acme Printworks
+        documentType:
+          type: string
+          enum: [invoice, receipt, contract, certificate]
+          example: invoice
+        deliveryMethod:
+          type: string
+          enum: [email, pickup, courier, fax]
+          example: email
+        issuedBy:
+          type: string
+          example: marko.petrovic
+        createdAt:
+          type: string
+          format: date
+          example: '2025-03-03'
+        completedAt:
+          type:
+            - string
+            - 'null'
+          format: date
+          example: '2025-03-04'
+        price:
+          type:
+            - integer
+            - 'null'
+          description: Stored in RSD as an integer amount.
+          example: 22000
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
