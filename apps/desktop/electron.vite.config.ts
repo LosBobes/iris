@@ -7,6 +7,7 @@ export default defineConfig({
   main: {},
   preload: {},
   renderer: {
+    cacheDir: resolve('.vite/renderer'),
     resolve: {
       alias: {
         '@': resolve('src/renderer/src'),
