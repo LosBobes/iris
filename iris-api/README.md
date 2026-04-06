@@ -252,6 +252,7 @@ If you are new to Go, read the project in this order:
 2. `internal/api/server.go`
 3. `internal/domain/types.go`
 4. `internal/store/fixtures.go`
+5. `internal/api/doc.go`, `internal/domain/doc.go`, and `internal/store/doc.go`
 
 That order mirrors the runtime flow:
 
@@ -259,6 +260,7 @@ That order mirrors the runtime flow:
 - register routes
 - understand payloads
 - load data
+- read package intent
 
 ### 16. The five Go habits that matter most here
 
@@ -388,6 +390,113 @@ Operators:
 ```bash
 curl http://localhost:8080/work-orders/operators
 ```
+
+## Go testing primer for this API
+
+This project now includes real Go tests in two places:
+
+- `internal/store/fixtures_test.go`
+- `internal/api/server_test.go`
+
+Shared test-only helpers live in:
+
+- `internal/testutil/fixtures.go`
+
+They are intentionally small and focused so you can learn the standard Go testing style from code that already matters to this project.
+
+### 1. How Go tests are named
+
+Go discovers tests in files ending with `_test.go`.
+
+Each test function must:
+
+- start with `Test`
+- accept `t *testing.T`
+
+Example:
+
+```go
+func TestLoginSuccess(t *testing.T) {
+	...
+}
+```
+
+### 2. How to run the tests
+
+From `iris-api`:
+
+```bash
+go test ./...
+```
+
+To run only one package:
+
+```bash
+go test ./internal/api
+go test ./internal/store
+```
+
+To run one specific test:
+
+```bash
+go test ./internal/api -run TestLoginSuccess
+```
+
+### 3. What the store tests teach
+
+The store tests focus on plain function behavior:
+
+- reading users from fixtures
+- deriving sorted unique operators
+- failing correctly when fixture files are missing
+
+This is the simplest kind of Go testing: call a function, inspect the result, fail fast with `t.Fatalf(...)` if something is wrong.
+
+### 4. What the handler tests teach
+
+The API tests use standard-library HTTP testing tools:
+
+- `httptest.NewRequest(...)`
+- `httptest.NewRecorder()`
+
+That lets you exercise the router without starting a real network server.
+
+The pattern is:
+
+1. build a request
+2. record the response
+3. call `server.Routes().ServeHTTP(...)`
+4. assert on status code and JSON body
+
+This is the core testing technique for many Go HTTP services.
+
+The API endpoint tests are written in table-driven style, which is one of the
+most common Go testing patterns. Instead of writing a separate top-level test
+for every case, you define a slice of test cases and run them with `t.Run(...)`.
+
+### 5. Why these tests matter for learning Go
+
+These tests show several important Go habits in a compact form:
+
+- explicit setup helpers
+- table-like assertion style without heavy frameworks
+- direct use of the standard library
+- JSON decoding in assertions
+- small focused test cases instead of large integration flows
+
+### 6. Suggested reading order for the tests
+
+If you are learning Go testing, read them in this order:
+
+1. `internal/store/fixtures_test.go`
+2. `internal/api/server_test.go`
+3. `internal/testutil/fixtures.go`
+
+The store tests are simpler. The API tests add HTTP request/response testing on top.
+
+### 7. A good next testing step
+
+Once you are comfortable with these tests, the next useful improvement is to expand the table-driven cases with more edge scenarios, such as fixture corruption, missing required fields, or additional auth behaviors.
 
 ## How this maps back to Electron
 

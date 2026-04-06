@@ -1,5 +1,10 @@
 package domain
 
+// The domain package holds the data shapes shared across the API.
+//
+// Read this file after internal/api/server.go if you want to understand what
+// each endpoint sends and receives on the wire.
+
 type UserRole string
 
 const (
@@ -14,6 +19,8 @@ type User struct {
 }
 
 type FixtureUser struct {
+	// Embedding User keeps the API-facing fields together while adding the
+	// password field needed only for fixture-backed authentication.
 	User
 	Password string `json:"password"`
 }
