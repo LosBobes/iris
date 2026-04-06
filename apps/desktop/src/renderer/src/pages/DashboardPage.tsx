@@ -3,6 +3,8 @@ import { AppShell } from '@/components/layout/AppShell'
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { DashboardSummaryCards } from '@/components/dashboard/DashboardSummaryCards'
+import { RevenuePerMonthChart } from '@/components/dashboard/charts/RevenuePerMonthChart'
+import { WorkOrdersPerMonthChart } from '@/components/dashboard/charts/WorkOrdersPerMonthChart'
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
@@ -23,6 +25,7 @@ function DashboardPage(): React.JSX.Element {
   const isFilteredEmpty = !loading && !error && hasSourceData && summary.totalOrders === 0
   const isGlobalEmpty = !loading && !error && !hasSourceData
   const showWidgets = !loading && !error && summary.totalOrders > 0
+  const showMockMonthlyCharts = !loading && !error && !hasSourceData
 
   return (
     <AppShell>
@@ -51,6 +54,18 @@ function DashboardPage(): React.JSX.Element {
             <p className="text-sm text-muted-foreground">
               Nema radnih naloga u bazi podataka.
             </p>
+          </div>
+        )}
+
+        {showMockMonthlyCharts && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Prikazan je demo pregled mesečnih trendova dok podaci ne budu dostupni.
+            </p>
+            <div className="grid grid-cols-2 gap-5">
+              <WorkOrdersPerMonthChart monthlyOrders={[]} />
+              <RevenuePerMonthChart monthlyRevenue={[]} />
+            </div>
           </div>
         )}
 

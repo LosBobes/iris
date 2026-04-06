@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getMockMonthlyRevenue } from '@/components/dashboard/charts/mockMonthlyData'
 import type { DashboardFilters, WorkOrder } from '@/types/work-order'
 import {
   deliveryDistribution,
@@ -49,10 +50,12 @@ export function useDashboardData() {
     [buckets]
   )
 
-  const monthlyRevenue = useMemo(
-    () => buckets.map(({ month, revenue }) => ({ month, revenue })),
-    [buckets]
-  )
+  const monthlyRevenue = useMemo(() => {
+    const revenueSeries = buckets.map(({ month, revenue }) => ({ month, revenue }))
+    return revenueSeries.some(({ revenue }) => revenue > 0)
+      ? revenueSeries
+      : getMockMonthlyRevenue()
+  }, [buckets])
 
   const deliveryDist = useMemo(() => deliveryDistribution(filtered), [filtered])
 
