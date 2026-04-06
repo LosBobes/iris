@@ -26,7 +26,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
       if (result.success && result.user) {
         onLoginSuccess(result.user)
       } else {
-        // error text comes from the main process, already in Serbian
+        // Error text can come from the main process.
         setError(result.error ?? 'Greška pri prijavljivanju.')
       }
     } catch (err) {

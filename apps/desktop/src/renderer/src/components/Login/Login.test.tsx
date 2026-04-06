@@ -13,7 +13,7 @@ describe('Login', () => {
     onLoginSuccess.mockReset()
   })
 
-  it('renders the login form with Serbian labels', () => {
+  it('renders the login form', () => {
     render(<Login onLoginSuccess={onLoginSuccess} />)
 
     expect(screen.getByLabelText('Korisničko ime')).toBeInTheDocument()
@@ -41,7 +41,7 @@ describe('Login', () => {
     })
   })
 
-  it('displays a Serbian error message when credentials are wrong', async () => {
+  it('displays an English error message when credentials are wrong', async () => {
     mockLogin.mockResolvedValueOnce({
       success: false,
       error: 'Neispravno korisničko ime ili lozinka.'
@@ -58,9 +58,7 @@ describe('Login', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Prijavite se' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Neispravno korisničko ime ili lozinka.'
-      )
+      expect(screen.getByRole('alert')).toHaveTextContent('Neispravno korisničko ime ili lozinka.')
       expect(onLoginSuccess).not.toHaveBeenCalled()
     })
   })
@@ -80,7 +78,7 @@ describe('Login', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Nije moguće uspostaviti vezu sa serverom.'
+        'Greška u komunikaciji sa glavnim procesom aplikacije. (IPC error)'
       )
     })
   })
