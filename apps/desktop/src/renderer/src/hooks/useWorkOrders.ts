@@ -1,160 +1,193 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   WorkOrder,
   WorkOrderStatus,
   BillingDocumentType,
   DeliveryMethod,
-} from '@/types/work-order'
+} from "@/types/work-order";
 
 export type SortField =
-  | 'orderNumber'
-  | 'clientName'
-  | 'jobDescription'
-  | 'billingDocumentType'
-  | 'shipping.deliveryMethod'
-  | 'price'
-  | 'status'
-  | 'issueDate'
+  | "orderNumber"
+  | "clientName"
+  | "jobDescription"
+  | "billingDocumentType"
+  | "shipping.deliveryMethod"
+  | "price"
+  | "status"
+  | "issueDate";
 
-export type SortDirection = 'asc' | 'desc'
+export type SortDirection = "asc" | "desc";
+export const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100] as const;
+export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
 export interface WorkOrdersFiltersState {
-  search: string
-  status: WorkOrderStatus | 'all'
-  billingDocumentType: BillingDocumentType | 'all'
-  deliveryMethod: DeliveryMethod | 'all'
-  dateFrom: string
-  dateTo: string
+  search: string;
+  status: WorkOrderStatus | "all";
+  billingDocumentType: BillingDocumentType | "all";
+  deliveryMethod: DeliveryMethod | "all";
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface UseWorkOrdersResult {
+  orders: WorkOrder[];
+  totalFiltered: number;
+  loading: boolean;
+  error: string | null;
+  filters: WorkOrdersFiltersState;
+  updateFilters: (patch: Partial<WorkOrdersFiltersState>) => void;
+  resetFilters: () => void;
+  sortField: SortField;
+  sortDirection: SortDirection;
+  handleSort: (field: SortField) => void;
+  currentPage: number;
+  totalPages: number;
+  setCurrentPage: (page: number) => void;
+  pageSize: PageSize;
+  setPageSize: (pageSize: PageSize) => void;
+  refreshOrders: () => Promise<void>;
 }
 
 const INITIAL_FILTERS: WorkOrdersFiltersState = {
-  search: '',
-  status: 'all',
-  billingDocumentType: 'all',
-  deliveryMethod: 'all',
-  dateFrom: '',
-  dateTo: '',
-}
+  search: "",
+  status: "all",
+  billingDocumentType: "all",
+  deliveryMethod: "all",
+  dateFrom: "",
+  dateTo: "",
+};
 
-const PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE: PageSize = 10;
 
-export function useWorkOrders() {
-  const [orders, setOrders] = useState<WorkOrder[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState<WorkOrdersFiltersState>(INITIAL_FILTERS)
-  const [sortField, setSortField] = useState<SortField>('issueDate')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
-  const [currentPage, setCurrentPage] = useState(1)
+export function useWorkOrders(): UseWorkOrdersResult {
+  const [orders, setOrders] = useState<WorkOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] =
+    useState<WorkOrdersFiltersState>(INITIAL_FILTERS);
+  const [sortField, setSortField] = useState<SortField>("issueDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
 
   const fetchOrders = useCallback(async () => {
     try {
-      setLoading(true)
-      setError(null)
-      const data = await window.api.getWorkOrders()
-      setOrders(data)
+      setLoading(true);
+      setError(null);
+      const data = await window.api.getWorkOrders();
+      setOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nepoznata greška')
+      setError(err instanceof Error ? err.message : "Nepoznata greška");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
+    fetchOrders();
+  }, [fetchOrders]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (filters.search) {
-        const q = filters.search.toLowerCase()
+        const q = filters.search.toLowerCase();
         const matches =
           order.orderNumber.toLowerCase().includes(q) ||
           order.clientName.toLowerCase().includes(q) ||
-          order.jobDescription.toLowerCase().includes(q)
-        if (!matches) return false
+          order.jobDescription.toLowerCase().includes(q);
+        if (!matches) return false;
       }
-      if (filters.status !== 'all' && order.status !== filters.status) return false
+      if (filters.status !== "all" && order.status !== filters.status)
+        return false;
       if (
-        filters.billingDocumentType !== 'all' &&
+        filters.billingDocumentType !== "all" &&
         order.billingDocumentType !== filters.billingDocumentType
       )
-        return false
+        return false;
       if (
-        filters.deliveryMethod !== 'all' &&
+        filters.deliveryMethod !== "all" &&
         order.shipping.deliveryMethod !== filters.deliveryMethod
       )
-        return false
-      if (filters.dateFrom && order.issueDate < filters.dateFrom) return false
-      if (filters.dateTo && order.issueDate > filters.dateTo) return false
-      return true
-    })
-  }, [orders, filters])
+        return false;
+      if (filters.dateFrom && order.issueDate < filters.dateFrom) return false;
+      if (filters.dateTo && order.issueDate > filters.dateTo) return false;
+      return true;
+    });
+  }, [orders, filters]);
 
   const sortedOrders = useMemo(() => {
-    const sorted = [...filteredOrders]
+    const sorted = [...filteredOrders];
     sorted.sort((a, b) => {
-      let aVal: string | number | null
-      let bVal: string | number | null
+      let aVal: string | number | null;
+      let bVal: string | number | null;
 
       switch (sortField) {
-        case 'shipping.deliveryMethod':
-          aVal = a.shipping.deliveryMethod
-          bVal = b.shipping.deliveryMethod
-          break
-        case 'price':
-          aVal = a.price
-          bVal = b.price
-          break
+        case "shipping.deliveryMethod":
+          aVal = a.shipping.deliveryMethod;
+          bVal = b.shipping.deliveryMethod;
+          break;
+        case "price":
+          aVal = a.price;
+          bVal = b.price;
+          break;
         default:
-          aVal = a[sortField]
-          bVal = b[sortField]
+          aVal = a[sortField];
+          bVal = b[sortField];
       }
 
-      if (aVal === null && bVal === null) return 0
-      if (aVal === null) return 1
-      if (bVal === null) return -1
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
 
-      const cmp = typeof aVal === 'number' && typeof bVal === 'number'
-        ? aVal - bVal
-        : String(aVal).localeCompare(String(bVal), 'sr-Latn')
+      const cmp =
+        typeof aVal === "number" && typeof bVal === "number"
+          ? aVal - bVal
+          : String(aVal).localeCompare(String(bVal), "sr-Latn");
 
-      return sortDirection === 'asc' ? cmp : -cmp
-    })
-    return sorted
-  }, [filteredOrders, sortField, sortDirection])
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [filteredOrders, sortField, sortDirection]);
 
-  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / pageSize));
 
-  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const safeCurrentPage = Math.min(currentPage, totalPages);
 
   const paginatedOrders = useMemo(() => {
-    const start = (safeCurrentPage - 1) * PAGE_SIZE
-    return sortedOrders.slice(start, start + PAGE_SIZE)
-  }, [sortedOrders, safeCurrentPage])
+    const start = (safeCurrentPage - 1) * pageSize;
+    return sortedOrders.slice(start, start + pageSize);
+  }, [pageSize, safeCurrentPage, sortedOrders]);
 
   const handleSort = useCallback(
     (field: SortField) => {
       if (field === sortField) {
-        setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
+        setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
       } else {
-        setSortField(field)
-        setSortDirection('asc')
+        setSortField(field);
+        setSortDirection("asc");
       }
-      setCurrentPage(1)
+      setCurrentPage(1);
     },
-    [sortField]
-  )
+    [sortField],
+  );
 
   const resetFilters = useCallback(() => {
-    setFilters(INITIAL_FILTERS)
-    setCurrentPage(1)
-  }, [])
+    setFilters(INITIAL_FILTERS);
+    setCurrentPage(1);
+  }, []);
 
-  const updateFilters = useCallback((patch: Partial<WorkOrdersFiltersState>) => {
-    setFilters((prev) => ({ ...prev, ...patch }))
-    setCurrentPage(1)
-  }, [])
+  const updateFilters = useCallback(
+    (patch: Partial<WorkOrdersFiltersState>) => {
+      setFilters((prev) => ({ ...prev, ...patch }));
+      setCurrentPage(1);
+    },
+    [],
+  );
+
+  const handlePageSizeChange = useCallback((nextPageSize: PageSize) => {
+    setPageSize(nextPageSize);
+    setCurrentPage(1);
+  }, []);
 
   return {
     orders: paginatedOrders,
@@ -170,6 +203,8 @@ export function useWorkOrders() {
     currentPage: safeCurrentPage,
     totalPages,
     setCurrentPage,
+    pageSize,
+    setPageSize: handlePageSizeChange,
     refreshOrders: fetchOrders,
-  }
+  };
 }

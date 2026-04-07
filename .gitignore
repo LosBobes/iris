@@ -2,3 +2,6 @@ node_modules/
 .history/
 .vite/
 .DS_Store
+apps/desktop/out
+apps/desktop/out/main/index.js
+apps/desktop/out/preload/index.js

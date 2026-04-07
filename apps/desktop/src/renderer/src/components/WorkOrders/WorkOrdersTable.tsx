@@ -14,6 +14,13 @@ import {
   PaginationItem,
 } from "@/components/ui/pagination";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Pencil,
   Trash2,
   Copy,
@@ -29,7 +36,12 @@ import type {
   BillingDocumentType,
   DeliveryMethod,
 } from "@/types/work-order";
-import type { SortField, SortDirection } from "@/hooks/useWorkOrders";
+import {
+  PAGE_SIZE_OPTIONS,
+  type PageSize,
+  type SortField,
+  type SortDirection,
+} from "@/hooks/useWorkOrders";
 
 // ---------------------------------------------------------------------------
 // Serbian label maps
@@ -139,6 +151,8 @@ interface WorkOrdersTableProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  pageSize: PageSize;
+  onPageSizeChange: (pageSize: PageSize) => void;
   onDelete: (order: WorkOrder) => void;
   onDuplicate: (order: WorkOrder) => void;
   onEdit: (order: WorkOrder) => void;
@@ -154,6 +168,8 @@ export function WorkOrdersTable({
   currentPage,
   totalPages,
   onPageChange,
+  pageSize,
+  onPageSizeChange,
   onDelete,
   onDuplicate,
   onEdit,
@@ -279,9 +295,9 @@ export function WorkOrdersTable({
                       onClick={() => onToggleStatus(order)}
                     >
                       {order.status === "completed" ? (
-                        <Circle className="h-3.5 w-3.5" />
-                      ) : (
                         <CheckCircle className="h-3.5 w-3.5" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5" />
                       )}
                     </Button>
                     <Button
@@ -316,67 +332,90 @@ export function WorkOrdersTable({
         </TableBody>
       </Table>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Ukupno {totalFiltered} naloga — stranica {currentPage} od{" "}
-            {totalPages}
-          </p>
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage <= 1}
-                  onClick={() => onPageChange(currentPage - 1)}
-                >
-                  Prethodna
-                </Button>
-              </PaginationItem>
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter((page) => {
-                  if (totalPages <= 7) return true;
-                  if (page === 1 || page === totalPages) return true;
-                  return Math.abs(page - currentPage) <= 1;
-                })
-                .map((page, idx, arr) => {
-                  const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
-                  return (
-                    <span key={page} className="contents">
-                      {showEllipsis && (
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+        <p className="text-center text-xs text-muted-foreground sm:text-left">
+          Ukupno {totalFiltered} naloga — stranica {currentPage} od {totalPages}
+        </p>
+        <div className="flex justify-center">
+          {totalPages > 1 && (
+            <Pagination className="w-auto">
+              <PaginationContent>
+                <PaginationItem>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => onPageChange(currentPage - 1)}
+                  >
+                    Prethodna
+                  </Button>
+                </PaginationItem>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((page) => {
+                    if (totalPages <= 7) return true;
+                    if (page === 1 || page === totalPages) return true;
+                    return Math.abs(page - currentPage) <= 1;
+                  })
+                  .map((page, idx, arr) => {
+                    const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                    return (
+                      <span key={page} className="contents">
+                        {showEllipsis && (
+                          <PaginationItem>
+                            <span className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">
+                              ...
+                            </span>
+                          </PaginationItem>
+                        )}
                         <PaginationItem>
-                          <span className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">
-                            ...
-                          </span>
+                          <Button
+                            variant={
+                              page === currentPage ? "default" : "outline"
+                            }
+                            size="icon"
+                            onClick={() => onPageChange(page)}
+                          >
+                            {page}
+                          </Button>
                         </PaginationItem>
-                      )}
-                      <PaginationItem>
-                        <Button
-                          variant={page === currentPage ? "default" : "outline"}
-                          size="icon"
-                          onClick={() => onPageChange(page)}
-                        >
-                          {page}
-                        </Button>
-                      </PaginationItem>
-                    </span>
-                  );
-                })}
-              <PaginationItem>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => onPageChange(currentPage + 1)}
-                >
-                  Sledeća
-                </Button>
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+                      </span>
+                    );
+                  })}
+                <PaginationItem>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => onPageChange(currentPage + 1)}
+                  >
+                    Sledeća
+                  </Button>
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
-      )}
+        <div className="flex items-center justify-center gap-2 sm:justify-self-end">
+          <span className="text-xs text-muted-foreground">Po strani</span>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) =>
+              onPageSizeChange(Number(value) as PageSize)
+            }
+          >
+            <SelectTrigger size="sm" className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <SelectItem key={option} value={String(option)}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
     </div>
   );
 }

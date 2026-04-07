@@ -34,6 +34,8 @@ function WorkOrdersPage(): React.JSX.Element {
     currentPage,
     totalPages,
     setCurrentPage,
+    pageSize,
+    setPageSize,
     refreshOrders,
   } = useWorkOrders();
 
@@ -150,6 +152,8 @@ function WorkOrdersPage(): React.JSX.Element {
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
             onDelete={handleDelete}
             onDuplicate={handleDuplicate}
             onEdit={handleEdit}
