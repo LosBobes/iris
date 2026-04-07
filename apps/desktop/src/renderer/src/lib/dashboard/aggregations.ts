@@ -1,5 +1,6 @@
 import type {
   WorkOrder,
+  WorkOrderStatus,
   DashboardFilters,
   DashboardSummary,
   DeliveryMethod
@@ -33,15 +34,15 @@ export interface ClientCount {
 
 /**
  * Applies DashboardFilters to a WorkOrder array.
- * String comparison on YYYY-MM-DD dates is safe for ISO-8601.
+ * Filters on issueDate. String comparison on YYYY-MM-DD dates is safe for ISO-8601.
  */
 export function filterWorkOrders(
   orders: WorkOrder[],
   filters: DashboardFilters
 ): WorkOrder[] {
   return orders.filter((order) => {
-    if (filters.dateFrom !== null && order.createdAt < filters.dateFrom) return false
-    if (filters.dateTo !== null && order.createdAt > filters.dateTo) return false
+    if (filters.dateFrom !== null && order.issueDate < filters.dateFrom) return false
+    if (filters.dateTo !== null && order.issueDate > filters.dateTo) return false
     if (filters.issuedBy !== null && order.issuedBy !== filters.issuedBy) return false
     return true
   })
@@ -53,19 +54,23 @@ export function filterWorkOrders(
 
 /** Derives counts and revenue from a (possibly filtered) WorkOrder array. */
 export function deriveSummary(orders: WorkOrder[]): DashboardSummary {
-  let completedOrders = 0
+  const statusCounts: Record<WorkOrderStatus, number> = {
+    draft: 0,
+    active: 0,
+    completed: 0,
+    cancelled: 0,
+  }
   let totalRevenue = 0
 
   for (const order of orders) {
-    if (order.completedAt !== null) completedOrders++
+    statusCounts[order.status]++
     if (order.price !== null) totalRevenue += order.price
   }
 
   return {
     totalOrders: orders.length,
-    completedOrders,
-    inProgressOrders: orders.length - completedOrders,
-    totalRevenue
+    statusCounts,
+    totalRevenue,
   }
 }
 
@@ -74,14 +79,14 @@ export function deriveSummary(orders: WorkOrder[]): DashboardSummary {
 // ---------------------------------------------------------------------------
 
 /**
- * Groups orders by calendar month and returns an array sorted chronologically.
- * Revenue bucket excludes orders where price === null.
+ * Groups orders by calendar month (based on issueDate) and returns an array
+ * sorted chronologically. Revenue bucket excludes orders where price === null.
  */
 export function monthlyBuckets(orders: WorkOrder[]): MonthlyBucket[] {
   const map = new Map<string, MonthlyBucket>()
 
   for (const order of orders) {
-    const month = order.createdAt.slice(0, 7) // 'YYYY-MM'
+    const month = order.issueDate.slice(0, 7) // 'YYYY-MM'
     const bucket = map.get(month) ?? { month, count: 0, revenue: 0 }
     bucket.count++
     if (order.price !== null) bucket.revenue += order.price
@@ -100,7 +105,9 @@ export function deliveryDistribution(orders: WorkOrder[]): DeliveryCount[] {
   const map = new Map<DeliveryMethod, number>()
 
   for (const order of orders) {
-    map.set(order.deliveryMethod, (map.get(order.deliveryMethod) ?? 0) + 1)
+    const method = order.shipping?.deliveryMethod
+    if (method == null) continue
+    map.set(method, (map.get(method) ?? 0) + 1)
   }
 
   return Array.from(map.entries())

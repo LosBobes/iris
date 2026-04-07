@@ -47,8 +47,7 @@ This glossary records the business and application terms that appear in the Iris
 | `Kontrolna tabla` | `DashboardPage` | The admin dashboard screen. |
 | Summary cards | `DashboardSummary` | Top-line reporting metrics shown above the charts. |
 | Total orders | `totalOrders` | Count of work orders in the current dataset or filtered dataset. |
-| Completed orders | `completedOrders` | Count of work orders with a non-null `completedAt`. |
-| In-progress orders | `inProgressOrders` | Count of work orders with a null `completedAt`. |
+| Status counts | `statusCounts` | Per-status breakdown (`draft`, `active`, `completed`, `cancelled`) derived from `order.status`. |
 | Total revenue | `totalRevenue` | Sum of all non-null work-order prices. |
 | Filters | `DashboardFilters` | Dashboard constraints for date range and operator. |
 | Top clients | `topClients(...)` | Clients ranked by work-order volume in the current filtered dataset. |

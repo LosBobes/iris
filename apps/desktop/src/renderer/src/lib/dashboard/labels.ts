@@ -1,15 +1,21 @@
-import type { DeliveryMethod, DocumentType } from '@/types/work-order'
+import type { BillingDocumentType, DeliveryMethod, WorkOrderStatus } from '@/types/work-order'
 
 export const DELIVERY_METHOD_LABELS: Record<DeliveryMethod, string> = {
-  email: 'E-pošta',
   pickup: 'Lično preuzimanje',
-  courier: 'Kurir',
-  fax: 'Faks'
+  postExpress: 'Post ekspres',
+  cityExpress: 'City ekspres',
+  fieldVisit: 'Izlazak na teren'
 }
 
-export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+export const BILLING_DOCUMENT_TYPE_LABELS: Record<BillingDocumentType, string> = {
   invoice: 'Faktura',
-  receipt: 'Račun',
-  contract: 'Ugovor',
-  certificate: 'Potvrda'
+  cashCollection: 'Otkup',
+  proforma: 'Profaktura'
+}
+
+export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
+  draft: 'Nacrt',
+  active: 'Aktivan',
+  completed: 'Završen',
+  cancelled: 'Otkazan'
 }

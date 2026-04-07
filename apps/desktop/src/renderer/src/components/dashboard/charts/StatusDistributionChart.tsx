@@ -1,7 +1,15 @@
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import type { DashboardSummary } from '@/types/work-order'
+import type { DashboardSummary, WorkOrderStatus } from '@/types/work-order'
+import { WORK_ORDER_STATUS_LABELS } from '@/lib/dashboard/labels'
 
-const STATUS_COLORS = ['#22c55e', '#f59e0b'] as const
+const STATUS_COLORS: Record<WorkOrderStatus, string> = {
+  completed: '#22c55e',
+  active: '#3b82f6',
+  draft: '#a1a1aa',
+  cancelled: '#ef4444',
+}
+
+const STATUS_ORDER: WorkOrderStatus[] = ['completed', 'active', 'draft', 'cancelled']
 
 interface StatusDistributionChartProps {
   summary: DashboardSummary
@@ -10,10 +18,14 @@ interface StatusDistributionChartProps {
 export function StatusDistributionChart({
   summary,
 }: StatusDistributionChartProps): React.JSX.Element {
-  const data = [
-    { name: 'Završeni', value: summary.completedOrders },
-    { name: 'U toku', value: summary.inProgressOrders },
-  ]
+  const data = STATUS_ORDER
+    .map((status) => ({
+      name: WORK_ORDER_STATUS_LABELS[status],
+      value: summary.statusCounts[status],
+      status,
+    }))
+    .filter((d) => d.value > 0)
+
   const hasData = summary.totalOrders > 0
 
   return (
@@ -34,8 +46,8 @@ export function StatusDistributionChart({
               outerRadius={88}
               dataKey="value"
             >
-              {data.map((_, index) => (
-                <Cell key={index} fill={STATUS_COLORS[index]} />
+              {data.map((entry) => (
+                <Cell key={entry.status} fill={STATUS_COLORS[entry.status]} />
               ))}
             </Pie>
             <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />

@@ -14,13 +14,21 @@ import { loadFixtureJson } from '../shared/load-fixture'
  * Call this once from main/index.ts inside app.whenReady().
  */
 export function registerWorkOrderHandlers(): void {
+  let workOrders: WorkOrder[] | null = null
+
+  function getOrders(): WorkOrder[] {
+    if (workOrders === null) {
+      workOrders = loadFixtureJson<WorkOrder[]>('work-orders.json')
+    }
+    return workOrders
+  }
+
   ipcMain.handle('workorders:getAll', async (): Promise<WorkOrder[]> => {
-    return loadFixtureJson<WorkOrder[]>('work-orders.json')
+    return getOrders()
   })
 
   ipcMain.handle('workorders:getOperators', async (): Promise<string[]> => {
-    const workOrders = loadFixtureJson<WorkOrder[]>('work-orders.json')
-    const operators = [...new Set(workOrders.map((o) => o.issuedBy))]
+    const operators = [...new Set(getOrders().map((o) => o.issuedBy))]
     return operators.sort()
   })
 }
