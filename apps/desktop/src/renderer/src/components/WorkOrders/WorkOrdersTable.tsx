@@ -175,16 +175,6 @@ export function WorkOrdersTable({
   onEdit,
   onToggleStatus,
 }: WorkOrdersTableProps): React.JSX.Element {
-  if (totalFiltered === 0) {
-    return (
-      <div className="py-20 text-center">
-        <p className="text-sm text-muted-foreground">
-          Nema radnih naloga koji odgovaraju izabranim filterima.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <Table>
@@ -267,10 +257,14 @@ export function WorkOrdersTable({
                   {order.jobDescription}
                 </TableCell>
                 <TableCell>
-                  {BILLING_LABELS[order.billingDocumentType]}
+                  {order.billingDocumentType
+                    ? BILLING_LABELS[order.billingDocumentType]
+                    : '—'}
                 </TableCell>
                 <TableCell>
-                  {DELIVERY_LABELS[order.shipping.deliveryMethod]}
+                  {order.shipping.deliveryMethod
+                    ? DELIVERY_LABELS[order.shipping.deliveryMethod]
+                    : '—'}
                 </TableCell>
                 <TableCell>{formatPrice(order.price)}</TableCell>
                 <TableCell>

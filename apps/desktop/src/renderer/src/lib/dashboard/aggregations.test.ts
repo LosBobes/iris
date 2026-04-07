@@ -12,18 +12,34 @@ import {
 // Fixtures
 // ---------------------------------------------------------------------------
 
+const ship = (method: WorkOrder['shipping']['deliveryMethod']): WorkOrder['shipping'] => ({
+  deliveryMethod: method,
+  hasPackaging: false,
+  hasLabeling: false,
+  isFragile: false,
+  requiresSignature: false,
+  hasInsurance: false,
+  shippingAddress: null,
+})
+
 const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   id: '0',
   orderNumber: 'RN-2025-0000',
   clientName: 'Test Company',
+  contactPerson: null,
   jobDescription: 'Test job',
+  jobDetails: null,
   billingDocumentType: 'invoice',
-  shipping: { deliveryMethod: 'pickup' },
+  billingDocumentNumber: null,
+  shipping: ship('pickup'),
   issuedBy: 'operator.a',
+  executedBy: null,
   issueDate: '2025-01-15',
+  dueDate: null,
   isCompleted: true,
   status: 'completed',
   price: 10000,
+  note: null,
   createdAt: '2025-01-15T08:00:00Z',
   updatedAt: '2025-01-15T08:00:00Z',
   completionDate: null,
@@ -31,14 +47,14 @@ const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
 })
 
 const ORDERS: WorkOrder[] = [
-  base({ id: '1', clientName: 'Client A', issueDate: '2024-11-10', isCompleted: true,  status: 'completed', price: 5000,  issuedBy: 'operator.a', shipping: { deliveryMethod: 'pickup' } }),
-  base({ id: '2', clientName: 'Client B', issueDate: '2024-11-20', isCompleted: false, status: 'active',    price: null,  issuedBy: 'operator.b', shipping: { deliveryMethod: 'postExpress' } }),
-  base({ id: '3', clientName: 'Client A', issueDate: '2024-12-05', isCompleted: true,  status: 'completed', price: 8000,  issuedBy: 'operator.a', shipping: { deliveryMethod: 'cityExpress' } }),
-  base({ id: '4', clientName: 'Client C', issueDate: '2025-01-10', isCompleted: false, status: 'active',    price: 3000,  issuedBy: 'operator.b', shipping: { deliveryMethod: 'fieldVisit' } }),
-  base({ id: '5', clientName: 'Client A', issueDate: '2025-01-25', isCompleted: true,  status: 'completed', price: null,  issuedBy: 'operator.a', shipping: { deliveryMethod: 'pickup' } }),
-  base({ id: '6', clientName: 'Client D', issueDate: '2025-02-14', isCompleted: true,  status: 'completed', price: 12000, issuedBy: 'operator.b', shipping: { deliveryMethod: 'pickup' } }),
-  base({ id: '7', clientName: 'Client E', issueDate: '2025-02-20', isCompleted: false, status: 'draft',     price: null,  issuedBy: 'operator.a', shipping: { deliveryMethod: 'postExpress' } }),
-  base({ id: '8', clientName: 'Client F', issueDate: '2025-02-22', isCompleted: false, status: 'cancelled', price: 2000,  issuedBy: 'operator.b', shipping: { deliveryMethod: 'pickup' } }),
+  base({ id: '1', clientName: 'Client A', issueDate: '2024-11-10', isCompleted: true,  status: 'completed', price: 5000,  issuedBy: 'operator.a', shipping: ship('pickup') }),
+  base({ id: '2', clientName: 'Client B', issueDate: '2024-11-20', isCompleted: false, status: 'active',    price: null,  issuedBy: 'operator.b', shipping: ship('postExpress') }),
+  base({ id: '3', clientName: 'Client A', issueDate: '2024-12-05', isCompleted: true,  status: 'completed', price: 8000,  issuedBy: 'operator.a', shipping: ship('cityExpress') }),
+  base({ id: '4', clientName: 'Client C', issueDate: '2025-01-10', isCompleted: false, status: 'active',    price: 3000,  issuedBy: 'operator.b', shipping: ship('fieldVisit') }),
+  base({ id: '5', clientName: 'Client A', issueDate: '2025-01-25', isCompleted: true,  status: 'completed', price: null,  issuedBy: 'operator.a', shipping: ship('pickup') }),
+  base({ id: '6', clientName: 'Client D', issueDate: '2025-02-14', isCompleted: true,  status: 'completed', price: 12000, issuedBy: 'operator.b', shipping: ship('pickup') }),
+  base({ id: '7', clientName: 'Client E', issueDate: '2025-02-20', isCompleted: false, status: 'draft',     price: null,  issuedBy: 'operator.a', shipping: ship('postExpress') }),
+  base({ id: '8', clientName: 'Client F', issueDate: '2025-02-22', isCompleted: false, status: 'cancelled', price: 2000,  issuedBy: 'operator.b', shipping: ship('pickup') }),
 ]
 
 const NO_FILTERS: DashboardFilters = { dateFrom: null, dateTo: null, issuedBy: null }
@@ -220,7 +236,7 @@ describe('deliveryDistribution', () => {
   })
 
   it('only includes methods present in the data', () => {
-    const orders = [base({ shipping: { deliveryMethod: 'pickup' } }), base({ shipping: { deliveryMethod: 'pickup' } })]
+    const orders = [base({ shipping: ship('pickup') }), base({ shipping: ship('pickup') })]
     const dist = deliveryDistribution(orders)
     expect(dist).toHaveLength(1)
     expect(dist[0]).toEqual({ method: 'pickup', count: 2 })

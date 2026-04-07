@@ -2,8 +2,50 @@ import { ipcMain } from 'electron'
 import type { WorkOrder, CreateWorkOrderInput, UpdateWorkOrderInput } from '../../../model/work-order'
 import { loadFixtureJson } from '../shared/load-fixture'
 
+const DEFAULT_SHIPPING = {
+  deliveryMethod: null,
+  hasPackaging: false,
+  hasLabeling: false,
+  isFragile: false,
+  requiresSignature: false,
+  hasInsurance: false,
+  shippingAddress: null,
+} as const
+
+/** Ensure fixture records that predate the schema expansion have all fields. */
+function normalizeWorkOrder(raw: Partial<WorkOrder> & { id: string }): WorkOrder {
+  return {
+    id: raw.id,
+    orderNumber: raw.orderNumber ?? '',
+    clientName: raw.clientName ?? '',
+    contactPerson: raw.contactPerson ?? null,
+    jobDescription: raw.jobDescription ?? '',
+    jobDetails: raw.jobDetails ?? null,
+    billingDocumentType: raw.billingDocumentType ?? null,
+    billingDocumentNumber: raw.billingDocumentNumber ?? null,
+    shipping: {
+      ...DEFAULT_SHIPPING,
+      ...raw.shipping,
+    },
+    issuedBy: raw.issuedBy ?? '',
+    executedBy: raw.executedBy ?? null,
+    issueDate: raw.issueDate ?? '',
+    dueDate: raw.dueDate ?? null,
+    isCompleted: raw.isCompleted ?? false,
+    status: raw.status ?? 'active',
+    price: raw.price ?? null,
+    note: raw.note ?? null,
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+    updatedAt: raw.updatedAt ?? new Date().toISOString(),
+    completionDate: raw.completionDate ?? null,
+  }
+}
+
 export function registerWorkOrderHandlers(): void {
-  let workOrders: WorkOrder[] = loadFixtureJson<WorkOrder[]>('work-orders.json')
+  const rawOrders = loadFixtureJson<Partial<WorkOrder>[]>('work-orders.json')
+  let workOrders: WorkOrder[] = rawOrders.map((raw) =>
+    normalizeWorkOrder(raw as Partial<WorkOrder> & { id: string })
+  )
   let sequenceCounter = workOrders.length + 1
 
   function generateOrderNumber(): string {
@@ -36,14 +78,20 @@ export function registerWorkOrderHandlers(): void {
         id: String(sequenceCounter),
         orderNumber: generateOrderNumber(),
         clientName: input.clientName,
+        contactPerson: input.contactPerson ?? null,
         jobDescription: input.jobDescription,
-        billingDocumentType: input.billingDocumentType,
-        shipping: input.shipping,
+        jobDetails: input.jobDetails ?? null,
+        billingDocumentType: input.billingDocumentType ?? null,
+        billingDocumentNumber: input.billingDocumentNumber ?? null,
+        shipping: { ...DEFAULT_SHIPPING, ...input.shipping },
         issuedBy: input.issuedBy,
+        executedBy: null,
         issueDate: input.issueDate,
+        dueDate: input.dueDate ?? null,
         isCompleted: false,
         status: 'active',
         price: input.price,
+        note: input.note ?? null,
         createdAt: now,
         updatedAt: now,
         completionDate: null,

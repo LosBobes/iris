@@ -3,6 +3,7 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { Login } from "@/components/Login/Login";
 import DashboardPage from "@/pages/DashboardPage";
 import WorkOrderCreatePage from "@/pages/WorkOrderCreatePage";
+import WorkOrderEditPage from "@/pages/WorkOrderEditPage";
 import WorkOrdersPage from "@/pages/WorkOrdersPage";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthContext } from "@/contexts/AuthContext";
@@ -42,6 +43,7 @@ function App(): React.JSX.Element {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/work-orders" element={<WorkOrdersPage />} />
           <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
+          <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
         </Routes>
       </MemoryRouter>
       <Toaster />

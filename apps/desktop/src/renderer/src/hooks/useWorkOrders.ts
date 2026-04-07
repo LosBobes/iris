@@ -32,6 +32,7 @@ export interface WorkOrdersFiltersState {
 export interface UseWorkOrdersResult {
   orders: WorkOrder[];
   totalFiltered: number;
+  allOrdersCount: number;
   loading: boolean;
   error: string | null;
   filters: WorkOrdersFiltersState;
@@ -192,6 +193,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
   return {
     orders: paginatedOrders,
     totalFiltered: sortedOrders.length,
+    allOrdersCount: orders.length,
     loading,
     error,
     filters,
