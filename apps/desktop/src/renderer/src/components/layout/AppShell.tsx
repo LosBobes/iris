@@ -1,14 +1,16 @@
+import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard } from 'lucide-react'
+import { LayoutDashboard, ClipboardList } from 'lucide-react'
 
-interface NavItem {
+interface NavItemDef {
   label: string
+  to: string
   icon: React.ComponentType<{ size?: number; className?: string }>
-  active?: boolean
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Kontrolna tabla', icon: LayoutDashboard, active: true },
+const NAV_ITEMS: NavItemDef[] = [
+  { label: 'Kontrolna tabla', to: '/', icon: LayoutDashboard },
+  { label: 'Radni nalozi', to: '/work-orders', icon: ClipboardList },
 ]
 
 interface AppShellProps {
@@ -26,18 +28,22 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
         </div>
         <nav className="flex-1 p-2">
           {NAV_ITEMS.map((item) => (
-            <div
-              key={item.label}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
-                item.active
-                  ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-                  : 'text-sidebar-foreground'
-              )}
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
+                  isActive
+                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                )
+              }
             >
               <item.icon size={16} />
               {item.label}
-            </div>
+            </NavLink>
           ))}
         </nav>
       </aside>

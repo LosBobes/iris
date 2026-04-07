@@ -1,7 +1,11 @@
-import { useCallback, useState } from 'react'
-import { Login } from '@/components/Login/Login'
-import DashboardPage from '@/pages/DashboardPage'
-import { Toaster } from '@/components/ui/sonner'
+import { useCallback, useState } from "react";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { Login } from "@/components/Login/Login";
+import DashboardPage from "@/pages/DashboardPage";
+import WorkOrderCreatePage from "@/pages/WorkOrderCreatePage";
+import WorkOrdersPage from "@/pages/WorkOrdersPage";
+import { Toaster } from "@/components/ui/sonner";
+import { AuthContext } from "@/contexts/AuthContext";
 
 function AccessDenied(): React.JSX.Element {
   return (
@@ -10,31 +14,39 @@ function AccessDenied(): React.JSX.Element {
         Nemate dozvolu za pristup ovoj stranici.
       </p>
     </main>
-  )
+  );
 }
 
 function App(): React.JSX.Element {
-  const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(null)
+  const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(
+    null,
+  );
 
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser) => setCurrentUser(user),
-    []
-  )
+    [],
+  );
 
   if (!currentUser) {
-    return <Login onLoginSuccess={handleLoginSuccess} />
+    return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  if (currentUser.role !== 'admin') {
-    return <AccessDenied />
+  if (currentUser.role !== "admin") {
+    return <AccessDenied />;
   }
 
   return (
-    <>
-      <DashboardPage />
+    <AuthContext.Provider value={{ currentUser }}>
+      <MemoryRouter>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/work-orders" element={<WorkOrdersPage />} />
+          <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
+        </Routes>
+      </MemoryRouter>
       <Toaster />
-    </>
-  )
+    </AuthContext.Provider>
+  );
 }
 
-export default App
+export default App;
