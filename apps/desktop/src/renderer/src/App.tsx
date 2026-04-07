@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Login } from '@/components/Login/Login'
 import DashboardPage from '@/pages/DashboardPage'
+import { Toaster } from '@/components/ui/sonner'
 
 function AccessDenied(): React.JSX.Element {
   return (
@@ -28,7 +29,12 @@ function App(): React.JSX.Element {
     return <AccessDenied />
   }
 
-  return <DashboardPage />
+  return (
+    <>
+      <DashboardPage />
+      <Toaster />
+    </>
+  )
 }
 
 export default App
