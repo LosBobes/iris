@@ -14,7 +14,9 @@ import {
 
 const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   id: '0',
+  orderNumber: 'RN-2025-0000',
   clientName: 'Test Company',
+  jobDescription: 'Test job',
   billingDocumentType: 'invoice',
   shipping: { deliveryMethod: 'pickup' },
   issuedBy: 'operator.a',
@@ -22,6 +24,9 @@ const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   isCompleted: true,
   status: 'completed',
   price: 10000,
+  createdAt: '2025-01-15T08:00:00Z',
+  updatedAt: '2025-01-15T08:00:00Z',
+  completionDate: null,
   ...overrides
 })
 
