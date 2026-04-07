@@ -10,7 +10,9 @@ export interface Shipping {
 
 export interface WorkOrder {
   id: string
+  orderNumber: string
   clientName: string
+  jobDescription: string
   billingDocumentType: BillingDocumentType
   shipping: Shipping
   /** Operator username */
@@ -22,6 +24,35 @@ export interface WorkOrder {
   status: WorkOrderStatus
   /** Null means unbilled / price not yet set */
   price: number | null
+  /** ISO-8601 datetime string */
+  createdAt: string
+  /** ISO-8601 datetime string */
+  updatedAt: string
+  /** ISO-8601 date string, set when completed */
+  completionDate: string | null
+}
+
+export interface CreateWorkOrderInput {
+  clientName: string
+  jobDescription: string
+  billingDocumentType: BillingDocumentType
+  shipping: Shipping
+  issuedBy: string
+  issueDate: string
+  price: number | null
+}
+
+export interface UpdateWorkOrderInput {
+  clientName?: string
+  jobDescription?: string
+  billingDocumentType?: BillingDocumentType
+  shipping?: Shipping
+  issuedBy?: string
+  issueDate?: string
+  isCompleted?: boolean
+  status?: WorkOrderStatus
+  price?: number | null
+  completionDate?: string | null
 }
 
 export interface DashboardFilters {
