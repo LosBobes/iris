@@ -13,7 +13,28 @@ const api = {
   getWorkOrders: () => ipcRenderer.invoke('workorders:getAll'),
 
   // Fetch the sorted list of unique operator usernames.
-  getWorkOrderOperators: () => ipcRenderer.invoke('workorders:getOperators')
+  getWorkOrderOperators: () => ipcRenderer.invoke('workorders:getOperators'),
+
+  // Fetch a single work order by ID.
+  getWorkOrderById: (id: string) => ipcRenderer.invoke('workorders:getById', { id }),
+
+  // Create a new work order.
+  createWorkOrder: (input: {
+    clientName: string
+    jobDescription: string
+    billingDocumentType: string
+    shipping: { deliveryMethod: string }
+    issuedBy: string
+    issueDate: string
+    price: number | null
+  }) => ipcRenderer.invoke('workorders:create', input),
+
+  // Update an existing work order.
+  updateWorkOrder: (id: string, changes: Record<string, unknown>) =>
+    ipcRenderer.invoke('workorders:update', { id, ...changes }),
+
+  // Delete a work order.
+  deleteWorkOrder: (id: string) => ipcRenderer.invoke('workorders:delete', { id })
 }
 
 if (process.contextIsolated) {

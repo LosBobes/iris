@@ -28,6 +28,21 @@ declare global {
       >
 
       getWorkOrderOperators: () => Promise<string[]>
+
+      getWorkOrderById: (
+        id: string
+      ) => Promise<import('../renderer/src/types/work-order').WorkOrder | null>
+
+      createWorkOrder: (
+        input: import('../renderer/src/types/work-order').CreateWorkOrderInput
+      ) => Promise<import('../renderer/src/types/work-order').WorkOrder>
+
+      updateWorkOrder: (
+        id: string,
+        changes: import('../renderer/src/types/work-order').UpdateWorkOrderInput
+      ) => Promise<import('../renderer/src/types/work-order').WorkOrder | null>
+
+      deleteWorkOrder: (id: string) => Promise<{ success: boolean }>
     }
   }
 }
