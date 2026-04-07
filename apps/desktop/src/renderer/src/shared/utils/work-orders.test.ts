@@ -4,6 +4,7 @@ import {
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_STATUS_VARIANTS,
   WORK_ORDER_SELECT_NONE_VALUE,
+  canToggleWorkOrderCompletion,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -23,6 +24,13 @@ describe("work-order shared utils", () => {
     expect(getLocalIsoDate(new Date("2025-04-07T12:00:00.000Z"))).toBe(
       "2025-04-07",
     );
+  });
+
+  it("identifies statuses that support quick completion toggling", () => {
+    expect(canToggleWorkOrderCompletion("active")).toBe(true);
+    expect(canToggleWorkOrderCompletion("completed")).toBe(true);
+    expect(canToggleWorkOrderCompletion("draft")).toBe(false);
+    expect(canToggleWorkOrderCompletion("cancelled")).toBe(false);
   });
 
   it("formats a work-order datetime with Serbian locale options", () => {

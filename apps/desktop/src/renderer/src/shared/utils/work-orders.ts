@@ -41,6 +41,10 @@ export function getLocalIsoDate(date = new Date()): string {
   return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
 }
 
+export function canToggleWorkOrderCompletion(status: WorkOrderStatus): boolean {
+  return status === "active" || status === "completed";
+}
+
 export function formatWorkOrderDateTime(iso: string): string {
   return new Date(iso).toLocaleString("sr-Latn-RS", {
     day: "2-digit",

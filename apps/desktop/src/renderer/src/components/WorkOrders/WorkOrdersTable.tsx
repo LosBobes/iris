@@ -42,6 +42,7 @@ import {
   WORK_ORDER_DELIVERY_LABELS,
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_STATUS_VARIANTS,
+  canToggleWorkOrderCompletion,
   formatWorkOrderDate,
   formatWorkOrderPrice,
 } from "@/shared/utils/work-orders";
@@ -190,8 +191,7 @@ export function WorkOrdersTable({
         </TableHeader>
         <TableBody>
           {orders.map((order) => {
-            const canToggleStatus =
-              order.status === "active" || order.status === "completed";
+            const canToggleStatus = canToggleWorkOrderCompletion(order.status);
 
             return (
               <TableRow key={order.id}>
