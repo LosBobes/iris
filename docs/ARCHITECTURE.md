@@ -97,7 +97,7 @@ Key files:
 
 Important current details:
 
-- window size is initialized at `1280x800` with minimum `1024x700`
+- window size is initialized at `1430x800` with minimum `1024x700`
 - the preload script is loaded from `../preload/index.js`
 - external links are opened with `shell.openExternal(...)`
 - the app appends `lang=sr-Latn` on startup for Serbian Latin locale handling

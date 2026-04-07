@@ -30,72 +30,21 @@ import {
   CheckCircle,
   Circle,
 } from "lucide-react";
-import type {
-  WorkOrder,
-  WorkOrderStatus,
-  BillingDocumentType,
-  DeliveryMethod,
-} from "@/types/work-order";
+import type { WorkOrder } from "@/types/work-order";
 import {
   PAGE_SIZE_OPTIONS,
   type PageSize,
   type SortField,
   type SortDirection,
 } from "@/hooks/useWorkOrders";
-
-// ---------------------------------------------------------------------------
-// Serbian label maps
-// ---------------------------------------------------------------------------
-
-const STATUS_LABELS: Record<WorkOrderStatus, string> = {
-  draft: "Nacrt",
-  active: "Aktivan",
-  completed: "Završen",
-  cancelled: "Otkazan",
-};
-
-const STATUS_VARIANT: Record<
-  WorkOrderStatus,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  draft: "outline",
-  active: "default",
-  completed: "secondary",
-  cancelled: "destructive",
-};
-
-const BILLING_LABELS: Record<BillingDocumentType, string> = {
-  invoice: "Faktura",
-  cashCollection: "Gotovinski račun",
-  proforma: "Profaktura",
-};
-
-const DELIVERY_LABELS: Record<DeliveryMethod, string> = {
-  pickup: "Lično preuzimanje",
-  postExpress: "Post Express",
-  cityExpress: "City Express",
-  fieldVisit: "Terenski obilazak",
-};
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatPrice(price: number | null): string {
-  if (price === null) return "—";
-  return (
-    new Intl.NumberFormat("sr-Latn-RS", {
-      style: "decimal",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(price) + " RSD"
-  );
-}
-
-function formatDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-");
-  return `${d}.${m}.${y}`;
-}
+import {
+  WORK_ORDER_BILLING_LABELS,
+  WORK_ORDER_DELIVERY_LABELS,
+  WORK_ORDER_STATUS_LABELS,
+  WORK_ORDER_STATUS_VARIANTS,
+  formatWorkOrderDate,
+  formatWorkOrderPrice,
+} from "@/shared/utils/work-orders";
 
 // ---------------------------------------------------------------------------
 // Column header with sort indicator
@@ -258,21 +207,21 @@ export function WorkOrdersTable({
                 </TableCell>
                 <TableCell>
                   {order.billingDocumentType
-                    ? BILLING_LABELS[order.billingDocumentType]
-                    : '—'}
+                    ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+                    : "—"}
                 </TableCell>
                 <TableCell>
                   {order.shipping.deliveryMethod
-                    ? DELIVERY_LABELS[order.shipping.deliveryMethod]
-                    : '—'}
+                    ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
+                    : "—"}
                 </TableCell>
-                <TableCell>{formatPrice(order.price)}</TableCell>
+                <TableCell>{formatWorkOrderPrice(order.price)}</TableCell>
                 <TableCell>
-                  <Badge variant={STATUS_VARIANT[order.status]}>
-                    {STATUS_LABELS[order.status]}
+                  <Badge variant={WORK_ORDER_STATUS_VARIANTS[order.status]}>
+                    {WORK_ORDER_STATUS_LABELS[order.status]}
                   </Badge>
                 </TableCell>
-                <TableCell>{formatDate(order.issueDate)}</TableCell>
+                <TableCell>{formatWorkOrderDate(order.issueDate)}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
                     <Button

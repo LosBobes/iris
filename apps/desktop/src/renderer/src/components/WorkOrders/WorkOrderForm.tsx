@@ -1,85 +1,47 @@
-import { useEffect, useState } from 'react'
-import { useForm, Controller } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
+import { useEffect, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import type { WorkOrder } from '@/types/work-order'
+} from "@/components/ui/select";
+import type { WorkOrder } from "@/types/work-order";
 import {
   workOrderFormSchema,
   type WorkOrderFormValues,
-} from '@/lib/work-orders/validation'
-
-// ---------------------------------------------------------------------------
-// Label maps
-// ---------------------------------------------------------------------------
-
-const DELIVERY_LABELS = {
-  pickup: 'Lično preuzimanje',
-  postExpress: 'Post Express',
-  cityExpress: 'City Express',
-  fieldVisit: 'Terenski obilazak',
-} as const
-
-const BILLING_LABELS = {
-  invoice: 'Faktura',
-  cashCollection: 'Gotovinski račun',
-  proforma: 'Profaktura',
-} as const
-
-const STATUS_LABELS = {
-  draft: 'Nacrt',
-  active: 'Aktivan',
-  completed: 'Završen',
-  cancelled: 'Otkazan',
-} as const
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getLocalIsoDate(date = new Date()): string {
-  const timezoneOffsetMs = date.getTimezoneOffset() * 60_000
-  return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 10)
-}
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString('sr-Latn-RS', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+} from "@/lib/work-orders/validation";
+import {
+  WORK_ORDER_BILLING_LABELS,
+  WORK_ORDER_DELIVERY_LABELS,
+  WORK_ORDER_SELECT_NONE_VALUE,
+  WORK_ORDER_STATUS_LABELS,
+  formatWorkOrderDateTime,
+  getLocalIsoDate,
+} from "@/shared/utils/work-orders";
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 interface WorkOrderFormProps {
-  initialData?: WorkOrder | null
-  initialValues?: WorkOrderFormValues
-  onSubmit: (values: WorkOrderFormValues) => Promise<void>
-  onCancel: () => void
+  initialData?: WorkOrder | null;
+  initialValues?: WorkOrderFormValues;
+  onSubmit: (values: WorkOrderFormValues) => Promise<void>;
+  onCancel: () => void;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-
-const NONE_VALUE = '__none__'
 
 export function WorkOrderForm({
   initialData,
@@ -87,8 +49,8 @@ export function WorkOrderForm({
   onSubmit,
   onCancel,
 }: WorkOrderFormProps): React.JSX.Element {
-  const [submitting, setSubmitting] = useState(false)
-  const isEdit = !!initialData
+  const [submitting, setSubmitting] = useState(false);
+  const isEdit = !!initialData;
 
   const defaultValues: WorkOrderFormValues =
     initialValues ??
@@ -108,9 +70,9 @@ export function WorkOrderForm({
           executedBy: initialData.executedBy,
         }
       : {
-          clientName: '',
+          clientName: "",
           contactPerson: null,
-          jobDescription: '',
+          jobDescription: "",
           jobDetails: null,
           billingDocumentType: null,
           billingDocumentNumber: null,
@@ -128,7 +90,7 @@ export function WorkOrderForm({
           issueDate: getLocalIsoDate(),
           dueDate: null,
           executedBy: null,
-        })
+        });
 
   const {
     register,
@@ -139,34 +101,38 @@ export function WorkOrderForm({
   } = useForm<WorkOrderFormValues>({
     resolver: zodResolver(workOrderFormSchema),
     defaultValues,
-  })
+  });
 
-  const deliveryMethod = watch('shipping.deliveryMethod')
+  const deliveryMethod = watch("shipping.deliveryMethod");
   const showShippingAddress =
-    deliveryMethod !== null && deliveryMethod !== 'pickup'
+    deliveryMethod !== null && deliveryMethod !== "pickup";
 
   // Track whether job details section is expanded
-  const [showJobDetails, setShowJobDetails] = useState(!!defaultValues.jobDetails)
+  const [showJobDetails, setShowJobDetails] = useState(
+    !!defaultValues.jobDetails,
+  );
 
-  const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
-    setSubmitting(true)
+  const handleFormSubmit = async (
+    values: WorkOrderFormValues,
+  ): Promise<void> => {
+    setSubmitting(true);
     try {
-      await onSubmit(values)
+      await onSubmit(values);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   // Handle Enter key for submit
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        onCancel()
+      if (e.key === "Escape") {
+        onCancel();
       }
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onCancel])
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onCancel]);
 
   return (
     <form
@@ -179,23 +145,23 @@ export function WorkOrderForm({
           <h2 className="text-sm font-semibold">Informacije o nalogu</h2>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-muted-foreground">Broj naloga:</span>{' '}
+              <span className="text-muted-foreground">Broj naloga:</span>{" "}
               <span className="font-medium">{initialData.orderNumber}</span>
             </div>
             <div>
-              <span className="text-muted-foreground">Status:</span>{' '}
+              <span className="text-muted-foreground">Status:</span>{" "}
               <span className="font-medium">
-                {STATUS_LABELS[initialData.status]}
+                {WORK_ORDER_STATUS_LABELS[initialData.status]}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Kreiran:</span>{' '}
+              <span className="text-muted-foreground">Kreiran:</span>{" "}
               <span className="font-medium">
-                {formatDateTime(initialData.createdAt)}
+                {formatWorkOrderDateTime(initialData.createdAt)}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Izdao:</span>{' '}
+              <span className="text-muted-foreground">Izdao:</span>{" "}
               <span className="font-medium">{initialData.issuedBy}</span>
             </div>
           </div>
@@ -208,7 +174,7 @@ export function WorkOrderForm({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="clientName">Naziv klijenta *</Label>
-            <Input id="clientName" {...register('clientName')} />
+            <Input id="clientName" {...register("clientName")} />
             {errors.clientName && (
               <p className="text-xs text-destructive">
                 {errors.clientName.message}
@@ -219,8 +185,8 @@ export function WorkOrderForm({
             <Label htmlFor="contactPerson">Kontakt osoba</Label>
             <Input
               id="contactPerson"
-              {...register('contactPerson', {
-                setValueAs: (v: string) => (v === '' ? null : v),
+              {...register("contactPerson", {
+                setValueAs: (v: string) => (v === "" ? null : v),
               })}
             />
           </div>
@@ -235,7 +201,7 @@ export function WorkOrderForm({
           <Textarea
             id="jobDescription"
             rows={3}
-            {...register('jobDescription')}
+            {...register("jobDescription")}
           />
           {errors.jobDescription && (
             <p className="text-xs text-destructive">
@@ -251,9 +217,7 @@ export function WorkOrderForm({
             size="sm"
             onClick={() => setShowJobDetails(!showJobDetails)}
           >
-            {showJobDetails
-              ? 'Sakrij detalje posla'
-              : 'Prikaži detalje posla'}
+            {showJobDetails ? "Sakrij detalje posla" : "Prikaži detalje posla"}
           </Button>
         </div>
 
@@ -263,8 +227,8 @@ export function WorkOrderForm({
               <Label htmlFor="jobDetails.productCode">Šifra proizvoda</Label>
               <Input
                 id="jobDetails.productCode"
-                {...register('jobDetails.productCode', {
-                  setValueAs: (v: string) => (v === '' ? null : v),
+                {...register("jobDetails.productCode", {
+                  setValueAs: (v: string) => (v === "" ? null : v),
                 })}
               />
             </div>
@@ -275,9 +239,8 @@ export function WorkOrderForm({
               <Input
                 id="jobDetails.paperWeightGsm"
                 type="number"
-                {...register('jobDetails.paperWeightGsm', {
-                  setValueAs: (v: string) =>
-                    v === '' ? null : Number(v),
+                {...register("jobDetails.paperWeightGsm", {
+                  setValueAs: (v: string) => (v === "" ? null : Number(v)),
                 })}
               />
             </div>
@@ -285,8 +248,8 @@ export function WorkOrderForm({
               <Label htmlFor="jobDetails.dimensions">Dimenzije</Label>
               <Input
                 id="jobDetails.dimensions"
-                {...register('jobDetails.dimensions', {
-                  setValueAs: (v: string) => (v === '' ? null : v),
+                {...register("jobDetails.dimensions", {
+                  setValueAs: (v: string) => (v === "" ? null : v),
                 })}
               />
             </div>
@@ -295,9 +258,8 @@ export function WorkOrderForm({
               <Input
                 id="jobDetails.quantity"
                 type="number"
-                {...register('jobDetails.quantity', {
-                  setValueAs: (v: string) =>
-                    v === '' ? null : Number(v),
+                {...register("jobDetails.quantity", {
+                  setValueAs: (v: string) => (v === "" ? null : Number(v)),
                 })}
               />
             </div>
@@ -307,8 +269,8 @@ export function WorkOrderForm({
               </Label>
               <Input
                 id="jobDetails.finishingNote"
-                {...register('jobDetails.finishingNote', {
-                  setValueAs: (v: string) => (v === '' ? null : v),
+                {...register("jobDetails.finishingNote", {
+                  setValueAs: (v: string) => (v === "" ? null : v),
                 })}
               />
             </div>
@@ -327,21 +289,27 @@ export function WorkOrderForm({
               control={control}
               render={({ field }) => (
                 <Select
-                  value={field.value ?? NONE_VALUE}
+                  value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
                   onValueChange={(v) =>
-                    field.onChange(v === NONE_VALUE ? null : v)
+                    field.onChange(
+                      v === WORK_ORDER_SELECT_NONE_VALUE ? null : v,
+                    )
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Izaberite tip" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE_VALUE}>Nije izabrano</SelectItem>
-                    {Object.entries(BILLING_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                      Nije izabrano
+                    </SelectItem>
+                    {Object.entries(WORK_ORDER_BILLING_LABELS).map(
+                      ([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ),
+                    )}
                   </SelectContent>
                 </Select>
               )}
@@ -351,8 +319,8 @@ export function WorkOrderForm({
             <Label htmlFor="billingDocumentNumber">Broj dokumenta</Label>
             <Input
               id="billingDocumentNumber"
-              {...register('billingDocumentNumber', {
-                setValueAs: (v: string) => (v === '' ? null : v),
+              {...register("billingDocumentNumber", {
+                setValueAs: (v: string) => (v === "" ? null : v),
               })}
             />
           </div>
@@ -369,21 +337,25 @@ export function WorkOrderForm({
             control={control}
             render={({ field }) => (
               <Select
-                value={field.value ?? NONE_VALUE}
+                value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
                 onValueChange={(v) =>
-                  field.onChange(v === NONE_VALUE ? null : v)
+                  field.onChange(v === WORK_ORDER_SELECT_NONE_VALUE ? null : v)
                 }
               >
                 <SelectTrigger className="max-w-xs">
                   <SelectValue placeholder="Izaberite način" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE_VALUE}>Nije izabrano</SelectItem>
-                  {Object.entries(DELIVERY_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                    Nije izabrano
+                  </SelectItem>
+                  {Object.entries(WORK_ORDER_DELIVERY_LABELS).map(
+                    ([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
             )}
@@ -468,8 +440,8 @@ export function WorkOrderForm({
             <Label htmlFor="shippingAddress">Adresa za dostavu *</Label>
             <Input
               id="shippingAddress"
-              {...register('shipping.shippingAddress', {
-                setValueAs: (v: string) => (v === '' ? null : v),
+              {...register("shipping.shippingAddress", {
+                setValueAs: (v: string) => (v === "" ? null : v),
               })}
             />
             {errors.shipping?.shippingAddress && (
@@ -491,15 +463,12 @@ export function WorkOrderForm({
               id="price"
               type="number"
               step="0.01"
-              {...register('price', {
-                setValueAs: (v: string) =>
-                  v === '' ? null : Number(v),
+              {...register("price", {
+                setValueAs: (v: string) => (v === "" ? null : Number(v)),
               })}
             />
             {errors.price && (
-              <p className="text-xs text-destructive">
-                {errors.price.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.price.message}</p>
             )}
           </div>
           <div className="space-y-1.5">
@@ -507,8 +476,8 @@ export function WorkOrderForm({
             <Textarea
               id="note"
               rows={2}
-              {...register('note', {
-                setValueAs: (v: string) => (v === '' ? null : v),
+              {...register("note", {
+                setValueAs: (v: string) => (v === "" ? null : v),
               })}
             />
           </div>
@@ -521,7 +490,7 @@ export function WorkOrderForm({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="issueDate">Datum izdavanja *</Label>
-            <Input id="issueDate" type="date" {...register('issueDate')} />
+            <Input id="issueDate" type="date" {...register("issueDate")} />
             {errors.issueDate && (
               <p className="text-xs text-destructive">
                 {errors.issueDate.message}
@@ -533,8 +502,8 @@ export function WorkOrderForm({
             <Input
               id="dueDate"
               type="date"
-              {...register('dueDate', {
-                setValueAs: (v: string) => (v === '' ? null : v),
+              {...register("dueDate", {
+                setValueAs: (v: string) => (v === "" ? null : v),
               })}
             />
           </div>
@@ -549,8 +518,8 @@ export function WorkOrderForm({
             <Label htmlFor="executedBy">Izvršio</Label>
             <Input
               id="executedBy"
-              {...register('executedBy', {
-                setValueAs: (v: string) => (v === '' ? null : v),
+              {...register("executedBy", {
+                setValueAs: (v: string) => (v === "" ? null : v),
               })}
             />
           </div>
@@ -560,7 +529,9 @@ export function WorkOrderForm({
       {/* Footer */}
       <div className="flex items-center gap-3 border-t border-border pt-6">
         <Button type="submit" size="sm" disabled={submitting}>
-          {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+          {submitting && (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          )}
           Sačuvaj
         </Button>
         <Button
@@ -574,5 +545,5 @@ export function WorkOrderForm({
         </Button>
       </div>
     </form>
-  )
+  );
 }
