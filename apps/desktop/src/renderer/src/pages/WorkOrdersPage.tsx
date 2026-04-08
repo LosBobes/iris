@@ -76,14 +76,16 @@ function WorkOrdersPage(): React.JSX.Element {
     if (!deleteTarget) return;
     try {
       const result = await window.api.deleteWorkOrder(deleteTarget.id);
-      if (result.success) {
-        await refreshOrders();
-        toast.success(`Radni nalog ${deleteTarget.orderNumber} je obrisan`);
+      if (!result.success) {
+        toast.error(result.message ?? "Greška pri brisanju naloga");
+        return;
       }
-    } catch {
-      toast.error("Greška pri brisanju naloga");
-    } finally {
+
       setDeleteTarget(null);
+      await refreshOrders();
+      toast.success(`Radni nalog ${deleteTarget.orderNumber} je obrisan`);
+    } catch {
+      toast.error("Neočekivana greška pri brisanju naloga");
     }
   }, [deleteTarget, refreshOrders]);
 
