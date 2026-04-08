@@ -6,26 +6,28 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts'
-import type { DeliveryMethod } from '@/types/work-order'
-import type { DeliveryCount } from '@/lib/dashboard/aggregations'
-import { DELIVERY_METHOD_LABELS } from '@/lib/dashboard/labels'
+} from "recharts";
+import type { DeliveryMethod } from "@/types/work-order";
+import type { DeliveryCount } from "@/lib/dashboard/aggregations";
+import { WORK_ORDER_DELIVERY_LABELS } from "@/shared/utils/work-orders";
 
 interface DeliveryMethodChartProps {
-  deliveryDistribution: DeliveryCount[]
+  deliveryDistribution: DeliveryCount[];
 }
 
 export function DeliveryMethodChart({
   deliveryDistribution,
 }: DeliveryMethodChartProps): React.JSX.Element {
   const data = deliveryDistribution.map(({ method, count }) => ({
-    label: DELIVERY_METHOD_LABELS[method as DeliveryMethod],
+    label: WORK_ORDER_DELIVERY_LABELS[method as DeliveryMethod],
     count,
-  }))
+  }));
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
-      <h2 className="mb-5 text-sm font-medium text-card-foreground">Metod isporuke</h2>
+      <h2 className="mb-5 text-sm font-medium text-card-foreground">
+        Metod isporuke
+      </h2>
       {data.length === 0 ? (
         <p className="mt-8 text-center text-sm text-muted-foreground">
           Nema podataka za prikaz.
@@ -37,7 +39,11 @@ export function DeliveryMethodChart({
             layout="vertical"
             margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="var(--border)"
+              horizontal={false}
+            />
             <XAxis
               type="number"
               allowDecimals={false}
@@ -54,7 +60,7 @@ export function DeliveryMethodChart({
               width={120}
             />
             <Tooltip
-              formatter={(value) => [value, 'Nalozi']}
+              formatter={(value) => [value, "Nalozi"]}
               contentStyle={{ fontSize: 12 }}
             />
             <Bar dataKey="count" fill="#f59e0b" radius={[0, 3, 3, 0]} />
@@ -62,5 +68,5 @@ export function DeliveryMethodChart({
         </ResponsiveContainer>
       )}
     </div>
-  )
+  );
 }

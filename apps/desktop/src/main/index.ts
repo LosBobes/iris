@@ -9,7 +9,7 @@ import { registerWorkOrderHandlers } from './WorkOrder/WorkOrder.async'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
-    width: 1280,
+    width: 1430,
     height: 800,
     minWidth: 1024,
     minHeight: 700,

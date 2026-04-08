@@ -38,12 +38,12 @@ export function DashboardSummaryCards({
       />
       <SummaryCard
         label="Završeni"
-        value={summary.completedOrders}
+        value={summary.statusCounts.completed}
         icon={CheckCircle2}
       />
       <SummaryCard
-        label="U toku"
-        value={summary.inProgressOrders}
+        label="Aktivni"
+        value={summary.statusCounts.active}
         icon={Clock}
       />
       <SummaryCard
