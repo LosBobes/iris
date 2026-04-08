@@ -27,16 +27,17 @@ This glossary records the business and application terms that appear in the Iris
 | Work order | `WorkOrder` | The main business record used for dashboard reporting. |
 | Client | `clientName` | The customer associated with a work order. |
 | Operator | `issuedBy` | The staff username associated with issuing a work order. |
-| Created date | `createdAt` | ISO date string used as the primary reporting date. |
-| Completed date | `completedAt` | ISO date string for completion, or `null` when still in progress. |
+| Issue date | `issueDate` | ISO date string used as the primary reporting date. |
+| Completion date | `completionDate` | ISO date string for completion, or `null` when still in progress. |
+| Status | `status` | Work order lifecycle state: `draft`, `active`, `completed`, or `cancelled`. |
 | Price | `price` | Monetary value of the work order; `null` means not billed or not set. |
 
 ## Work-Order Status Terms
 
 | Term | Code rule | Meaning |
 | --- | --- | --- |
-| Completed | `completedAt !== null` | Work order is finished. |
-| In progress | `completedAt === null` | Work order is still open or unfinished. |
+| Completed | `status === 'completed'` and `isCompleted === true` | Work order is finished. `completionDate` is set. |
+| In progress | `status === 'active'` and `isCompleted === false` | Work order is still open or unfinished. |
 | Revenue-bearing order | `price !== null` | Order contributes to revenue totals. |
 | Non-revenue order | `price === null` | Order is excluded from revenue totals. |
 
@@ -54,18 +55,17 @@ This glossary records the business and application terms that appear in the Iris
 
 ## Document Types
 
-These are the current `documentType` enum values in the codebase.
+These are the current `billingDocumentType` enum values in the codebase.
 
 | Code value | Serbian label | Meaning |
 | --- | --- | --- |
 | `invoice` | `Faktura` | Invoice-style document. |
-| `receipt` | `Racun` | Receipt-style document. |
-| `contract` | `Ugovor` | Contract-style document. |
-| `certificate` | `Potvrda` | Certificate or confirmation document. |
+| `cashCollection` | `Gotovinski račun` | Cash collection document. |
+| `proforma` | `Profaktura` | Proforma invoice. |
 
 Note:
 
-- Labels are currently mapped in `apps/desktop/src/renderer/src/lib/dashboard/labels.ts`.
+- Labels are currently mapped in `apps/desktop/src/renderer/src/shared/utils/work-orders.ts`.
 
 ## Delivery Methods
 
@@ -73,10 +73,10 @@ These are the current `deliveryMethod` enum values in the codebase.
 
 | Code value | Serbian label | Meaning |
 | --- | --- | --- |
-| `email` | `E-posta` | Delivered electronically by email. |
-| `pickup` | `Licno preuzimanje` | Picked up in person. |
-| `courier` | `Kurir` | Delivered by courier. |
-| `fax` | `Faks` | Delivered by fax. |
+| `pickup` | `Lično preuzimanje` | Picked up in person. |
+| `postExpress` | `Post Express` | Delivered via Post Express. |
+| `cityExpress` | `City Express` | Delivered via City Express. |
+| `fieldVisit` | `Terenski obilazak` | Delivered by field visit. |
 
 ## Data And Reporting Terms
 

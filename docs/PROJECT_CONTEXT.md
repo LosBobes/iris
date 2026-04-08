@@ -38,7 +38,6 @@ The current desktop app does not include:
 
 - a checked-in backend service
 - persistent authentication
-- a router
 - database-backed storage
 
 ## Repository Structure
@@ -90,6 +89,10 @@ Current IPC handlers:
 - `auth:login`
 - `workorders:getAll`
 - `workorders:getOperators`
+- `workorders:getById`
+- `workorders:create`
+- `workorders:update`
+- `workorders:delete`
 
 ## Preload Layer
 
@@ -106,6 +109,10 @@ Current renderer API:
 window.api.login(credentials)
 window.api.getWorkOrders()
 window.api.getWorkOrderOperators()
+window.api.getWorkOrderById(id)
+window.api.createWorkOrder(input)
+window.api.updateWorkOrder(id, changes)
+window.api.deleteWorkOrder(id)
 ```
 
 The preload also exposes `window.electron` from `@electron-toolkit/preload`.
@@ -159,13 +166,25 @@ Defined in `apps/desktop/model/work-order.ts`
 ```ts
 interface WorkOrder {
   id: string
+  orderNumber: string
   clientName: string
-  documentType: 'invoice' | 'receipt' | 'contract' | 'certificate'
-  deliveryMethod: 'email' | 'pickup' | 'courier' | 'fax'
+  contactPerson: string | null
+  jobDescription: string
+  jobDetails: JobDetails | null
+  billingDocumentType: 'invoice' | 'cashCollection' | 'proforma' | null
+  billingDocumentNumber: string | null
+  shipping: Shipping
   issuedBy: string
-  createdAt: string
-  completedAt: string | null
+  executedBy: string | null
+  issueDate: string
+  dueDate: string | null
+  isCompleted: boolean
+  status: 'draft' | 'active' | 'completed' | 'cancelled'
   price: number | null
+  note: string | null
+  createdAt: string
+  updatedAt: string
+  completionDate: string | null
 }
 ```
 

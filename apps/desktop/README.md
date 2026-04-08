@@ -26,7 +26,7 @@ Current limitations:
 - authentication is backed by local JSON fixtures, not a real auth provider
 - work orders are loaded from local fixture data, not a database
 - only one seeded user currently exists, and it has the `admin` role
-- there is no router yet; the app conditionally renders login or dashboard from `App.tsx`
+- routing is limited to the existing `react-router` flow for the dashboard and work-orders screens, with sidebar navigation between those views
 
 ## Stack
 
@@ -181,13 +181,25 @@ The current work-order fixture shape is:
 ```ts
 interface WorkOrder {
   id: string
+  orderNumber: string
   clientName: string
-  documentType: 'invoice' | 'receipt' | 'contract' | 'certificate'
-  deliveryMethod: 'email' | 'pickup' | 'courier' | 'fax'
+  contactPerson: string | null
+  jobDescription: string
+  jobDetails: JobDetails | null
+  billingDocumentType: 'invoice' | 'cashCollection' | 'proforma' | null
+  billingDocumentNumber: string | null
+  shipping: Shipping
   issuedBy: string
-  createdAt: string
-  completedAt: string | null
+  executedBy: string | null
+  issueDate: string
+  dueDate: string | null
+  isCompleted: boolean
+  status: 'draft' | 'active' | 'completed' | 'cancelled'
   price: number | null
+  note: string | null
+  createdAt: string
+  updatedAt: string
+  completionDate: string | null
 }
 ```
 

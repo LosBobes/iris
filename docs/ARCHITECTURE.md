@@ -269,6 +269,10 @@ Current channels:
 - `auth:login`
 - `workorders:getAll`
 - `workorders:getOperators`
+- `workorders:getById`
+- `workorders:create`
+- `workorders:update`
+- `workorders:delete`
 
 ## Source Of Truth By Concern
 
@@ -280,7 +284,7 @@ Current channels:
 | Login fixture data | `apps/desktop/fixtures/users.json` |
 | Work-order fixture data | `apps/desktop/fixtures/work-orders.json` |
 | Dashboard aggregation rules | `apps/desktop/src/renderer/src/lib/dashboard/aggregations.ts` |
-| Serbian labels for enums | `apps/desktop/src/renderer/src/lib/dashboard/labels.ts` |
+| Serbian labels for enums | `apps/desktop/src/renderer/src/shared/utils/work-orders.ts` |
 
 ## Key Types
 
@@ -303,13 +307,25 @@ Defined in `apps/desktop/model/work-order.ts`
 ```ts
 interface WorkOrder {
   id: string
+  orderNumber: string
   clientName: string
-  documentType: 'invoice' | 'receipt' | 'contract' | 'certificate'
-  deliveryMethod: 'email' | 'pickup' | 'courier' | 'fax'
+  contactPerson: string | null
+  jobDescription: string
+  jobDetails: JobDetails | null
+  billingDocumentType: 'invoice' | 'cashCollection' | 'proforma' | null
+  billingDocumentNumber: string | null
+  shipping: Shipping
   issuedBy: string
-  createdAt: string
-  completedAt: string | null
+  executedBy: string | null
+  issueDate: string
+  dueDate: string | null
+  isCompleted: boolean
+  status: 'draft' | 'active' | 'completed' | 'cancelled'
   price: number | null
+  note: string | null
+  createdAt: string
+  updatedAt: string
+  completionDate: string | null
 }
 ```
 
