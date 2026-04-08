@@ -69,10 +69,20 @@ function SortableHeader({
   const isActive = field === currentField;
   return (
     <TableHead
-      className="cursor-pointer select-none"
-      onClick={() => onSort(field)}
+      aria-sort={
+        isActive ? (direction === "asc" ? "ascending" : "descending") : "none"
+      }
     >
-      <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        className="inline-flex cursor-pointer select-none items-center gap-1"
+        onClick={() => onSort(field)}
+        aria-label={
+          isActive
+            ? `Sort by ${label}, currently ${direction === "asc" ? "ascending" : "descending"}`
+            : `Sort by ${label}`
+        }
+      >
         {label}
         {isActive ? (
           direction === "asc" ? (
@@ -83,7 +93,7 @@ function SortableHeader({
         ) : (
           <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />
         )}
-      </span>
+      </button>
     </TableHead>
   );
 }
@@ -235,6 +245,13 @@ export function WorkOrdersTable({
                             : "Označi kao završen"
                           : "Status ovog naloga se ne menja iz liste"
                       }
+                      aria-label={
+                        canToggleStatus
+                          ? order.status === "completed"
+                            ? "Označi kao aktivan"
+                            : "Označi kao završen"
+                          : "Status ovog naloga se ne menja iz liste"
+                      }
                       onClick={() => onToggleStatus(order)}
                     >
                       {order.status === "completed" ? (
@@ -247,6 +264,7 @@ export function WorkOrdersTable({
                       variant="ghost"
                       size="icon-xs"
                       title="Izmeni"
+                      aria-label="Izmeni"
                       onClick={() => onEdit(order)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -255,6 +273,7 @@ export function WorkOrdersTable({
                       variant="ghost"
                       size="icon-xs"
                       title="Dupliraj"
+                      aria-label="Dupliraj"
                       onClick={() => onDuplicate(order)}
                     >
                       <Copy className="h-3.5 w-3.5" />
@@ -263,6 +282,7 @@ export function WorkOrdersTable({
                       variant="ghost"
                       size="icon-xs"
                       title="Obriši"
+                      aria-label="Obriši"
                       onClick={() => onDelete(order)}
                     >
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
