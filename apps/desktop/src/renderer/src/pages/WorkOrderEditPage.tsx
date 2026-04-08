@@ -60,22 +60,26 @@ function WorkOrderEditPage(): React.JSX.Element {
     async (values: WorkOrderFormValues) => {
       if (!id || !order) return;
 
-      await window.api.updateWorkOrder(id, {
-        clientName: values.clientName,
-        contactPerson: values.contactPerson,
-        jobDescription: values.jobDescription,
-        jobDetails: values.jobDetails,
-        billingDocumentType: values.billingDocumentType,
-        billingDocumentNumber: values.billingDocumentNumber,
-        shipping: values.shipping,
-        executedBy: values.executedBy,
-        issueDate: values.issueDate,
-        dueDate: values.dueDate,
-        price: values.price,
-        note: values.note,
-      });
-      toast.success(`Radni nalog ${order.orderNumber} je ažuriran`);
-      navigate("/work-orders");
+      try {
+        await window.api.updateWorkOrder(id, {
+          clientName: values.clientName,
+          contactPerson: values.contactPerson,
+          jobDescription: values.jobDescription,
+          jobDetails: values.jobDetails,
+          billingDocumentType: values.billingDocumentType,
+          billingDocumentNumber: values.billingDocumentNumber,
+          shipping: values.shipping,
+          executedBy: values.executedBy,
+          issueDate: values.issueDate,
+          dueDate: values.dueDate,
+          price: values.price,
+          note: values.note,
+        });
+        toast.success(`Radni nalog ${order.orderNumber} je ažuriran`);
+        navigate("/work-orders");
+      } catch {
+        toast.error("Greška pri ažuriranju radnog naloga");
+      }
     },
     [id, order, navigate],
   );
@@ -86,18 +90,22 @@ function WorkOrderEditPage(): React.JSX.Element {
     const newStatus = isCompleting ? "completed" : "active";
     const now = getLocalIsoDate();
 
-    const updated = await window.api.updateWorkOrder(id, {
-      status: newStatus,
-      isCompleted: isCompleting,
-      completionDate: isCompleting ? now : null,
-    });
-    if (updated) {
-      setOrder(updated);
-      toast.success(
-        isCompleting
-          ? `Nalog ${order.orderNumber} označen kao završen`
-          : `Nalog ${order.orderNumber} označen kao aktivan`,
-      );
+    try {
+      const updated = await window.api.updateWorkOrder(id, {
+        status: newStatus,
+        isCompleted: isCompleting,
+        completionDate: isCompleting ? now : null,
+      });
+      if (updated) {
+        setOrder(updated);
+        toast.success(
+          isCompleting
+            ? `Nalog ${order.orderNumber} označen kao završen`
+            : `Nalog ${order.orderNumber} označen kao aktivan`,
+        );
+      }
+    } catch {
+      toast.error("Greška pri promeni statusa");
     }
   }, [id, order]);
 
