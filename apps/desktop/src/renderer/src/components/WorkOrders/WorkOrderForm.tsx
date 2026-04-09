@@ -3,6 +3,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -489,8 +490,18 @@ export function WorkOrderForm({
         <h2 className="text-sm font-semibold">Datumi</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label htmlFor="issueDate">Datum izdavanja *</Label>
-            <Input id="issueDate" type="date" {...register("issueDate")} />
+            <Label>Datum izdavanja *</Label>
+            <Controller
+              name="issueDate"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  value={field.value}
+                  onChange={(v) => field.onChange(v ?? "")}
+                  placeholder="Datum izdavanja"
+                />
+              )}
+            />
             {errors.issueDate && (
               <p className="text-xs text-destructive">
                 {errors.issueDate.message}
@@ -498,13 +509,17 @@ export function WorkOrderForm({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="dueDate">Rok završetka</Label>
-            <Input
-              id="dueDate"
-              type="date"
-              {...register("dueDate", {
-                setValueAs: (v: string) => (v === "" ? null : v),
-              })}
+            <Label>Rok završetka</Label>
+            <Controller
+              name="dueDate"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  value={field.value}
+                  onChange={(v) => field.onChange(v)}
+                  placeholder="Rok završetka"
+                />
+              )}
             />
           </div>
         </div>

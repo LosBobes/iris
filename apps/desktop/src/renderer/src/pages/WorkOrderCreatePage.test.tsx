@@ -78,8 +78,7 @@ describe('WorkOrderCreatePage', () => {
     expect(screen.getByLabelText('Opis *')).toHaveValue(
       duplicateSource.jobDescription
     )
-    expect(screen.getByLabelText('Datum izdavanja *')).toHaveValue(
-      duplicateSource.issueDate
-    )
+    // DatePicker renders a button showing the formatted date, not an input
+    expect(screen.getByText('7. april 2025.')).toBeInTheDocument()
   })
 })
