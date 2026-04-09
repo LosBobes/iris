@@ -61,7 +61,7 @@ function WorkOrderEditPage(): React.JSX.Element {
       if (!id || !order) return;
 
       try {
-        await window.api.updateWorkOrder(id, {
+        const updated = await window.api.updateWorkOrder(id, {
           clientName: values.clientName,
           contactPerson: values.contactPerson,
           jobDescription: values.jobDescription,
@@ -75,7 +75,11 @@ function WorkOrderEditPage(): React.JSX.Element {
           price: values.price,
           note: values.note,
         });
-        toast.success(`Radni nalog ${order.orderNumber} je ažuriran`);
+        if (!updated) {
+          toast.error("Radni nalog nije pronađen.");
+          return;
+        }
+        toast.success(`Radni nalog ${updated.orderNumber} je ažuriran`);
         navigate("/work-orders");
       } catch {
         toast.error("Greška pri ažuriranju radnog naloga");
@@ -96,14 +100,16 @@ function WorkOrderEditPage(): React.JSX.Element {
         isCompleted: isCompleting,
         completionDate: isCompleting ? now : null,
       });
-      if (updated) {
-        setOrder(updated);
-        toast.success(
-          isCompleting
-            ? `Nalog ${order.orderNumber} označen kao završen`
-            : `Nalog ${order.orderNumber} označen kao aktivan`,
-        );
+      if (!updated) {
+        toast.error("Radni nalog nije pronađen.");
+        return;
       }
+      setOrder(updated);
+      toast.success(
+        isCompleting
+          ? `Nalog ${updated.orderNumber} označen kao završen`
+          : `Nalog ${updated.orderNumber} označen kao aktivan`,
+      );
     } catch {
       toast.error("Greška pri promeni statusa");
     }

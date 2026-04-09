@@ -1,3 +1,4 @@
+import { parse } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -105,12 +106,14 @@ export function WorkOrdersFilters({
           value={filters.dateFrom || null}
           onChange={(v) => updateFilters({ dateFrom: v ?? "" })}
           placeholder="Od datuma"
+          toDate={filters.dateTo ? parse(filters.dateTo, "yyyy-MM-dd", new Date()) : undefined}
         />
         <span className="text-xs text-muted-foreground">—</span>
         <DatePicker
           value={filters.dateTo || null}
           onChange={(v) => updateFilters({ dateTo: v ?? "" })}
           placeholder="Do datuma"
+          fromDate={filters.dateFrom ? parse(filters.dateFrom, "yyyy-MM-dd", new Date()) : undefined}
         />
       </div>
 

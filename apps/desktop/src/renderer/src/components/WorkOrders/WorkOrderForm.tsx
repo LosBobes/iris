@@ -490,15 +490,17 @@ export function WorkOrderForm({
         <h2 className="text-sm font-semibold">Datumi</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>Datum izdavanja *</Label>
+            <Label htmlFor="issueDate">Datum izdavanja *</Label>
             <Controller
               name="issueDate"
               control={control}
               render={({ field }) => (
                 <DatePicker
+                  id="issueDate"
                   value={field.value}
                   onChange={(v) => field.onChange(v ?? "")}
                   placeholder="Datum izdavanja"
+                  disabled={submitting}
                 />
               )}
             />
@@ -509,15 +511,17 @@ export function WorkOrderForm({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label>Rok završetka</Label>
+            <Label htmlFor="dueDate">Rok završetka</Label>
             <Controller
               name="dueDate"
               control={control}
               render={({ field }) => (
                 <DatePicker
+                  id="dueDate"
                   value={field.value}
                   onChange={(v) => field.onChange(v)}
                   placeholder="Rok završetka"
+                  disabled={submitting}
                 />
               )}
             />

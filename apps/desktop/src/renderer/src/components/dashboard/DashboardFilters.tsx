@@ -1,3 +1,4 @@
+import { parse } from "date-fns";
 import type { DashboardFilters } from "@/types/work-order";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -32,6 +33,7 @@ export function DashboardFilters({
           value={filters.dateFrom}
           onChange={(dateFrom) => setFilters((prev) => ({ ...prev, dateFrom }))}
           placeholder="Od datuma"
+          toDate={filters.dateTo ? parse(filters.dateTo, "yyyy-MM-dd", new Date()) : undefined}
         />
       </div>
 
@@ -47,6 +49,7 @@ export function DashboardFilters({
           value={filters.dateTo}
           onChange={(dateTo) => setFilters((prev) => ({ ...prev, dateTo }))}
           placeholder="Do datuma"
+          fromDate={filters.dateFrom ? parse(filters.dateFrom, "yyyy-MM-dd", new Date()) : undefined}
         />
       </div>
 

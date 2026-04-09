@@ -50,11 +50,15 @@ function WorkOrdersPage(): React.JSX.Element {
       const now = getLocalIsoDate();
 
       try {
-        await window.api.updateWorkOrder(order.id, {
+        const updated = await window.api.updateWorkOrder(order.id, {
           status: newStatus,
           isCompleted: isCompleting,
           completionDate: isCompleting ? now : null,
         });
+        if (!updated) {
+          toast.error("Radni nalog nije pronađen.");
+          return;
+        }
         await refreshOrders();
         toast.success(
           isCompleting

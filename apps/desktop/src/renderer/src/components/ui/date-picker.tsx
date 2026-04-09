@@ -18,6 +18,11 @@ interface DatePickerProps {
   placeholder?: string;
   className?: string;
   id?: string;
+  disabled?: boolean;
+  /** Earliest selectable date (dates before this are disabled) */
+  fromDate?: Date;
+  /** Latest selectable date (dates after this are disabled) */
+  toDate?: Date;
 }
 
 /** Converts YYYY-MM-DD to a Date at local midnight */
@@ -31,6 +36,9 @@ export function DatePicker({
   placeholder = "Izaberi datum",
   className,
   id,
+  disabled,
+  fromDate,
+  toDate,
 }: DatePickerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
 
@@ -43,6 +51,7 @@ export function DatePicker({
           id={id}
           variant="outline"
           size="sm"
+          disabled={disabled}
           className={cn(
             "h-8 justify-start px-2 text-xs font-normal",
             !value && "text-muted-foreground",
@@ -64,6 +73,12 @@ export function DatePicker({
             setOpen(false);
           }}
           locale={calendarLocale}
+          startMonth={fromDate}
+          endMonth={toDate}
+          disabled={[
+            ...(fromDate ? [{ before: fromDate }] : []),
+            ...(toDate ? [{ after: toDate }] : []),
+          ]}
         />
       </PopoverContent>
     </Popover>
