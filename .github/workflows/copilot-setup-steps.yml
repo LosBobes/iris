@@ -1,0 +1,26 @@
+name: "Copilot Setup Steps"
+
+on: workflow_dispatch
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: apps/desktop
+        env:
+          # Skip Electron download and postinstall native deps — not needed for linting/typechecking/testing
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
