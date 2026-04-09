@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import WorkOrderEditPage from "./WorkOrderEditPage";
 import type { WorkOrder } from "@/types/work-order";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
+import { AuthContext } from "@/contexts/AuthContext";
 
 const mockGetWorkOrderById = vi.fn();
 const mockUpdateWorkOrder = vi.fn();
@@ -84,12 +85,16 @@ const sampleOrder: WorkOrder = {
 
 function renderPage(): void {
   render(
-    <MemoryRouter initialEntries={["/work-orders/order-1/edit"]}>
-      <Routes>
-        <Route path="/work-orders" element={<div>Lista naloga</div>} />
-        <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthContext.Provider
+      value={{ currentUser: { id: '1', username: 'admin', role: 'admin' }, onLogout: vi.fn() }}
+    >
+      <MemoryRouter initialEntries={["/work-orders/order-1/edit"]}>
+        <Routes>
+          <Route path="/work-orders" element={<div>Lista naloga</div>} />
+          <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>,
   );
 }
 

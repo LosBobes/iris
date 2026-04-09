@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import WorkOrdersPage from "./WorkOrdersPage";
 import { useWorkOrders } from "@/hooks/useWorkOrders";
 import type { WorkOrder } from "@/types/work-order";
+import { AuthContext } from "@/contexts/AuthContext";
 
 const mockUseWorkOrders = vi.mocked(useWorkOrders);
 const mockDeleteWorkOrder = vi.fn();
@@ -143,9 +144,13 @@ describe("WorkOrdersPage", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/work-orders"]}>
-        <WorkOrdersPage />
-      </MemoryRouter>,
+      <AuthContext.Provider
+        value={{ currentUser: { id: '1', username: 'admin', role: 'admin' }, onLogout: vi.fn() }}
+      >
+        <MemoryRouter initialEntries={["/work-orders"]}>
+          <WorkOrdersPage />
+        </MemoryRouter>
+      </AuthContext.Provider>,
     );
 
     fireEvent.click(
@@ -167,9 +172,13 @@ describe("WorkOrdersPage", () => {
     mockUpdateWorkOrder.mockResolvedValueOnce(null);
 
     render(
-      <MemoryRouter initialEntries={["/work-orders"]}>
-        <WorkOrdersPage />
-      </MemoryRouter>,
+      <AuthContext.Provider
+        value={{ currentUser: { id: '1', username: 'admin', role: 'admin' }, onLogout: vi.fn() }}
+      >
+        <MemoryRouter initialEntries={["/work-orders"]}>
+          <WorkOrdersPage />
+        </MemoryRouter>
+      </AuthContext.Provider>,
     );
 
     fireEvent.click(

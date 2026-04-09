@@ -23,6 +23,8 @@ function App(): React.JSX.Element {
     null,
   );
 
+  const handleLogout = useCallback(() => setCurrentUser(null), []);
+
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser) => setCurrentUser(user),
     [],
@@ -37,7 +39,7 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser }}>
+    <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
       <MemoryRouter>
         <Routes>
           <Route path="/" element={<DashboardPage />} />

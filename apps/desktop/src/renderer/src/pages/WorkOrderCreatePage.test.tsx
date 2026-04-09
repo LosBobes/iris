@@ -46,6 +46,7 @@ function renderPageWithDuplicateState(): void {
     <AuthContext.Provider
       value={{
         currentUser: { id: '1', username: 'admin', role: 'admin' },
+        onLogout: vi.fn(),
       }}
     >
       <MemoryRouter

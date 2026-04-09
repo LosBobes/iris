@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, ClipboardList } from "lucide-react";
+import { LayoutDashboard, ClipboardList, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface NavItemDef {
   label: string;
@@ -18,6 +19,8 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
+  const { onLogout } = useAuth();
+
   return (
     <div className="flex h-screen min-w-[1024px] overflow-hidden bg-background">
       <aside className="sticky top-0 flex h-screen w-60 shrink-0 self-start flex-col border-r border-sidebar-border bg-sidebar">
@@ -46,6 +49,15 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
             </NavLink>
           ))}
         </nav>
+        <div className="border-t border-sidebar-border p-2">
+          <button
+            onClick={onLogout}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <LogOut size={16} />
+            Odjava
+          </button>
+        </div>
       </aside>
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {children}
