@@ -1,19 +1,21 @@
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { parse } from "date-fns";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import type { WorkOrdersFiltersState } from '@/hooks/useWorkOrders'
-import { Search, X } from 'lucide-react'
+} from "@/components/ui/select";
+import type { WorkOrdersFiltersState } from "@/hooks/useWorkOrders";
+import { Search, X } from "lucide-react";
 
 interface WorkOrdersFiltersProps {
-  filters: WorkOrdersFiltersState
-  updateFilters: (patch: Partial<WorkOrdersFiltersState>) => void
-  resetFilters: () => void
+  filters: WorkOrdersFiltersState;
+  updateFilters: (patch: Partial<WorkOrdersFiltersState>) => void;
+  resetFilters: () => void;
 }
 
 export function WorkOrdersFilters({
@@ -22,12 +24,12 @@ export function WorkOrdersFilters({
   resetFilters,
 }: WorkOrdersFiltersProps): React.JSX.Element {
   const hasActiveFilters =
-    filters.search !== '' ||
-    filters.status !== 'all' ||
-    filters.billingDocumentType !== 'all' ||
-    filters.deliveryMethod !== 'all' ||
-    filters.dateFrom !== '' ||
-    filters.dateTo !== ''
+    filters.search !== "" ||
+    filters.status !== "all" ||
+    filters.billingDocumentType !== "all" ||
+    filters.deliveryMethod !== "all" ||
+    filters.dateFrom !== "" ||
+    filters.dateTo !== "";
 
   return (
     <div className="flex flex-wrap items-end gap-3">
@@ -44,7 +46,7 @@ export function WorkOrdersFilters({
       <Select
         value={filters.status}
         onValueChange={(value) =>
-          updateFilters({ status: value as WorkOrdersFiltersState['status'] })
+          updateFilters({ status: value as WorkOrdersFiltersState["status"] })
         }
       >
         <SelectTrigger className="w-36">
@@ -63,7 +65,8 @@ export function WorkOrdersFilters({
         value={filters.billingDocumentType}
         onValueChange={(value) =>
           updateFilters({
-            billingDocumentType: value as WorkOrdersFiltersState['billingDocumentType'],
+            billingDocumentType:
+              value as WorkOrdersFiltersState["billingDocumentType"],
           })
         }
       >
@@ -82,7 +85,7 @@ export function WorkOrdersFilters({
         value={filters.deliveryMethod}
         onValueChange={(value) =>
           updateFilters({
-            deliveryMethod: value as WorkOrdersFiltersState['deliveryMethod'],
+            deliveryMethod: value as WorkOrdersFiltersState["deliveryMethod"],
           })
         }
       >
@@ -99,20 +102,18 @@ export function WorkOrdersFilters({
       </Select>
 
       <div className="flex items-center gap-1.5">
-        <Input
-          type="date"
-          value={filters.dateFrom}
-          onChange={(e) => updateFilters({ dateFrom: e.target.value })}
-          className="w-36"
-          placeholder="Od"
+        <DatePicker
+          value={filters.dateFrom || null}
+          onChange={(v) => updateFilters({ dateFrom: v ?? "" })}
+          placeholder="Od datuma"
+          toDate={filters.dateTo ? parse(filters.dateTo, "yyyy-MM-dd", new Date()) : undefined}
         />
         <span className="text-xs text-muted-foreground">—</span>
-        <Input
-          type="date"
-          value={filters.dateTo}
-          onChange={(e) => updateFilters({ dateTo: e.target.value })}
-          className="w-36"
-          placeholder="Do"
+        <DatePicker
+          value={filters.dateTo || null}
+          onChange={(v) => updateFilters({ dateTo: v ?? "" })}
+          placeholder="Do datuma"
+          fromDate={filters.dateFrom ? parse(filters.dateFrom, "yyyy-MM-dd", new Date()) : undefined}
         />
       </div>
 
@@ -123,5 +124,5 @@ export function WorkOrdersFilters({
         </Button>
       )}
     </div>
-  )
+  );
 }

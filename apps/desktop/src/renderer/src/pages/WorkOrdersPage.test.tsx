@@ -7,6 +7,7 @@ import type { WorkOrder } from "@/types/work-order";
 
 const mockUseWorkOrders = vi.mocked(useWorkOrders);
 const mockDeleteWorkOrder = vi.fn();
+const mockUpdateWorkOrder = vi.fn();
 const mockRefreshOrders = vi.fn();
 
 vi.mock("sonner", () => ({
@@ -25,13 +26,20 @@ vi.mock("@/components/WorkOrders/WorkOrdersTable", () => ({
   WorkOrdersTable: ({
     orders,
     onDelete,
+    onToggleStatus,
   }: {
     orders: WorkOrder[];
     onDelete: (order: WorkOrder) => void;
+    onToggleStatus: (order: WorkOrder) => void;
   }) => (
-    <button type="button" onClick={() => onDelete(orders[0])}>
-      Obrisi {orders[0].orderNumber}
-    </button>
+    <div>
+      <button type="button" onClick={() => onDelete(orders[0])}>
+        Obrisi {orders[0].orderNumber}
+      </button>
+      <button type="button" onClick={() => onToggleStatus(orders[0])}>
+        Promeni status {orders[0].orderNumber}
+      </button>
+    </div>
   ),
 }));
 
@@ -89,8 +97,10 @@ const sampleOrder: WorkOrder = {
 describe("WorkOrdersPage", () => {
   beforeEach(() => {
     mockDeleteWorkOrder.mockReset();
+    mockUpdateWorkOrder.mockReset();
     mockRefreshOrders.mockReset();
     vi.mocked(toast.error).mockReset();
+    vi.mocked(toast.info).mockReset();
     vi.mocked(toast.success).mockReset();
 
     mockUseWorkOrders.mockReturnValue({
@@ -122,6 +132,7 @@ describe("WorkOrdersPage", () => {
 
     vi.stubGlobal("api", {
       deleteWorkOrder: mockDeleteWorkOrder,
+      updateWorkOrder: mockUpdateWorkOrder,
     });
   });
 
@@ -150,5 +161,34 @@ describe("WorkOrdersPage", () => {
     expect(mockRefreshOrders).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
     expect(screen.getByText("Potvrda za RN-2026-0001")).toBeInTheDocument();
+  });
+
+  it("shows an error toast and skips refresh when toggle update returns null", async () => {
+    mockUpdateWorkOrder.mockResolvedValueOnce(null);
+
+    render(
+      <MemoryRouter initialEntries={["/work-orders"]}>
+        <WorkOrdersPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /promeni status rn-2026-0001/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateWorkOrder).toHaveBeenCalledWith(
+        sampleOrder.id,
+        expect.objectContaining({
+          status: "completed",
+          isCompleted: true,
+          completionDate: expect.any(String),
+        }),
+      );
+      expect(toast.error).toHaveBeenCalledWith("Radni nalog nije pronađen.");
+    });
+
+    expect(mockRefreshOrders).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
