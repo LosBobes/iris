@@ -1,18 +1,4 @@
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/components/ui/pagination";
+import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import {
   Select,
   SelectContent,
@@ -24,11 +10,11 @@ import {
   Pencil,
   Trash2,
   Copy,
+  Check,
+  Circle,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
-  CheckCircle,
-  Circle,
 } from "lucide-react";
 import type { WorkOrder } from "@/types/work-order";
 import {
@@ -40,67 +26,30 @@ import {
 import {
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
-  WORK_ORDER_STATUS_LABELS,
-  WORK_ORDER_STATUS_VARIANTS,
   canToggleWorkOrderCompletion,
   formatWorkOrderDate,
   formatWorkOrderPrice,
 } from "@/shared/utils/work-orders";
 
-// ---------------------------------------------------------------------------
-// Column header with sort indicator
-// ---------------------------------------------------------------------------
-
-interface SortableHeaderProps {
+interface ColDef {
+  key: string;
   label: string;
-  field: SortField;
-  currentField: SortField;
-  direction: SortDirection;
-  onSort: (field: SortField) => void;
+  field?: SortField;
+  width?: string;
+  align?: "left" | "right";
 }
 
-function SortableHeader({
-  label,
-  field,
-  currentField,
-  direction,
-  onSort,
-}: SortableHeaderProps): React.JSX.Element {
-  const isActive = field === currentField;
-  return (
-    <TableHead
-      aria-sort={
-        isActive ? (direction === "asc" ? "ascending" : "descending") : "none"
-      }
-    >
-      <button
-        type="button"
-        className="inline-flex cursor-pointer select-none items-center gap-1"
-        onClick={() => onSort(field)}
-        aria-label={
-          isActive
-            ? `Sort by ${label}, currently ${direction === "asc" ? "ascending" : "descending"}`
-            : `Sort by ${label}`
-        }
-      >
-        {label}
-        {isActive ? (
-          direction === "asc" ? (
-            <ArrowUp className="h-3 w-3" />
-          ) : (
-            <ArrowDown className="h-3 w-3" />
-          )
-        ) : (
-          <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />
-        )}
-      </button>
-    </TableHead>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+const COLUMNS: ColDef[] = [
+  { key: "orderNumber", label: "Br. naloga", field: "orderNumber", width: "110px" },
+  { key: "clientName", label: "Klijent", field: "clientName", width: "140px" },
+  { key: "jobDescription", label: "Opis posla", field: "jobDescription" },
+  { key: "billing", label: "Tip dokumenta", field: "billingDocumentType", width: "130px" },
+  { key: "delivery", label: "Dostava", field: "shipping.deliveryMethod", width: "150px" },
+  { key: "price", label: "Cena", field: "price", width: "110px", align: "right" },
+  { key: "status", label: "Status", field: "status", width: "110px" },
+  { key: "date", label: "Datum", field: "issueDate", width: "110px" },
+  { key: "actions", label: "", width: "110px" },
+];
 
 interface WorkOrdersTableProps {
   orders: WorkOrder[];
@@ -117,6 +66,26 @@ interface WorkOrdersTableProps {
   onDuplicate: (order: WorkOrder) => void;
   onEdit: (order: WorkOrder) => void;
   onToggleStatus: (order: WorkOrder) => void;
+  onOpen?: (order: WorkOrder) => void;
+}
+
+function SortIcon({
+  field,
+  currentField,
+  direction,
+}: {
+  field: SortField;
+  currentField: SortField;
+  direction: SortDirection;
+}): React.JSX.Element {
+  if (field !== currentField) {
+    return <ArrowUpDown className="h-3 w-3 text-[color:var(--iris-ink-faint)]" />;
+  }
+  return direction === "asc" ? (
+    <ArrowUp className="h-3 w-3" />
+  ) : (
+    <ArrowDown className="h-3 w-3" />
+  );
 }
 
 export function WorkOrdersTable({
@@ -134,109 +103,109 @@ export function WorkOrdersTable({
   onDuplicate,
   onEdit,
   onToggleStatus,
+  onOpen,
 }: WorkOrdersTableProps): React.JSX.Element {
   return (
-    <div className="space-y-4">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <SortableHeader
-              label="Br. naloga"
-              field="orderNumber"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <SortableHeader
-              label="Klijent"
-              field="clientName"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <SortableHeader
-              label="Opis posla"
-              field="jobDescription"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <SortableHeader
-              label="Tip dokumenta"
-              field="billingDocumentType"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <SortableHeader
-              label="Dostava"
-              field="shipping.deliveryMethod"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <SortableHeader
-              label="Cena"
-              field="price"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <SortableHeader
-              label="Status"
-              field="status"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <SortableHeader
-              label="Datum izdavanja"
-              field="issueDate"
-              currentField={sortField}
-              direction={sortDirection}
-              onSort={onSort}
-            />
-            <TableHead>Radnje</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+    <div className="border border-border bg-card">
+      <table className="w-full border-collapse text-[12px]">
+        <thead>
+          <tr className="border-b border-border">
+            {COLUMNS.map((col) => {
+              const isSortable = !!col.field;
+              const isActive = col.field === sortField;
+              return (
+                <th
+                  key={col.key}
+                  style={{ width: col.width }}
+                  className={`px-4 py-[10px] text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] ${
+                    col.align === "right" ? "text-right" : "text-left"
+                  }`}
+                  aria-sort={
+                    isActive
+                      ? sortDirection === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : isSortable
+                        ? "none"
+                        : undefined
+                  }
+                >
+                  {isSortable ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(col.field!)}
+                      className="inline-flex cursor-pointer items-center gap-1 bg-transparent p-0 text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                      aria-label={
+                        isActive
+                          ? `Sortirano po ${col.label}, ${sortDirection === "asc" ? "rastuće" : "opadajuće"}`
+                          : `Sortiraj po ${col.label}`
+                      }
+                    >
+                      {col.label}
+                      <SortIcon
+                        field={col.field!}
+                        currentField={sortField}
+                        direction={sortDirection}
+                      />
+                    </button>
+                  ) : (
+                    col.label
+                  )}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
           {orders.map((order) => {
             const canToggleStatus = canToggleWorkOrderCompletion(order.status);
-
             return (
-              <TableRow key={order.id}>
-                <TableCell className="font-medium">
+              <tr
+                key={order.id}
+                onClick={onOpen ? () => onOpen(order) : undefined}
+                className={`h-10 border-b border-[color:var(--iris-border-soft)] last:border-b-0 ${
+                  onOpen ? "cursor-pointer hover:bg-black/[0.02]" : ""
+                }`}
+              >
+                <td className="tnum px-4 font-medium text-foreground">
                   {order.orderNumber}
-                </TableCell>
-                <TableCell>{order.clientName}</TableCell>
-                <TableCell
-                  className="max-w-[200px] truncate"
+                </td>
+                <td className="px-4 text-foreground">{order.clientName}</td>
+                <td
+                  className="max-w-[220px] truncate px-4 text-[color:var(--iris-ink-soft)]"
                   title={order.jobDescription}
                 >
                   {order.jobDescription}
-                </TableCell>
-                <TableCell>
+                </td>
+                <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.billingDocumentType
                     ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
                     : "—"}
-                </TableCell>
-                <TableCell>
+                </td>
+                <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.shipping.deliveryMethod
                     ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
                     : "—"}
-                </TableCell>
-                <TableCell>{formatWorkOrderPrice(order.price)}</TableCell>
-                <TableCell>
-                  <Badge variant={WORK_ORDER_STATUS_VARIANTS[order.status]}>
-                    {WORK_ORDER_STATUS_LABELS[order.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell>{formatWorkOrderDate(order.issueDate)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
+                </td>
+                <td
+                  className={`tnum px-4 text-right ${
+                    order.price !== null
+                      ? "font-medium text-foreground"
+                      : "text-[color:var(--iris-ink-faint)]"
+                  }`}
+                >
+                  {formatWorkOrderPrice(order.price)}
+                </td>
+                <td className="px-4">
+                  <IrisBadge status={order.status} />
+                </td>
+                <td className="tnum px-4 text-[color:var(--iris-ink-soft)]">
+                  {formatWorkOrderDate(order.issueDate)}
+                </td>
+                <td className="px-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2.5 text-[color:var(--iris-ink-mute)]">
+                    <button
+                      type="button"
                       disabled={!canToggleStatus}
                       title={
                         canToggleStatus
@@ -253,120 +222,110 @@ export function WorkOrdersTable({
                           : "Status ovog naloga se ne menja iz liste"
                       }
                       onClick={() => onToggleStatus(order)}
+                      className="bg-transparent p-0 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {order.status === "completed" ? (
-                        <CheckCircle className="h-3.5 w-3.5" />
+                        <Check className="h-3.5 w-3.5" />
                       ) : (
                         <Circle className="h-3.5 w-3.5" />
                       )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
+                    </button>
+                    <button
+                      type="button"
                       title="Izmeni"
                       aria-label="Izmeni"
                       onClick={() => onEdit(order)}
+                      className="bg-transparent p-0 hover:text-foreground"
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
+                    </button>
+                    <button
+                      type="button"
                       title="Dupliraj"
                       aria-label="Dupliraj"
                       onClick={() => onDuplicate(order)}
+                      className="bg-transparent p-0 hover:text-foreground"
                     >
                       <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
+                    </button>
+                    <button
+                      type="button"
                       title="Obriši"
                       aria-label="Obriši"
                       onClick={() => onDelete(order)}
+                      className="bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             );
           })}
-        </TableBody>
-      </Table>
+        </tbody>
+      </table>
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-        <p className="text-center text-xs text-muted-foreground sm:text-left">
-          Ukupno {totalFiltered} naloga — stranica {currentPage} od {totalPages}
-        </p>
-        <div className="flex justify-center">
-          {totalPages > 1 && (
-            <Pagination className="w-auto">
-              <PaginationContent>
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage <= 1}
-                    onClick={() => onPageChange(currentPage - 1)}
-                  >
-                    Prethodna
-                  </Button>
-                </PaginationItem>
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter((page) => {
-                    if (totalPages <= 7) return true;
-                    if (page === 1 || page === totalPages) return true;
-                    return Math.abs(page - currentPage) <= 1;
-                  })
-                  .map((page, idx, arr) => {
-                    const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
-                    return (
-                      <span key={page} className="contents">
-                        {showEllipsis && (
-                          <PaginationItem>
-                            <span className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">
-                              ...
-                            </span>
-                          </PaginationItem>
-                        )}
-                        <PaginationItem>
-                          <Button
-                            variant={
-                              page === currentPage ? "default" : "outline"
-                            }
-                            size="icon"
-                            onClick={() => onPageChange(page)}
-                          >
-                            {page}
-                          </Button>
-                        </PaginationItem>
-                      </span>
-                    );
-                  })}
-                <PaginationItem>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= totalPages}
-                    onClick={() => onPageChange(currentPage + 1)}
-                  >
-                    Sledeća
-                  </Button>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          )}
+      <div className="flex items-center justify-between border-t border-border bg-background px-6 py-3 text-[11px] text-[color:var(--iris-ink-mute)]">
+        <div>
+          Ukupno {totalFiltered} naloga · stranica {currentPage} od {totalPages}
         </div>
-        <div className="flex items-center justify-center gap-2 sm:justify-self-end">
-          <span className="text-xs text-muted-foreground">Po strani</span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange(currentPage - 1)}
+            className="border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ← Prethodna
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter((page) => {
+              if (totalPages <= 7) return true;
+              if (page === 1 || page === totalPages) return true;
+              return Math.abs(page - currentPage) <= 1;
+            })
+            .map((page, idx, arr) => {
+              const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+              const isCurrent = page === currentPage;
+              return (
+                <span key={page} className="contents">
+                  {showEllipsis && (
+                    <span className="px-1 text-[color:var(--iris-ink-faint)]">
+                      …
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onPageChange(page)}
+                    className={`tnum min-w-7 border px-2.5 py-1 text-[11px] ${
+                      isCurrent
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:text-foreground"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                </span>
+              );
+            })}
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+            className="border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Sledeća →
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span>Po strani</span>
           <Select
             value={String(pageSize)}
             onValueChange={(value) =>
               onPageSizeChange(Number(value) as PageSize)
             }
           >
-            <SelectTrigger size="sm" className="w-20">
+            <SelectTrigger size="sm" className="h-7 w-16 rounded-none border-border text-[11px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent align="end">

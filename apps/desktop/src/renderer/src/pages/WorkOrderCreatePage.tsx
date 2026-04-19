@@ -3,7 +3,6 @@ import { ArrowLeft } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
-import { Button } from "@/components/ui/button";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useAuth } from "@/hooks/useAuth";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
@@ -72,24 +71,34 @@ function WorkOrderCreatePage(): React.JSX.Element {
 
   return (
     <AppShell>
-      <div className="space-y-6 p-8">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
+      <div className="space-y-8">
+        <div className="border-b border-border px-10 pt-7 pb-5">
+          <button
+            type="button"
             onClick={() => navigate("/work-orders")}
+            className="mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
-            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+            <ArrowLeft className="h-3 w-3" />
             Nazad na naloge
-          </Button>
-          <h1 className="text-base font-semibold">Novi radni nalog</h1>
+          </button>
+          <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+            Iris · nalog
+          </div>
+          <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
+            Novi radni nalog
+          </h1>
+          <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
+            Popunite podatke za novi nalog
+          </div>
         </div>
 
-        <WorkOrderForm
-          initialValues={duplicateInitialValues}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-        />
+        <div className="pl-10 pr-0">
+          <WorkOrderForm
+            initialValues={duplicateInitialValues}
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+          />
+        </div>
       </div>
     </AppShell>
   );

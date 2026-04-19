@@ -1,119 +1,162 @@
-import { useState } from 'react'
-import { Eye, EyeOff, Lock, User } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import './Login.css'
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 interface LoginProps {
-  // Called when authentication succeeds — parent decides what to render next
-  onLoginSuccess: (user: AuthenticatedUser) => void
+  onLoginSuccess: (user: AuthenticatedUser) => void;
 }
 
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
-    e.preventDefault()
-    setError(null)
-    setIsLoading(true)
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
 
     try {
-      const result = await window.api.login({ username, password })
+      const result = await window.api.login({ username, password });
 
       if (result.success && result.user) {
-        onLoginSuccess(result.user)
+        onLoginSuccess(result.user);
       } else {
-        // Error text can come from the main process.
-        setError(result.error ?? 'Greška pri prijavljivanju.')
+        setError(result.error ?? "Greška pri prijavljivanju.");
       }
     } catch (err) {
-      // IPC/main-process failure while invoking login
-      const details = err instanceof Error && err.message ? ` (${err.message})` : ''
-      setError(`Greška u komunikaciji sa glavnim procesom aplikacije.${details}`)
+      const details =
+        err instanceof Error && err.message ? ` (${err.message})` : "";
+      setError(
+        `Greška u komunikaciji sa glavnim procesom aplikacije.${details}`,
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
   return (
-    <div className="login-container">
-      <div className="login-card">
+    <div className="relative flex min-h-screen items-center justify-center bg-background text-foreground">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 30% 20%, rgba(120,100,70,0.04) 0%, transparent 60%)",
+        }}
+      />
 
-        {/* App name and welcome header */}
-        <div className="login-header">
-          <h1 className="login-title">Iris aplikacija</h1>
-          <p className="login-description">Prijavite se na vaš nalog</p>
+      <div className="relative flex items-center gap-20">
+        {/* Masthead */}
+        <div className="w-80">
+          <div className="text-[56px] font-normal leading-none tracking-[-2px] text-foreground">
+            Iris
+          </div>
+          <div className="my-5 h-0.5 w-8 bg-[color:var(--iris-accent)]" />
+          <p className="max-w-[260px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
+            Sistem za vođenje radnih naloga u štampariji. Svaki posao —
+            evidentiran.
+          </p>
+          <div className="mt-10 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)]">
+            izdanje 2025 · beograd
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form" noValidate>
-          <div className="login-field">
-            <label htmlFor="username" className="login-label">
-              Korisničko ime
-            </label>
-            <div className="login-input-wrapper">
-              <User className="login-input-icon" />
+        {/* Form */}
+        <div className="w-[340px] border border-border bg-card px-9 pt-9 pb-7">
+          <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+            Prijava
+          </div>
+          <h1 className="mb-6 text-[22px] font-medium tracking-[-0.3px] text-foreground">
+            Dobrodošli
+          </h1>
+
+          <form onSubmit={handleSubmit} className="flex flex-col" noValidate>
+            <div className="mb-[18px]">
+              <label
+                htmlFor="username"
+                className="mb-1.5 block text-[11px] text-[color:var(--iris-ink-soft)]"
+              >
+                Korisničko ime
+              </label>
               <input
                 id="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Unesite korisničko ime"
                 autoComplete="username"
                 required
                 disabled={isLoading}
-                className="login-input has-icon"
+                className="w-full border-0 border-b border-border bg-transparent py-2 text-[14px] text-foreground outline-none focus:border-foreground"
               />
             </div>
-          </div>
 
-          <div className="login-field">
-            <label htmlFor="password" className="login-label">
-              Lozinka
-            </label>
-            <div className="login-input-wrapper">
-              <Lock className="login-input-icon" />
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Unesite lozinku"
-                autoComplete="current-password"
-                required
-                disabled={isLoading}
-                className="login-input has-icon has-toggle"
-              />
-              <button
-                type="button"
-                className="login-password-toggle"
-                onClick={() => setShowPassword((prev) => !prev)}
-                tabIndex={-1}
-                aria-label={showPassword ? 'Sakrij lozinku' : 'Prikaži lozinku'}
+            <div className="mb-7">
+              <div className="mb-1.5 flex justify-between text-[11px] text-[color:var(--iris-ink-soft)]">
+                <label htmlFor="password">Lozinka</label>
+                <span className="text-[11px] text-[color:var(--iris-accent)]">
+                  zaboravljena?
+                </span>
+              </div>
+              <div className="relative flex items-center">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  disabled={isLoading}
+                  className="w-full border-0 border-b border-border bg-transparent py-2 pr-7 text-[14px] text-foreground outline-none focus:border-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  tabIndex={-1}
+                  aria-label={
+                    showPassword ? "Sakrij lozinku" : "Prikaži lozinku"
+                  }
+                  className="absolute right-0 flex items-center justify-center p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+
+            {error ? (
+              <div
+                role="alert"
+                className="mb-4 border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-3 py-2 text-[12px] text-[color:var(--iris-status-cancelled)]"
               >
-                {showPassword ? (
-                  <EyeOff className="login-input-icon" />
-                ) : (
-                  <Eye className="login-input-icon" />
-                )}
-              </button>
-            </div>
+                {error}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-foreground px-0 py-[11px] text-[13px] font-medium tracking-[0.3px] text-background disabled:opacity-50"
+            >
+              {isLoading ? (
+                "Učitavanje..."
+              ) : (
+                <>
+                  Prijavite se
+                  <span aria-hidden className="ml-1.5">
+                    →
+                  </span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-5 flex justify-between border-t border-[color:var(--iris-border-soft)] pt-4 text-[11px] text-[color:var(--iris-ink-mute)]">
+            <span>Zapamti uređaj</span>
+            <span>v2.4.1</span>
           </div>
-
-          {/* Error box — only rendered when there is an active error */}
-          {error ? (
-            <div className="login-error" role="alert">
-              {error}
-            </div>
-          ) : null}
-
-          <Button type="submit" className="w-full mt-1" disabled={isLoading}>
-            {isLoading ? 'Učitavanje...' : 'Prijavite se'}
-          </Button>
-        </form>
+        </div>
       </div>
     </div>
-  )
+  );
 }

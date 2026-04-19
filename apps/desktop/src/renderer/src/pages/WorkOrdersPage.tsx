@@ -109,6 +109,13 @@ function WorkOrdersPage(): React.JSX.Element {
     [navigate],
   );
 
+  const handleOpen = useCallback(
+    (order: WorkOrder) => {
+      navigate(`/work-orders/${order.id}`);
+    },
+    [navigate],
+  );
+
   const hasActiveFilters =
     filters.search !== "" ||
     filters.status !== "all" ||
@@ -119,45 +126,69 @@ function WorkOrdersPage(): React.JSX.Element {
 
   return (
     <AppShell>
-      <div className="space-y-6 p-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-base font-semibold">Radni nalozi</h1>
-          <Button size="sm" onClick={() => navigate("/work-orders/new")}>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Novi radni nalog
-          </Button>
+      <div className="space-y-8">
+        <div className="border-b border-border px-10 pt-7 pb-5">
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                Iris · nalozi
+              </div>
+              <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
+                Radni nalozi
+              </h1>
+              <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
+                {allOrdersCount === 0
+                  ? "Još nema naloga"
+                  : `Ukupno ${totalFiltered} od ${allOrdersCount}`}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/work-orders/new")}
+              className="flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Novi radni nalog
+            </button>
+          </div>
         </div>
 
-        <WorkOrdersFilters
-          filters={filters}
-          updateFilters={updateFilters}
-          resetFilters={resetFilters}
-        />
+        <div className="px-8">
+          <WorkOrdersFilters
+            filters={filters}
+            updateFilters={updateFilters}
+            resetFilters={resetFilters}
+          />
+        </div>
 
         {loading && (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            <span className="text-sm">Učitavanje naloga...</span>
+          <div className="px-8">
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <span className="text-sm">Učitavanje naloga...</span>
+            </div>
           </div>
         )}
 
         {!loading && error && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-8 text-center">
-            <p className="text-sm text-destructive">
+          <div className="px-8">
+            <div className="border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               Greška pri učitavanju naloga: {error}
-            </p>
+            </div>
           </div>
         )}
 
         {!loading && !error && allOrdersCount === 0 && (
-          <div className="py-20 text-center">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Nema radnih naloga. Kreirajte prvi radni nalog.
-            </p>
-            <Button size="sm" onClick={() => navigate("/work-orders/new")}>
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              Novi radni nalog
-            </Button>
+          <div className="px-8">
+            <div className="py-20 text-center">
+              <p className="mb-4 text-sm text-muted-foreground">
+                Nema radnih naloga. Kreirajte prvi radni nalog.
+              </p>
+              <Button size="sm" onClick={() => navigate("/work-orders/new")}>
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Novi radni nalog
+              </Button>
+            </div>
           </div>
         )}
 
@@ -166,33 +197,38 @@ function WorkOrdersPage(): React.JSX.Element {
           allOrdersCount > 0 &&
           totalFiltered === 0 &&
           hasActiveFilters && (
-            <div className="py-20 text-center">
-              <p className="mb-4 text-sm text-muted-foreground">
-                Nema radnih naloga koji odgovaraju izabranim filterima.
-              </p>
-              <Button variant="outline" size="sm" onClick={resetFilters}>
-                Poništi filtere
-              </Button>
+            <div className="px-8">
+              <div className="py-20 text-center">
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Nema radnih naloga koji odgovaraju izabranim filterima.
+                </p>
+                <Button variant="outline" size="sm" onClick={resetFilters}>
+                  Poništi filtere
+                </Button>
+              </div>
             </div>
           )}
 
         {!loading && !error && totalFiltered > 0 && (
-          <WorkOrdersTable
-            orders={orders}
-            totalFiltered={totalFiltered}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-            onDelete={handleDeleteClick}
-            onDuplicate={handleDuplicate}
-            onEdit={handleEdit}
-            onToggleStatus={handleToggleStatus}
-          />
+          <div className="px-8 pb-8">
+            <WorkOrdersTable
+              orders={orders}
+              totalFiltered={totalFiltered}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+              onDelete={handleDeleteClick}
+              onDuplicate={handleDuplicate}
+              onEdit={handleEdit}
+              onToggleStatus={handleToggleStatus}
+              onOpen={handleOpen}
+            />
+          </div>
         )}
       </div>
 

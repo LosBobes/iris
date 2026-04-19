@@ -29,36 +29,52 @@ function DashboardPage(): React.JSX.Element {
 
   return (
     <AppShell>
-      <div className="space-y-8 p-8">
-        <h1 className="text-base font-semibold">Kontrolna tabla</h1>
+      <div className="space-y-8">
+        <div className="border-b border-border px-10 pt-7 pb-5">
+          <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+            Iris · pregled
+          </div>
+          <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
+            Kontrolna tabla
+          </h1>
+          <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
+            Sažetak poslovanja
+          </div>
+        </div>
 
-        <DashboardFilters filters={filters} setFilters={setFilters} operators={operators} />
+        <div className="px-8">
+          <DashboardFilters filters={filters} setFilters={setFilters} operators={operators} />
+        </div>
 
         {loading && (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            <span className="text-sm">Učitavanje podataka...</span>
+          <div className="px-8">
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <span className="text-sm">Učitavanje podataka...</span>
+            </div>
           </div>
         )}
 
         {!loading && error && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-8 text-center">
-            <p className="text-sm text-destructive">
+          <div className="px-8">
+            <div className="border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               Greška pri učitavanju podataka: {error}
-            </p>
+            </div>
           </div>
         )}
 
         {isGlobalEmpty && (
-          <div className="py-20 text-center">
-            <p className="text-sm text-muted-foreground">
-              Nema radnih naloga u bazi podataka.
-            </p>
+          <div className="px-8">
+            <div className="py-20 text-center">
+              <p className="text-sm text-muted-foreground">
+                Nema radnih naloga u bazi podataka.
+              </p>
+            </div>
           </div>
         )}
 
         {showMockMonthlyCharts && (
-          <div className="space-y-4">
+          <div className="space-y-4 px-8">
             <p className="text-sm text-muted-foreground">
               Prikazan je demo pregled mesečnih trendova dok podaci ne budu dostupni.
             </p>
@@ -70,15 +86,17 @@ function DashboardPage(): React.JSX.Element {
         )}
 
         {isFilteredEmpty && (
-          <div className="py-20 text-center">
-            <p className="text-sm text-muted-foreground">
-              Nema radnih naloga koji odgovaraju izabranim filterima.
-            </p>
+          <div className="px-8">
+            <div className="py-20 text-center">
+              <p className="text-sm text-muted-foreground">
+                Nema radnih naloga koji odgovaraju izabranim filterima.
+              </p>
+            </div>
           </div>
         )}
 
         {showWidgets && (
-          <>
+          <div className="space-y-8 px-8">
             <DashboardSummaryCards summary={summary} />
             <DashboardCharts
               monthlyOrders={monthlyOrders}
@@ -87,7 +105,7 @@ function DashboardPage(): React.JSX.Element {
               topClients={topClients}
               summary={summary}
             />
-          </>
+          </div>
         )}
       </div>
     </AppShell>

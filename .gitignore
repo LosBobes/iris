@@ -5,3 +5,5 @@ node_modules/
 out/
 dist/
 build/
+apps/desktop/.eslintcache
+.gitignore
