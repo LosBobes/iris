@@ -31,7 +31,7 @@ export function registerLoginHandlers(): void {
       const users = loadFixtureJson<FixtureUser[]>('users.json')
       const { username, password } = credentials
 
-      // Look up the user — in production this should be an async DB query
+      // Look up the user - in production this should be an async DB query
       const match = users.find(
         (u) => u.username === username && u.password === password
       )

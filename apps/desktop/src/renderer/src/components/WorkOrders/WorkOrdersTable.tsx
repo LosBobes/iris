@@ -180,12 +180,12 @@ export function WorkOrdersTable({
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.billingDocumentType
                     ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
-                    : "—"}
+                    : "-"}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.shipping.deliveryMethod
                     ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
-                    : "—"}
+                    : "-"}
                 </td>
                 <td
                   className={`tnum px-4 text-right ${

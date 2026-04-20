@@ -1,5 +1,5 @@
 // Development environment configuration
-// These values are for local development only — never used in production builds
+// These values are for local development only - never used in production builds
 export const config = {
   environment: 'development' as const,
   auth: {

@@ -56,7 +56,11 @@ export function WorkOrdersPerMonthChart({
             width={28}
           />
           <Tooltip
-            formatter={(value) => [value, 'Nalozi']}
+            formatter={(value, _name, item) => [
+              value,
+              (item?.payload as { label?: string } | undefined)?.label ?? '',
+            ]}
+            labelFormatter={() => ''}
             contentStyle={{ fontSize: 12 }}
           />
           <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />

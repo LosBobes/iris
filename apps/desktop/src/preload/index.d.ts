@@ -23,6 +23,8 @@ declare global {
   interface Window {
     electron: ElectronAPI;
     api: {
+      getAppVersion: () => Promise<string>;
+
       login: (credentials: {
         username: string;
         password: string;

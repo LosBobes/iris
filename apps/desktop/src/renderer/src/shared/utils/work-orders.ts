@@ -56,7 +56,7 @@ export function formatWorkOrderDateTime(iso: string): string {
 }
 
 export function formatWorkOrderPrice(price: number | null): string {
-  if (price === null) return "—";
+  if (price === null) return "-";
 
   return (
     new Intl.NumberFormat("sr-Latn-RS", {

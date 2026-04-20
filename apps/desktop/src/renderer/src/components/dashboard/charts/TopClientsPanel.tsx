@@ -47,7 +47,11 @@ export function TopClientsPanel({ topClients }: TopClientsPanelProps): React.JSX
               width={160}
             />
             <Tooltip
-              formatter={(value) => [value, 'Nalozi']}
+              formatter={(value, _name, item) => [
+                value,
+                (item?.payload as { label?: string } | undefined)?.label ?? '',
+              ]}
+              labelFormatter={() => ''}
               contentStyle={{ fontSize: 12 }}
             />
             <Bar dataKey="count" fill="#22c55e" radius={[0, 3, 3, 0]} />

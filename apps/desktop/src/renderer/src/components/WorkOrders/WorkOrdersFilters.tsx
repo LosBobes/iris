@@ -179,7 +179,7 @@ export function WorkOrdersFilters({
               : undefined
           }
         />
-        <span className="text-[color:var(--iris-ink-faint)]">—</span>
+        <span className="text-[color:var(--iris-ink-faint)]">-</span>
         <DatePicker
           value={filters.dateTo || null}
           onChange={(v) => updateFilters({ dateTo: v ?? "" })}
