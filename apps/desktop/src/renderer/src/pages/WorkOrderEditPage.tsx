@@ -121,51 +121,67 @@ function WorkOrderEditPage(): React.JSX.Element {
 
   return (
     <AppShell>
-      <div className="space-y-6 p-8">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
+      <div className="space-y-8">
+        <div className="border-b border-border px-10 pt-7 pb-5">
+          <button
+            type="button"
             onClick={() => navigate("/work-orders")}
+            className="mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
-            <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+            <ArrowLeft className="h-3 w-3" />
             Nazad na naloge
-          </Button>
-          <h1 className="text-base font-semibold">
-            {order ? `Izmena naloga ${order.orderNumber}` : "Izmena naloga"}
-          </h1>
-          {order && canToggleWorkOrderCompletion(order.status) && (
-            <Button
-              variant={order.status === "completed" ? "outline" : "secondary"}
-              size="sm"
-              onClick={handleToggleStatus}
-            >
-              {order.status === "active"
-                ? "Označi kao završeno"
-                : "Označi kao aktivno"}
-            </Button>
-          )}
+          </button>
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                Iris · izmena
+              </div>
+              <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
+                {order ? `Izmena naloga ${order.orderNumber}` : "Izmena naloga"}
+              </h1>
+              <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
+                {order?.clientName ?? "Izmena postojećeg naloga"}
+              </div>
+            </div>
+            {order && canToggleWorkOrderCompletion(order.status) && (
+              <Button
+                variant={order.status === "completed" ? "outline" : "secondary"}
+                size="sm"
+                onClick={handleToggleStatus}
+              >
+                {order.status === "active"
+                  ? "Označi kao završeno"
+                  : "Označi kao aktivno"}
+              </Button>
+            )}
+          </div>
         </div>
 
         {loading && (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            <span className="text-sm">Učitavanje naloga...</span>
+          <div className="px-8">
+            <div className="flex items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <span className="text-sm">Učitavanje naloga...</span>
+            </div>
           </div>
         )}
 
         {!loading && error && (
-          <div className="rounded-none border border-destructive/30 bg-destructive/10 px-4 py-8 text-center">
-            <p className="text-sm text-destructive">{error}</p>
+          <div className="px-8">
+            <div className="border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+              {error}
+            </div>
           </div>
         )}
 
         {!loading && !error && order && (
-          <WorkOrderForm
-            initialData={order}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-          />
+          <div className="pl-10 pr-0">
+            <WorkOrderForm
+              initialData={order}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+            />
+          </div>
         )}
       </div>
     </AppShell>

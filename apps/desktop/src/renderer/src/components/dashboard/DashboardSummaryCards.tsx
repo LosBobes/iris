@@ -1,23 +1,27 @@
-import { Banknote, CheckCircle2, ClipboardList, Clock } from 'lucide-react'
 import type { DashboardSummary } from '@/types/work-order'
 
 const formatRsd = (amount: number): string =>
   new Intl.NumberFormat('sr-RS', { style: 'currency', currency: 'RSD' }).format(amount)
 
-interface SummaryCardProps {
+interface SummaryCellProps {
   label: string
   value: string | number
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  isLast?: boolean
 }
 
-function SummaryCard({ label, value, icon: Icon }: SummaryCardProps): React.JSX.Element {
+function SummaryCell({ label, value, isLast }: SummaryCellProps): React.JSX.Element {
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon size={13} />
-        <span className="text-xs uppercase tracking-wide">{label}</span>
+    <div
+      className={`flex-1 px-6 py-5 ${
+        isLast ? '' : 'border-r border-[color:var(--iris-border-soft)]'
+      }`}
+    >
+      <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+        {label}
       </div>
-      <p className="mt-2 text-2xl font-semibold text-card-foreground">{value}</p>
+      <div className="tnum mt-2 text-[28px] font-normal tracking-[-0.5px] text-foreground">
+        {value}
+      </div>
     </div>
   )
 }
@@ -30,27 +34,11 @@ export function DashboardSummaryCards({
   summary,
 }: DashboardSummaryCardsProps): React.JSX.Element {
   return (
-    <div className="grid grid-cols-4 gap-5">
-      <SummaryCard
-        label="Ukupno radnih naloga"
-        value={summary.totalOrders}
-        icon={ClipboardList}
-      />
-      <SummaryCard
-        label="Završeni"
-        value={summary.statusCounts.completed}
-        icon={CheckCircle2}
-      />
-      <SummaryCard
-        label="Aktivni"
-        value={summary.statusCounts.active}
-        icon={Clock}
-      />
-      <SummaryCard
-        label="Ukupan prihod"
-        value={formatRsd(summary.totalRevenue)}
-        icon={Banknote}
-      />
+    <div className="flex border border-border bg-card">
+      <SummaryCell label="Ukupno naloga" value={summary.totalOrders} />
+      <SummaryCell label="Završeni" value={summary.statusCounts.completed} />
+      <SummaryCell label="Aktivni" value={summary.statusCounts.active} />
+      <SummaryCell label="Ukupan prihod" value={formatRsd(summary.totalRevenue)} isLast />
     </div>
   )
 }
