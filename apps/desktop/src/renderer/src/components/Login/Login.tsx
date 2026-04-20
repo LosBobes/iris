@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 interface LoginProps {
@@ -8,9 +8,31 @@ interface LoginProps {
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    void window.api
+      .getAppVersion()
+      .then((version) => {
+        if (isActive) {
+          setAppVersion(version);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setAppVersion(null);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -59,7 +81,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
             evidentiran.
           </p>
           <div className="mt-10 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)]">
-            izdanje 2025 · beograd
+            {appVersion ? `Verzija ${appVersion}` : "Verzija"}
           </div>
         </div>
 
@@ -152,7 +174,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
 
           <div className="mt-5 flex justify-between border-t border-[color:var(--iris-border-soft)] pt-4 text-[11px] text-[color:var(--iris-ink-mute)]">
             <span>Zapamti uređaj</span>
-            <span>v2.4.1</span>
+            <span>{appVersion ? `v${appVersion}` : null}</span>
           </div>
         </div>
       </div>

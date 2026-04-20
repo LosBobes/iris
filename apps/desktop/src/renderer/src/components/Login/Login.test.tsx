@@ -3,18 +3,23 @@ import { Login } from './Login'
 
 // Mock window.api - the real implementation is injected by the preload script at runtime
 const mockLogin = vi.fn()
-vi.stubGlobal('api', { login: mockLogin })
+const mockGetAppVersion = vi.fn().mockResolvedValue('0.1.0-dev')
+vi.stubGlobal('api', { login: mockLogin, getAppVersion: mockGetAppVersion })
 
 describe('Login', () => {
   const onLoginSuccess = vi.fn()
 
   beforeEach(() => {
     mockLogin.mockReset()
+    mockGetAppVersion.mockReset()
+    mockGetAppVersion.mockResolvedValue('0.1.0-dev')
     onLoginSuccess.mockReset()
   })
 
-  it('renders the login form', () => {
+  it('renders the login form', async () => {
     render(<Login onLoginSuccess={onLoginSuccess} />)
+
+    await screen.findByText('v0.1.0-dev')
 
     expect(screen.getByLabelText('Korisničko ime')).toBeInTheDocument()
     expect(screen.getByLabelText('Lozinka')).toBeInTheDocument()
