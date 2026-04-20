@@ -64,7 +64,7 @@ export function StatusDistributionChart({
             </Pie>
             <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
             <Tooltip
-              formatter={(value) => [value, "Nalozi"]}
+              formatter={(value, name) => [value, name]}
               contentStyle={{ fontSize: 12 }}
             />
           </PieChart>

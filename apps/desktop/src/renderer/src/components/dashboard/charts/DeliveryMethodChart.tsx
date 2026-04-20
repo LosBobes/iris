@@ -60,7 +60,11 @@ export function DeliveryMethodChart({
               width={120}
             />
             <Tooltip
-              formatter={(value) => [value, "Nalozi"]}
+              formatter={(value, _name, item) => [
+                value,
+                (item?.payload as { label?: string } | undefined)?.label ?? "",
+              ]}
+              labelFormatter={() => ""}
               contentStyle={{ fontSize: 12 }}
             />
             <Bar dataKey="count" fill="#f59e0b" radius={[0, 3, 3, 0]} />

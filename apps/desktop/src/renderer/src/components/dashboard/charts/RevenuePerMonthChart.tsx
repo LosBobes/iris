@@ -59,7 +59,11 @@ export function RevenuePerMonthChart({
             tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
           />
           <Tooltip
-            formatter={(value) => [formatRSD(Number(value ?? 0)), 'Prihod']}
+            formatter={(value, _name, item) => [
+              formatRSD(Number(value ?? 0)),
+              (item?.payload as { label?: string } | undefined)?.label ?? '',
+            ]}
+            labelFormatter={() => ''}
             contentStyle={{ fontSize: 12 }}
           />
           <Line
