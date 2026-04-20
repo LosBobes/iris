@@ -71,9 +71,12 @@ function FieldShell({
   full,
   children,
 }: FieldShellProps): React.JSX.Element {
+  const labelId = id ? `${id}-label` : undefined;
+
   return (
     <div className={full ? "col-span-full" : undefined}>
       <label
+        id={labelId}
         htmlFor={id}
         className="mb-1.5 block text-[11px] text-[color:var(--iris-ink-soft)]"
       >
@@ -333,7 +336,7 @@ export function WorkOrderForm({
 
         <FormSection num="03" title="Dokument i isporuka">
           <div className="grid grid-cols-2 gap-6">
-            <FieldShell label="Tip dokumenta">
+            <FieldShell id="billingDocumentType" label="Tip dokumenta">
               <Controller
                 name="billingDocumentType"
                 control={control}
@@ -344,7 +347,11 @@ export function WorkOrderForm({
                       field.onChange(v === WORK_ORDER_SELECT_NONE_VALUE ? null : v)
                     }
                   >
-                    <SelectTrigger className={underlineTrigger}>
+                    <SelectTrigger
+                      id="billingDocumentType"
+                      aria-labelledby="billingDocumentType-label"
+                      className={underlineTrigger}
+                    >
                       <SelectValue placeholder="Izaberite tip" />
                     </SelectTrigger>
                     <SelectContent>
@@ -364,7 +371,7 @@ export function WorkOrderForm({
               />
             </FieldShell>
 
-            <FieldShell label="Način dostave">
+            <FieldShell id="shipping.deliveryMethod" label="Način dostave">
               <Controller
                 name="shipping.deliveryMethod"
                 control={control}
@@ -375,7 +382,11 @@ export function WorkOrderForm({
                       field.onChange(v === WORK_ORDER_SELECT_NONE_VALUE ? null : v)
                     }
                   >
-                    <SelectTrigger className={underlineTrigger}>
+                    <SelectTrigger
+                      id="shipping.deliveryMethod"
+                      aria-labelledby="shipping.deliveryMethod-label"
+                      className={underlineTrigger}
+                    >
                       <SelectValue placeholder="Izaberite način" />
                     </SelectTrigger>
                     <SelectContent>

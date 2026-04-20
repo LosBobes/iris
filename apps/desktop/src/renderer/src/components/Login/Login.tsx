@@ -113,11 +113,10 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  tabIndex={-1}
                   aria-label={
                     showPassword ? "Sakrij lozinku" : "Prikaži lozinku"
                   }
-                  className="absolute right-0 flex items-center justify-center p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                  className="absolute right-0 flex items-center justify-center p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--iris-accent)] focus-visible:ring-offset-1"
                 >
                   {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>

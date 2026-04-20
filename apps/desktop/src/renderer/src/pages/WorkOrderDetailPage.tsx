@@ -20,22 +20,34 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setOrder(null);
+      setError("Radni nalog nije pronađen");
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     const load = async (): Promise<void> => {
       setLoading(true);
       setError(null);
+      setOrder(null);
+
       try {
         const data = await window.api.getWorkOrderById(id);
         if (cancelled) return;
         if (!data) {
+          setOrder(null);
           setError("Radni nalog nije pronađen");
           return;
         }
         setOrder(data);
       } catch {
-        if (!cancelled) setError("Greška pri učitavanju radnog naloga");
+        if (!cancelled) {
+          setOrder(null);
+          setError("Greška pri učitavanju radnog naloga");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
