@@ -55,7 +55,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
           </div>
           <div className="my-5 h-0.5 w-8 bg-[color:var(--iris-accent)]" />
           <p className="max-w-[260px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
-            Sistem za vođenje radnih naloga u štampariji. Svaki posao —
+            Sistem za vođenje radnih naloga u štampariji. Svaki posao je
             evidentiran.
           </p>
           <div className="mt-10 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)]">

@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Login } from './Login'
 
-// Mock window.api — the real implementation is injected by the preload script at runtime
+// Mock window.api - the real implementation is injected by the preload script at runtime
 const mockLogin = vi.fn()
 vi.stubGlobal('api', { login: mockLogin })
 

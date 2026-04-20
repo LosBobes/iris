@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import App from './App'
 
-// Mock window.api — injected by the preload script at runtime, not available in jsdom
+// Mock window.api - injected by the preload script at runtime, not available in jsdom
 vi.stubGlobal('api', { login: vi.fn() })
 
 describe('App', () => {

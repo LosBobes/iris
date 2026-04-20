@@ -150,19 +150,19 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       "Tip dokumenta",
       order.billingDocumentType
         ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
-        : "—",
+        : "-",
     ],
     ["Datum izdavanja", formatWorkOrderDate(order.issueDate)],
     [
       "Dostava",
       order.shipping.deliveryMethod
         ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
-        : "—",
+        : "-",
     ],
-    ["Rok", order.dueDate ? formatWorkOrderDate(order.dueDate) : "—"],
+    ["Rok", order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],
     [
       "Broj dokumenta",
-      order.billingDocumentNumber ? order.billingDocumentNumber : "—",
+      order.billingDocumentNumber ? order.billingDocumentNumber : "-",
     ],
   ];
 
@@ -180,7 +180,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     ...(order.status === "active"
       ? ([
           {
-            time: "—",
+            time: "-",
             label: "U proizvodnji",
             who: "u toku",
             state: "current",
@@ -192,7 +192,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {
             time: formatWorkOrderDateTime(order.completionDate),
             label: "Nalog završen",
-            who: order.executedBy ?? "—",
+            who: order.executedBy ?? "-",
             state: "done",
           },
         ] as const)
@@ -202,7 +202,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {
             time: formatWorkOrderDateTime(order.updatedAt),
             label: "Nalog otkazan",
-            who: order.executedBy ?? "—",
+            who: order.executedBy ?? "-",
             state: "done",
           },
         ] as const)
@@ -210,9 +210,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     ...(order.status !== "completed" && order.status !== "cancelled"
       ? ([
           {
-            time: order.dueDate ? formatWorkOrderDate(order.dueDate) : "—",
+            time: order.dueDate ? formatWorkOrderDate(order.dueDate) : "-",
             label: "Isporuka",
-            who: order.dueDate ? "zakazana" : "—",
+            who: order.dueDate ? "zakazana" : "-",
             state: "pending",
           },
         ] as const)

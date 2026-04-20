@@ -48,7 +48,7 @@ describe("work-order shared utils", () => {
   });
 
   it("formats work-order price and date strings", () => {
-    expect(formatWorkOrderPrice(null)).toBe("—");
+    expect(formatWorkOrderPrice(null)).toBe("-");
     expect(formatWorkOrderPrice(12345.5)).toBe(
       `${new Intl.NumberFormat("sr-Latn-RS", {
         style: "decimal",

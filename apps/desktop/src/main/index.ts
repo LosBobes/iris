@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-// Feature-specific IPC handlers — one import per main-process feature folder
+// Feature-specific IPC handlers - one import per main-process feature folder
 import { registerLoginHandlers } from './Login/Login.async'
 import { registerWorkOrderHandlers } from './WorkOrder/WorkOrder.async'
 

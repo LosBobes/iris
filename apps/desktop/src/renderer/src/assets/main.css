@@ -52,7 +52,7 @@
 :root {
   --radius: 0.25rem;
 
-  /* Iris palette — warm ivory paper + ink */
+  /* Iris palette - warm ivory paper + ink */
   --background: oklch(0.975 0.008 75);
   --foreground: oklch(0.22 0.012 60);
   --card: oklch(0.992 0.004 80);
@@ -76,7 +76,7 @@
   --input: oklch(0.88 0.008 70);
   --ring: oklch(0.55 0.09 55);
 
-  /* Accent — Ember (Iris default) */
+  /* Accent - Ember (Iris default) */
   --iris-accent: oklch(0.62 0.13 45);
   --iris-border-soft: oklch(0.93 0.008 75);
   --iris-ink-soft: oklch(0.45 0.010 60);

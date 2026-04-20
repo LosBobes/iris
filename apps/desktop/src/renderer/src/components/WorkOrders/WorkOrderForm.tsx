@@ -595,15 +595,15 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
   const dueDate = watch("dueDate");
 
   const rows: Array<[string, string]> = [
-    ["Klijent", clientName || "—"],
-    ["Opis", jobDescription || "—"],
+    ["Klijent", clientName || "-"],
+    ["Opis", jobDescription || "-"],
     [
       "Tip dokumenta",
-      billingDocumentType ? WORK_ORDER_BILLING_LABELS[billingDocumentType] : "—",
+      billingDocumentType ? WORK_ORDER_BILLING_LABELS[billingDocumentType] : "-",
     ],
-    ["Dostava", deliveryMethod ? WORK_ORDER_DELIVERY_LABELS[deliveryMethod] : "—"],
-    ["Datum izdavanja", issueDate ? formatWorkOrderDate(issueDate) : "—"],
-    ["Rok", dueDate ? formatWorkOrderDate(dueDate) : "—"],
+    ["Dostava", deliveryMethod ? WORK_ORDER_DELIVERY_LABELS[deliveryMethod] : "-"],
+    ["Datum izdavanja", issueDate ? formatWorkOrderDate(issueDate) : "-"],
+    ["Rok", dueDate ? formatWorkOrderDate(dueDate) : "-"],
   ];
 
   return (
