@@ -1,10 +1,9 @@
 import { ipcMain } from 'electron'
 import type { User } from '../../../model/user'
-import { loadFixtureJson } from '../shared/load-fixture'
-
-interface FixtureUser extends User {
-  password: string
-}
+import {
+  createConfiguredIrisApiClient,
+  mapIrisApiErrorToUserMessage
+} from '../shared/iris-api-client'
 
 interface LoginResponse {
   success: boolean
@@ -28,21 +27,30 @@ export function registerLoginHandlers(): void {
       _event,
       credentials: { username: string; password: string }
     ): Promise<LoginResponse> => {
-      const users = loadFixtureJson<FixtureUser[]>('users.json')
-      const { username, password } = credentials
+      try {
+        const client = createConfiguredIrisApiClient()
+        const result = await client.login(credentials)
 
-      // Look up the user - in production this should be an async DB query
-      const match = users.find(
-        (u) => u.username === username && u.password === password
-      )
+        if (!result.success || !result.user) {
+          return {
+            success: false,
+            error: result.error ?? 'Neispravno korisničko ime ili lozinka.'
+          }
+        }
 
-      if (!match) {
-        return { success: false, error: 'Neispravno korisničko ime ili lozinka.' }
+        const user: User = {
+          id: result.user.id,
+          username: result.user.username,
+          role: result.user.role
+        }
+
+        return { success: true, user }
+      } catch (error) {
+        return {
+          success: false,
+          error: mapIrisApiErrorToUserMessage(error, 'Greška pri prijavljivanju.')
+        }
       }
-
-      // Never send the password back to the renderer
-      const user: User = { id: match.id, username: match.username, role: match.role }
-      return { success: true, user }
     }
   )
 }
