@@ -122,13 +122,13 @@ function WorkOrderEditPage(): React.JSX.Element {
   return (
     <AppShell>
       <div className="space-y-8">
-        <div className="border-b border-border px-10 pt-7 pb-5">
+        <div className="animate-iris-enter border-b border-border px-10 pt-7 pb-5">
           <button
             type="button"
             onClick={() => navigate("/work-orders")}
-            className="mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+            className="iris-focusable iris-press group mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
-            <ArrowLeft className="h-3 w-3" />
+            <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
             Nazad na naloge
           </button>
           <div className="flex items-end justify-between">
@@ -159,7 +159,10 @@ function WorkOrderEditPage(): React.JSX.Element {
 
         {loading && (
           <div className="px-8">
-            <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <div
+              className="flex items-center justify-center py-20 text-muted-foreground"
+              style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
+            >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-sm">Učitavanje naloga...</span>
             </div>
@@ -168,14 +171,14 @@ function WorkOrderEditPage(): React.JSX.Element {
 
         {!loading && error && (
           <div className="px-8">
-            <div className="border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+            <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               {error}
             </div>
           </div>
         )}
 
         {!loading && !error && order && (
-          <div className="pl-10 pr-0">
+          <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
             <WorkOrderForm
               initialData={order}
               onSubmit={handleSubmit}

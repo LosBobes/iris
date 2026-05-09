@@ -6,6 +6,7 @@ import {
   createIrisApiClient,
   getConfiguredBackendStatus,
 } from './iris-api-client'
+import { __resetEnvFileCacheForTests } from './runtime-config'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(body === null ? null : JSON.stringify(body), {
@@ -47,10 +48,17 @@ describe('iris-api-client', () => {
     } else {
       process.env.IRIS_API_BASE_URL = originalApiBaseUrl
     }
+    vi.restoreAllMocks()
+    __resetEnvFileCacheForTests()
   })
 
   it('returns a configuration error when IRIS_API_BASE_URL is missing', async () => {
     delete process.env.IRIS_API_BASE_URL
+    // Point cwd at a directory with no .env so the file fallback in
+    // runtime-config also produces no value — we want to exercise the
+    // truly-unset branch, not paper over it with an empty string.
+    vi.spyOn(process, 'cwd').mockReturnValue('/nonexistent-iris-test-dir')
+    __resetEnvFileCacheForTests()
 
     await expect(getConfiguredBackendStatus()).resolves.toEqual({
       ready: false,

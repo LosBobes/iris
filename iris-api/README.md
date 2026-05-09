@@ -5,14 +5,20 @@ This folder contains a minimal HTTP API for the Iris desktop application. The go
 - how to derive an HTTP contract from an Electron IPC contract
 - how to organize a small Go service so it stays readable
 - how to let the desktop app and API share the same fixture data before a real database exists
+- how to keep a small in-memory CRUD layer behind a stable HTTP contract during the migration away from main-process fixtures
 
 ## What the server does
 
-The desktop application currently needs three capabilities:
+The desktop application currently needs these backend capabilities:
 
+- `GET /healthz`
 - `POST /auth/login`
 - `GET /work-orders`
 - `GET /work-orders/operators`
+- `GET /work-orders/{id}`
+- `POST /work-orders`
+- `PATCH /work-orders/{id}`
+- `DELETE /work-orders/{id}`
 
 That contract is documented in [openapi.yaml](openapi.yaml).
 
@@ -21,7 +27,7 @@ The server is intentionally small, but it is not collapsed into a single file. T
 - `cmd/server/main.go`: application entry point
 - `internal/api/server.go`: HTTP routing and handlers
 - `internal/domain/types.go`: domain types and request/response models
-- `internal/store/fixtures.go`: fixture JSON loading
+- `internal/store/fixtures.go`: fixture JSON loading plus in-memory CRUD behavior
 
 ## Go language primer for this API
 

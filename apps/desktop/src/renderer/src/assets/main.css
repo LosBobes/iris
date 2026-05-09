@@ -123,6 +123,105 @@
   [data-tnum] {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Iris motion tokens — restrained, editorial. Never bouncy. */
+  :root {
+    --iris-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --iris-ease-out-soft: cubic-bezier(0.25, 1, 0.5, 1);
+    --iris-ease-out-decisive: cubic-bezier(0.16, 1, 0.3, 1);
+    --iris-dur-fast: 140ms;
+    --iris-dur-base: 220ms;
+    --iris-dur-slow: 360ms;
+    --iris-dur-page: 520ms;
+  }
+
+  /* Honor reduced-motion: disable all animations and instant-snap transitions. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Page entrance — gentle fade + lift, set to fill-mode both so initial paint is hidden. */
+  @keyframes iris-fade-up {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 6px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes iris-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes iris-error-shake {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    20% { transform: translate3d(-3px, 0, 0); }
+    40% { transform: translate3d(3px, 0, 0); }
+    60% { transform: translate3d(-2px, 0, 0); }
+    80% { transform: translate3d(1px, 0, 0); }
+  }
+
+  @keyframes iris-rule-grow {
+    from {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleX(1);
+      opacity: 1;
+    }
+  }
+
+  .animate-iris-enter {
+    animation: iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both;
+  }
+
+  .animate-iris-fade {
+    animation: iris-fade-in var(--iris-dur-base) var(--iris-ease-out) both;
+  }
+
+  .animate-iris-shake {
+    animation: iris-error-shake 360ms var(--iris-ease-out) both;
+  }
+
+  /* Iris focus ring — used on bare buttons (nav, table actions, pagination). Only shows on keyboard focus. */
+  .iris-focusable {
+    transition: color var(--iris-dur-fast) var(--iris-ease-out),
+      background-color var(--iris-dur-fast) var(--iris-ease-out),
+      opacity var(--iris-dur-fast) var(--iris-ease-out);
+  }
+  .iris-focusable:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background),
+      0 0 0 3.5px color-mix(in oklch, var(--iris-accent) 55%, transparent);
+    border-radius: 1px;
+  }
+
+  /* Press feedback for non-shadcn buttons. Short, restrained. */
+  .iris-press {
+    transition: transform var(--iris-dur-fast) var(--iris-ease-out),
+      opacity var(--iris-dur-fast) var(--iris-ease-out);
+  }
+  .iris-press:not(:disabled):active {
+    transform: translate3d(0, 1px, 0);
+  }
 }
 
 #root {

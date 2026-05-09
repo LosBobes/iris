@@ -13,7 +13,7 @@ import { AuthContext } from "@/contexts/AuthContext";
 function AccessDenied(): React.JSX.Element {
   return (
     <main className="flex min-h-screen items-center justify-center">
-      <p className="text-muted-foreground">
+      <p className="animate-iris-fade text-muted-foreground">
         Nemate dozvolu za pristup ovoj stranici.
       </p>
     </main>
@@ -27,7 +27,10 @@ type AppBootstrapState =
 
 function StartupLoadingScreen(): React.JSX.Element {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+    <main
+      className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground"
+      style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
+    >
       <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
         <Loader2 className="h-5 w-5 animate-spin" />
         <span>Povezivanje sa backend servisom...</span>
@@ -45,7 +48,7 @@ function BackendUnavailableScreen({
 }): React.JSX.Element {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-      <div className="w-full max-w-xl border border-border bg-card px-8 py-7">
+      <div className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
         <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
           Iris · backend
         </div>
@@ -58,7 +61,7 @@ function BackendUnavailableScreen({
         <button
           type="button"
           onClick={onRetry}
-          className="mt-6 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background"
+          className="iris-focusable iris-press mt-6 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
         >
           Pokušaj ponovo
         </button>

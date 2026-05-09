@@ -12,6 +12,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorKey, setErrorKey] = useState(0);
 
   useEffect(() => {
     let isActive = true;
@@ -46,6 +47,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         onLoginSuccess(result.user);
       } else {
         setError(result.error ?? "Greška pri prijavljivanju.");
+        setErrorKey((k) => k + 1);
       }
     } catch (err) {
       const details =
@@ -53,6 +55,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
       setError(
         `Greška u komunikaciji sa glavnim procesom aplikacije.${details}`,
       );
+      setErrorKey((k) => k + 1);
     } finally {
       setIsLoading(false);
     }
@@ -71,11 +74,23 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
 
       <div className="relative flex items-center gap-20">
         {/* Masthead */}
-        <div className="w-80">
+        <div
+          className="w-80"
+          style={{
+            animation:
+              "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both",
+          }}
+        >
           <div className="text-[56px] font-normal leading-none tracking-[-2px] text-foreground">
             Iris
           </div>
-          <div className="my-5 h-0.5 w-8 bg-[color:var(--iris-accent)]" />
+          <div
+            className="my-5 h-0.5 w-8 bg-[color:var(--iris-accent)] origin-left"
+            style={{
+              animation:
+                "iris-rule-grow 520ms var(--iris-ease-out-decisive) both 180ms",
+            }}
+          />
           <p className="max-w-[260px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
             Sistem za vođenje radnih naloga u štampariji. Svaki posao je
             evidentiran.
@@ -86,7 +101,14 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         </div>
 
         {/* Form */}
-        <div className="w-[340px] border border-border bg-card px-9 pt-9 pb-7">
+        <div
+          className="w-[340px] border border-border bg-card px-9 pt-9 pb-7"
+          style={{
+            animation:
+              "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both 120ms",
+          }}
+        >
+          {/* Use ref so the shake animation can be re-triggered on subsequent errors. */}
           <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             Prijava
           </div>
@@ -110,7 +132,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                 autoComplete="username"
                 required
                 disabled={isLoading}
-                className="w-full border-0 border-b border-border bg-transparent py-2 text-[14px] text-foreground outline-none focus:border-foreground"
+                className="w-full border-0 border-b border-border bg-transparent py-2 text-[14px] text-foreground outline-none transition-colors duration-150 focus:border-foreground"
               />
             </div>
 
@@ -130,7 +152,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                   autoComplete="current-password"
                   required
                   disabled={isLoading}
-                  className="w-full border-0 border-b border-border bg-transparent py-2 pr-7 text-[14px] text-foreground outline-none focus:border-foreground"
+                  className="w-full border-0 border-b border-border bg-transparent py-2 pr-7 text-[14px] text-foreground outline-none transition-colors duration-150 focus:border-foreground"
                 />
                 <button
                   type="button"
@@ -138,7 +160,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                   aria-label={
                     showPassword ? "Sakrij lozinku" : "Prikaži lozinku"
                   }
-                  className="absolute right-0 flex items-center justify-center p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--iris-accent)] focus-visible:ring-offset-1"
+                  className="iris-focusable iris-press absolute right-0 flex items-center justify-center p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
                 >
                   {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -147,8 +169,10 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
 
             {error ? (
               <div
+                key={errorKey}
                 role="alert"
-                className="mb-4 border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-3 py-2 text-[12px] text-[color:var(--iris-status-cancelled)]"
+                aria-live="assertive"
+                className="animate-iris-shake mb-4 border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-3 py-2 text-[12px] text-[color:var(--iris-status-cancelled)]"
               >
                 {error}
               </div>
@@ -157,14 +181,23 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-foreground px-0 py-[11px] text-[13px] font-medium tracking-[0.3px] text-background disabled:opacity-50"
+              className="iris-focusable iris-press group relative w-full bg-foreground px-0 py-[11px] text-[13px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90 disabled:opacity-50"
             >
               {isLoading ? (
-                "Učitavanje..."
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-background/40 border-t-background"
+                  />
+                  Učitavanje...
+                </span>
               ) : (
                 <>
                   Prijavite se
-                  <span aria-hidden className="ml-1.5">
+                  <span
+                    aria-hidden
+                    className="ml-1.5 inline-block transition-transform duration-200 ease-out group-hover:translate-x-[3px]"
+                  >
                     →
                   </span>
                 </>

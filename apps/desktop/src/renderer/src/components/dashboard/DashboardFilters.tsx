@@ -69,7 +69,7 @@ export function DashboardFilters({
               issuedBy: e.target.value || null,
             }))
           }
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+          className="iris-focusable h-8 border border-input bg-background px-2 text-xs text-foreground transition-colors duration-150 hover:border-foreground/40"
         >
           <option value="">Svi operateri</option>
           {operators.map((op) => (

@@ -2,15 +2,16 @@
 
 Desktop application for Iris, built with Electron, React, and TypeScript.
 
-This README is scoped only to `apps/desktop`. It describes the desktop app's current architecture, local development workflow, fixture-driven data model, and packaging setup.
+This README is scoped only to `apps/desktop`. It describes the desktop app's current architecture, local development workflow, backend API configuration, and packaging setup.
 
 ## What This App Does
 
-The current desktop app is an admin dashboard prototype with a fixture-backed login flow.
+The current desktop app is an admin dashboard that reaches an external Go API through Electron IPC.
 
 Today it includes:
 
 - an Electron main process that owns the application window and IPC handlers
+- an Electron main process API client that forwards auth and work-order requests to Iris API
 - a preload bridge that exposes a narrow `window.api` surface to the renderer
 - a React renderer with:
   - a login screen
@@ -23,9 +24,9 @@ Today it includes:
 
 Current limitations:
 
-- authentication is backed by local JSON fixtures, not a real auth provider
-- work orders are loaded from local fixture data, not a database
-- only one seeded user currently exists, and it has the `admin` role
+- the desktop app depends on a running Iris API instance configured through `IRIS_API_BASE_URL`
+- the backend is still fixture-backed and keeps work-order mutations only in memory for the current process lifetime
+- only one seeded user currently exists in the shared fixture data, and it has the `admin` role
 - routing is limited to the existing `react-router` flow for the dashboard and work-orders screens, with sidebar navigation between those views
 
 ## Stack
@@ -51,7 +52,7 @@ Responsibilities:
 
 - create and configure the browser window
 - register IPC handlers
-- load local fixture data for login and work orders
+- call the external Iris API for login and work-order operations
 - own privileged Electron APIs that should not be exposed directly to the renderer
 
 Current feature handlers:
@@ -72,9 +73,14 @@ Responsibilities:
 
 Current API surface:
 
+- `window.api.getBackendStatus()`
 - `window.api.login(credentials)`
 - `window.api.getWorkOrders()`
 - `window.api.getWorkOrderOperators()`
+- `window.api.getWorkOrderById(id)`
+- `window.api.createWorkOrder(input)`
+- `window.api.updateWorkOrder(id, changes)`
+- `window.api.deleteWorkOrder(id)`
 
 Relevant files:
 
@@ -103,28 +109,17 @@ High-level flow:
 
 ## Runtime Data Flow
 
-The current data path is intentionally simple:
+The current data path is:
 
 ```text
-fixtures/*.json
-  -> src/main/shared/load-fixture.ts
+IRIS_API_BASE_URL
+  -> src/main/shared/runtime-config.ts
+  -> src/main/shared/iris-api-client.ts
   -> IPC handlers in src/main/*
   -> preload bridge in src/preload/index.ts
   -> window.api in renderer
-  -> React hook: useDashboardData()
-  -> dashboard components and charts
+  -> React hooks and pages
 ```
-
-### Fixture Resolution
-
-Fixture loading is implemented in `src/main/shared/load-fixture.ts`.
-
-When the main process loads fixture JSON, it checks these locations in order:
-
-1. `app.getAppPath()/fixtures/<file>`
-2. `process.cwd()/fixtures/<file>`
-
-That keeps the local development path simple while still allowing packaged apps to ship fixture files if needed.
 
 ## Getting Started
 
@@ -138,6 +133,25 @@ npm install
 ```
 
 `npm install` also runs `electron-builder install-app-deps` through `postinstall`.
+
+### Configure the Backend URL
+
+Create `apps/desktop/.env` with:
+
+```env
+IRIS_API_BASE_URL=http://localhost:8080
+```
+
+The Electron main process reads that value and keeps backend URLs out of the renderer.
+
+### Start the Backend First
+
+In a separate terminal:
+
+```bash
+cd iris-api
+go run ./cmd/server
+```
 
 ### Start Development Mode
 
@@ -156,27 +170,24 @@ npm run start
 
 This uses `electron-vite preview` to run the built output.
 
-## Login and Fixture Data
+## Login and Data Source
 
-The current login flow is fixture-backed.
+The desktop app no longer reads auth and work-order fixtures directly.
+Those requests now go through Electron IPC to the external Iris API.
 
 ### Seeded Credentials
 
-`fixtures/users.json` currently contains:
+The default backend fixture data currently contains:
 
 - username: `admin`
 - password: `admin123`
 - role: `admin`
 
-There is no seeded non-admin user yet, so the access-denied branch exists in code but is not covered by the default fixture data.
+There is no seeded non-admin user yet, so the access-denied branch exists in code but is not covered by the default backend fixture data.
 
-### Work Order Fixture File
+### Work Order Shape
 
-Dashboard data comes from:
-
-- `fixtures/work-orders.json`
-
-The current work-order fixture shape is:
+The current work-order API shape is:
 
 ```ts
 interface WorkOrder {
@@ -210,7 +221,7 @@ Notes:
 - `price === null` means the order is excluded from revenue totals
 - `issuedBy` is used to build the operator filter options
 
-If you want to change the dashboard output locally, edit `fixtures/work-orders.json` and restart the app.
+Today the backend still reads the shared fixture files under `apps/desktop/fixtures/`, but the desktop app consumes that data only through the API.
 
 ## Available Scripts
 
