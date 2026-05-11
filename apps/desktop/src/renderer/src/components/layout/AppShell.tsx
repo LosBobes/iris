@@ -26,9 +26,21 @@ function isActivePath(currentPath: string, item: NavItemDef): boolean {
   return currentPath === item.to || currentPath.startsWith(`${item.to}/`);
 }
 
+function getActiveNavItemIndex(currentPath: string): number {
+  return NAV_ITEMS.reduce((activeIndex, item, index) => {
+    if (!isActivePath(currentPath, item)) return activeIndex;
+
+    const activeItem = activeIndex >= 0 ? NAV_ITEMS[activeIndex] : null;
+    return !activeItem || item.to.length > activeItem.to.length
+      ? index
+      : activeIndex;
+  }, -1);
+}
+
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const { currentUser, onLogout } = useAuth();
   const location = useLocation();
+  const activeNavIndex = getActiveNavItemIndex(location.pathname);
   const navRef = useRef<HTMLElement | null>(null);
   const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const [indicator, setIndicator] = useState<{
@@ -46,9 +58,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
     .toUpperCase();
 
   const recomputeIndicator = useCallback(() => {
-    const activeIdx = NAV_ITEMS.findIndex((item) =>
-      isActivePath(location.pathname, item),
-    );
+    const activeIdx = activeNavIndex;
     if (activeIdx === -1) {
       setIndicator((prev) => ({ ...prev, visible: false }));
       return;
@@ -62,7 +72,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
       height: itemRect.height - 16,
       visible: true,
     });
-  }, [location.pathname]);
+  }, [activeNavIndex]);
 
   useLayoutEffect(() => {
     recomputeIndicator();
@@ -125,10 +135,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               ref={(el) => {
                 itemRefs.current[idx] = el;
               }}
-              className={({ isActive }) =>
+              className={() =>
                 cn(
                   "iris-focusable iris-press relative flex items-center gap-2.5 rounded-sm px-2 py-2 text-[13px]",
-                  isActive
+                  idx === activeNavIndex
                     ? "bg-black/5 font-medium text-foreground"
                     : "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
                 )
