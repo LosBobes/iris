@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import {
   Select,
@@ -105,6 +106,13 @@ export function WorkOrdersTable({
   onToggleStatus,
   onOpen,
 }: WorkOrdersTableProps): React.JSX.Element {
+  // Stagger the entrance animation only on the very first paint. Subsequent
+  // sort / filter / page changes should swap rows in place — no shimmer.
+  const isFirstPaintRef = useRef(true);
+  useEffect(() => {
+    isFirstPaintRef.current = false;
+  }, []);
+  const shouldStagger = isFirstPaintRef.current;
   return (
     <div className="border border-border bg-card">
       <table className="w-full border-collapse text-[12px]">
@@ -134,7 +142,7 @@ export function WorkOrdersTable({
                     <button
                       type="button"
                       onClick={() => onSort(col.field!)}
-                      className="inline-flex cursor-pointer items-center gap-1 bg-transparent p-0 text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                      className="iris-focusable iris-press inline-flex cursor-pointer items-center gap-1 bg-transparent p-0 text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
                       aria-label={
                         isActive
                           ? `Sortirano po ${col.label}, ${sortDirection === "asc" ? "rastuće" : "opadajuće"}`
@@ -157,14 +165,25 @@ export function WorkOrdersTable({
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => {
+          {orders.map((order, idx) => {
             const canToggleStatus = canToggleWorkOrderCompletion(order.status);
+            // Cap stagger so a 100-row page doesn't take 3s to settle.
+            const rowDelayMs = Math.min(idx, 12) * 22;
             return (
               <tr
                 key={order.id}
                 onClick={onOpen ? () => onOpen(order) : undefined}
-                className={`h-10 border-b border-[color:var(--iris-border-soft)] last:border-b-0 ${
-                  onOpen ? "cursor-pointer hover:bg-black/[0.02]" : ""
+                style={
+                  shouldStagger
+                    ? {
+                        animation:
+                          "iris-fade-up 360ms var(--iris-ease-out) both",
+                        animationDelay: `${rowDelayMs}ms`,
+                      }
+                    : undefined
+                }
+                className={`h-10 border-b border-[color:var(--iris-border-soft)] transition-colors duration-150 last:border-b-0 ${
+                  onOpen ? "cursor-pointer hover:bg-black/[0.025]" : ""
                 }`}
               >
                 <td className="tnum px-4 font-medium text-foreground">
@@ -222,20 +241,29 @@ export function WorkOrdersTable({
                           : "Status ovog naloga se ne menja iz liste"
                       }
                       onClick={() => onToggleStatus(order)}
-                      className="bg-transparent p-0 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                      className="iris-focusable iris-press relative grid size-3.5 place-items-center bg-transparent p-0 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {order.status === "completed" ? (
-                        <Check className="h-3.5 w-3.5" />
-                      ) : (
-                        <Circle className="h-3.5 w-3.5" />
-                      )}
+                      <Check
+                        className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
+                          order.status === "completed"
+                            ? "scale-100 opacity-100"
+                            : "scale-50 opacity-0"
+                        }`}
+                      />
+                      <Circle
+                        className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
+                          order.status === "completed"
+                            ? "scale-50 opacity-0"
+                            : "scale-100 opacity-100"
+                        }`}
+                      />
                     </button>
                     <button
                       type="button"
                       title="Izmeni"
                       aria-label="Izmeni"
                       onClick={() => onEdit(order)}
-                      className="bg-transparent p-0 hover:text-foreground"
+                      className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
@@ -244,7 +272,7 @@ export function WorkOrdersTable({
                       title="Dupliraj"
                       aria-label="Dupliraj"
                       onClick={() => onDuplicate(order)}
-                      className="bg-transparent p-0 hover:text-foreground"
+                      className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
@@ -253,7 +281,7 @@ export function WorkOrdersTable({
                       title="Obriši"
                       aria-label="Obriši"
                       onClick={() => onDelete(order)}
-                      className="bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
+                      className="iris-focusable iris-press bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -274,7 +302,7 @@ export function WorkOrdersTable({
             type="button"
             disabled={currentPage <= 1}
             onClick={() => onPageChange(currentPage - 1)}
-            className="border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             ← Prethodna
           </button>
@@ -297,10 +325,11 @@ export function WorkOrdersTable({
                   <button
                     type="button"
                     onClick={() => onPageChange(page)}
-                    className={`tnum min-w-7 border px-2.5 py-1 text-[11px] ${
+                    aria-current={isCurrent ? "page" : undefined}
+                    className={`iris-focusable iris-press tnum min-w-7 border px-2.5 py-1 text-[11px] ${
                       isCurrent
                         ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:text-foreground"
+                        : "border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                     }`}
                   >
                     {page}
@@ -312,7 +341,7 @@ export function WorkOrdersTable({
             type="button"
             disabled={currentPage >= totalPages}
             onClick={() => onPageChange(currentPage + 1)}
-            className="border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             Sledeća →
           </button>

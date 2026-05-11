@@ -62,14 +62,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
   return (
     <AppShell>
       <div>
-        <div className="border-b border-border px-10 pt-5 pb-6">
+        <div className="animate-iris-enter border-b border-border px-10 pt-5 pb-6">
           <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-mute)]">
             <button
               type="button"
               onClick={() => navigate("/work-orders")}
-              className="flex items-center gap-1 bg-transparent p-0 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+              className="iris-focusable iris-press group flex items-center gap-1 bg-transparent p-0 text-[color:var(--iris-ink-mute)] hover:text-foreground"
             >
-              <ArrowLeft className="h-3 w-3" />
+              <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
               Radni nalozi
             </button>
             <span className="text-[color:var(--iris-ink-faint)]">/</span>
@@ -96,7 +96,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+                  className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   Štampaj
                 </button>
@@ -107,14 +107,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
                       state: { duplicateFrom: order },
                     })
                   }
-                  className="border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+                  className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   Dupliraj
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate(`/work-orders/${order.id}/edit`)}
-                  className="bg-foreground px-3.5 py-[7px] text-[12px] font-medium text-background"
+                  className="iris-focusable iris-press bg-foreground px-3.5 py-[7px] text-[12px] font-medium text-background hover:bg-foreground/90"
                 >
                   Izmeni
                 </button>
@@ -124,7 +124,10 @@ function WorkOrderDetailPage(): React.JSX.Element {
         </div>
 
         {loading && (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
+          <div
+            className="flex items-center justify-center py-20 text-muted-foreground"
+            style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
+          >
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             <span className="text-sm">Učitavanje naloga...</span>
           </div>
@@ -132,13 +135,17 @@ function WorkOrderDetailPage(): React.JSX.Element {
 
         {!loading && error && (
           <div className="px-10 pt-6">
-            <div className="border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+            <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               {error}
             </div>
           </div>
         )}
 
-        {!loading && !error && order && <DetailBody order={order} />}
+        {!loading && !error && order && (
+          <div className="animate-iris-enter" style={{ animationDelay: "80ms" }}>
+            <DetailBody order={order} />
+          </div>
+        )}
       </div>
     </AppShell>
   );

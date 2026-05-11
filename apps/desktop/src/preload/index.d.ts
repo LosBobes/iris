@@ -20,10 +20,17 @@ declare global {
     message?: string;
   }
 
+  interface BackendStatus {
+    ready: boolean;
+    message?: string;
+  }
+
   interface Window {
     electron: ElectronAPI;
     api: {
       getAppVersion: () => Promise<string>;
+
+      getBackendStatus: () => Promise<BackendStatus>;
 
       login: (credentials: {
         username: string;

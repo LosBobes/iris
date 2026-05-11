@@ -267,14 +267,21 @@ export function WorkOrderForm({
               <button
                 type="button"
                 onClick={() => setShowJobDetails(!showJobDetails)}
-                className="bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
+                aria-expanded={showJobDetails}
+                className="iris-focusable iris-press bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
               >
                 {showJobDetails ? "Sakrij detalje posla" : "Prikaži detalje posla"}
               </button>
             </div>
 
             {showJobDetails && (
-              <div className="grid grid-cols-2 gap-6">
+              <div
+                className="grid grid-cols-2 gap-6"
+                style={{
+                  animation:
+                    "iris-fade-up 320ms var(--iris-ease-out) both",
+                }}
+              >
                 <FieldShell id="jobDetails.productCode" label="Šifra proizvoda">
                   <input
                     id="jobDetails.productCode"
@@ -465,6 +472,10 @@ export function WorkOrderForm({
                 <input
                   id="shippingAddress"
                   className={underlineInput}
+                  style={{
+                    animation:
+                      "iris-fade-up 280ms var(--iris-ease-out) both",
+                  }}
                   {...register("shipping.shippingAddress", {
                     setValueAs: (v: string) => (v === "" ? null : v),
                   })}
@@ -561,7 +572,7 @@ export function WorkOrderForm({
           <button
             type="submit"
             disabled={submitting}
-            className="flex items-center justify-center gap-2 bg-foreground px-4 py-[11px] text-[12px] font-medium tracking-[0.3px] text-background disabled:opacity-60"
+            className="iris-focusable iris-press flex items-center justify-center gap-2 bg-foreground px-4 py-[11px] text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90 disabled:opacity-60"
           >
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Sačuvaj nalog
@@ -570,7 +581,7 @@ export function WorkOrderForm({
             type="button"
             onClick={onCancel}
             disabled={submitting}
-            className="bg-transparent py-2 text-[11px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
+            className="iris-focusable iris-press bg-transparent py-2 text-[11px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
           >
             Odustani
           </button>

@@ -17,7 +17,7 @@ The desktop application currently focuses on:
 - work order browsing and dashboard reporting
 - operator-based work order analysis
 
-The API module provides a simple backend contract for those same capabilities.
+The API module is now the source of truth for those same capabilities, and the desktop app reaches it through Electron main-process IPC handlers.
 
 ## AI Assets for Contributors
 
@@ -34,6 +34,9 @@ This repository includes specialized GitHub Copilot assets under `.github/` to h
 - **`.github/agents/react-frontend-agent.agent.md`**
   Use for new React UI features, component work, forms, routing, and renderer-layer improvements.
 
+- **`.github/agents/go-backend-agent.agent.md`**
+  Use for OpenAPI changes, chi handlers, fixture-store behavior, and Go tests in `iris-api`.
+
 - **`.github/agents/electron-code-review-mode.md`**
   Use for code reviews across the Electron stack — main process IPC handlers, preload bridge, and renderer.
 
@@ -42,6 +45,7 @@ This repository includes specialized GitHub Copilot assets under `.github/` to h
 | Task | Agent |
 |------|-------|
 | Building or modifying React UI components, forms, or pages | `react-frontend-agent` |
+| Changing Go routes, OpenAPI, fixture-backed API behavior, or backend tests | `go-backend-agent` |
 | Reviewing code across any Electron layer | `electron-code-review-mode` |
 | Unsure? | Start with the shared baseline in `.github/copilot-instructions.md`, then pick the agent whose mission best matches the task |
 
@@ -49,4 +53,4 @@ This repository includes specialized GitHub Copilot assets under `.github/` to h
 
 1. Read the shared baseline in `.github/copilot-instructions.md`.
 2. Choose the matching agent in `.github/agents/`.
-3. Follow the normal repo workflow: inspect docs first, update tests, and run the relevant build/lint/test commands from `apps/desktop/`.
+3. Follow the normal repo workflow: inspect docs first, update tests, and run the relevant commands from `apps/desktop/` or `iris-api/` depending on the slice you changed.

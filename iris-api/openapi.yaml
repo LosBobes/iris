@@ -1,19 +1,29 @@
 openapi: 3.1.0
 info:
   title: Iris Desktop Support API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    HTTP API that mirrors the data needs of the Electron desktop application.
-    The desktop app currently needs three capabilities:
-    - authenticate a user
-    - fetch all work orders
-    - fetch the distinct operator usernames used by those work orders
+    HTTP API that mirrors the full work-order workflow used by the Electron desktop application.
+    The desktop app talks to Electron IPC, and Electron main forwards those requests to this REST API.
 servers:
   - url: http://localhost:8080
 tags:
+  - name: System
   - name: Auth
   - name: Work Orders
 paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: Return backend readiness status
+      operationId: healthz
+      responses:
+        '200':
+          description: Backend is reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
   /auth/login:
     post:
       tags: [Auth]
@@ -41,7 +51,7 @@ paths:
   /work-orders:
     get:
       tags: [Work Orders]
-      summary: Return all work orders needed by the dashboard
+      summary: Return all work orders needed by the desktop application
       operationId: listWorkOrders
       responses:
         '200':
@@ -52,6 +62,35 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/WorkOrder'
+    post:
+      tags: [Work Orders]
+      summary: Create a new work order
+      operationId: createWorkOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkOrderInput'
+      responses:
+        '201':
+          description: Created work order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrder'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid work-order input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /work-orders/operators:
     get:
       tags: [Work Orders]
@@ -66,8 +105,85 @@ paths:
                 type: array
                 items:
                   type: string
+  /work-orders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Work Orders]
+      summary: Return a single work order by id
+      operationId: getWorkOrderById
+      responses:
+        '200':
+          description: Matching work order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrder'
+        '404':
+          description: Unknown work-order id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [Work Orders]
+      summary: Partially update a work order
+      operationId: updateWorkOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkOrderInput'
+      responses:
+        '200':
+          description: Updated work order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrder'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown work-order id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid work-order update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Work Orders]
+      summary: Delete a work order
+      operationId: deleteWorkOrder
+      responses:
+        '200':
+          description: Deletion result, including business failure for unknown ids
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteWorkOrderResponse'
 components:
   schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
     LoginRequest:
       type: object
       required: [username, password]
@@ -102,44 +218,203 @@ components:
         role:
           type: string
           enum: [admin, user]
+    JobDetails:
+      type: object
+      required: [productCode, paperWeightGsm, dimensions, quantity, finishingNote]
+      properties:
+        productCode:
+          type: [string, 'null']
+          example: CAT-42
+        paperWeightGsm:
+          type: [integer, 'null']
+          example: 170
+        dimensions:
+          type: [string, 'null']
+          example: A4
+        quantity:
+          type: [integer, 'null']
+          example: 500
+        finishingNote:
+          type: [string, 'null']
+          example: Mat plastifikacija
+    Shipping:
+      type: object
+      required:
+        [deliveryMethod, hasPackaging, hasLabeling, isFragile, requiresSignature, hasInsurance, shippingAddress]
+      properties:
+        deliveryMethod:
+          type: [string, 'null']
+          enum: [pickup, postExpress, cityExpress, fieldVisit, null]
+          example: postExpress
+        hasPackaging:
+          type: boolean
+        hasLabeling:
+          type: boolean
+        isFragile:
+          type: boolean
+        requiresSignature:
+          type: boolean
+        hasInsurance:
+          type: boolean
+        shippingAddress:
+          type: [string, 'null']
+          example: Bulevar 1
     WorkOrder:
       type: object
       required:
-        [id, clientName, documentType, deliveryMethod, issuedBy, createdAt]
+        [id, orderNumber, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, issueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate]
       properties:
         id:
           type: string
-          example: '1'
+          example: '42'
+        orderNumber:
+          type: string
+          example: RN-2025-0042
         clientName:
           type: string
-          example: Acme Printworks
-        documentType:
+          example: Demo Klijent
+        contactPerson:
+          type: [string, 'null']
+          example: Milica
+        jobDescription:
           type: string
-          enum: [invoice, receipt, contract, certificate]
+          example: Štampa kataloga
+        jobDetails:
+          anyOf:
+            - $ref: '#/components/schemas/JobDetails'
+            - type: 'null'
+        billingDocumentType:
+          type: [string, 'null']
+          enum: [invoice, cashCollection, proforma, null]
           example: invoice
-        deliveryMethod:
-          type: string
-          enum: [email, pickup, courier, fax]
-          example: email
+        billingDocumentNumber:
+          type: [string, 'null']
+          example: INV-42
+        shipping:
+          $ref: '#/components/schemas/Shipping'
         issuedBy:
           type: string
-          example: marko.petrovic
-        createdAt:
+          example: admin
+        executedBy:
+          type: [string, 'null']
+          example: pera
+        issueDate:
           type: string
           format: date
-          example: '2025-03-03'
-        completedAt:
-          type:
-            - string
-            - 'null'
+          example: '2025-04-07'
+        dueDate:
+          type: [string, 'null']
           format: date
-          example: '2025-03-04'
+          example: '2025-04-14'
+        isCompleted:
+          type: boolean
+        status:
+          type: string
+          enum: [draft, active, completed, cancelled]
+          example: completed
         price:
-          type:
-            - integer
-            - 'null'
-          description: Stored in RSD as an integer amount.
-          example: 22000
+          type: [integer, 'null']
+          example: 12000
+        note:
+          type: [string, 'null']
+          example: Hitno
+        createdAt:
+          type: string
+          format: date-time
+          example: '2025-04-01T10:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2025-04-02T10:00:00Z'
+        completionDate:
+          type: [string, 'null']
+          format: date
+          example: '2025-04-05'
+    CreateWorkOrderInput:
+      type: object
+      required:
+        [clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, issueDate, dueDate, price, note]
+      properties:
+        clientName:
+          type: string
+        contactPerson:
+          type: [string, 'null']
+        jobDescription:
+          type: string
+        jobDetails:
+          anyOf:
+            - $ref: '#/components/schemas/JobDetails'
+            - type: 'null'
+        billingDocumentType:
+          type: [string, 'null']
+          enum: [invoice, cashCollection, proforma, null]
+        billingDocumentNumber:
+          type: [string, 'null']
+        shipping:
+          $ref: '#/components/schemas/Shipping'
+        issuedBy:
+          type: string
+        issueDate:
+          type: string
+          format: date
+        dueDate:
+          type: [string, 'null']
+          format: date
+        price:
+          type: [integer, 'null']
+        note:
+          type: [string, 'null']
+    UpdateWorkOrderInput:
+      type: object
+      properties:
+        clientName:
+          type: string
+        contactPerson:
+          type: [string, 'null']
+        jobDescription:
+          type: string
+        jobDetails:
+          anyOf:
+            - $ref: '#/components/schemas/JobDetails'
+            - type: 'null'
+        billingDocumentType:
+          type: [string, 'null']
+          enum: [invoice, cashCollection, proforma, null]
+        billingDocumentNumber:
+          type: [string, 'null']
+        shipping:
+          $ref: '#/components/schemas/Shipping'
+        issuedBy:
+          type: string
+        executedBy:
+          type: [string, 'null']
+        issueDate:
+          type: string
+          format: date
+        dueDate:
+          type: [string, 'null']
+          format: date
+        isCompleted:
+          type: boolean
+        status:
+          type: string
+          enum: [draft, active, completed, cancelled]
+        price:
+          type: [integer, 'null']
+        note:
+          type: [string, 'null']
+        completionDate:
+          type: [string, 'null']
+          format: date
+    DeleteWorkOrderResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: Radni nalog nije pronađen.
     ErrorResponse:
       type: object
       required: [error]

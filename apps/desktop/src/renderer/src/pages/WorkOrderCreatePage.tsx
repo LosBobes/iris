@@ -72,13 +72,13 @@ function WorkOrderCreatePage(): React.JSX.Element {
   return (
     <AppShell>
       <div className="space-y-8">
-        <div className="border-b border-border px-10 pt-7 pb-5">
+        <div className="animate-iris-enter border-b border-border px-10 pt-7 pb-5">
           <button
             type="button"
             onClick={() => navigate("/work-orders")}
-            className="mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+            className="iris-focusable iris-press group mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
-            <ArrowLeft className="h-3 w-3" />
+            <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
             Nazad na naloge
           </button>
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
@@ -92,7 +92,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
           </div>
         </div>
 
-        <div className="pl-10 pr-0">
+        <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
           <WorkOrderForm
             initialValues={duplicateInitialValues}
             onSubmit={handleSubmit}

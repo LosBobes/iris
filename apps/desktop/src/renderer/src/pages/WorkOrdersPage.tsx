@@ -127,7 +127,7 @@ function WorkOrdersPage(): React.JSX.Element {
   return (
     <AppShell>
       <div className="space-y-8">
-        <div className="border-b border-border px-10 pt-7 pb-5">
+        <div className="animate-iris-enter border-b border-border px-10 pt-7 pb-5">
           <div className="flex items-end justify-between">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
@@ -145,15 +145,15 @@ function WorkOrdersPage(): React.JSX.Element {
             <button
               type="button"
               onClick={() => navigate("/work-orders/new")}
-              className="flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background"
+              className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:rotate-90" />
               Novi radni nalog
             </button>
           </div>
         </div>
 
-        <div className="px-8">
+        <div className="animate-iris-enter px-8" style={{ animationDelay: "60ms" }}>
           <WorkOrdersFilters
             filters={filters}
             updateFilters={updateFilters}
@@ -163,7 +163,10 @@ function WorkOrdersPage(): React.JSX.Element {
 
         {loading && (
           <div className="px-8">
-            <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <div
+              className="flex items-center justify-center py-20 text-muted-foreground"
+              style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
+            >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-sm">Učitavanje naloga...</span>
             </div>
@@ -172,7 +175,7 @@ function WorkOrdersPage(): React.JSX.Element {
 
         {!loading && error && (
           <div className="px-8">
-            <div className="border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+            <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               Greška pri učitavanju naloga: {error}
             </div>
           </div>
@@ -180,7 +183,7 @@ function WorkOrdersPage(): React.JSX.Element {
 
         {!loading && !error && allOrdersCount === 0 && (
           <div className="px-8">
-            <div className="py-20 text-center">
+            <div className="animate-iris-fade py-20 text-center">
               <p className="mb-4 text-sm text-muted-foreground">
                 Nema radnih naloga. Kreirajte prvi radni nalog.
               </p>
@@ -198,7 +201,7 @@ function WorkOrdersPage(): React.JSX.Element {
           totalFiltered === 0 &&
           hasActiveFilters && (
             <div className="px-8">
-              <div className="py-20 text-center">
+              <div className="animate-iris-fade py-20 text-center">
                 <p className="mb-4 text-sm text-muted-foreground">
                   Nema radnih naloga koji odgovaraju izabranim filterima.
                 </p>
@@ -210,7 +213,10 @@ function WorkOrdersPage(): React.JSX.Element {
           )}
 
         {!loading && !error && totalFiltered > 0 && (
-          <div className="px-8 pb-8">
+          <div
+            className="animate-iris-enter px-8 pb-8"
+            style={{ animationDelay: "120ms" }}
+          >
             <WorkOrdersTable
               orders={orders}
               totalFiltered={totalFiltered}

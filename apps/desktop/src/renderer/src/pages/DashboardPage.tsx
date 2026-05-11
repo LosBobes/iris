@@ -30,7 +30,9 @@ function DashboardPage(): React.JSX.Element {
   return (
     <AppShell>
       <div className="space-y-8">
-        <div className="border-b border-border px-10 pt-7 pb-5">
+        <div
+          className="animate-iris-enter border-b border-border px-10 pt-7 pb-5"
+        >
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             Iris · pregled
           </div>
@@ -42,13 +44,16 @@ function DashboardPage(): React.JSX.Element {
           </div>
         </div>
 
-        <div className="px-8">
+        <div className="animate-iris-enter px-8" style={{ animationDelay: "60ms" }}>
           <DashboardFilters filters={filters} setFilters={setFilters} operators={operators} />
         </div>
 
         {loading && (
           <div className="px-8">
-            <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <div
+              className="flex items-center justify-center py-20 text-muted-foreground"
+              style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
+            >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-sm">Učitavanje podataka...</span>
             </div>
@@ -57,7 +62,7 @@ function DashboardPage(): React.JSX.Element {
 
         {!loading && error && (
           <div className="px-8">
-            <div className="border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+            <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               Greška pri učitavanju podataka: {error}
             </div>
           </div>
@@ -65,7 +70,7 @@ function DashboardPage(): React.JSX.Element {
 
         {isGlobalEmpty && (
           <div className="px-8">
-            <div className="py-20 text-center">
+            <div className="animate-iris-fade py-20 text-center">
               <p className="text-sm text-muted-foreground">
                 Nema radnih naloga u bazi podataka.
               </p>
@@ -74,7 +79,10 @@ function DashboardPage(): React.JSX.Element {
         )}
 
         {showMockMonthlyCharts && (
-          <div className="space-y-4 px-8">
+          <div
+            className="animate-iris-enter space-y-4 px-8"
+            style={{ animationDelay: "120ms" }}
+          >
             <p className="text-sm text-muted-foreground">
               Prikazan je demo pregled mesečnih trendova dok podaci ne budu dostupni.
             </p>
@@ -87,7 +95,7 @@ function DashboardPage(): React.JSX.Element {
 
         {isFilteredEmpty && (
           <div className="px-8">
-            <div className="py-20 text-center">
+            <div className="animate-iris-fade py-20 text-center">
               <p className="text-sm text-muted-foreground">
                 Nema radnih naloga koji odgovaraju izabranim filterima.
               </p>
@@ -98,13 +106,15 @@ function DashboardPage(): React.JSX.Element {
         {showWidgets && (
           <div className="space-y-8 px-8">
             <DashboardSummaryCards summary={summary} />
-            <DashboardCharts
-              monthlyOrders={monthlyOrders}
-              monthlyRevenue={monthlyRevenue}
-              deliveryDistribution={deliveryDistribution}
-              topClients={topClients}
-              summary={summary}
-            />
+            <div className="animate-iris-enter" style={{ animationDelay: "320ms" }}>
+              <DashboardCharts
+                monthlyOrders={monthlyOrders}
+                monthlyRevenue={monthlyRevenue}
+                deliveryDistribution={deliveryDistribution}
+                topClients={topClients}
+                summary={summary}
+              />
+            </div>
           </div>
         )}
       </div>

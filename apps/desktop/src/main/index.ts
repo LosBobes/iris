@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 
 // Feature-specific IPC handlers - one import per main-process feature folder
 import { registerAppVersionHandlers } from './AppVersion/AppVersion.async'
+import { registerBackendStatusHandlers } from './BackendStatus/BackendStatus.async'
 import { registerLoginHandlers } from './Login/Login.async'
 import { registerWorkOrderHandlers } from './WorkOrder/WorkOrder.async'
 
@@ -53,6 +54,7 @@ app.whenReady().then(() => {
 
   // Register IPC handlers for each feature
   registerAppVersionHandlers()
+  registerBackendStatusHandlers()
   registerLoginHandlers()
   registerWorkOrderHandlers()
 

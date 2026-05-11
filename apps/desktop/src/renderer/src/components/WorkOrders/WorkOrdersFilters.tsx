@@ -55,14 +55,14 @@ function FilterPill({ label, isActive, children }: FilterPillProps): React.JSX.E
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`flex items-center gap-2 border border-border bg-card px-3 py-2 text-[12px] ${
+          className={`iris-focusable iris-press group flex items-center gap-2 border border-border bg-card px-3 py-2 text-[12px] hover:bg-black/[0.02] ${
             isActive
               ? "text-foreground"
               : "text-[color:var(--iris-ink-soft)] hover:text-foreground"
           }`}
         >
           {label}
-          <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)]" />
+          <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 rounded-none border-border p-1" align="start">
@@ -90,7 +90,7 @@ function OptionList<T extends string>({
           key={opt.value}
           type="button"
           onClick={() => onSelect(opt.value)}
-          className={`bg-transparent px-3 py-2 text-left text-[12px] hover:bg-black/[0.03] ${
+          className={`iris-focusable bg-transparent px-3 py-2 text-left text-[12px] hover:bg-black/[0.03] ${
             opt.value === current
               ? "font-medium text-foreground"
               : "text-[color:var(--iris-ink-soft)]"
@@ -127,8 +127,8 @@ export function WorkOrdersFilters({
 
   return (
     <div className="flex items-center gap-2">
-      <div className="relative flex flex-1 items-center gap-2 border border-border bg-card px-3 py-2">
-        <Search className="h-3 w-3 text-[color:var(--iris-ink-mute)]" />
+      <div className="group relative flex flex-1 items-center gap-2 border border-border bg-card px-3 py-2 transition-colors duration-150 focus-within:border-foreground">
+        <Search className="h-3 w-3 text-[color:var(--iris-ink-mute)] transition-colors duration-150 group-focus-within:text-foreground" />
         <input
           type="text"
           placeholder="Pretraži naloge, klijente, opis…"
@@ -196,7 +196,7 @@ export function WorkOrdersFilters({
         <button
           type="button"
           onClick={resetFilters}
-          className="flex items-center gap-1 bg-transparent px-2 py-2 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+          className="iris-focusable iris-press animate-iris-fade flex items-center gap-1 bg-transparent px-2 py-2 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
         >
           <X className="h-3 w-3" />
           Resetuj

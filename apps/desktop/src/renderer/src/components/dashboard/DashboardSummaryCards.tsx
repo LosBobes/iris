@@ -7,14 +7,20 @@ interface SummaryCellProps {
   label: string
   value: string | number
   isLast?: boolean
+  delayMs: number
 }
 
-function SummaryCell({ label, value, isLast }: SummaryCellProps): React.JSX.Element {
+function SummaryCell({ label, value, isLast, delayMs }: SummaryCellProps): React.JSX.Element {
   return (
     <div
       className={`flex-1 px-6 py-5 ${
         isLast ? '' : 'border-r border-[color:var(--iris-border-soft)]'
       }`}
+      style={{
+        animation:
+          'iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both',
+        animationDelay: `${delayMs}ms`,
+      }}
     >
       <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
         {label}
@@ -35,10 +41,15 @@ export function DashboardSummaryCards({
 }: DashboardSummaryCardsProps): React.JSX.Element {
   return (
     <div className="flex border border-border bg-card">
-      <SummaryCell label="Ukupno naloga" value={summary.totalOrders} />
-      <SummaryCell label="Završeni" value={summary.statusCounts.completed} />
-      <SummaryCell label="Aktivni" value={summary.statusCounts.active} />
-      <SummaryCell label="Ukupan prihod" value={formatRsd(summary.totalRevenue)} isLast />
+      <SummaryCell label="Ukupno naloga" value={summary.totalOrders} delayMs={120} />
+      <SummaryCell label="Završeni" value={summary.statusCounts.completed} delayMs={180} />
+      <SummaryCell label="Aktivni" value={summary.statusCounts.active} delayMs={240} />
+      <SummaryCell
+        label="Ukupan prihod"
+        value={formatRsd(summary.totalRevenue)}
+        isLast
+        delayMs={300}
+      />
     </div>
   )
 }

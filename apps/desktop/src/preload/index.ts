@@ -10,6 +10,8 @@ import type {
 const api = {
   getAppVersion: () => ipcRenderer.invoke("app:getVersion"),
 
+  getBackendStatus: () => ipcRenderer.invoke("app:getBackendStatus"),
+
   // Send login credentials to the main process for validation.
   // Returns a LoginResponse (see index.d.ts for the full type).
   login: (credentials: { username: string; password: string }) =>
