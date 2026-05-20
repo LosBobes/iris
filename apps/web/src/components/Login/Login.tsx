@@ -1,8 +1,37 @@
 import { useEffect, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Check, Eye, EyeOff } from "lucide-react";
 
 interface LoginProps {
   onLoginSuccess: (user: AuthenticatedUser) => void;
+}
+
+const REMEMBER_DEVICE_KEY = "iris.rememberDevice";
+const REMEMBERED_USERNAME_KEY = "iris.rememberedUsername";
+
+function readRememberedLogin(): { rememberDevice: boolean; username: string } {
+  try {
+    return {
+      rememberDevice: localStorage.getItem(REMEMBER_DEVICE_KEY) === "true",
+      username: localStorage.getItem(REMEMBERED_USERNAME_KEY) ?? "",
+    };
+  } catch {
+    return { rememberDevice: false, username: "" };
+  }
+}
+
+function storeRememberedLogin(username: string, rememberDevice: boolean): void {
+  try {
+    if (rememberDevice) {
+      localStorage.setItem(REMEMBER_DEVICE_KEY, "true");
+      localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+      return;
+    }
+
+    localStorage.removeItem(REMEMBER_DEVICE_KEY);
+    localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+  } catch {
+    // Login should not fail if browser storage is unavailable.
+  }
 }
 
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
@@ -10,12 +39,18 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   const [password, setPassword] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorKey, setErrorKey] = useState(0);
 
   useEffect(() => {
     let isActive = true;
+    const rememberedLogin = readRememberedLogin();
+
+    setRememberDevice(rememberedLogin.rememberDevice);
+    setUsername(rememberedLogin.username);
 
     void window.api
       .getAppVersion()
@@ -38,12 +73,14 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setIsLoading(true);
 
     try {
       const result = await window.api.login({ username, password });
 
       if (result.success && result.user) {
+        storeRememberedLogin(username, rememberDevice);
         onLoginSuccess(result.user);
       } else {
         setError(result.error ?? "Greška pri prijavljivanju.");
@@ -61,8 +98,15 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
     }
   }
 
+  function handleForgottenPassword(): void {
+    setError(null);
+    setNotice(
+      "Za reset lozinke obratite se administratoru sistema. Reset lozinke trenutno nije povezan sa backend API-jem.",
+    );
+  }
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background text-foreground">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-5 py-8 text-foreground sm:px-8 lg:px-10">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -72,37 +116,37 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         }}
       />
 
-      <div className="relative flex items-center gap-20">
+      <div className="relative flex w-full max-w-5xl flex-col items-stretch gap-8 sm:gap-10 lg:flex-row lg:items-center lg:justify-center lg:gap-20">
         {/* Masthead */}
         <div
-          className="w-80"
+          className="w-full max-w-[340px] self-center text-center sm:max-w-[420px] lg:w-80 lg:self-auto lg:text-left"
           style={{
             animation:
               "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both",
           }}
         >
-          <div className="text-[56px] font-normal leading-none tracking-[-2px] text-foreground">
+          <div className="text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px]">
             Iris
           </div>
           <div
-            className="my-5 h-0.5 w-8 bg-[color:var(--iris-accent)] origin-left"
+            className="mx-auto my-4 h-0.5 w-8 origin-left bg-[color:var(--iris-accent)] sm:my-5 lg:mx-0"
             style={{
               animation:
                 "iris-rule-grow 520ms var(--iris-ease-out-decisive) both 180ms",
             }}
           />
-          <p className="max-w-[260px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
+          <p className="mx-auto max-w-[300px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)] lg:mx-0 lg:max-w-[260px]">
             Sistem za vođenje radnih naloga u štampariji. Svaki posao je
             evidentiran.
           </p>
-          <div className="mt-10 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)]">
+          <div className="mt-6 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)] sm:mt-10">
             {appVersion ? `Verzija ${appVersion}` : "Verzija"}
           </div>
         </div>
 
         {/* Form */}
         <div
-          className="w-[340px] border border-border bg-card px-9 pt-9 pb-7"
+          className="w-full max-w-[380px] self-center border border-border bg-card px-6 py-7 shadow-[0_24px_70px_rgba(52,43,31,0.08)] sm:px-9 sm:pt-9 sm:pb-7 lg:w-[340px] lg:self-auto"
           style={{
             animation:
               "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both 120ms",
@@ -139,9 +183,13 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
             <div className="mb-7">
               <div className="mb-1.5 flex justify-between text-[11px] text-[color:var(--iris-ink-soft)]">
                 <label htmlFor="password">Lozinka</label>
-                <span className="text-[11px] text-[color:var(--iris-accent)]">
+                <button
+                  type="button"
+                  onClick={handleForgottenPassword}
+                  className="iris-focusable iris-press -mr-1 px-1 text-[11px] text-[color:var(--iris-accent)] underline-offset-4 hover:underline"
+                >
                   zaboravljena?
-                </span>
+                </button>
               </div>
               <div className="relative flex items-center">
                 <input
@@ -166,6 +214,16 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                 </button>
               </div>
             </div>
+
+            {notice ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mb-4 border-l-2 border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-3 py-2 text-[12px] leading-5 text-[color:var(--iris-ink-soft)]"
+              >
+                {notice}
+              </div>
+            ) : null}
 
             {error ? (
               <div
@@ -205,8 +263,29 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
             </button>
           </form>
 
-          <div className="mt-5 flex justify-between border-t border-[color:var(--iris-border-soft)] pt-4 text-[11px] text-[color:var(--iris-ink-mute)]">
-            <span>Zapamti uređaj</span>
+          <div className="mt-5 flex flex-col gap-3 border-t border-[color:var(--iris-border-soft)] pt-4 text-[11px] text-[color:var(--iris-ink-mute)] sm:flex-row sm:items-center sm:justify-between">
+            <label
+              htmlFor="remember-device"
+              className="iris-focusable group -ml-1 inline-flex w-fit cursor-pointer items-center gap-2 px-1 py-1"
+            >
+              <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+                <input
+                  id="remember-device"
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(e) => setRememberDevice(e.target.checked)}
+                  disabled={isLoading}
+                  className="peer size-3.5 shrink-0 appearance-none border border-input bg-transparent transition-colors checked:border-foreground checked:bg-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--iris-accent)]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <Check
+                  aria-hidden="true"
+                  size={11}
+                  strokeWidth={3}
+                  className="pointer-events-none absolute text-background opacity-0 transition-opacity peer-checked:opacity-100"
+                />
+              </span>
+              <span className="group-hover:text-foreground">Zapamti uređaj</span>
+            </label>
             <span>{appVersion ? `v${appVersion}` : null}</span>
           </div>
         </div>

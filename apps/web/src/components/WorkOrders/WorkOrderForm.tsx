@@ -35,18 +35,14 @@ interface WorkOrderFormProps {
 }
 
 interface FormSectionProps {
-  num: string;
   title: string;
   children: React.ReactNode;
 }
 
-function FormSection({ num, title, children }: FormSectionProps): React.JSX.Element {
+function FormSection({ title, children }: FormSectionProps): React.JSX.Element {
   return (
     <section className="mb-8">
       <div className="mb-4 flex items-baseline gap-3 border-b border-border pb-2.5">
-        <span className="tnum text-[10px] tracking-[1px] text-[color:var(--iris-ink-faint)]">
-          {num}
-        </span>
         <span className="text-[13px] font-medium text-foreground">{title}</span>
       </div>
       {children}
@@ -221,7 +217,7 @@ export function WorkOrderForm({
           </div>
         )}
 
-        <FormSection num="01" title="Klijent">
+        <FormSection title="Klijent">
           <div className="grid grid-cols-2 gap-6">
             <FieldShell
               id="clientName"
@@ -247,7 +243,7 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection num="02" title="Posao">
+        <FormSection title="Posao">
           <div className="space-y-6">
             <FieldShell
               id="jobDescription"
@@ -341,7 +337,7 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection num="03" title="Dokument i isporuka">
+        <FormSection title="Dokument i isporuka">
           <div className="grid grid-cols-2 gap-6">
             <FieldShell id="billingDocumentType" label="Tip dokumenta">
               <Controller
@@ -520,7 +516,7 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection num="04" title="Finansije i napomena">
+        <FormSection title="Finansije i napomena">
           <div className="grid grid-cols-2 gap-6">
             <FieldShell
               id="price"

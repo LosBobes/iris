@@ -7,14 +7,13 @@ import { useAuth } from "@/hooks/useAuth";
 interface NavItemDef {
   label: string;
   to: string;
-  num: string;
   end?: boolean;
 }
 
 const NAV_ITEMS: NavItemDef[] = [
-  { label: "Kontrolna tabla", to: "/", num: "01", end: true },
-  { label: "Radni nalozi", to: "/work-orders", num: "02" },
-  { label: "Novi nalog", to: "/work-orders/new", num: "03" },
+  { label: "Kontrolna tabla", to: "/", end: true },
+  { label: "Radni nalozi", to: "/work-orders" },
+  { label: "Novi nalog", to: "/work-orders/new" },
 ];
 
 interface AppShellProps {
@@ -144,9 +143,6 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 )
               }
             >
-              <span className="tnum text-[10px] text-[color:var(--iris-ink-faint)]">
-                {item.num}
-              </span>
               <span>{item.label}</span>
             </NavLink>
           ))}
