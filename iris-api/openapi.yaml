@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
-  title: Iris Desktop Support API
-  version: 0.2.0
+  title: Iris Operations API
+  version: 0.3.0
   description: |
-    HTTP API that mirrors the full work-order workflow used by the Electron desktop application.
-    The desktop app talks to Electron IPC, and Electron main forwards those requests to this REST API.
+    Shared HTTP API for Iris work-order operations. Production runtime persists
+    data in SQLite, while fixture-backed data remains available for development
+    and automated tests.
 servers:
   - url: http://localhost:8080
 tags:
@@ -49,6 +50,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /auth/session:
+    get:
+      tags: [Auth]
+      summary: Return the current cookie-backed session
+      operationId: getCurrentSession
+      responses:
+        '200':
+          description: Current session result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Clear the current session
+      operationId: logout
+      responses:
+        '200':
+          description: Logout result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
   /customers:
     get:
       tags: [Customers]
@@ -80,17 +109,54 @@ paths:
   /work-orders:
     get:
       tags: [Work Orders]
-      summary: Return all work orders needed by the desktop application
+      summary: Return filtered and paginated work orders
       operationId: listWorkOrders
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: sort
+          in: query
+          schema:
+            type: string
+            example: -issueDate
       responses:
         '200':
-          description: Ordered collection of work orders
+          description: Filtered work-order page
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/WorkOrder'
+                $ref: '#/components/schemas/WorkOrderListResponse'
     post:
       tags: [Work Orders]
       summary: Create a new work order
@@ -254,6 +320,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 components:
+  securitySchemes:
+    IrisSession:
+      type: apiKey
+      in: cookie
+      name: iris_session
   schemas:
     HealthResponse:
       type: object
@@ -571,6 +642,17 @@ components:
           $ref: '#/components/schemas/InvoiceDraft'
         communication:
           $ref: '#/components/schemas/CustomerCommunication'
+    WorkOrderListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrder'
+        total:
+          type: integer
+          minimum: 0
     CreateWorkOrderInput:
       type: object
       required:

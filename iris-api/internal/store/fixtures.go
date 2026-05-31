@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -42,14 +43,93 @@ type FixtureStore struct {
 	workOrders   []domain.WorkOrder
 	nextSequence int
 	loaded       bool
+	sessions     map[string]fixtureSession
+}
+
+type fixtureSession struct {
+	userID    string
+	expiresAt time.Time
 }
 
 func NewFixtureStore(basePath string) *FixtureStore {
-	return &FixtureStore{basePath: basePath}
+	return &FixtureStore{
+		basePath: basePath,
+		sessions: make(map[string]fixtureSession),
+	}
+}
+
+func (s *FixtureStore) AuthenticateUser(
+	ctx context.Context,
+	username string,
+	password string,
+) (*domain.User, error) {
+	users, err := s.Users(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, user := range users {
+		if user.Username == username && user.Password == password {
+			return &domain.User{
+				ID:       user.ID,
+				Username: user.Username,
+				Role:     user.Role,
+			}, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (s *FixtureStore) CreateSession(
+	_ context.Context,
+	userID string,
+	expiresAt time.Time,
+) (string, error) {
+	token, err := newSessionToken()
+	if err != nil {
+		return "", err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessions[token] = fixtureSession{userID: userID, expiresAt: expiresAt}
+	return token, nil
+}
+
+func (s *FixtureStore) UserBySessionToken(ctx context.Context, token string) (*domain.User, error) {
+	s.mu.Lock()
+	session, ok := s.sessions[token]
+	if ok && time.Now().UTC().After(session.expiresAt) {
+		delete(s.sessions, token)
+		ok = false
+	}
+	s.mu.Unlock()
+	if !ok {
+		return nil, nil
+	}
+
+	users, err := s.Users(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, user := range users {
+		if user.ID == session.userID {
+			return &domain.User{ID: user.ID, Username: user.Username, Role: user.Role}, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *FixtureStore) DeleteSession(_ context.Context, token string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, token)
+	return nil
 }
 
 // Users reads login fixture data.
-func (s *FixtureStore) Users() ([]domain.FixtureUser, error) {
+func (s *FixtureStore) Users(_ context.Context) ([]domain.FixtureUser, error) {
 	var users []domain.FixtureUser
 	if err := s.readJSON("users.json", &users); err != nil {
 		return nil, err
@@ -58,7 +138,7 @@ func (s *FixtureStore) Users() ([]domain.FixtureUser, error) {
 }
 
 // Customers reads normalized customer fixture data.
-func (s *FixtureStore) Customers() ([]domain.Customer, error) {
+func (s *FixtureStore) Customers(_ context.Context) ([]domain.Customer, error) {
 	var customers []domain.Customer
 	if err := s.readJSON("customers.json", &customers); err != nil {
 		return nil, err
@@ -67,7 +147,7 @@ func (s *FixtureStore) Customers() ([]domain.Customer, error) {
 }
 
 // Locations reads normalized customer location fixture data.
-func (s *FixtureStore) Locations() ([]domain.Location, error) {
+func (s *FixtureStore) Locations(_ context.Context) ([]domain.Location, error) {
 	var locations []domain.Location
 	if err := s.readJSON("locations.json", &locations); err != nil {
 		return nil, err
@@ -75,20 +155,54 @@ func (s *FixtureStore) Locations() ([]domain.Location, error) {
 	return locations, nil
 }
 
+func (s *FixtureStore) UpsertCustomer(
+	_ context.Context,
+	customer domain.Customer,
+) (*domain.Customer, error) {
+	if strings.TrimSpace(customer.ID) == "" || strings.TrimSpace(customer.Name) == "" {
+		return nil, newValidationError(invalidWorkOrderMessage)
+	}
+	return &customer, nil
+}
+
+func (s *FixtureStore) UpsertLocation(
+	_ context.Context,
+	location domain.Location,
+) (*domain.Location, error) {
+	if strings.TrimSpace(location.ID) == "" ||
+		strings.TrimSpace(location.CustomerID) == "" ||
+		strings.TrimSpace(location.Name) == "" {
+		return nil, newValidationError(invalidWorkOrderMessage)
+	}
+	return &location, nil
+}
+
+func (s *FixtureStore) DeleteCustomer(_ context.Context, _ string) error {
+	return nil
+}
+
+func (s *FixtureStore) DeleteLocation(_ context.Context, _ string) error {
+	return nil
+}
+
 // WorkOrders returns the current in-memory work-order collection.
-func (s *FixtureStore) WorkOrders() ([]domain.WorkOrder, error) {
+func (s *FixtureStore) WorkOrders(_ context.Context, query WorkOrderListQuery) (WorkOrderListResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if err := s.ensureWorkOrdersLoaded(); err != nil {
-		return nil, err
+		return WorkOrderListResult{}, err
 	}
 
-	return cloneWorkOrders(s.workOrders), nil
+	filtered := filterWorkOrders(s.workOrders, query)
+	total := len(filtered)
+	filtered = paginateWorkOrders(filtered, query)
+
+	return WorkOrderListResult{Items: cloneWorkOrders(filtered), Total: total}, nil
 }
 
 // WorkOrderByID returns one work order or nil when the id is unknown.
-func (s *FixtureStore) WorkOrderByID(id string) (*domain.WorkOrder, error) {
+func (s *FixtureStore) WorkOrderByID(_ context.Context, id string) (*domain.WorkOrder, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -106,7 +220,10 @@ func (s *FixtureStore) WorkOrderByID(id string) (*domain.WorkOrder, error) {
 }
 
 // CreateWorkOrder appends a new work order to the in-memory slice.
-func (s *FixtureStore) CreateWorkOrder(input domain.CreateWorkOrderInput) (*domain.WorkOrder, error) {
+func (s *FixtureStore) CreateWorkOrder(
+	_ context.Context,
+	input domain.CreateWorkOrderInput,
+) (*domain.WorkOrder, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -166,6 +283,7 @@ func (s *FixtureStore) CreateWorkOrder(input domain.CreateWorkOrderInput) (*doma
 
 // UpdateWorkOrder applies a partial update and returns nil when the id is not found.
 func (s *FixtureStore) UpdateWorkOrder(
+	_ context.Context,
 	id string,
 	changes domain.UpdateWorkOrderInput,
 ) (*domain.WorkOrder, error) {
@@ -195,7 +313,7 @@ func (s *FixtureStore) UpdateWorkOrder(
 }
 
 // DeleteWorkOrder removes a work order by id and keeps not-found as a business response.
-func (s *FixtureStore) DeleteWorkOrder(id string) (domain.DeleteWorkOrderResponse, error) {
+func (s *FixtureStore) DeleteWorkOrder(_ context.Context, id string) (domain.DeleteWorkOrderResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -219,7 +337,7 @@ func (s *FixtureStore) DeleteWorkOrder(id string) (domain.DeleteWorkOrderRespons
 }
 
 // Operators derives a sorted, unique operator list from the work-order data.
-func (s *FixtureStore) Operators() ([]string, error) {
+func (s *FixtureStore) Operators(_ context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -253,6 +371,101 @@ func (s *FixtureStore) Operators() ([]string, error) {
 	return operators, nil
 }
 
+func filterWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) []domain.WorkOrder {
+	filtered := make([]domain.WorkOrder, 0, len(workOrders))
+	search := strings.ToLower(strings.TrimSpace(query.Search))
+	for _, workOrder := range workOrders {
+		if search != "" {
+			searchable := strings.ToLower(strings.Join([]string{
+				workOrder.OrderNumber,
+				workOrder.ClientName,
+				workOrder.JobDescription,
+			}, " "))
+			if !strings.Contains(searchable, search) {
+				continue
+			}
+		}
+		if query.Status != "" && workOrder.Status != query.Status {
+			continue
+		}
+		if query.AssignedTo != "" {
+			assignedTo := ""
+			if workOrder.Assignment.AssignedTo != nil {
+				assignedTo = *workOrder.Assignment.AssignedTo
+			}
+			if assignedTo != query.AssignedTo {
+				continue
+			}
+		}
+		if query.DateFrom != "" && workOrder.IssueDate < query.DateFrom {
+			continue
+		}
+		if query.DateTo != "" && workOrder.IssueDate > query.DateTo {
+			continue
+		}
+		filtered = append(filtered, workOrder)
+	}
+
+	sortWorkOrders(filtered, query.Sort)
+	return filtered
+}
+
+func paginateWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) []domain.WorkOrder {
+	if query.Offset >= len(workOrders) {
+		return []domain.WorkOrder{}
+	}
+	start := query.Offset
+	if start < 0 {
+		start = 0
+	}
+	end := len(workOrders)
+	if query.Limit > 0 && start+query.Limit < end {
+		end = start + query.Limit
+	}
+	return workOrders[start:end]
+}
+
+func sortWorkOrders(workOrders []domain.WorkOrder, sortKey string) {
+	desc := strings.HasPrefix(sortKey, "-")
+	field := strings.TrimPrefix(sortKey, "-")
+	if field == "" {
+		field = "issueDate"
+		desc = true
+	}
+
+	sort.SliceStable(workOrders, func(i int, j int) bool {
+		a := workOrderSortValue(workOrders[i], field)
+		b := workOrderSortValue(workOrders[j], field)
+		if desc {
+			return a > b
+		}
+		return a < b
+	})
+}
+
+func workOrderSortValue(workOrder domain.WorkOrder, field string) string {
+	switch field {
+	case "orderNumber":
+		return workOrder.OrderNumber
+	case "clientName":
+		return workOrder.ClientName
+	case "status":
+		return string(workOrder.Status)
+	case "assignedTo":
+		if workOrder.Assignment.AssignedTo == nil {
+			return ""
+		}
+		return *workOrder.Assignment.AssignedTo
+	case "dueDate":
+		if workOrder.DueDate == nil {
+			return ""
+		}
+		return *workOrder.DueDate
+	default:
+		return workOrder.IssueDate
+	}
+}
+
 func (s *FixtureStore) ensureWorkOrdersLoaded() error {
 	if s.loaded {
 		return nil
@@ -262,8 +475,8 @@ func (s *FixtureStore) ensureWorkOrdersLoaded() error {
 	if err := s.readJSON("work-orders.json", &rawOrders); err != nil {
 		return err
 	}
-	customers, _ := s.Customers()
-	locations, _ := s.Locations()
+	customers, _ := s.Customers(context.Background())
+	locations, _ := s.Locations(context.Background())
 
 	s.workOrders = make([]domain.WorkOrder, len(rawOrders))
 	for index, rawOrder := range rawOrders {

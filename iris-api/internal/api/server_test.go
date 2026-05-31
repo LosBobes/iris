@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -79,12 +81,12 @@ func TestWorkOrderReadEndpoints(t *testing.T) {
 			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 		}
 
-		var workOrders []domain.WorkOrder
+		var workOrders store.WorkOrderListResult
 		if err := json.Unmarshal(response.Body.Bytes(), &workOrders); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if len(workOrders) != 25 {
-			t.Fatalf("len(workOrders) = %d, want 25", len(workOrders))
+		if len(workOrders.Items) != 25 || workOrders.Total != 25 {
+			t.Fatalf("workOrders = %#v, want 25 items and total", workOrders)
 		}
 	})
 
@@ -193,12 +195,12 @@ func TestCreateWorkOrderEndpoint(t *testing.T) {
 	}
 
 	listResponse := performRequest(t, server, http.MethodGet, "/work-orders", "")
-	var workOrders []domain.WorkOrder
+	var workOrders store.WorkOrderListResult
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &workOrders); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
-	if len(workOrders) != 26 {
-		t.Fatalf("len(workOrders) = %d, want 26 after create", len(workOrders))
+	if len(workOrders.Items) != 26 || workOrders.Total != 26 {
+		t.Fatalf("workOrders = %#v, want 26 after create", workOrders)
 	}
 }
 
@@ -375,10 +377,31 @@ func performRequest(t *testing.T, server *Server, method string, path string, bo
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if needsTestSession(path) {
+		user, err := server.store.AuthenticateUser(context.Background(), "admin", "admin123")
+		if err != nil {
+			t.Fatalf("authenticate test user: %v", err)
+		}
+		token, err := server.store.CreateSession(
+			context.Background(),
+			user.ID,
+			time.Now().Add(time.Hour),
+		)
+		if err != nil {
+			t.Fatalf("create test session: %v", err)
+		}
+		req.AddCookie(&http.Cookie{Name: server.config.SessionCookieName, Value: token})
+	}
 
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 	return rec
+}
+
+func needsTestSession(path string) bool {
+	return !strings.HasPrefix(path, "/auth/") &&
+		!strings.HasPrefix(path, "/public/") &&
+		path != "/healthz"
 }
 
 func assertErrorResponse(t *testing.T, body []byte, want string) {
