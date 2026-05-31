@@ -7,7 +7,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { getMockMonthlyOrders } from './mockMonthlyData'
 import { formatMonthLabel, getLast12Months } from './utils'
 
 interface WorkOrdersPerMonthChartProps {
@@ -19,15 +18,12 @@ export function WorkOrdersPerMonthChart({
 }: WorkOrdersPerMonthChartProps): React.JSX.Element {
   const last12 = getLast12Months()
   const ordersLookup = new Map(monthlyOrders.map(({ month, count }) => [month, count]))
-  const fallbackLookup = new Map(
-    getMockMonthlyOrders().map(({ month, count }) => [month, count]),
-  )
   const data = last12.map((month) => {
     const actualCount = ordersLookup.get(month)
 
     return {
       label: formatMonthLabel(month),
-      count: actualCount !== undefined && actualCount > 0 ? actualCount : (fallbackLookup.get(month) ?? 0),
+      count: actualCount ?? 0,
     }
   })
 

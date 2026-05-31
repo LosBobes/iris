@@ -14,6 +14,7 @@ const NAV_ITEMS: NavItemDef[] = [
   { label: "Kontrolna tabla", to: "/", end: true },
   { label: "Radni nalozi", to: "/work-orders" },
   { label: "Novi nalog", to: "/work-orders/new" },
+  { label: "Klijenti", to: "/customers" },
 ];
 
 interface AppShellProps {

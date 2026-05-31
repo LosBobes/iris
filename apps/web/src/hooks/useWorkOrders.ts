@@ -81,7 +81,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
       setLoading(true);
       setError(null);
       const data = await window.api.getWorkOrders();
-      setOrders(data);
+      setOrders(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nepoznata greška");
     } finally {

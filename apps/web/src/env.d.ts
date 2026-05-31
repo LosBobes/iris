@@ -7,6 +7,8 @@ import type {
   PublicWorkOrderStatus,
   UpdateWorkOrderInput,
   WorkOrder,
+  WorkOrderListQuery,
+  WorkOrderListResult,
 } from '@/types/work-order'
 
 declare global {
@@ -40,9 +42,15 @@ declare global {
         username: string
         password: string
       }) => Promise<LoginResponse>
+      getCurrentSession: () => Promise<LoginResponse>
+      logout: () => Promise<void>
       getCustomers: () => Promise<Customer[]>
+      upsertCustomer: (customer: Customer) => Promise<Customer>
+      deleteCustomer: (id: string) => Promise<{ success: boolean }>
       getLocations: () => Promise<Location[]>
-      getWorkOrders: () => Promise<WorkOrder[]>
+      upsertLocation: (location: Location) => Promise<Location>
+      deleteLocation: (id: string) => Promise<{ success: boolean }>
+      getWorkOrders: (query?: WorkOrderListQuery) => Promise<WorkOrderListResult>
       getWorkOrderOperators: () => Promise<string[]>
       getWorkOrderById: (id: string) => Promise<WorkOrder | null>
       createWorkOrder: (input: CreateWorkOrderInput) => Promise<WorkOrder>

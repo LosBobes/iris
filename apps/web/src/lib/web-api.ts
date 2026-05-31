@@ -16,6 +16,8 @@ import type {
   TimeEntry,
   WorkOrder,
   WorkOrderEvent,
+  WorkOrderListQuery,
+  WorkOrderListResult,
   WorkOrderNote,
   WorkOrderStatus,
   WorkOrderStatusHistory,
@@ -236,8 +238,52 @@ function generateOrderNumber(sequence: number): string {
   return `RN-${new Date().getUTCFullYear()}-${String(sequence).padStart(4, '0')}`
 }
 
-function getWorkOrderSnapshot(): WorkOrder[] {
-  return cloneValue(workOrders)
+function listFixtureWorkOrders(query: WorkOrderListQuery = {}): WorkOrderListResult {
+  const search = query.search?.trim().toLowerCase() ?? ''
+  let items = workOrders.filter((order) => {
+    if (search) {
+      const haystack = `${order.orderNumber} ${order.clientName} ${order.jobDescription}`.toLowerCase()
+      if (!haystack.includes(search)) return false
+    }
+    if (query.status && order.status !== query.status) return false
+    if (query.assignedTo && order.assignment.assignedTo !== query.assignedTo) return false
+    if (query.dateFrom && order.issueDate < query.dateFrom) return false
+    if (query.dateTo && order.issueDate > query.dateTo) return false
+    return true
+  })
+
+  const sort = query.sort ?? '-issueDate'
+  const desc = sort.startsWith('-')
+  const field = desc ? sort.slice(1) : sort
+  items = [...items].sort((a, b) => {
+    const av = fixtureSortValue(a, field)
+    const bv = fixtureSortValue(b, field)
+    const cmp = av.localeCompare(bv, 'sr-Latn')
+    return desc ? -cmp : cmp
+  })
+
+  const total = items.length
+  const offset = query.offset ?? 0
+  const limit = query.limit ?? 0
+  const paged = limit > 0 ? items.slice(offset, offset + limit) : items.slice(offset)
+  return { items: cloneValue(paged), total }
+}
+
+function fixtureSortValue(order: WorkOrder, field: string): string {
+  switch (field) {
+    case 'orderNumber':
+      return order.orderNumber
+    case 'clientName':
+      return order.clientName
+    case 'status':
+      return order.status
+    case 'assignedTo':
+      return order.assignment.assignedTo ?? ''
+    case 'dueDate':
+      return order.dueDate ?? ''
+    default:
+      return order.issueDate
+  }
 }
 
 function validateCreateInput(input: WorkOrder): void {
@@ -282,16 +328,56 @@ function createFixtureApi(): Window['api'] {
       }
     },
 
+    async getCurrentSession() {
+      return { success: false }
+    },
+
+    async logout() {
+      return undefined
+    },
+
     async getCustomers() {
       return cloneValue(customers)
+    },
+
+    async upsertCustomer(customer) {
+      const index = customers.findIndex((candidate) => candidate.id === customer.id)
+      if (index === -1) {
+        customers.push(cloneValue(customer))
+      } else {
+        customers[index] = cloneValue(customer)
+      }
+      return cloneValue(customer)
+    },
+
+    async deleteCustomer(id) {
+      const index = customers.findIndex((candidate) => candidate.id === id)
+      if (index >= 0) customers.splice(index, 1)
+      return { success: true }
     },
 
     async getLocations() {
       return cloneValue(locations)
     },
 
-    async getWorkOrders() {
-      return getWorkOrderSnapshot()
+    async upsertLocation(location) {
+      const index = locations.findIndex((candidate) => candidate.id === location.id)
+      if (index === -1) {
+        locations.push(cloneValue(location))
+      } else {
+        locations[index] = cloneValue(location)
+      }
+      return cloneValue(location)
+    },
+
+    async deleteLocation(id) {
+      const index = locations.findIndex((candidate) => candidate.id === id)
+      if (index >= 0) locations.splice(index, 1)
+      return { success: true }
+    },
+
+    async getWorkOrders(query) {
+      return listFixtureWorkOrders(query)
     },
 
     async getWorkOrderOperators() {
@@ -413,6 +499,8 @@ function createFixtureApi(): Window['api'] {
 }
 
 const apiMode = import.meta.env.VITE_IRIS_API_MODE ?? 'http'
-const apiBaseUrl = import.meta.env.VITE_IRIS_API_BASE_URL ?? 'http://127.0.0.1:8080'
+const apiBaseUrl =
+  import.meta.env.VITE_IRIS_API_BASE_URL ??
+  (import.meta.env.DEV ? 'http://localhost:8080' : window.location.origin)
 
 window.api = apiMode === 'fixtures' ? createFixtureApi() : createHttpApi(apiBaseUrl)

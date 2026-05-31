@@ -90,7 +90,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
       const details =
         err instanceof Error && err.message ? ` (${err.message})` : "";
       setError(
-        `Greška u komunikaciji sa glavnim procesom aplikacije.${details}`,
+        `Greška u komunikaciji sa backend servisom.${details}`,
       );
       setErrorKey((k) => k + 1);
     } finally {

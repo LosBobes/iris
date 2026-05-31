@@ -1,8 +1,10 @@
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Login } from "@/components/Login/Login";
 import DashboardPage from "@/pages/DashboardPage";
+import CustomersPage from "@/pages/CustomersPage";
+import PublicWorkOrderPage from "@/pages/PublicWorkOrderPage";
 import WorkOrderCreatePage from "@/pages/WorkOrderCreatePage";
 import WorkOrderDetailPage from "@/pages/WorkOrderDetailPage";
 import WorkOrderEditPage from "@/pages/WorkOrderEditPage";
@@ -86,18 +88,23 @@ function App(): React.JSX.Element {
 
     try {
       const status = await window.api.getBackendStatus();
+      if (!status.ready) {
+        startTransition(() => {
+          setBootstrapState({
+            kind: "error",
+            message:
+              status.message ??
+              "Backend servis trenutno nije dostupan.",
+          });
+        });
+        return;
+      }
+
+      const session = await window.api.getCurrentSession();
 
       startTransition(() => {
-        setBootstrapState(
-          status.ready
-            ? { kind: "ready" }
-            : {
-                kind: "error",
-                message:
-                  status.message ??
-                  "Backend servis trenutno nije dostupan.",
-              },
-        );
+        setCurrentUser(session.success && session.user ? session.user : null);
+        setBootstrapState({ kind: "ready" });
       });
     } catch {
       startTransition(() => {
@@ -114,7 +121,9 @@ function App(): React.JSX.Element {
     void checkBackendStatus();
   }, [checkBackendStatus]);
 
-  const handleLogout = useCallback(() => setCurrentUser(null), []);
+  const handleLogout = useCallback(() => {
+    void window.api.logout().finally(() => setCurrentUser(null));
+  }, []);
 
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser) => setCurrentUser(user),
@@ -136,20 +145,23 @@ function App(): React.JSX.Element {
     );
   }
 
-  if (!currentUser) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  if (currentUser.role !== "admin") {
-    return <AccessDenied />;
-  }
-
   return (
-    <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-      <TooltipProvider>
-        <MemoryRouter>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
+        <Route
+          path="*"
+          element={
+            !currentUser ? (
+              <Login onLoginSuccess={handleLoginSuccess} />
+            ) : currentUser.role !== "admin" ? (
+              <AccessDenied />
+            ) : (
+              <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
+                <TooltipProvider>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+                    <Route path="/customers" element={<CustomersPage />} />
             <Route path="/work-orders" element={<WorkOrdersPage />} />
             <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
             <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
@@ -158,10 +170,14 @@ function App(): React.JSX.Element {
               element={<WorkOrderEditPage />}
             />
           </Routes>
-        </MemoryRouter>
-        <Toaster />
-      </TooltipProvider>
-    </AuthContext.Provider>
+                  <Toaster />
+                </TooltipProvider>
+              </AuthContext.Provider>
+            )
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

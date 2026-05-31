@@ -63,7 +63,22 @@ describe('createHttpApi', () => {
     const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
 
     await expect(api.getBackendStatus()).resolves.toEqual({ ready: true })
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:8080/healthz')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/healthz',
+      expect.objectContaining({ credentials: 'include' }),
+    )
+  })
+
+  it('reports backend unavailable when /healthz returns non-API HTML', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response('<!doctype html>', { status: 200, headers: { 'Content-Type': 'text/html' } }),
+    )
+    const api = createHttpApi('http://127.0.0.1:5173', fetchMock)
+
+    await expect(api.getBackendStatus()).resolves.toEqual({
+      ready: false,
+      message: 'Backend servis nije dostupan. Pokrenite iris-api i pokušajte ponovo.',
+    })
   })
 
   it('loads normalized customers and locations from the API', async () => {
@@ -79,6 +94,19 @@ describe('createHttpApi', () => {
     await expect(api.getLocations()).resolves.toEqual([
       { id: 'loc-1', customerId: 'cust-1' },
     ])
+  })
+
+  it('passes work-order list filters to the API', async () => {
+    const fetchMock = vi.fn(async () => response({ items: [], total: 0 }))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(
+      api.getWorkOrders({ search: 'katalog', limit: 15, offset: 30, sort: '-issueDate' }),
+    ).resolves.toEqual({ items: [], total: 0 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/work-orders?search=katalog&limit=15&offset=30&sort=-issueDate',
+      expect.objectContaining({ credentials: 'include' }),
+    )
   })
 
   it('posts the expanded work-order input to the API', async () => {

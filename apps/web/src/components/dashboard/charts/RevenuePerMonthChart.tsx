@@ -7,7 +7,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { getMockMonthlyRevenue } from './mockMonthlyData'
 import { formatMonthLabel, formatRSD, getLast12Months } from './utils'
 
 interface RevenuePerMonthChartProps {
@@ -21,18 +20,12 @@ export function RevenuePerMonthChart({
   const revenueLookup = new Map(
     monthlyRevenue.map(({ month, revenue }) => [month, revenue]),
   )
-  const fallbackLookup = new Map(
-    getMockMonthlyRevenue().map(({ month, revenue }) => [month, revenue]),
-  )
   const data = last12.map((month) => {
     const actualRevenue = revenueLookup.get(month)
 
     return {
       label: formatMonthLabel(month),
-      revenue:
-        actualRevenue !== undefined && actualRevenue > 0
-          ? actualRevenue
-          : (fallbackLookup.get(month) ?? 0),
+      revenue: actualRevenue ?? 0,
     }
   })
 

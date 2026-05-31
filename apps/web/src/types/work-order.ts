@@ -243,6 +243,22 @@ export interface WorkOrderRepository {
   getOperators(): Promise<string[]>
 }
 
+export interface WorkOrderListQuery {
+  search?: string
+  status?: WorkOrderStatus
+  assignedTo?: string
+  dateFrom?: string
+  dateTo?: string
+  limit?: number
+  offset?: number
+  sort?: string
+}
+
+export interface WorkOrderListResult {
+  items: WorkOrder[]
+  total: number
+}
+
 export interface PublicWorkOrderStatus {
   orderNumber: string
   clientName: string
