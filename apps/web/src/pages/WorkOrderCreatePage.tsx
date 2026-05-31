@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useAuth } from "@/hooks/useAuth";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
-import type { WorkOrder } from "@/types/work-order";
+import type { Customer, Location, WorkOrder, WorkOrderNote } from "@/types/work-order";
 
 function getDuplicateInitialValues(
   source: WorkOrder | null,
@@ -14,6 +14,8 @@ function getDuplicateInitialValues(
   if (!source) return undefined;
 
   return {
+    customerId: source.customerId,
+    locationId: source.locationId,
     clientName: source.clientName,
     contactPerson: source.contactPerson,
     jobDescription: source.jobDescription,
@@ -21,18 +23,55 @@ function getDuplicateInitialValues(
     billingDocumentType: source.billingDocumentType,
     billingDocumentNumber: source.billingDocumentNumber,
     shipping: source.shipping,
+    assignment: {
+      ...source.assignment,
+      assignedTo: null,
+    },
     price: source.price,
     note: source.note,
     issueDate: source.issueDate,
     dueDate: source.dueDate,
     executedBy: null,
+    internalNotes: [],
+    customerNotes: [],
+    attachments: [],
+    materialUsage: [],
+    timeEntries: [],
+    invoiceDraft: {
+      status: "draft",
+      invoiceNumber: null,
+      lineItems: [],
+      paidAt: null,
+    },
+    communication: {
+      publicToken: "",
+      notificationEmail: source.communication.notificationEmail,
+      emailNotificationsEnabled: source.communication.emailNotificationsEnabled,
+      signedBy: null,
+      signedAt: null,
+    },
   };
+}
+
+function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
+  return notes.filter((note) => note.body.trim() !== "");
 }
 
 function WorkOrderCreatePage(): React.JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  useEffect(() => {
+    void Promise.all([window.api.getCustomers(), window.api.getLocations()]).then(
+      ([nextCustomers, nextLocations]) => {
+        setCustomers(nextCustomers);
+        setLocations(nextLocations);
+      },
+    );
+  }, []);
 
   // Duplicate pre-fill: data passed via router state
   const duplicateSource =
@@ -43,6 +82,8 @@ function WorkOrderCreatePage(): React.JSX.Element {
     async (values: WorkOrderFormValues) => {
       try {
         const result = await window.api.createWorkOrder({
+          customerId: values.customerId,
+          locationId: values.locationId,
           clientName: values.clientName,
           contactPerson: values.contactPerson,
           jobDescription: values.jobDescription,
@@ -50,11 +91,19 @@ function WorkOrderCreatePage(): React.JSX.Element {
           billingDocumentType: values.billingDocumentType,
           billingDocumentNumber: values.billingDocumentNumber,
           shipping: values.shipping,
+          assignment: values.assignment,
           issuedBy: currentUser.username,
           issueDate: values.issueDate,
           dueDate: values.dueDate,
           price: values.price,
           note: values.note,
+          internalNotes: cleanNotes(values.internalNotes),
+          customerNotes: cleanNotes(values.customerNotes),
+          attachments: values.attachments,
+          materialUsage: values.materialUsage,
+          timeEntries: values.timeEntries,
+          invoiceDraft: values.invoiceDraft,
+          communication: values.communication,
         });
         toast.success(`Radni nalog ${result.orderNumber} je kreiran`);
         navigate("/work-orders");
@@ -95,6 +144,8 @@ function WorkOrderCreatePage(): React.JSX.Element {
         <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
           <WorkOrderForm
             initialValues={duplicateInitialValues}
+            customers={customers}
+            locations={locations}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
           />

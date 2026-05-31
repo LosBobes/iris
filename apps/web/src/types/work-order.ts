@@ -2,7 +2,19 @@ export type DeliveryMethod = 'pickup' | 'postExpress' | 'cityExpress' | 'fieldVi
 
 export type BillingDocumentType = 'invoice' | 'cashCollection' | 'proforma'
 
-export type WorkOrderStatus = 'draft' | 'active' | 'completed' | 'cancelled'
+export type WorkOrderStatus =
+  | 'new'
+  | 'assigned'
+  | 'inProgress'
+  | 'waitingForCustomer'
+  | 'waitingForMaterials'
+  | 'completed'
+  | 'cancelled'
+  | 'invoiced'
+
+export type WorkOrderPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type WorkOrderNoteVisibility = 'internal' | 'customer'
+export type InvoiceDraftStatus = 'none' | 'draft' | 'issued' | 'paid'
 
 export interface JobDetails {
   productCode: string | null
@@ -22,9 +34,99 @@ export interface Shipping {
   shippingAddress: string | null
 }
 
+export interface Customer {
+  id: string
+  name: string
+  contactName: string | null
+  email: string | null
+  phone: string | null
+}
+
+export interface Location {
+  id: string
+  customerId: string
+  name: string
+  address: string | null
+}
+
+export interface Assignment {
+  assignedTo: string | null
+  priority: WorkOrderPriority
+  scheduledDate: string | null
+}
+
+export interface WorkOrderStatusHistory {
+  status: WorkOrderStatus
+  changedAt: string
+  changedBy: string
+}
+
+export interface Attachment {
+  id: string
+  fileName: string
+  fileType: string
+  url: string | null
+  uploadedAt: string
+}
+
+export interface WorkOrderNote {
+  id: string
+  visibility: WorkOrderNoteVisibility
+  author: string
+  body: string
+  createdAt: string
+}
+
+export interface WorkOrderEvent {
+  id: string
+  kind: string
+  label: string
+  actor: string
+  createdAt: string
+}
+
+export interface MaterialUsage {
+  id: string
+  name: string
+  quantity: number
+  unit: string
+  unitCost: number | null
+}
+
+export interface TimeEntry {
+  id: string
+  operator: string
+  minutes: number
+  loggedAt: string
+}
+
+export interface InvoiceLineItem {
+  id: string
+  description: string
+  quantity: number
+  unitPrice: number
+}
+
+export interface InvoiceDraft {
+  status: InvoiceDraftStatus
+  invoiceNumber: string | null
+  lineItems: InvoiceLineItem[]
+  paidAt: string | null
+}
+
+export interface CustomerCommunication {
+  publicToken: string
+  notificationEmail: string | null
+  emailNotificationsEnabled: boolean
+  signedBy: string | null
+  signedAt: string | null
+}
+
 export interface WorkOrder {
   id: string
   orderNumber: string
+  customerId: string | null
+  locationId: string | null
   clientName: string
   contactPerson: string | null
   jobDescription: string
@@ -36,6 +138,7 @@ export interface WorkOrder {
   issuedBy: string
   /** Username of person who executed the order */
   executedBy: string | null
+  assignment: Assignment
   /** ISO-8601 date string (YYYY-MM-DD) */
   issueDate: string
   /** ISO-8601 date string (YYYY-MM-DD), optional */
@@ -52,9 +155,20 @@ export interface WorkOrder {
   updatedAt: string
   /** ISO-8601 date string, set when completed */
   completionDate: string | null
+  statusHistory: WorkOrderStatusHistory[]
+  internalNotes: WorkOrderNote[]
+  customerNotes: WorkOrderNote[]
+  events: WorkOrderEvent[]
+  attachments: Attachment[]
+  materialUsage: MaterialUsage[]
+  timeEntries: TimeEntry[]
+  invoiceDraft: InvoiceDraft
+  communication: CustomerCommunication
 }
 
 export interface CreateWorkOrderInput {
+  customerId: string | null
+  locationId: string | null
   clientName: string
   contactPerson: string | null
   jobDescription: string
@@ -62,14 +176,24 @@ export interface CreateWorkOrderInput {
   billingDocumentType: BillingDocumentType | null
   billingDocumentNumber: string | null
   shipping: Shipping
+  assignment: Assignment
   issuedBy: string
   issueDate: string
   dueDate: string | null
   price: number | null
   note: string | null
+  internalNotes: WorkOrderNote[]
+  customerNotes: WorkOrderNote[]
+  attachments: Attachment[]
+  materialUsage: MaterialUsage[]
+  timeEntries: TimeEntry[]
+  invoiceDraft: InvoiceDraft
+  communication: CustomerCommunication
 }
 
 export interface UpdateWorkOrderInput {
+  customerId?: string | null
+  locationId?: string | null
   clientName?: string
   contactPerson?: string | null
   jobDescription?: string
@@ -77,6 +201,7 @@ export interface UpdateWorkOrderInput {
   billingDocumentType?: BillingDocumentType | null
   billingDocumentNumber?: string | null
   shipping?: Shipping
+  assignment?: Assignment
   issuedBy?: string
   executedBy?: string | null
   issueDate?: string
@@ -86,6 +211,15 @@ export interface UpdateWorkOrderInput {
   price?: number | null
   note?: string | null
   completionDate?: string | null
+  statusHistory?: WorkOrderStatusHistory[]
+  internalNotes?: WorkOrderNote[]
+  customerNotes?: WorkOrderNote[]
+  events?: WorkOrderEvent[]
+  attachments?: Attachment[]
+  materialUsage?: MaterialUsage[]
+  timeEntries?: TimeEntry[]
+  invoiceDraft?: InvoiceDraft
+  communication?: CustomerCommunication
 }
 
 export interface DashboardFilters {
@@ -107,4 +241,16 @@ export interface DashboardSummary {
 export interface WorkOrderRepository {
   getAll(): Promise<WorkOrder[]>
   getOperators(): Promise<string[]>
+}
+
+export interface PublicWorkOrderStatus {
+  orderNumber: string
+  clientName: string
+  jobDescription: string
+  status: WorkOrderStatus
+  dueDate: string | null
+  customerNoteCount: number
+  internalNoteCount: number
+  signedBy: string | null
+  signedAt: string | null
 }

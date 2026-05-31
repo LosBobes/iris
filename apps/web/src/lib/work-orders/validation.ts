@@ -2,6 +2,12 @@ import { z } from 'zod'
 
 const deliveryMethodEnum = z.enum(['pickup', 'postExpress', 'cityExpress', 'fieldVisit'])
 const billingDocumentTypeEnum = z.enum(['invoice', 'cashCollection', 'proforma'])
+const priorityEnum = z.enum(['low', 'normal', 'high', 'urgent'])
+const invoiceDraftStatusEnum = z.enum(['none', 'draft', 'issued', 'paid'])
+
+const emptyToNullString = z
+  .union([z.string(), z.null()])
+  .transform((value) => (value === '' ? null : value))
 
 const jobDetailsSchema = z.object({
   productCode: z.string().nullable(),
@@ -25,20 +31,89 @@ const shippingSchema = z.object({
   shippingAddress: z.string().nullable(),
 })
 
+const assignmentSchema = z.object({
+  assignedTo: emptyToNullString,
+  priority: priorityEnum,
+  scheduledDate: emptyToNullString,
+})
+
+const noteSchema = z.object({
+  id: z.string(),
+  visibility: z.enum(['internal', 'customer']),
+  author: z.string(),
+  body: z.string(),
+  createdAt: z.string(),
+})
+
+const attachmentSchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  fileType: z.string(),
+  url: z.string().nullable(),
+  uploadedAt: z.string(),
+})
+
+const materialUsageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  quantity: z.number().int().nonnegative(),
+  unit: z.string(),
+  unitCost: z.number().min(0).nullable(),
+})
+
+const timeEntrySchema = z.object({
+  id: z.string(),
+  operator: z.string(),
+  minutes: z.number().int().nonnegative(),
+  loggedAt: z.string(),
+})
+
+const invoiceDraftSchema = z.object({
+  status: invoiceDraftStatusEnum,
+  invoiceNumber: emptyToNullString,
+  lineItems: z.array(
+    z.object({
+      id: z.string(),
+      description: z.string(),
+      quantity: z.number().int().positive(),
+      unitPrice: z.number().min(0),
+    })
+  ),
+  paidAt: emptyToNullString,
+})
+
+const communicationSchema = z.object({
+  publicToken: z.string(),
+  notificationEmail: emptyToNullString,
+  emailNotificationsEnabled: z.boolean(),
+  signedBy: emptyToNullString,
+  signedAt: emptyToNullString,
+})
+
 export const workOrderFormSchema = z
   .object({
+    customerId: emptyToNullString,
+    locationId: emptyToNullString,
     clientName: z.string().min(1, { message: 'Naziv klijenta je obavezan' }),
-    contactPerson: z.string().nullable(),
+    contactPerson: emptyToNullString,
     jobDescription: z.string().min(1, { message: 'Opis posla je obavezan' }),
     jobDetails: jobDetailsSchema.nullable(),
     billingDocumentType: billingDocumentTypeEnum.nullable(),
-    billingDocumentNumber: z.string().nullable(),
+    billingDocumentNumber: emptyToNullString,
     shipping: shippingSchema,
+    assignment: assignmentSchema,
     price: z.number().min(0, { message: 'Cena ne može biti negativna' }).nullable(),
-    note: z.string().nullable(),
+    note: emptyToNullString,
     issueDate: z.string().min(1, { message: 'Datum izdavanja je obavezan' }),
-    dueDate: z.string().nullable(),
-    executedBy: z.string().nullable(),
+    dueDate: emptyToNullString,
+    executedBy: emptyToNullString,
+    internalNotes: z.array(noteSchema),
+    customerNotes: z.array(noteSchema),
+    attachments: z.array(attachmentSchema),
+    materialUsage: z.array(materialUsageSchema),
+    timeEntries: z.array(timeEntrySchema),
+    invoiceDraft: invoiceDraftSchema,
+    communication: communicationSchema,
   })
   .superRefine((val, ctx) => {
     const { shipping } = val

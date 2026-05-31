@@ -7,21 +7,21 @@ import {
   Tooltip,
 } from "recharts";
 import type { DashboardSummary, WorkOrderStatus } from "@/types/work-order";
-import { WORK_ORDER_STATUS_LABELS } from "@/shared/utils/work-orders";
+import {
+  WORK_ORDER_STATUS_LABELS,
+  WORK_ORDER_STATUS_ORDER,
+} from "@/shared/utils/work-orders";
 
 const STATUS_COLORS: Record<WorkOrderStatus, string> = {
+  new: "#a1a1aa",
+  assigned: "#3b82f6",
+  inProgress: "#0ea5e9",
+  waitingForCustomer: "#f59e0b",
+  waitingForMaterials: "#d97706",
   completed: "#22c55e",
-  active: "#3b82f6",
-  draft: "#a1a1aa",
   cancelled: "#ef4444",
+  invoiced: "#16a34a",
 };
-
-const STATUS_ORDER: WorkOrderStatus[] = [
-  "completed",
-  "active",
-  "draft",
-  "cancelled",
-];
 
 interface StatusDistributionChartProps {
   summary: DashboardSummary;
@@ -30,7 +30,7 @@ interface StatusDistributionChartProps {
 export function StatusDistributionChart({
   summary,
 }: StatusDistributionChartProps): React.JSX.Element {
-  const data = STATUS_ORDER.map((status) => ({
+  const data = WORK_ORDER_STATUS_ORDER.map((status) => ({
     name: WORK_ORDER_STATUS_LABELS[status],
     value: summary.statusCounts[status],
     status,

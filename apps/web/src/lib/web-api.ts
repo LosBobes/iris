@@ -1,24 +1,67 @@
+import rawCustomers from '@/fixtures/customers.json'
+import rawLocations from '@/fixtures/locations.json'
 import rawUsers from '@/fixtures/users.json'
 import rawWorkOrders from '@/fixtures/work-orders.json'
+import { createHttpApi } from '@/lib/api-client'
 import type {
-  CreateWorkOrderInput,
+  Assignment,
+  Attachment,
+  Customer,
+  CustomerCommunication,
+  InvoiceDraft,
   JobDetails,
+  Location,
+  MaterialUsage,
   Shipping,
+  TimeEntry,
   WorkOrder,
+  WorkOrderEvent,
+  WorkOrderNote,
   WorkOrderStatus,
+  WorkOrderStatusHistory,
 } from '@/types/work-order'
 
 interface FixtureUser extends AuthenticatedUser {
   password: string
 }
 
-type FixtureWorkOrder = Partial<Omit<WorkOrder, 'jobDetails' | 'shipping'>> &
+type LegacyWorkOrderStatus = WorkOrderStatus | 'draft' | 'active'
+
+type FixtureWorkOrder = Partial<
+  Omit<
+    WorkOrder,
+    | 'jobDetails'
+    | 'shipping'
+    | 'status'
+    | 'assignment'
+    | 'statusHistory'
+    | 'internalNotes'
+    | 'customerNotes'
+    | 'events'
+    | 'attachments'
+    | 'materialUsage'
+    | 'timeEntries'
+    | 'invoiceDraft'
+    | 'communication'
+  >
+> &
   Pick<
     WorkOrder,
     'id' | 'orderNumber' | 'clientName' | 'jobDescription' | 'issuedBy' | 'issueDate'
   > & {
     jobDetails?: Partial<JobDetails> | null
     shipping?: Partial<Shipping> | null
+    status?: LegacyWorkOrderStatus
+    assignment?: Partial<Assignment> | null
+    statusHistory?: WorkOrderStatusHistory[]
+    internalNotes?: WorkOrderNote[]
+    customerNotes?: WorkOrderNote[]
+    events?: WorkOrderEvent[]
+    attachments?: Attachment[]
+    materialUsage?: MaterialUsage[]
+    timeEntries?: TimeEntry[]
+    invoiceDraft?: Partial<InvoiceDraft> | null
+    communication?: Partial<CustomerCommunication> | null
   }
 
 const APP_VERSION = '0.1.0-dev'
@@ -26,6 +69,8 @@ const INVALID_CREDENTIALS = 'Neispravno korisničko ime ili lozinka.'
 const INVALID_WORK_ORDER = 'Prosleđeni podaci nisu ispravni.'
 
 const users = rawUsers as FixtureUser[]
+const customers = rawCustomers as Customer[]
+const locations = rawLocations as Location[]
 
 function cloneValue<T>(value: T): T {
   return structuredClone(value)
@@ -33,6 +78,23 @@ function cloneValue<T>(value: T): T {
 
 function normalizeNullableString(value: string | null | undefined): string | null {
   return value ?? null
+}
+
+function normalizeStatus(rawStatus: LegacyWorkOrderStatus | undefined): WorkOrderStatus {
+  if (!rawStatus || rawStatus === 'draft') return 'new'
+  if (rawStatus === 'active') return 'inProgress'
+  return rawStatus
+}
+
+function normalizeCustomerId(raw: FixtureWorkOrder): string | null {
+  if (raw.customerId) return raw.customerId
+  return customers.find((customer) => customer.name === raw.clientName)?.id ?? null
+}
+
+function normalizeLocationId(customerId: string | null, rawLocationId: string | null | undefined): string | null {
+  if (rawLocationId) return rawLocationId
+  if (!customerId) return null
+  return locations.find((location) => location.customerId === customerId)?.id ?? null
 }
 
 function normalizeJobDetails(
@@ -61,17 +123,73 @@ function normalizeShipping(shipping: Partial<Shipping> | null | undefined): Ship
   }
 }
 
-function normalizeStatus(rawStatus: WorkOrderStatus | undefined): WorkOrderStatus {
-  return rawStatus ?? 'active'
+function normalizeAssignment(
+  assignment: Partial<Assignment> | null | undefined,
+  raw: FixtureWorkOrder,
+): Assignment {
+  return {
+    assignedTo:
+      normalizeNullableString(assignment?.assignedTo) ??
+      normalizeNullableString(raw.executedBy) ??
+      raw.issuedBy,
+    priority: assignment?.priority ?? 'normal',
+    scheduledDate: normalizeNullableString(assignment?.scheduledDate ?? raw.dueDate),
+  }
+}
+
+function normalizeInvoiceDraft(
+  invoiceDraft: Partial<InvoiceDraft> | null | undefined,
+  raw: FixtureWorkOrder,
+): InvoiceDraft {
+  const hasPrice = raw.price !== null && raw.price !== undefined
+  return {
+    status: invoiceDraft?.status ?? (hasPrice ? 'draft' : 'none'),
+    invoiceNumber: normalizeNullableString(invoiceDraft?.invoiceNumber),
+    lineItems:
+      invoiceDraft?.lineItems ??
+      (hasPrice
+        ? [
+            {
+              id: 'line-1',
+              description: raw.jobDescription,
+              quantity: 1,
+              unitPrice: raw.price ?? 0,
+            },
+          ]
+        : []),
+    paidAt: normalizeNullableString(invoiceDraft?.paidAt),
+  }
+}
+
+function normalizeCommunication(
+  communication: Partial<CustomerCommunication> | null | undefined,
+  raw: FixtureWorkOrder,
+  customerId: string | null,
+): CustomerCommunication {
+  const customer = customers.find((candidate) => candidate.id === customerId)
+  return {
+    publicToken: communication?.publicToken ?? `wo-${raw.id.padStart(4, '0')}`,
+    notificationEmail:
+      normalizeNullableString(communication?.notificationEmail) ?? customer?.email ?? null,
+    emailNotificationsEnabled: communication?.emailNotificationsEnabled ?? false,
+    signedBy: normalizeNullableString(communication?.signedBy),
+    signedAt: normalizeNullableString(communication?.signedAt),
+  }
 }
 
 function normalizeWorkOrder(raw: FixtureWorkOrder): WorkOrder {
   const now = new Date().toISOString()
   const status = normalizeStatus(raw.status)
+  const customerId = normalizeCustomerId(raw)
+  const locationId = normalizeLocationId(customerId, raw.locationId)
+  const createdAt = raw.createdAt ?? now
+  const updatedAt = raw.updatedAt ?? createdAt
 
   return {
     id: raw.id,
     orderNumber: raw.orderNumber,
+    customerId,
+    locationId,
     clientName: raw.clientName,
     contactPerson: normalizeNullableString(raw.contactPerson),
     jobDescription: raw.jobDescription,
@@ -81,15 +199,29 @@ function normalizeWorkOrder(raw: FixtureWorkOrder): WorkOrder {
     shipping: normalizeShipping(raw.shipping),
     issuedBy: raw.issuedBy,
     executedBy: normalizeNullableString(raw.executedBy),
+    assignment: normalizeAssignment(raw.assignment, raw),
     issueDate: raw.issueDate,
     dueDate: normalizeNullableString(raw.dueDate),
-    isCompleted: raw.isCompleted ?? status === 'completed',
+    isCompleted: status === 'completed' || status === 'invoiced',
     status,
     price: raw.price ?? null,
     note: normalizeNullableString(raw.note),
-    createdAt: raw.createdAt ?? now,
-    updatedAt: raw.updatedAt ?? raw.createdAt ?? now,
+    createdAt,
+    updatedAt,
     completionDate: normalizeNullableString(raw.completionDate),
+    statusHistory: raw.statusHistory ?? [
+      { status, changedAt: createdAt, changedBy: raw.issuedBy },
+    ],
+    internalNotes: raw.internalNotes ?? [],
+    customerNotes: raw.customerNotes ?? [],
+    events: raw.events ?? [
+      { id: 'event-created', kind: 'created', label: 'Nalog kreiran', actor: raw.issuedBy, createdAt },
+    ],
+    attachments: raw.attachments ?? [],
+    materialUsage: raw.materialUsage ?? [],
+    timeEntries: raw.timeEntries ?? [],
+    invoiceDraft: normalizeInvoiceDraft(raw.invoiceDraft, raw),
+    communication: normalizeCommunication(raw.communication, raw, customerId),
   }
 }
 
@@ -108,7 +240,7 @@ function getWorkOrderSnapshot(): WorkOrder[] {
   return cloneValue(workOrders)
 }
 
-function validateCreateInput(input: CreateWorkOrderInput): void {
+function validateCreateInput(input: WorkOrder): void {
   if (
     input.clientName.trim() === '' ||
     input.jobDescription.trim() === '' ||
@@ -119,7 +251,7 @@ function validateCreateInput(input: CreateWorkOrderInput): void {
   }
 }
 
-function createWebApi(): Window['api'] {
+function createFixtureApi(): Window['api'] {
   return {
     async getAppVersion() {
       return APP_VERSION
@@ -150,14 +282,30 @@ function createWebApi(): Window['api'] {
       }
     },
 
+    async getCustomers() {
+      return cloneValue(customers)
+    },
+
+    async getLocations() {
+      return cloneValue(locations)
+    },
+
     async getWorkOrders() {
       return getWorkOrderSnapshot()
     },
 
     async getWorkOrderOperators() {
-      return [...new Set(workOrders.map((order) => order.issuedBy).filter(Boolean))].sort(
-        (a, b) => a.localeCompare(b, 'sr-Latn'),
-      )
+      return [
+        ...new Set(
+          workOrders
+            .flatMap((order) => [
+              order.issuedBy,
+              order.assignment.assignedTo,
+              order.executedBy,
+            ])
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ].sort((a, b) => a.localeCompare(b, 'sr-Latn'))
     },
 
     async getWorkOrderById(id) {
@@ -166,8 +314,6 @@ function createWebApi(): Window['api'] {
     },
 
     async createWorkOrder(input) {
-      validateCreateInput(input)
-
       const sequence = nextSequence
       nextSequence += 1
 
@@ -176,15 +322,24 @@ function createWebApi(): Window['api'] {
         ...input,
         id: String(sequence),
         orderNumber: generateOrderNumber(sequence),
-        shipping: normalizeShipping(input.shipping),
-        jobDetails: normalizeJobDetails(input.jobDetails),
+        status: 'new',
         executedBy: null,
         isCompleted: false,
-        status: 'active',
         createdAt: now,
         updatedAt: now,
         completionDate: null,
+        statusHistory: [
+          { status: 'new', changedAt: now, changedBy: input.issuedBy },
+        ],
+        events: [
+          { id: 'event-created', kind: 'created', label: 'Nalog kreiran', actor: input.issuedBy, createdAt: now },
+        ],
+        communication: {
+          ...input.communication,
+          publicToken: input.communication.publicToken || `wo-${String(sequence).padStart(4, '0')}`,
+        },
       }
+      validateCreateInput(order)
 
       workOrders = [...workOrders, order]
       return cloneValue(order)
@@ -195,6 +350,8 @@ function createWebApi(): Window['api'] {
       if (index === -1) return null
 
       const current = workOrders[index]
+      const nextStatus = changes.status ?? current.status
+      const isCompleted = nextStatus === 'completed' || nextStatus === 'invoiced'
       const updated: WorkOrder = {
         ...current,
         ...changes,
@@ -204,6 +361,10 @@ function createWebApi(): Window['api'] {
             : current.jobDetails,
         shipping:
           'shipping' in changes ? normalizeShipping(changes.shipping) : current.shipping,
+        isCompleted,
+        completionDate: isCompleted
+          ? changes.completionDate ?? current.completionDate ?? new Date().toISOString().slice(0, 10)
+          : null,
         updatedAt: new Date().toISOString(),
       }
 
@@ -224,7 +385,34 @@ function createWebApi(): Window['api'] {
         ? { success: false, message: 'Radni nalog nije pronađen.' }
         : { success: true }
     },
+
+    async getPublicWorkOrderStatus(token) {
+      const order = workOrders.find((candidate) => candidate.communication.publicToken === token)
+      if (!order) return null
+      return {
+        orderNumber: order.orderNumber,
+        clientName: order.clientName,
+        jobDescription: order.jobDescription,
+        status: order.status,
+        dueDate: order.dueDate,
+        customerNoteCount: order.customerNotes.length,
+        internalNoteCount: 0,
+        signedBy: order.communication.signedBy,
+        signedAt: order.communication.signedAt,
+      }
+    },
+
+    getPublicTrackingUrl(token) {
+      return `${window.location.origin}/public/work-orders/${encodeURIComponent(token)}`
+    },
+
+    getWorkOrderReportUrl(id) {
+      return `${window.location.origin}/work-orders/${encodeURIComponent(id)}/report`
+    },
   }
 }
 
-window.api = createWebApi()
+const apiMode = import.meta.env.VITE_IRIS_API_MODE ?? 'http'
+const apiBaseUrl = import.meta.env.VITE_IRIS_API_BASE_URL ?? 'http://127.0.0.1:8080'
+
+window.api = apiMode === 'fixtures' ? createFixtureApi() : createHttpApi(apiBaseUrl)

@@ -101,7 +101,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   function handleForgottenPassword(): void {
     setError(null);
     setNotice(
-      "Za reset lozinke obratite se administratoru sistema. Reset lozinke trenutno nije povezan sa backend API-jem.",
+      "Za reset lozinke obratite se administratoru sistema.",
     );
   }
 

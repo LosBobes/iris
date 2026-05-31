@@ -8,6 +8,7 @@ import WorkOrderDetailPage from "@/pages/WorkOrderDetailPage";
 import WorkOrderEditPage from "@/pages/WorkOrderEditPage";
 import WorkOrdersPage from "@/pages/WorkOrdersPage";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthContext } from "@/contexts/AuthContext";
 
 function AccessDenied(): React.JSX.Element {
@@ -145,16 +146,21 @@ function App(): React.JSX.Element {
 
   return (
     <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-      <MemoryRouter>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/work-orders" element={<WorkOrdersPage />} />
-          <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
-          <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
-          <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
-        </Routes>
-      </MemoryRouter>
-      <Toaster />
+      <TooltipProvider>
+        <MemoryRouter>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/work-orders" element={<WorkOrdersPage />} />
+            <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
+            <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
+            <Route
+              path="/work-orders/:id/edit"
+              element={<WorkOrderEditPage />}
+            />
+          </Routes>
+        </MemoryRouter>
+        <Toaster />
+      </TooltipProvider>
     </AuthContext.Provider>
   );
 }

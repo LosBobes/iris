@@ -7,6 +7,10 @@ import {
 } from "@/components/ui/popover";
 import type { WorkOrdersFiltersState } from "@/hooks/useWorkOrders";
 import { Search, X, ChevronDown } from "lucide-react";
+import {
+  WORK_ORDER_STATUS_LABELS,
+  WORK_ORDER_STATUS_ORDER,
+} from "@/shared/utils/work-orders";
 
 interface WorkOrdersFiltersProps {
   filters: WorkOrdersFiltersState;
@@ -16,10 +20,10 @@ interface WorkOrdersFiltersProps {
 
 const STATUS_OPTIONS: Array<{ value: WorkOrdersFiltersState["status"]; label: string }> = [
   { value: "all", label: "Svi statusi" },
-  { value: "draft", label: "Nacrt" },
-  { value: "active", label: "Aktivan" },
-  { value: "completed", label: "Završen" },
-  { value: "cancelled", label: "Otkazan" },
+  ...WORK_ORDER_STATUS_ORDER.map((status) => ({
+    value: status,
+    label: WORK_ORDER_STATUS_LABELS[status],
+  })),
 ];
 
 const BILLING_OPTIONS: Array<{
@@ -41,6 +45,17 @@ const DELIVERY_OPTIONS: Array<{
   { value: "postExpress", label: "Post Express" },
   { value: "cityExpress", label: "City Express" },
   { value: "fieldVisit", label: "Terenski obilazak" },
+];
+
+const QUEUE_OPTIONS: Array<{
+  value: WorkOrdersFiltersState["queue"];
+  label: string;
+}> = [
+  { value: "all", label: "Svi redovi" },
+  { value: "unassigned", label: "Nedodeljeni" },
+  { value: "overdue", label: "Kasne" },
+  { value: "today", label: "Danas" },
+  { value: "thisWeek", label: "Ove nedelje" },
 ];
 
 interface FilterPillProps {
@@ -113,6 +128,7 @@ export function WorkOrdersFilters({
     filters.status !== "all" ||
     filters.billingDocumentType !== "all" ||
     filters.deliveryMethod !== "all" ||
+    filters.queue !== "all" ||
     filters.dateFrom !== "" ||
     filters.dateTo !== "";
 
@@ -124,10 +140,12 @@ export function WorkOrdersFilters({
   const deliveryLabel =
     DELIVERY_OPTIONS.find((o) => o.value === filters.deliveryMethod)?.label ??
     "Sve dostave";
+  const queueLabel =
+    QUEUE_OPTIONS.find((o) => o.value === filters.queue)?.label ?? "Svi redovi";
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="group relative flex flex-1 items-center gap-2 border border-border bg-card px-3 py-2 transition-colors duration-150 focus-within:border-foreground">
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="group relative flex min-w-[220px] flex-1 items-center gap-2 border border-border bg-card px-3 py-2 transition-colors duration-150 focus-within:border-foreground">
         <Search className="h-3 w-3 text-[color:var(--iris-ink-mute)] transition-colors duration-150 group-focus-within:text-foreground" />
         <input
           type="text"
@@ -165,6 +183,14 @@ export function WorkOrdersFilters({
           options={DELIVERY_OPTIONS}
           current={filters.deliveryMethod}
           onSelect={(value) => updateFilters({ deliveryMethod: value })}
+        />
+      </FilterPill>
+
+      <FilterPill label={queueLabel} isActive={filters.queue !== "all"}>
+        <OptionList
+          options={QUEUE_OPTIONS}
+          current={filters.queue}
+          onSelect={(value) => updateFilters({ queue: value })}
         />
       </FilterPill>
 

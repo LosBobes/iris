@@ -5,6 +5,7 @@ import type {
   DashboardSummary,
   DeliveryMethod
 } from '@/types/work-order'
+import { WORK_ORDER_STATUS_ORDER } from '@/shared/utils/work-orders'
 
 // ---------------------------------------------------------------------------
 // Public data shapes returned by aggregation functions
@@ -54,12 +55,9 @@ export function filterWorkOrders(
 
 /** Derives counts and revenue from a (possibly filtered) WorkOrder array. */
 export function deriveSummary(orders: WorkOrder[]): DashboardSummary {
-  const statusCounts: Record<WorkOrderStatus, number> = {
-    draft: 0,
-    active: 0,
-    completed: 0,
-    cancelled: 0,
-  }
+  const statusCounts = Object.fromEntries(
+    WORK_ORDER_STATUS_ORDER.map((status) => [status, 0])
+  ) as Record<WorkOrderStatus, number>
   let totalRevenue = 0
 
   for (const order of orders) {

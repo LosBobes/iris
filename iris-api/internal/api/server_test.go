@@ -134,6 +134,44 @@ func TestWorkOrderReadEndpoints(t *testing.T) {
 	})
 }
 
+func TestCustomerLocationEndpoints(t *testing.T) {
+	t.Run("list customers", func(t *testing.T) {
+		response := performRequest(t, newTestServer(t), http.MethodGet, "/customers", "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+
+		var customers []domain.Customer
+		if err := json.Unmarshal(response.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(customers) == 0 {
+			t.Fatal("len(customers) = 0, want fixture-backed customers")
+		}
+		if customers[0].Name == "" {
+			t.Fatalf("customers[0] = %#v, want named customer", customers[0])
+		}
+	})
+
+	t.Run("list locations", func(t *testing.T) {
+		response := performRequest(t, newTestServer(t), http.MethodGet, "/locations", "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+
+		var locations []domain.Location
+		if err := json.Unmarshal(response.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(locations) == 0 {
+			t.Fatal("len(locations) = 0, want fixture-backed locations")
+		}
+		if locations[0].CustomerID == "" {
+			t.Fatalf("locations[0] = %#v, want customer linkage", locations[0])
+		}
+	})
+}
+
 func TestCreateWorkOrderEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	payload := `{"clientName":"Novi klijent","contactPerson":null,"jobDescription":"Štampa brošure","jobDetails":null,"billingDocumentType":null,"billingDocumentNumber":null,"shipping":{"deliveryMethod":null,"hasPackaging":false,"hasLabeling":false,"isFragile":false,"requiresSignature":false,"hasInsurance":false,"shippingAddress":null},"issuedBy":"admin","issueDate":"2026-04-25","dueDate":null,"price":null,"note":null}`
@@ -147,8 +185,8 @@ func TestCreateWorkOrderEndpoint(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if created.ClientName != "Novi klijent" || created.Status != domain.WorkOrderStatusActive {
-		t.Fatalf("created = %#v, want active created work order", created)
+	if created.ClientName != "Novi klijent" || created.Status != domain.WorkOrderStatusNew {
+		t.Fatalf("created = %#v, want new created work order", created)
 	}
 	if !strings.HasPrefix(created.OrderNumber, "RN-") {
 		t.Fatalf("OrderNumber = %q, want RN- prefix", created.OrderNumber)
@@ -161,6 +199,24 @@ func TestCreateWorkOrderEndpoint(t *testing.T) {
 	}
 	if len(workOrders) != 26 {
 		t.Fatalf("len(workOrders) = %d, want 26 after create", len(workOrders))
+	}
+}
+
+func TestCreateWorkOrderAcceptsDecimalPrice(t *testing.T) {
+	server := newTestServer(t)
+	payload := `{"clientName":"Novi klijent","contactPerson":null,"jobDescription":"Štampa brošure","jobDetails":null,"billingDocumentType":null,"billingDocumentNumber":null,"shipping":{"deliveryMethod":null,"hasPackaging":false,"hasLabeling":false,"isFragile":false,"requiresSignature":false,"hasInsurance":false,"shippingAddress":null},"issuedBy":"admin","issueDate":"2026-04-25","dueDate":null,"price":12000.5,"note":null}`
+
+	response := performRequest(t, server, http.MethodPost, "/work-orders", payload)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if created["price"] != 12000.5 {
+		t.Fatalf("price = %#v, want 12000.5", created["price"])
 	}
 }
 
@@ -184,7 +240,7 @@ func TestUpdateWorkOrderEndpoint(t *testing.T) {
 		newTestServer(t),
 		http.MethodPatch,
 		"/work-orders/3",
-		`{"status":"completed","isCompleted":true,"completionDate":"2026-04-25"}`,
+		`{"status":"waitingForMaterials"}`,
 	)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -194,8 +250,64 @@ func TestUpdateWorkOrderEndpoint(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if updated.Status != domain.WorkOrderStatusCompleted || !updated.IsCompleted {
-		t.Fatalf("updated = %#v, want completed order", updated)
+	if updated.Status != domain.WorkOrderStatusWaitingForMaterials || updated.IsCompleted {
+		t.Fatalf("updated = %#v, want waiting-for-materials order", updated)
+	}
+}
+
+func TestUpdateWorkOrderRejectsInvalidTransition(t *testing.T) {
+	response := performRequest(
+		t,
+		newTestServer(t),
+		http.MethodPatch,
+		"/work-orders/3",
+		`{"status":"invoiced"}`,
+	)
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnprocessableEntity)
+	}
+	assertErrorResponse(t, response.Body.Bytes(), "Promena statusa nije dozvoljena.")
+}
+
+func TestReportAndPublicTrackingEndpoints(t *testing.T) {
+	server := newTestServer(t)
+
+	reportResponse := performRequest(t, server, http.MethodGet, "/work-orders/1/report", "")
+	if reportResponse.Code != http.StatusOK {
+		t.Fatalf("report status = %d, want %d", reportResponse.Code, http.StatusOK)
+	}
+	if contentType := reportResponse.Header().Get("Content-Type"); contentType != "application/pdf" {
+		t.Fatalf("Content-Type = %q, want application/pdf", contentType)
+	}
+	if !bytes.HasPrefix(reportResponse.Body.Bytes(), []byte("%PDF-")) {
+		t.Fatalf("report body prefix = %q, want PDF header", reportResponse.Body.String()[:5])
+	}
+
+	workOrderResponse := performRequest(t, server, http.MethodGet, "/work-orders/1", "")
+	var workOrder domain.WorkOrder
+	if err := json.Unmarshal(workOrderResponse.Body.Bytes(), &workOrder); err != nil {
+		t.Fatalf("decode work order: %v", err)
+	}
+	if workOrder.Communication.PublicToken == "" {
+		t.Fatal("PublicToken = empty, want public tracking token")
+	}
+
+	publicResponse := performRequest(
+		t,
+		server,
+		http.MethodGet,
+		"/public/work-orders/"+workOrder.Communication.PublicToken,
+		"",
+	)
+	if publicResponse.Code != http.StatusOK {
+		t.Fatalf("public status = %d, want %d", publicResponse.Code, http.StatusOK)
+	}
+	var publicStatus domain.PublicWorkOrderStatus
+	if err := json.Unmarshal(publicResponse.Body.Bytes(), &publicStatus); err != nil {
+		t.Fatalf("decode public status: %v", err)
+	}
+	if publicStatus.OrderNumber != workOrder.OrderNumber || publicStatus.InternalNoteCount != 0 {
+		t.Fatalf("public status = %#v, want sanitized status for %s", publicStatus, workOrder.OrderNumber)
 	}
 }
 
