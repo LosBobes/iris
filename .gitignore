@@ -6,3 +6,7 @@ out/
 dist/
 build/
 apps/desktop/.eslintcache
+apps/desktop/.env
+PLAN.md
+.omx/
+.cursor/rules/karpathy-guidelines.mdc
