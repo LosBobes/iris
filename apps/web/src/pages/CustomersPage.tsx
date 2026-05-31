@@ -19,11 +19,48 @@ const emptyLocation: Location = {
   address: null,
 };
 
+type RequiredField<T> = {
+  label: string;
+  value: (draft: T) => string | null;
+};
+
+const customerRequiredFields = [
+  { label: "ID", value: (customer: Customer) => customer.id },
+  { label: "Naziv", value: (customer: Customer) => customer.name },
+  { label: "Kontakt", value: (customer: Customer) => customer.contactName },
+  { label: "Email", value: (customer: Customer) => customer.email },
+  { label: "Telefon", value: (customer: Customer) => customer.phone },
+] satisfies Array<RequiredField<Customer>>;
+
+const locationRequiredFields = [
+  { label: "ID", value: (location: Location) => location.id },
+  { label: "Klijent", value: (location: Location) => location.customerId },
+  { label: "Naziv", value: (location: Location) => location.name },
+  { label: "Adresa", value: (location: Location) => location.address },
+] satisfies Array<RequiredField<Location>>;
+
+export function getMissingCustomerFields(customer: Customer): string[] {
+  return getMissingRequiredFields(customer, customerRequiredFields);
+}
+
+export function getMissingLocationFields(location: Location): string[] {
+  return getMissingRequiredFields(location, locationRequiredFields);
+}
+
+export function formatMandatoryFieldsMessage(
+  formName: string,
+  missingFields: string[],
+): string {
+  return `Popunite sva obavezna polja za ${formName}: ${missingFields.join(", ")}.`;
+}
+
 function CustomersPage(): React.JSX.Element {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [customerDraft, setCustomerDraft] = useState<Customer>(emptyCustomer);
   const [locationDraft, setLocationDraft] = useState<Location>(emptyLocation);
+  const [customerMissingFields, setCustomerMissingFields] = useState<string[]>([]);
+  const [locationMissingFields, setLocationMissingFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -51,11 +88,33 @@ function CustomersPage(): React.JSX.Element {
     [customers],
   );
 
+  const updateCustomerDraft = useCallback((nextCustomer: Customer) => {
+    setCustomerDraft(nextCustomer);
+    setCustomerMissingFields((currentMissingFields) =>
+      currentMissingFields.length > 0
+        ? getMissingCustomerFields(nextCustomer)
+        : currentMissingFields,
+    );
+  }, []);
+
+  const updateLocationDraft = useCallback((nextLocation: Location) => {
+    setLocationDraft(nextLocation);
+    setLocationMissingFields((currentMissingFields) =>
+      currentMissingFields.length > 0
+        ? getMissingLocationFields(nextLocation)
+        : currentMissingFields,
+    );
+  }, []);
+
   const saveCustomer = useCallback(async () => {
-    if (!customerDraft.name.trim()) {
-      toast.error("Naziv klijenta je obavezan.");
+    const missingFields = getMissingCustomerFields(customerDraft);
+    setCustomerMissingFields(missingFields);
+
+    if (missingFields.length > 0) {
+      toast.error(formatMandatoryFieldsMessage("klijenta", missingFields));
       return;
     }
+
     const customer = {
       ...customerDraft,
       id: customerDraft.id || slugId("cust", customerDraft.name),
@@ -66,6 +125,7 @@ function CustomersPage(): React.JSX.Element {
     try {
       await window.api.upsertCustomer(customer);
       setCustomerDraft(emptyCustomer);
+      setCustomerMissingFields([]);
       await load();
       toast.success("Klijent je sačuvan.");
     } catch {
@@ -74,10 +134,14 @@ function CustomersPage(): React.JSX.Element {
   }, [customerDraft, load]);
 
   const saveLocation = useCallback(async () => {
-    if (!locationDraft.customerId || !locationDraft.name.trim()) {
-      toast.error("Klijent i naziv lokacije su obavezni.");
+    const missingFields = getMissingLocationFields(locationDraft);
+    setLocationMissingFields(missingFields);
+
+    if (missingFields.length > 0) {
+      toast.error(formatMandatoryFieldsMessage("lokaciju", missingFields));
       return;
     }
+
     const location = {
       ...locationDraft,
       id: locationDraft.id || slugId("loc", locationDraft.name),
@@ -86,6 +150,7 @@ function CustomersPage(): React.JSX.Element {
     try {
       await window.api.upsertLocation(location);
       setLocationDraft(emptyLocation);
+      setLocationMissingFields([]);
       await load();
       toast.success("Lokacija je sačuvana.");
     } catch {
@@ -145,7 +210,8 @@ function CustomersPage(): React.JSX.Element {
               <Header title="Klijenti" />
               <CustomerForm
                 value={customerDraft}
-                onChange={setCustomerDraft}
+                missingFields={customerMissingFields}
+                onChange={updateCustomerDraft}
                 onSave={saveCustomer}
               />
               <div className="divide-y divide-[color:var(--iris-border-soft)]">
@@ -156,7 +222,10 @@ function CustomersPage(): React.JSX.Element {
                     detail={[customer.contactName, customer.email, customer.phone]
                       .filter(Boolean)
                       .join(" · ")}
-                    onEdit={() => setCustomerDraft(customer)}
+                    onEdit={() => {
+                      setCustomerDraft(customer);
+                      setCustomerMissingFields([]);
+                    }}
                     onDelete={() => void deleteCustomer(customer.id)}
                   />
                 ))}
@@ -168,7 +237,8 @@ function CustomersPage(): React.JSX.Element {
               <LocationForm
                 value={locationDraft}
                 customers={customerOptions}
-                onChange={setLocationDraft}
+                missingFields={locationMissingFields}
+                onChange={updateLocationDraft}
                 onSave={saveLocation}
               />
               <div className="divide-y divide-[color:var(--iris-border-soft)]">
@@ -177,7 +247,10 @@ function CustomersPage(): React.JSX.Element {
                     key={location.id}
                     title={location.name}
                     detail={`${customerName(customers, location.customerId)} · ${location.address ?? "-"}`}
-                    onEdit={() => setLocationDraft(location)}
+                    onEdit={() => {
+                      setLocationDraft(location);
+                      setLocationMissingFields([]);
+                    }}
                     onDelete={() => void deleteLocation(location.id)}
                   />
                 ))}
@@ -200,20 +273,53 @@ function Header({ title }: { title: string }): React.JSX.Element {
 
 function CustomerForm({
   value,
+  missingFields,
   onChange,
   onSave,
 }: {
   value: Customer;
+  missingFields: string[];
   onChange: (value: Customer) => void;
   onSave: () => void;
 }): React.JSX.Element {
   return (
     <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2">
-      <TextInput label="ID" value={value.id} onChange={(id) => onChange({ ...value, id })} />
-      <TextInput label="Naziv" value={value.name} onChange={(name) => onChange({ ...value, name })} />
-      <TextInput label="Kontakt" value={value.contactName ?? ""} onChange={(contactName) => onChange({ ...value, contactName })} />
-      <TextInput label="Email" value={value.email ?? ""} onChange={(email) => onChange({ ...value, email })} />
-      <TextInput label="Telefon" value={value.phone ?? ""} onChange={(phone) => onChange({ ...value, phone })} />
+      <MandatoryFieldsAlert missingFields={missingFields} />
+      <TextInput
+        label="ID"
+        value={value.id}
+        required
+        isInvalid={isFieldMissing(missingFields, "ID")}
+        onChange={(id) => onChange({ ...value, id })}
+      />
+      <TextInput
+        label="Naziv"
+        value={value.name}
+        required
+        isInvalid={isFieldMissing(missingFields, "Naziv")}
+        onChange={(name) => onChange({ ...value, name })}
+      />
+      <TextInput
+        label="Kontakt"
+        value={value.contactName ?? ""}
+        required
+        isInvalid={isFieldMissing(missingFields, "Kontakt")}
+        onChange={(contactName) => onChange({ ...value, contactName })}
+      />
+      <TextInput
+        label="Email"
+        value={value.email ?? ""}
+        required
+        isInvalid={isFieldMissing(missingFields, "Email")}
+        onChange={(email) => onChange({ ...value, email })}
+      />
+      <TextInput
+        label="Telefon"
+        value={value.phone ?? ""}
+        required
+        isInvalid={isFieldMissing(missingFields, "Telefon")}
+        onChange={(phone) => onChange({ ...value, phone })}
+      />
       <SaveButton onClick={onSave} />
     </div>
   );
@@ -222,23 +328,34 @@ function CustomerForm({
 function LocationForm({
   value,
   customers,
+  missingFields,
   onChange,
   onSave,
 }: {
   value: Location;
   customers: Array<{ id: string; name: string }>;
+  missingFields: string[];
   onChange: (value: Location) => void;
   onSave: () => void;
 }): React.JSX.Element {
   return (
     <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2">
-      <TextInput label="ID" value={value.id} onChange={(id) => onChange({ ...value, id })} />
+      <MandatoryFieldsAlert missingFields={missingFields} />
+      <TextInput
+        label="ID"
+        value={value.id}
+        required
+        isInvalid={isFieldMissing(missingFields, "ID")}
+        onChange={(id) => onChange({ ...value, id })}
+      />
       <label className="text-[11px] text-[color:var(--iris-ink-soft)]">
         Klijent
         <select
           value={value.customerId}
           onChange={(event) => onChange({ ...value, customerId: event.target.value })}
-          className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+          required
+          aria-invalid={isFieldMissing(missingFields, "Klijent") || undefined}
+          className={fieldControlClassName(isFieldMissing(missingFields, "Klijent"))}
         >
           <option value="">Izaberite klijenta</option>
           {customers.map((customer) => (
@@ -248,8 +365,20 @@ function LocationForm({
           ))}
         </select>
       </label>
-      <TextInput label="Naziv" value={value.name} onChange={(name) => onChange({ ...value, name })} />
-      <TextInput label="Adresa" value={value.address ?? ""} onChange={(address) => onChange({ ...value, address })} />
+      <TextInput
+        label="Naziv"
+        value={value.name}
+        required
+        isInvalid={isFieldMissing(missingFields, "Naziv")}
+        onChange={(name) => onChange({ ...value, name })}
+      />
+      <TextInput
+        label="Adresa"
+        value={value.address ?? ""}
+        required
+        isInvalid={isFieldMissing(missingFields, "Adresa")}
+        onChange={(address) => onChange({ ...value, address })}
+      />
       <SaveButton onClick={onSave} />
     </div>
   );
@@ -258,10 +387,14 @@ function LocationForm({
 function TextInput({
   label,
   value,
+  required = false,
+  isInvalid = false,
   onChange,
 }: {
   label: string;
   value: string;
+  required?: boolean;
+  isInvalid?: boolean;
   onChange: (value: string) => void;
 }): React.JSX.Element {
   return (
@@ -269,10 +402,30 @@ function TextInput({
       {label}
       <input
         value={value}
+        required={required}
+        aria-invalid={isInvalid || undefined}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+        className={fieldControlClassName(isInvalid)}
       />
     </label>
+  );
+}
+
+function MandatoryFieldsAlert({
+  missingFields,
+}: {
+  missingFields: string[];
+}): React.JSX.Element | null {
+  if (missingFields.length === 0) return null;
+
+  return (
+    <div
+      role="alert"
+      className="animate-iris-fade border-l-2 border-destructive bg-destructive/10 px-3 py-2 text-[12px] text-destructive sm:col-span-2"
+    >
+      <div className="font-medium">Popunite sva obavezna polja pre čuvanja.</div>
+      <div className="mt-1">Nedostaje: {missingFields.join(", ")}</div>
+    </div>
   );
 }
 
@@ -323,6 +476,32 @@ function Row({
 function blankToNull(value: string | null): string | null {
   if (value === null || value.trim() === "") return null;
   return value;
+}
+
+function getMissingRequiredFields<T>(
+  draft: T,
+  requiredFields: Array<RequiredField<T>>,
+): string[] {
+  return requiredFields
+    .filter((field) => !isPopulated(field.value(draft)))
+    .map((field) => field.label);
+}
+
+function isPopulated(value: string | null | undefined): boolean {
+  return value !== null && value !== undefined && value.trim().length > 0;
+}
+
+function isFieldMissing(missingFields: string[], field: string): boolean {
+  return missingFields.includes(field);
+}
+
+function fieldControlClassName(isInvalid: boolean): string {
+  return [
+    "mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground",
+    isInvalid ? "border-destructive ring-1 ring-destructive/20" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function slugId(prefix: string, value: string): string {

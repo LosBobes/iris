@@ -7,7 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatMonthLabel, getLast12Months } from './utils'
+import { formatMonthLabel, resolveChartMonths } from './utils'
 
 interface WorkOrdersPerMonthChartProps {
   monthlyOrders: { month: string; count: number }[]
@@ -16,9 +16,9 @@ interface WorkOrdersPerMonthChartProps {
 export function WorkOrdersPerMonthChart({
   monthlyOrders,
 }: WorkOrdersPerMonthChartProps): React.JSX.Element {
-  const last12 = getLast12Months()
+  const chartMonths = resolveChartMonths(monthlyOrders.map(({ month }) => month))
   const ordersLookup = new Map(monthlyOrders.map(({ month, count }) => [month, count]))
-  const data = last12.map((month) => {
+  const data = chartMonths.map((month) => {
     const actualCount = ordersLookup.get(month)
 
     return {
