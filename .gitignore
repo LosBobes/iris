@@ -1,9 +1,0 @@
-node_modules/
-.history/
-.vite/
-.DS_Store
-out/
-dist/
-build/
-apps/desktop/.eslintcache
-.gitignore
