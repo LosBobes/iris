@@ -1,117 +1,118 @@
-# Contributing
+# Contributing to Iris
 
-This repository currently contains Iris, a desktop application for Stamparija Cobanovic.
-The active code lives in `apps/desktop/`.
+This repository contains **Iris**, a full-stack operations management suite for Stamparija Cobanovic. It is structured as a monorepo containing multiple frontend clients and a shared Go backend service.
 
 Use this guide together with:
+- [PROJECT_CONTEXT.md](file:///Users/luka/Projects/iris/docs/PROJECT_CONTEXT.md)
+- [ARCHITECTURE.md](file:///Users/luka/Projects/iris/docs/ARCHITECTURE.md)
+- [DOMAIN_GLOSSARY.md](file:///Users/luka/Projects/iris/docs/DOMAIN_GLOSSARY.md)
+- [DECISIONS.md](file:///Users/luka/Projects/iris/docs/DECISIONS.md)
 
-- `docs/ARCHITECTURE.md`
-- `docs/DOMAIN_GLOSSARY.md`
-- `docs/DECISIONS.md`
+---
 
-## Current Scope
+## Monorepo Structure & Scope
 
-- The working application in this checkout is `apps/desktop`.
-- The root `README.md` mentions an `iris-api` module, but that directory is not present in the current repository state.
-- Unless a task explicitly says otherwise, run project commands from `apps/desktop/`.
+The active codebase is divided into three key services:
+
+1. **Desktop Client (`apps/desktop/`)**: Secure, containerized Electron desktop app for local shop operations.
+2. **Web Client (`apps/web/`)**: React web application for browser-based operations, dashboard reporting, and remote tracking.
+3. **Backend API (`iris-api/`)**: Pure Go HTTP REST service providing the single source of truth for authentication, CRM auto-completions, and work-order management.
+
+---
 
 ## Prerequisites
 
-- Node.js and npm
-- A desktop environment capable of running Electron during local development
+- **Node.js** (v18+) and **npm** for frontends.
+- **Go** (v1.22+) for backend API.
+- A desktop environment capable of running Electron during local desktop development.
 
-## Setup
+---
 
+## Development Setup
+
+To get the entire stack running locally:
+
+### 1. Start the Shared Go Backend
+```bash
+cd iris-api
+go run ./cmd/server
+```
+*The API boots on `http://localhost:8080` (unless configured otherwise via `IRIS_API_ADDR`). It operates out of an in-memory store seeded from JSON fixtures.*
+
+### 2. Start the Desktop Client
 ```bash
 cd apps/desktop
 npm install
-```
-
-## Common Commands
-
-```bash
 npm run dev
-npm run lint
-npm run typecheck
-npm run test
-npm run build
 ```
+*The desktop app runs in development mode, automatically forwarding privileged Electron renderer actions via standard IPC handlers to the typed `IrisApiClient` which hits the Go REST backend.*
 
-Useful one-off test command:
-
+### 3. Start the Web Client
 ```bash
-npx vitest run src/renderer/src/lib/dashboard/aggregations.test.ts
+cd apps/web
+npm install
+npm run dev
 ```
+*The web client runs on Vite. You can configure `VITE_IRIS_API_MODE` in environment config to switch between `http` mode (communicates directly with Go backend) and `fixtures` mode (runs statefully in browser memory sandbox).*
 
-## Development Workflow
+---
 
-1. Start from a focused branch.
-2. Keep changes narrow and reviewable.
-3. Follow the existing Electron split:
-   - `src/main/` for main-process logic
-   - `src/preload/` for the typed bridge
-   - `src/renderer/src/` for React UI
-4. If you add a new IPC method, update all three layers:
-   - main handler
-   - preload runtime bridge
-   - preload TypeScript declarations
-5. Run `npm run lint`, `npm run typecheck`, and `npm run test` before handing work off.
-6. Update docs when behavior, architecture, or terminology changes.
+## Testing Boundaries
 
-## Code Organization Rules
+We maintain a rigorous multi-tiered testing strategy to ensure zero regressions across our runtime layers:
 
-- Organize by feature, not by file type.
-- Keep shared domain models in `apps/desktop/model/`.
-- Keep renderer-specific types in `apps/desktop/src/renderer/src/types/` when the UI needs a richer shape.
-- Keep hooks that call `window.api` in `apps/desktop/src/renderer/src/hooks/`.
-- Register new IPC handlers in `apps/desktop/src/main/index.ts`.
-- Keep `apps/desktop/src/preload/index.ts` and `apps/desktop/src/preload/index.d.ts` in sync.
-- Use the `@` alias for renderer imports. It resolves to `apps/desktop/src/renderer/src/`.
+1. **Go API Integration Tests (`iris-api/`)**:
+   Run with `go test ./...` to verify Chi routers, OpenAPI schema contracts, REST JSON serialization, and fixture seeding logic.
+2. **Desktop Client Tests (`apps/desktop/`)**:
+   Run with `npm run test` or `npx vitest run <path-to-test>`. Renderer tests run in `jsdom` with Vitest; preload boundaries and IPC handlers are verified using mock implementations.
+3. **Web Client Tests (`apps/web/`)**:
+   Run with `npm run test` to execute Vitest suites verifying dual-runtime clients, page state machines, filters, and CRM auto-completion panels.
 
-## UI And Language Conventions
+---
 
-- Visible UI text should be Serbian, in Latin script.
-- Code identifiers, filenames, and comments should stay in English.
-- Tailwind is v4. Use the existing Tailwind setup instead of older v3 patterns.
-- Reuse existing UI primitives and utilities before adding new ones.
+## Development Workflow & Rules
 
-## Data And Environment Expectations
+### 1. Modifying the Domain Model
+If you are modifying work-order fields, customer models, location structures, or billing logic:
+- Update the OpenAPI contract in `iris-api/openapi.yaml`.
+- Update the Go domain models in `iris-api/internal/domain/types.go`.
+- Update the React models in both `apps/desktop/model/work-order.ts` and `apps/web/src/types/work-order.ts` to ensure consistency.
 
-- Authentication and work-order data are currently loaded from JSON fixtures in `apps/desktop/fixtures/`.
-- Treat fixture-backed auth and data access as temporary implementation choices, not final production architecture.
-- If you change work-order fields, update both:
-  - `apps/desktop/model/work-order.ts`
-  - `apps/desktop/src/renderer/src/types/work-order.ts`
+### 2. Adding Desktop IPC Channels
+If you introduce a new native desktop capability:
+- Register the main process IPC handler in `apps/desktop/src/main/index.ts` (mapping requests to the typed `IrisApiClient`).
+- Expose the method on the context bridge in `apps/desktop/src/preload/index.ts`.
+- Update TypeScript interface declarations in `apps/desktop/src/preload/index.d.ts` to keep the bridge strictly typed.
 
-## Testing Expectations
+### 3. UI and Language Conventions
+- **Visible UI text** must be in **Serbian (Latin script)** (`sr-Latn`) to suit print-shop operations.
+- **Code identifiers, database columns, API JSON fields, and developer comments** must remain strictly in **English**.
+- Refer to `docs/DOMAIN_GLOSSARY.md` for consistent mapping between Serbian UI terminology and English code tokens.
 
-- Renderer tests run in jsdom with Vitest.
-- Stub preload APIs in tests with `vi.stubGlobal('api', ...)`.
-- Prefer colocated test files near the code they validate.
-- Add or update regression tests when changing filtering, aggregation, auth flow, or dashboard rendering behavior.
+---
 
 ## Pull Requests And Commits
 
-- Keep PRs scoped to one feature slice when possible.
-- Explain why the change exists, not just what changed.
-- Commit messages should follow the repository's Lore-style structure:
-  - intent-first subject
-  - optional explanatory body
-  - useful trailers such as `Constraint:`, `Rejected:`, `Confidence:`, `Scope-risk:`, `Directive:`, `Tested:`, and `Not-tested:`
-- Call out any temporary behavior, follow-up work, or known gaps in the PR description.
+### Scope
+Keep pull requests focused, narrow, and scoped to a single logical slice (e.g. adding a billing status, refactoring an API router, or adding unit tests).
 
-## When To Update Docs
+### LORE-Style Commit Messages
+We enforce LORE-style structured commit messages to build an informative development history. Every commit must have:
+- An **intent-first subject line** (e.g. `feat: implement dual-mode http/fixture client for web`).
+- An **optional explanatory body** describing *why* the change was made rather than *what* code changed.
+- **Useful trailers** to communicate risk, testing status, and constraints:
+  - `Tested: <test commands or manual confirmation details>`
+  - `Not-tested: <reasons why testing was skipped, if applicable>`
+  - `Constraint: <technological or project-level boundaries respected>`
+  - `Scope-risk: <low | medium | high> <explanation>`
 
-Update docs in the same change when you:
+---
 
-- add or rename IPC channels
-- change domain types or glossary terms
-- change developer workflow or required commands
-- introduce or retire an architectural boundary
-- replace fixture data with a persistent or remote data source
+## When to Update Documentation
+Always update relevant docs in the same PR when you:
+- Add, rename, or retire backend API routes or desktop IPC channels.
+- Shift any runtime boundaries or data flow pathways.
+- Change domain models, statuses, or print-shop vocabulary.
+- Graduate features from Phase 2 roadmaps to active service.
 
-## Security Notes For Contributors
-
-- Do not treat the renderer role gate as a strong security boundary.
-- Be careful when changing preload exposure; anything added there becomes reachable from renderer code.
-- If you change auth, data loading, or Electron window security settings, review `apps/desktop/desktop-threat-model.md`.
+*Last verified against the checked-in repository state on 2026-05-31.*

@@ -125,8 +125,8 @@ That lets the method operate on the same `Server` instance instead of a copied v
 Nullable fields:
 
 ```go
-CompletedAt *string `json:"completedAt"`
-Price       *int    `json:"price"`
+CompletedAt *string  `json:"completedAt"`
+Price       *float64 `json:"price"`
 ```
 
 In JSON, those fields may be `null`. In Go, a pointer can be `nil`, which is how this API represents missing values.
@@ -318,8 +318,8 @@ type WorkOrder struct {
 	DeliveryMethod string  `json:"deliveryMethod"`
 	IssuedBy       string  `json:"issuedBy"`
 	CreatedAt      string  `json:"createdAt"`
-	CompletedAt    *string `json:"completedAt"`
-	Price          *int    `json:"price"`
+	CompletedAt    *string  `json:"completedAt"`
+	Price          *float64 `json:"price"`
 }
 ```
 
@@ -529,15 +529,3 @@ If you want to grow this into a more serious Go backend, these are the natural n
 3. Add `context.Context` timeouts for I/O operations.
 4. Write table-driven Go tests for the store and handlers.
 5. Replace the fixture store with a real database while keeping the same OpenAPI contract.
-
-## What to learn from this example
-
-If your goal is to learn Go through this project, focus on these topics in order:
-
-1. The difference between package-level structure and folder organization.
-2. How `struct` types and JSON tags model HTTP payloads.
-3. Why pointer fields are useful for nullable JSON values.
-4. How `http.Handler` and `chi` work together.
-5. Why separating `api`, `domain`, and `store` is useful even in a small project.
-
-That is a strong minimum foundation for larger Go services later.

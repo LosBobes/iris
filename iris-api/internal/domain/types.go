@@ -155,10 +155,10 @@ type WorkOrderEvent struct {
 }
 
 type MaterialUsage struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Quantity int    `json:"quantity"`
-	Unit     string `json:"unit"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Quantity int      `json:"quantity"`
+	Unit     string   `json:"unit"`
 	UnitCost *float64 `json:"unitCost"`
 }
 

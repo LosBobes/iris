@@ -4,274 +4,128 @@ This document provides a fast, code-grounded summary of the Iris repository for 
 
 ## Project Overview
 
-**Iris** is currently an Electron desktop application for Stamparija Cobanovic.
+**Iris** is a full-stack operations management suite for Stamparija Cobanovic. It includes a desktop shell, a web client, and a Go backend API.
 
-| Aspect | Value |
-| --- | --- |
-| Active app | `apps/desktop` |
-| Desktop shell | Electron 39 |
-| UI | React 19 |
-| Language | TypeScript 5.9 |
-| Build tool | electron-vite 5 |
-| Styling | Tailwind CSS 4 |
-| Charts | Recharts 3 |
-| Test framework | Vitest 4 + React Testing Library |
-| Packaging | electron-builder 26 |
-
-Important repository note:
-
-- the root `README.md` mentions an `iris-api` module, but that directory is not present in this checkout
-
-## What Exists Today
-
-The current desktop app supports:
-
-- fixture-backed login
-- admin-only dashboard access
-- work-order reporting
-- date and operator filtering
-- monthly orders and revenue charts
-- status and delivery-method charts
-- top-clients reporting
-
-The current desktop app does not include:
-
-- a checked-in backend service
-- persistent authentication
-- database-backed storage
+| Aspect | Desktop Client | Web Client | Backend API |
+| --- | --- | --- | --- |
+| **Path** | `apps/desktop` | `apps/web` | `iris-api` |
+| **Shell/Build** | Electron 39 / electron-vite 5 | Vite | Go 1.22+ |
+| **UI Framework** | React 19 / TypeScript 5.9 | React 19 / TypeScript 5.9 | OpenAPI v3 Spec |
+| **Styling** | Tailwind CSS 4 | Tailwind CSS 4 | N/A |
+| **Charts** | Recharts 3 | Recharts 3 | N/A |
+| **Database/Storage** | `iris-api` backend | Dual mode: HTTP Client or Local Fixture state | Fixture-backed memory store |
 
 ## Repository Structure
 
 ```text
 .
-├─ apps/
-│  └─ desktop/
-│     ├─ fixtures/              JSON fixture data
-│     ├─ model/                 Shared cross-process types
-│     ├─ src/
-│     │  ├─ main/               Electron main process
-│     │  ├─ preload/            Typed renderer bridge
-│     │  └─ renderer/src/       React UI
-│     ├─ build/                 Packaging assets
-│     ├─ config/                App config files
-│     ├─ electron.vite.config.ts
-│     ├─ electron-builder.yml
-│     ├─ vitest.config.ts
-│     └─ package.json
-└─ docs/
-   ├─ ARCHITECTURE.md
-   ├─ CONTRIBUTING.md
-   ├─ DECISIONS.md
-   ├─ DOMAIN_GLOSSARY.md
-   └─ PROJECT_CONTEXT.md
+├── apps/
+│   ├── desktop/                Electron desktop app for local shop operations
+│   │   ├── fixtures/           Local JSON fixtures (fallback)
+│   │   ├── model/              Shared desktop domain types
+│   │   └── src/
+│   │       ├── main/           Electron main process (IPC-to-HTTP client forwarding)
+│   │       ├── preload/        Typed context bridge
+│   │       └── renderer/src/   React renderer mirroring desktop styles
+│   └── web/                    React web app for browser operations
+│       ├── public/             Favicon and public assets
+│       ├── src/
+│       │   ├── components/     UI widgets, CRM forms, dashboard charts
+│       │   ├── fixtures/       Local JSON fixtures (fallback)
+│       │   ├── hooks/          Data fetching and auth hooks
+│       │   ├── lib/            HTTP client and local mock API adapters
+│       │   ├── pages/          Dashboard, Create, Detail, Edit, List pages
+│       │   └── types/          Expanded 9-status domain types
+│       └── vite.config.ts
+├── iris-api/                   Go backend API
+│   ├── cmd/server/             API server entry point
+│   ├── internal/
+│   │   ├── api/                Chi routers, HTTP handlers, test suites
+│   │   ├── domain/             Go structs matching the expanded domain model
+│   │   └── store/              Fixture-backed memory store & seeding
+│   ├── go.mod                  Go modules configuration
+│   └── openapi.yaml            OpenAPI 3.0 specification contract
+└── docs/                       Project documentation & decisions
 ```
 
-## Main Process
+## Desktop Client
 
-Location: `apps/desktop/src/main/`
+Location: `apps/desktop/`
 
-Key files:
+### Runtime Flow
+1. **IPC Forwarding**: Rather than accessing JSON files directly, the main process is updated to act as a bridge. Renderer requests to `window.api` invoke Electron IPC handlers, which delegate to a typed `IrisApiClient` that communicates with `iris-api` via HTTP.
+2. **Configuration**: Configured at runtime via `apps/desktop/src/main/shared/runtime-config.ts`, loading backend base URLs from development/production configurations.
+3. **Preload Layer**: Located in `apps/desktop/src/preload/`, offering a secure context bridge.
 
-- `apps/desktop/src/main/index.ts`
-- `apps/desktop/src/main/Login/Login.async.ts`
-- `apps/desktop/src/main/WorkOrder/WorkOrder.async.ts`
-- `apps/desktop/src/main/shared/load-fixture.ts`
+## Web Client
 
-Responsibilities:
+Location: `apps/web/`
 
-- create the Electron window
-- register IPC handlers
-- load fixture data
-- keep filesystem and Electron privileges out of the renderer
+### Capabilities
+- **Dual API Modes**: In `apps/web/src/lib/web-api.ts`, the app checks `VITE_IRIS_API_MODE`. It can run in `fixtures` mode (in-memory stateful client using browser memory) or `http` mode (making HTTP calls to `iris-api`).
+- **Comprehensive CRM**: Features normalized `Customer` and `Location` auto-completions, client management panels, and clean creation workflows.
+- **Advanced Dashboard**: Dynamic filters (date, operators) and data visualizations showing revenue, orders, delivery distribution, and top clients.
 
-Current IPC handlers:
+## Go Backend API
 
-- `auth:login`
-- `workorders:getAll`
-- `workorders:getOperators`
-- `workorders:getById`
-- `workorders:create`
-- `workorders:update`
-- `workorders:delete`
+Location: `iris-api/`
 
-## Preload Layer
+- **Tech Stack**: Built with pure Go, standard library packages, and the Chi router.
+- **Contract-First**: Defined fully in `openapi.yaml`, detailing endpoints for `/auth/login`, `/work-orders`, `/customers`, `/locations`, and public tracking.
+- **Stateless Store**: The memory store in `internal/store` loads and seeds itself from `apps/desktop/fixtures/`, providing rich testing utilities and handlers.
 
-Location: `apps/desktop/src/preload/`
+## Expanded Domain Model
 
-Key files:
+The domain model has transitioned from a basic 4-status model to a comprehensive print-shop operational schema.
 
-- `apps/desktop/src/preload/index.ts`
-- `apps/desktop/src/preload/index.d.ts`
+### 1. WorkOrder Lifecycle
+Managed through 9 distinct transition-controlled statuses:
+- `new` -> `assigned` -> `inProgress` -> `waitingForCustomer` / `waitingForMaterials` -> `completed` -> `cancelled` -> `invoiced`
+- An immutable `statusHistory` list tracks every transition, timestamp, and active operator.
 
-Current renderer API:
+### 2. Normalized Entities
+- **Customer**: `id`, `name`, `contactName`, `email`, `phone`
+- **Location**: `id`, `customerId`, `name`, `address`
+- **Assignment**: Assigned operator (`assignedTo`), operational priority (`low` | `normal` | `high` | `urgent`), and `scheduledDate`.
 
-```ts
-window.api.login(credentials)
-window.api.getWorkOrders()
-window.api.getWorkOrderOperators()
-window.api.getWorkOrderById(id)
-window.api.createWorkOrder(input)
-window.api.updateWorkOrder(id, changes)
-window.api.deleteWorkOrder(id)
-```
-
-The preload also exposes `window.electron` from `@electron-toolkit/preload`.
-
-## Renderer
-
-Location: `apps/desktop/src/renderer/src/`
-
-Key entry points:
-
-- `apps/desktop/src/renderer/src/main.tsx`
-- `apps/desktop/src/renderer/src/App.tsx`
-- `apps/desktop/src/renderer/src/pages/DashboardPage.tsx`
-
-Main UI areas:
-
-- `components/Login/` for the login form
-- `components/dashboard/` for dashboard widgets and charts
-- `components/layout/` for the app shell
-- `hooks/` for data-fetching and filter state
-- `lib/dashboard/` for pure aggregation and label helpers
-- `types/` for renderer-specific domain contracts
-
-Current renderer flow:
-
-1. `App.tsx` starts unauthenticated.
-2. `Login.tsx` submits credentials through `window.api.login(...)`.
-3. On success, `App.tsx` stores `AuthenticatedUser` in local state.
-4. Only `role === 'admin'` reaches `DashboardPage`.
-5. `useDashboardData()` loads work orders and operators through IPC.
-6. Renderer aggregation helpers derive summary and chart data.
-
-## Domain Model
-
-### User
-
-Defined in `apps/desktop/model/user.ts`
-
-```ts
-interface User {
-  id: string
-  username: string
-  role: 'admin' | 'user'
-}
-```
-
-### WorkOrder
-
-Defined in `apps/desktop/model/work-order.ts`
-
-```ts
-interface WorkOrder {
-  id: string
-  orderNumber: string
-  clientName: string
-  contactPerson: string | null
-  jobDescription: string
-  jobDetails: JobDetails | null
-  billingDocumentType: 'invoice' | 'cashCollection' | 'proforma' | null
-  billingDocumentNumber: string | null
-  shipping: Shipping
-  issuedBy: string
-  executedBy: string | null
-  issueDate: string
-  dueDate: string | null
-  isCompleted: boolean
-  status: 'draft' | 'active' | 'completed' | 'cancelled'
-  price: number | null
-  note: string | null
-  createdAt: string
-  updatedAt: string
-  completionDate: string | null
-}
-```
-
-### Renderer-Specific Types
-
-Defined in `apps/desktop/src/renderer/src/types/work-order.ts`
-
-- `DashboardFilters`
-- `DashboardSummary`
-- `WorkOrderRepository`
-
-## Fixture Data
-
-Current fixture files:
-
-- `apps/desktop/fixtures/users.json`
-- `apps/desktop/fixtures/work-orders.json`
-
-Current auth seed:
-
-- username: `admin`
-- password: `admin123`
-- role: `admin`
-
-Fixture loading order:
-
-1. `app.getAppPath()/fixtures/<file>`
-2. `process.cwd()/fixtures/<file>`
-
-## Reporting Logic
-
-The dashboard uses pure aggregation helpers in `apps/desktop/src/renderer/src/lib/dashboard/aggregations.ts`.
-
-Main derived outputs:
-
-- filtered work orders
-- summary totals
-- monthly order buckets
-- monthly revenue buckets
-- delivery-method distribution
-- top clients
-
-Enum-to-label mapping lives in:
-
-- `apps/desktop/src/renderer/src/lib/dashboard/labels.ts`
-
-## Current Tests
-
-Checked-in test files:
-
-- `apps/desktop/src/renderer/src/App.test.tsx`
-- `apps/desktop/src/renderer/src/components/Login/Login.test.tsx`
-- `apps/desktop/src/renderer/src/lib/dashboard/aggregations.test.ts`
-
-Test setup:
-
-- jsdom environment
-- React Testing Library
-- global API stubbing with `vi.stubGlobal('api', ...)`
+### 3. Operational Detail Layers
+- **Notes Division**: Clear separation of internal-only `internalNotes` and client-facing `customerNotes` to protect internal shop communication.
+- **Material & Labor tracking**: `materialUsage` records quantities, units, and unit costs. `timeEntries` tracks operator time logs.
+- **Billing Drafts**: `invoiceDraft` houses line items, status (`none` | `draft` | `issued` | `paid`), invoice number, and payments.
+- **Attachments**: `attachments` hosts metadata for files, designs, and order photos.
+- **Public Communication**: `communication` contains public tracking tokens, enabling secure external status pages without user authentication.
 
 ## Commands
 
-Run commands from `apps/desktop`.
-
+### Desktop Client (`apps/desktop/`)
 ```bash
 npm install
 npm run dev
-npm run lint
 npm run typecheck
 npm run test
 npm run build
 ```
 
-## Important Constraints
+### Web Client (`apps/web/`)
+```bash
+npm install
+npm run dev
+npm run typecheck
+npm run test
+```
 
-- the current app is desktop-only in this checkout
-- the root README is ahead of the checked-in repo state because `iris-api` is absent
-- renderer auth gating is a UI rule, not a strong security boundary
-- fixture data is temporary architecture
-- work-order types exist in both `model/` and renderer `types/` and must stay aligned
-- there is no checked-in `apps/desktop/desktop-threat-model.md`
+### Backend API (`iris-api/`)
+```bash
+go run ./cmd/server
+go test ./...
+```
 
 ## Docs Map
 
-- `docs/ARCHITECTURE.md`: system structure and runtime flow
-- `docs/DECISIONS.md`: architectural and product decisions visible in code
-- `docs/DOMAIN_GLOSSARY.md`: Serbian business terms and code mappings
-- `docs/CONTRIBUTING.md`: contributor workflow and guardrails
+- `docs/ARCHITECTURE.md`: High-level multi-application structure, runtime layers, IPC-HTTP boundaries, and data flow.
+- `docs/DECISIONS.md`: Architectural decisions, status definitions, and schema alignments.
+- `docs/DOMAIN_GLOSSARY.md`: Glossary of print-shop terms mapped between Serbian UI labels and English code.
+- `docs/CONTRIBUTING.md`: Workflow guidelines and testing rules.
+- `docs/WEB_FUTURE_FEATURES.md`: Production checklist and future functional additions.
 
-*Last verified against the checked-in repository state on 2026-04-07.*
+*Last verified against the checked-in repository state on 2026-05-31.*

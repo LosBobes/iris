@@ -448,7 +448,8 @@ components:
         quantity:
           type: integer
         unitPrice:
-          type: integer
+          type: number
+          format: double
     CustomerCommunication:
       type: object
       required: [publicToken, notificationEmail, emailNotificationsEnabled, signedBy, signedAt]
@@ -524,8 +525,9 @@ components:
           enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
           example: inProgress
         price:
-          type: [integer, 'null']
-          example: 12000
+          type: [number, 'null']
+          format: double
+          example: 12000.5
         note:
           type: [string, 'null']
           example: Hitno
@@ -606,7 +608,8 @@ components:
           type: [string, 'null']
           format: date
         price:
-          type: [integer, 'null']
+          type: [number, 'null']
+          format: double
         note:
           type: [string, 'null']
         internalNotes:
@@ -675,7 +678,8 @@ components:
           type: string
           enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
         price:
-          type: [integer, 'null']
+          type: [number, 'null']
+          format: double
         note:
           type: [string, 'null']
         completionDate:

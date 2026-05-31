@@ -522,7 +522,7 @@ func normalizeTimeEntries(entries []domain.TimeEntry, operator string, createdAt
 func normalizeInvoiceDraft(
 	draft domain.InvoiceDraft,
 	jobDescription string,
-	price *int,
+	price *float64,
 ) domain.InvoiceDraft {
 	normalized := draft
 	if normalized.Status == "" {
@@ -710,7 +710,7 @@ func applyWorkOrderChanges(
 			}
 			applyStatus(&updated, value)
 		case "price":
-			var value *int
+			var value *float64
 			if err := decodeField(raw, &value); err != nil {
 				return domain.WorkOrder{}, err
 			}
@@ -993,7 +993,7 @@ func applyStatus(workOrder *domain.WorkOrder, status domain.WorkOrderStatus) {
 }
 
 // cloneWorkOrders deep-copies the slice so callers can mutate freely without
-// affecting the in-memory store. Pointer fields (JobDetails, *string, *int,
+// affecting the in-memory store. Pointer fields (JobDetails, *string, numbers,
 // *enum) all need fresh allocations.
 func cloneWorkOrders(workOrders []domain.WorkOrder) []domain.WorkOrder {
 	cloned := make([]domain.WorkOrder, len(workOrders))
@@ -1024,7 +1024,7 @@ func deepCopyWorkOrder(workOrder domain.WorkOrder) domain.WorkOrder {
 	cloned.Shipping = cloneShipping(workOrder.Shipping)
 	cloned.ExecutedBy = clonePtrString(workOrder.ExecutedBy)
 	cloned.DueDate = clonePtrString(workOrder.DueDate)
-	cloned.Price = clonePtrInt(workOrder.Price)
+	cloned.Price = clonePtrFloat64(workOrder.Price)
 	cloned.Note = clonePtrString(workOrder.Note)
 	cloned.CompletionDate = clonePtrString(workOrder.CompletionDate)
 	return cloned
@@ -1059,6 +1059,14 @@ func clonePtrString(value *string) *string {
 }
 
 func clonePtrInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	v := *value
+	return &v
+}
+
+func clonePtrFloat64(value *float64) *float64 {
 	if value == nil {
 		return nil
 	}

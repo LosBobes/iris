@@ -1,56 +1,74 @@
-# Iris
+# Iris Operations Management Suite
 
-Full-stack application for Stamparija Cobanovic.
+Iris is a high-performance, full-stack operations management suite built specifically for **Stamparija Cobanovic** (print-shop operations). The repository is organized as a monorepo consisting of native desktop client interfaces, a web operational client, and a shared Go backend API.
 
-## Workspace
+---
 
-This repository currently contains:
+## Monorepo Topology
 
-- `apps/desktop`: the Electron desktop application built with React and TypeScript
-- `iris-api`: a Go HTTP API that mirrors the data needs of the desktop app
+```text
+.
+├── apps/
+│   ├── desktop/                Electron desktop app for local shop floor operations
+│   └── web/                    Vite-powered React web app for remote managers and customer portals
+├── iris-api/                   Shared Go HTTP API server (single source of truth)
+└── docs/                       Project specifications, decisions, and domain glossaries
+```
 
-## Purpose
+- **[apps/desktop](file:///Users/luka/Projects/iris/apps/desktop/)**: A secure native desktop shell built with Electron 39, React 19, and Tailwind CSS 4. Operates by mapping local IPC commands in the renderer to a typed `IrisApiClient` in the main process, communicating securely over HTTP with the Go backend API.
+- **[apps/web](file:///Users/luka/Projects/iris/apps/web/)**: A lightweight, responsive React web client using a dual-mode API runtime configuration. It can connect directly to `iris-api` over fetch operations (`http` mode) or execute within a persistent stateful client sandbox completely inside browser memory (`fixtures` mode).
+- **[iris-api](file:///Users/luka/Projects/iris/iris-api/)**: High-performance Go REST API built with Chi router, executing against the contract defined in `openapi.yaml`. Uses a thread-safe, fixture-backed memory store loaded from seed JSON files during startup.
 
-The desktop application currently focuses on:
+---
 
-- user authentication
-- work order browsing and dashboard reporting
-- operator-based work order analysis
+## Quick Start
 
-The API module is now the source of truth for those same capabilities, and the desktop app reaches it through Electron main-process IPC handlers.
+### 1. Launch Backend API
+Ensure Go 1.22+ is installed:
+```bash
+cd iris-api
+go run ./cmd/server
+```
+*API runs at `http://localhost:8080`.*
+
+### 2. Launch Web Client
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+### 3. Launch Desktop Client
+```bash
+cd apps/desktop
+npm install
+npm run dev
+```
+
+For thorough command listings, testing guidelines, and repository contribution policies, consult the **[Contributing Guide](file:///Users/luka/Projects/iris/docs/CONTRIBUTING.md)**.
+
+---
 
 ## AI Assets for Contributors
 
-This repository includes specialized GitHub Copilot assets under `.github/` to help with common kinds of work.
+This repository includes specialized GitHub Copilot and AI agent profiles under `.github/` to accelerate common development activities:
 
-### Shared baseline instructions
+### Shared Baseline Instructions
+- **[copilot-instructions.md](file:///Users/luka/Projects/iris/.github/copilot-instructions.md)**: Universal repository principles, domain glossary alignments, and monorepo code conventions. Use this as your baseline instructions.
 
-- **`.github/copilot-instructions.md`**
-  Repository-wide coding rules, architecture guidance, and conventions.
-  Use this as the default baseline for all tasks.
+### Specialized AI Agent Handbooks
+- **[react-frontend-agent.agent.md](file:///Users/luka/Projects/iris/.github/agents/react-frontend-agent.agent.md)**: Optimized for React UI updates, Tailwind v4 layouts, forms, and client-side page aggregates in `apps/web` or `apps/desktop/src/renderer/`.
+- **[go-backend-agent.agent.md](file:///Users/luka/Projects/iris/.github/agents/go-backend-agent.agent.md)**: Crafted for editing OpenAPI contracts, writing new Chi endpoints, testing router layers, or maintaining mock stores in `iris-api`.
+- **[electron-code-review-mode.md](file:///Users/luka/Projects/iris/.github/agents/electron-code-review-mode.md)**: Tailored for validating sandboxing boundaries, context bridge security, and type safety across Electron main, preload, and renderer boundaries.
 
-### Custom agents
+---
 
-- **`.github/agents/react-frontend-agent.agent.md`**
-  Use for new React UI features, component work, forms, routing, and renderer-layer improvements.
+## Documentation Index
 
-- **`.github/agents/go-backend-agent.agent.md`**
-  Use for OpenAPI changes, chi handlers, fixture-store behavior, and Go tests in `iris-api`.
+Explore our extensive documentation folder for architectural context:
+- 🗺️ **[Architecture Overview](file:///Users/luka/Projects/iris/docs/ARCHITECTURE.md)**: Topology drawings, system interfaces, and end-to-end network flows.
+- 🎯 **[Project Context](file:///Users/luka/Projects/iris/docs/PROJECT_CONTEXT.md)**: Expanded domain models, structure definitions, and unified print lifecycle.
+- 📋 **[Decisions Register](file:///Users/luka/Projects/iris/docs/DECISIONS.md)**: History of architectural boundaries, storage choices, and runtime scopes.
+- 📖 **[Domain Glossary](file:///Users/luka/Projects/iris/docs/DOMAIN_GLOSSARY.md)**: Comprehensive vocabulary mapping Serbian interface text (`sr-Latn`) to backend English entities.
 
-- **`.github/agents/electron-code-review-mode.md`**
-  Use for code reviews across the Electron stack — main process IPC handlers, preload bridge, and renderer.
-
-### How to choose
-
-| Task | Agent |
-|------|-------|
-| Building or modifying React UI components, forms, or pages | `react-frontend-agent` |
-| Changing Go routes, OpenAPI, fixture-backed API behavior, or backend tests | `go-backend-agent` |
-| Reviewing code across any Electron layer | `electron-code-review-mode` |
-| Unsure? | Start with the shared baseline in `.github/copilot-instructions.md`, then pick the agent whose mission best matches the task |
-
-### Recommended workflow
-
-1. Read the shared baseline in `.github/copilot-instructions.md`.
-2. Choose the matching agent in `.github/agents/`.
-3. Follow the normal repo workflow: inspect docs first, update tests, and run the relevant commands from `apps/desktop/` or `iris-api/` depending on the slice you changed.
+*Last verified against the checked-in repository state on 2026-05-31.*
