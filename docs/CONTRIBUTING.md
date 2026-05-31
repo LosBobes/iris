@@ -1,118 +1,139 @@
 # Contributing to Iris
 
-This repository contains **Iris**, a full-stack operations management suite for Stamparija Cobanovic. It is structured as a monorepo containing multiple frontend clients and a shared Go backend service.
+Iris is a monorepo for Stamparija Cobanovic operations. Keep changes narrow,
+verify the affected runtime, and keep domain contracts aligned across clients,
+API, fixtures, and documentation.
 
-Use this guide together with:
-- [PROJECT_CONTEXT.md](file:///Users/luka/Projects/iris/docs/PROJECT_CONTEXT.md)
-- [ARCHITECTURE.md](file:///Users/luka/Projects/iris/docs/ARCHITECTURE.md)
-- [DOMAIN_GLOSSARY.md](file:///Users/luka/Projects/iris/docs/DOMAIN_GLOSSARY.md)
-- [DECISIONS.md](file:///Users/luka/Projects/iris/docs/DECISIONS.md)
+Related references:
 
----
+- [Project Context](PROJECT_CONTEXT.md)
+- [Architecture](ARCHITECTURE.md)
+- [Domain Glossary](DOMAIN_GLOSSARY.md)
+- [Decisions](DECISIONS.md)
 
-## Monorepo Structure & Scope
+## Repository Scope
 
-The active codebase is divided into three key services:
-
-1. **Desktop Client (`apps/desktop/`)**: Secure, containerized Electron desktop app for local shop operations.
-2. **Web Client (`apps/web/`)**: React web application for browser-based operations, dashboard reporting, and remote tracking.
-3. **Backend API (`iris-api/`)**: Pure Go HTTP REST service providing the single source of truth for authentication, CRM auto-completions, and work-order management.
-
----
+- `apps/desktop/`: Electron desktop app for local shop operations.
+- `apps/web/`: React web app for browser operations, dashboards, customer
+  management, and public tracking.
+- `iris-api/`: Go HTTP API, authentication, SQLite persistence, fixtures, and
+  operational CLI.
+- `docs/`: project-level architecture, decisions, glossary, and workflow policy.
 
 ## Prerequisites
 
-- **Node.js** (v18+) and **npm** for frontends.
-- **Go** (v1.22+) for backend API.
-- A desktop environment capable of running Electron during local desktop development.
+- Node.js 18+ and npm for frontend work.
+- Go 1.25+ for backend work.
+- Desktop environment capable of running Electron for desktop-client work.
 
----
+## Local Runtime Commands
 
-## Development Setup
+Backend API:
 
-To get the entire stack running locally:
-
-### 1. Start the Shared Go Backend
 ```bash
 cd iris-api
-go run ./cmd/server
+IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl migrate
+IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
+IRIS_DB_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
 ```
-*The API boots on `http://localhost:8080` (unless configured otherwise via `IRIS_API_ADDR`). It operates out of an in-memory store seeded from JSON fixtures.*
 
-### 2. Start the Desktop Client
-```bash
-cd apps/desktop
-npm install
-npm run dev
-```
-*The desktop app runs in development mode, automatically forwarding privileged Electron renderer actions via standard IPC handlers to the typed `IrisApiClient` which hits the Go REST backend.*
+Web client:
 
-### 3. Start the Web Client
 ```bash
 cd apps/web
 npm install
 npm run dev
 ```
-*The web client runs on Vite. You can configure `VITE_IRIS_API_MODE` in environment config to switch between `http` mode (communicates directly with Go backend) and `fixtures` mode (runs statefully in browser memory sandbox).*
 
----
+Desktop client:
 
-## Testing Boundaries
+```bash
+cd apps/desktop
+npm install
+npm run dev
+```
 
-We maintain a rigorous multi-tiered testing strategy to ensure zero regressions across our runtime layers:
+## Verification Commands
 
-1. **Go API Integration Tests (`iris-api/`)**:
-   Run with `go test ./...` to verify Chi routers, OpenAPI schema contracts, REST JSON serialization, and fixture seeding logic.
-2. **Desktop Client Tests (`apps/desktop/`)**:
-   Run with `npm run test` or `npx vitest run <path-to-test>`. Renderer tests run in `jsdom` with Vitest; preload boundaries and IPC handlers are verified using mock implementations.
-3. **Web Client Tests (`apps/web/`)**:
-   Run with `npm run test` to execute Vitest suites verifying dual-runtime clients, page state machines, filters, and CRM auto-completion panels.
+Backend:
 
----
+```bash
+cd iris-api
+go test ./...
+```
 
-## Development Workflow & Rules
+Web:
 
-### 1. Modifying the Domain Model
-If you are modifying work-order fields, customer models, location structures, or billing logic:
-- Update the OpenAPI contract in `iris-api/openapi.yaml`.
-- Update the Go domain models in `iris-api/internal/domain/types.go`.
-- Update the React models in both `apps/desktop/model/work-order.ts` and `apps/web/src/types/work-order.ts` to ensure consistency.
+```bash
+cd apps/web
+npm run lint
+npm run build
+npm test
+```
 
-### 2. Adding Desktop IPC Channels
-If you introduce a new native desktop capability:
-- Register the main process IPC handler in `apps/desktop/src/main/index.ts` (mapping requests to the typed `IrisApiClient`).
-- Expose the method on the context bridge in `apps/desktop/src/preload/index.ts`.
-- Update TypeScript interface declarations in `apps/desktop/src/preload/index.d.ts` to keep the bridge strictly typed.
+Desktop:
 
-### 3. UI and Language Conventions
-- **Visible UI text** must be in **Serbian (Latin script)** (`sr-Latn`) to suit print-shop operations.
-- **Code identifiers, database columns, API JSON fields, and developer comments** must remain strictly in **English**.
-- Refer to `docs/DOMAIN_GLOSSARY.md` for consistent mapping between Serbian UI terminology and English code tokens.
+```bash
+cd apps/desktop
+npm run lint
+npm run typecheck
+npm test
+```
 
----
+Use the smallest verification set that proves the change, then broaden it when
+runtime boundaries, shared domain types, auth, persistence, or public APIs are
+affected.
+
+## Development Rules
+
+Domain model changes must update all relevant layers:
+
+- `iris-api/openapi.yaml`
+- `iris-api/internal/domain/types.go`
+- `apps/web/src/types/work-order.ts`
+- `apps/desktop/model/work-order.ts`
+- fixtures and tests for affected payloads
+
+Desktop IPC changes must update:
+
+- `apps/desktop/src/main/index.ts`
+- the relevant main-process handler
+- `apps/desktop/src/preload/index.ts`
+- `apps/desktop/src/preload/index.d.ts`
+
+Visible UI text must stay in Serbian Latin (`sr-Latn`). Code identifiers,
+database columns, API JSON fields, and developer comments stay in English. Use
+[DOMAIN_GLOSSARY.md](DOMAIN_GLOSSARY.md) for terminology.
 
 ## Pull Requests And Commits
 
-### Scope
-Keep pull requests focused, narrow, and scoped to a single logical slice (e.g. adding a billing status, refactoring an API router, or adding unit tests).
+Keep commits and pull requests focused on one logical slice.
 
-### LORE-Style Commit Messages
-We enforce LORE-style structured commit messages to build an informative development history. Every commit must have:
-- An **intent-first subject line** (e.g. `feat: implement dual-mode http/fixture client for web`).
-- An **optional explanatory body** describing *why* the change was made rather than *what* code changed.
-- **Useful trailers** to communicate risk, testing status, and constraints:
-  - `Tested: <test commands or manual confirmation details>`
-  - `Not-tested: <reasons why testing was skipped, if applicable>`
-  - `Constraint: <technological or project-level boundaries respected>`
-  - `Scope-risk: <low | medium | high> <explanation>`
+Commit messages follow the repository Lore protocol:
 
----
+```text
+<intent-first subject>
 
-## When to Update Documentation
-Always update relevant docs in the same PR when you:
-- Add, rename, or retire backend API routes or desktop IPC channels.
-- Shift any runtime boundaries or data flow pathways.
-- Change domain models, statuses, or print-shop vocabulary.
-- Graduate features from Phase 2 roadmaps to active service.
+<context and rationale>
+
+Constraint: <external constraint>
+Rejected: <alternative> | <reason>
+Confidence: <low|medium|high>
+Scope-risk: <narrow|moderate|broad>
+Tested: <verification>
+Not-tested: <known gap>
+```
+
+Useful trailers are preferred over filler trailers. Always include honest
+verification coverage and known gaps.
+
+## Documentation Updates
+
+Update docs in the same change when modifying:
+
+- backend API routes or desktop IPC channels
+- runtime data flow or persistence boundaries
+- domain models, statuses, or print-shop vocabulary
+- roadmap items that have become active service behavior
 
 *Last verified against the checked-in repository state on 2026-05-31.*

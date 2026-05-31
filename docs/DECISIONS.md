@@ -95,10 +95,10 @@ This document records the project-level architectural decisions (ADRs) that shap
 ## D-010: Adopt a Go backend (iris-api) as the workspace source of truth
 - **Status**: `accepted` (supersedes [D-005](#d-005-use-fixture-json-files-as-the-current-data-source))
 - **Context**: Integrating multiple frontends (both desktop and browser clients) requires a single unified server layer to manage state transitions, validation, and user auth.
-- **Decision**: Establish `iris-api` using Go, routing calls via Chi routers, and executing transactions against contract routes declared in `openapi.yaml`. During startup, the Go store seeds itself from the desktop JSON fixtures to maintain stateless testing.
+- **Decision**: Establish `iris-api` using Go, routing calls via Chi routers, and executing transactions against contract routes declared in `openapi.yaml`. Production runtime uses SQLite selected by `IRIS_DB_PATH`; fixture data under `iris-api/testdata/fixtures` remains available for tests and local fallback mode.
 - **Consequences**:
   - Centralizes validation and business rules.
-  - Establishes a seamless upgrade path for database persistence (SQLite/PostgreSQL) in Phase 2.
+  - Keeps test fixtures decoupled from the desktop app runtime.
 
 ---
 
@@ -122,10 +122,10 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-## D-013: Standardize on an expanded 9-status domain model
+## D-013: Standardize on an expanded work-order domain model
 - **Status**: `accepted`
 - **Context**: Real-world operations need detailed steps beyond basic open/closed statuses—specifically tracking scheduling, materials, client approvals, and invoicing drafts.
-- **Decision**: Standardize all monorepo type contracts on a unified 9-status print-shop lifecycle (`new`, `assigned`, `inProgress`, `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`, `invoiced`) complete with normalized `Customer`, `Location`, `Assignment`, `InvoiceDraft`, and execution metrics.
+- **Decision**: Standardize all monorepo type contracts on a unified print-shop lifecycle (`new`, `assigned`, `inProgress`, `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`, `invoiced`) complete with normalized `Customer`, `Location`, `Assignment`, `InvoiceDraft`, and execution metrics. Legacy `draft` and `active` inputs are normalized at the API boundary where older fixture compatibility requires it.
 - **Consequences**:
   - Requires synchronized updates to TypeScript types, Go structs, and OpenAPI definitions when changing schemas.
   - Guarantees rich, operation-grounded dashboard analytics.

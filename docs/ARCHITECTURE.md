@@ -1,124 +1,120 @@
 # Architecture Overview
 
-This document describes the high-level architecture of the Iris workspace, covering the Electron desktop app, the web client, the Go HTTP API, and their data relationships.
+Iris contains three runtime surfaces for Stamparija Cobanovic operations: the
+Electron desktop client, the browser web client, and the shared Go API.
 
 ## System Topology
 
-Iris is a multi-service workspace catering to Stamparija Cobanovic. It contains three main components: a desktop operational client, a web interface, and a shared Go backend.
-
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Iris Desktop Client (Electron)                  │
-│                                                                        │
-│   Renderer (React UI)  ──[window.api IPC]──>  Main Process             │
-│                                                     │                  │
-│                                              [IrisApiClient]           │
-└───────────────────────────────────────────────────────────────────┼────┘
-                                                                    │
-┌───────────────────────────────────────────────────────────────────┼────┐
-│                        Iris Web Client (Vite)                     │
-│                                                                    │
-│   Renderer (React UI)  ──[VITE_IRIS_API_MODE]───┬──> [createHttpApi] ──┼────┐
-│                                                 │                      │    │
-│                                                 └──> [Fixture Store]   │    │
-└────────────────────────────────────────────────────────────────────────┘    │
-                                                                              │
-                                                                     [HTTP / JSON]
-                                                                              │
-                                                                              ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        Iris Shared Backend (Go API)                    │
-│                                                                        │
-│   [Chi HTTP Router]  ──>  [API Handlers]  ──>  [Fixture Memory Store]  │
-│                                                           │            │
-│                                                      (Loaded from      │
-│                                                       fixtures)        │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│ Iris Desktop Client (Electron)                                      │
+│                                                                     │
+│ React renderer -> window.api preload bridge -> main IPC handlers    │
+│                                                -> IrisApiClient      │
+└───────────────────────────────────────────────────────────┬─────────┘
+                                                            │
+                                                            │ HTTP/JSON
+                                                            │
+┌───────────────────────────────────────────────────────────┴─────────┐
+│ Iris Web Client (Vite)                                               │
+│                                                                      │
+│ React app -> window.api -> HTTP client or in-browser fixture adapter │
+└───────────────────────────────────────────────────────────┬─────────┘
+                                                            │
+                                                            │ HTTP/JSON
+                                                            │
+┌───────────────────────────────────────────────────────────▼─────────┐
+│ Iris Shared Backend (Go API)                                         │
+│                                                                      │
+│ chi router -> handlers -> store.Store -> SQLite or fixture store     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
-
----
 
 ## Workspace Components
 
-### 1. Shared Go Backend (`iris-api/`)
+### Shared Go Backend (`iris-api/`)
 
-- **Role**: Serves as the central server and database layer, handling authentication, order processing, and customer metadata.
-- **Contract-First API**: The endpoints are defined in `iris-api/openapi.yaml`. The handler logic is registered in `iris-api/internal/api/server.go`.
-- **Stateless Fixture Store**: `iris-api/internal/store/` provides thread-safe data operations. During server boot, it loads fixtures directly from `apps/desktop/fixtures/`, making development fully deterministic and independent of heavy local databases.
-- **Key Modules**:
-  - `cmd/server/`: The entry point that boots the HTTP server on port `8080` (or `IRIS_API_ADDR`).
-  - `internal/api/`: Maps endpoints, decodes JSON payloads, and handles REST responses.
-  - `internal/domain/`: Defines typed structures for the unified 9-status print-shop lifecycle, customers, locations, time entries, line items, and audit trails.
+- Serves authentication, customers, locations, work orders, reporting, and
+  public tracking.
+- Defines the HTTP contract in `iris-api/openapi.yaml`.
+- Registers handlers and auth middleware in `iris-api/internal/api/server.go`.
+- Uses `store.Store` as the persistence boundary. Runtime SQLite is selected by
+  `IRIS_DB_PATH`; fixture data under `iris-api/testdata/fixtures` remains for
+  tests and local fallback mode.
+- Provides `cmd/irisctl` for migrations, demo seeding, CSV import, user
+  creation, and database backup.
 
-### 2. Electron Desktop Client (`apps/desktop/`)
+### Electron Desktop Client (`apps/desktop/`)
 
-- **Role**: Provides a secure, containerized native application for on-premise shop machines.
-- **IPC-to-HTTP Gateway**:
-  - **Renderer**: The UI is isolated. It only has access to `window.api` exposed via `apps/desktop/src/preload/`.
-  - **Preload Bridge**: Forwards operations to the main process via standard Electron `ipcRenderer.invoke`.
-  - **Main Process**: Listens to IPC channels. Instead of parsing JSON fixtures directly, it instantiates `createConfiguredIrisApiClient` (`src/main/shared/iris-api-client.ts`), executing requests against the `iris-api` server via standard HTTP.
-- **Configurations**: Configuration values (such as `baseUrl` of the API) are resolved at launch via `runtime-config.ts` from environment configurations in `apps/desktop/config/`.
+- Runs the operational UI on local shop machines.
+- Keeps the renderer isolated behind the preload `window.api` bridge.
+- Sends renderer requests to Electron main-process IPC handlers.
+- Uses a typed `IrisApiClient` in the main process to communicate with
+  `iris-api`.
+- Resolves API configuration through `apps/desktop/src/main/shared/runtime-config.ts`.
 
-### 3. Web Client (`apps/web/`)
+### Web Client (`apps/web/`)
 
-- **Role**: Offers a lightweight browser-based alternative for operators, managers, and remote trackers.
-- **Dual Runtime Adapter**:
-  - Located in `apps/web/src/lib/web-api.ts`.
-  - **HTTP Mode**: Communicates directly with the `iris-api` server via fetch operations.
-  - **Fixtures Mode**: Runs a simulated, fully stateful local environment inside the browser's memory, pulling initial records from `fixtures/`. This makes client-only testing and sandbox development zero-overhead.
-- **Public Status Portal**: Connects to the public endpoint `/public/work-orders/{token}`, allowing print clients to view real-time production status and record digital sign-offs.
-
----
+- Provides browser operations, dashboard reporting, customer management, and
+  public work-order tracking.
+- Uses `apps/web/src/lib/web-api.ts` as the runtime adapter boundary.
+- Runs in `http` mode against `iris-api` or `fixtures` mode against a stateful
+  in-browser store.
+- Uses browser routes for authenticated pages and `/public/work-orders/:token`.
 
 ## Shared Domain Model
 
-The workspace shares a single, rich operational model defined in TypeScript (`apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`) and Go (`iris-api/internal/domain/types.go`).
+Work-order contracts are mirrored across:
 
-### Lifecycle States
-Work orders transition sequentially:
-1. `new`: Order registered, awaiting details.
-2. `assigned`: Dispatched to an active operator.
-3. `inProgress`: Production has begun.
-4. `waitingForCustomer`: Awaiting customer approval, print proofs, or sign-offs.
-5. `waitingForMaterials`: Production blocked by supply levels.
-6. `completed`: Physical production finished.
-7. `cancelled`: Job aborted.
-8. `invoiced`: Work order billed, line items compiled, and invoice registered.
+- `apps/web/src/types/work-order.ts`
+- `apps/desktop/model/work-order.ts`
+- `iris-api/internal/domain/types.go`
+- `iris-api/openapi.yaml`
 
----
+Canonical work-order statuses:
 
-## Data and Request Flows
+1. `new`
+2. `assigned`
+3. `inProgress`
+4. `waitingForCustomer`
+5. `waitingForMaterials`
+6. `completed`
+7. `cancelled`
+8. `invoiced`
 
-### Authenticated Desktop Flow
+The Go API still accepts legacy `draft` and `active` inputs where fixture
+normalization requires backward compatibility.
 
-```text
-1. Renderer calls: window.api.getWorkOrders()
-2. Preload invokes Electron IPC: 'workorders:getAll'
-3. Main process interceptor catches call in WorkOrder.async.ts
-4. Main process initiates: createConfiguredIrisApiClient().getWorkOrders()
-5. Client performs GET request to: http://127.0.0.1:8080/work-orders
-6. Go Server (iris-api) validates, reads from internal/store, returns JSON array
-7. Main process returns data back to Electron IPC channel
-8. React Renderer updates UI tables and charts
-```
+## Request Flows
 
-### Web Client Boot Sequence
+Authenticated desktop flow:
 
 ```text
-1. Vite app mounts main.tsx
-2. Checks VITE_IRIS_API_MODE (e.g., 'http' or 'fixtures')
-3. Configures window.api to use either:
-   - createHttpApi(baseUrl) via apps/web/src/lib/api-client.ts
-   - createFixtureApi() stateful mock via apps/web/src/lib/web-api.ts
-4. AppShell loads, displaying authentication or dashboard charts
+React renderer
+  -> window.api
+  -> Electron preload
+  -> Electron main IPC handler
+  -> IrisApiClient
+  -> iris-api HTTP endpoint
+  -> store.Store
 ```
 
----
+Web boot flow:
 
-## Testing Boundary Guidelines
+```text
+Vite app
+  -> VITE_IRIS_API_MODE
+  -> createHttpApi(baseUrl) or fixture adapter
+  -> window.api
+  -> pages and hooks
+```
 
-1. **Go API Tests**: Run from `iris-api/` with `go test ./...`. Ensures routers, JSON serialization, and fixture logic are completely verified.
-2. **Desktop Renderer Tests**: Located alongside React components. Stub `window.api` calls using Vitest `vi.stubGlobal('api', ...)`.
-3. **Web Client Tests**: Located under `apps/web/` using Vitest to test page interactions and API adapter operations.
+## Verification Boundaries
+
+- `iris-api/`: `go test ./...`
+- `apps/web/`: `npm run lint`, `npm run build`, `npm test`
+- `apps/desktop/`: `npm run lint`, `npm run typecheck`, `npm test`
+- Contract changes require synchronized updates to OpenAPI, Go domain types,
+  TypeScript types, fixtures, and API/client tests.
 
 *Last verified against the checked-in repository state on 2026-05-31.*

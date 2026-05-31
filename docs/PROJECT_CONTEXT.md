@@ -1,131 +1,131 @@
 # Iris Project Context
 
-This document provides a fast, code-grounded summary of the Iris repository for quick context loading.
+Compact repository context for Iris, the operations suite for Stamparija
+Cobanovic.
 
 ## Project Overview
 
-**Iris** is a full-stack operations management suite for Stamparija Cobanovic. It includes a desktop shell, a web client, and a Go backend API.
-
 | Aspect | Desktop Client | Web Client | Backend API |
 | --- | --- | --- | --- |
-| **Path** | `apps/desktop` | `apps/web` | `iris-api` |
-| **Shell/Build** | Electron 39 / electron-vite 5 | Vite | Go 1.22+ |
-| **UI Framework** | React 19 / TypeScript 5.9 | React 19 / TypeScript 5.9 | OpenAPI v3 Spec |
-| **Styling** | Tailwind CSS 4 | Tailwind CSS 4 | N/A |
-| **Charts** | Recharts 3 | Recharts 3 | N/A |
-| **Database/Storage** | `iris-api` backend | Dual mode: HTTP Client or Local Fixture state | Fixture-backed memory store |
+| Path | `apps/desktop` | `apps/web` | `iris-api` |
+| Runtime | Electron 39 / electron-vite 5 | Vite | Go 1.25+ |
+| UI | React 19 / TypeScript 5.9 | React 19 / TypeScript 5.9 | OpenAPI v3 contract |
+| Styling | Tailwind CSS 4 | Tailwind CSS 4 | N/A |
+| Data access | IPC to `IrisApiClient` | HTTP or fixture adapter | SQLite or fixture store |
 
 ## Repository Structure
 
 ```text
 .
 ├── apps/
-│   ├── desktop/                Electron desktop app for local shop operations
-│   │   ├── fixtures/           Local JSON fixtures (fallback)
-│   │   ├── model/              Shared desktop domain types
+│   ├── desktop/                Electron desktop app
+│   │   ├── model/              Desktop-facing domain types
 │   │   └── src/
-│   │       ├── main/           Electron main process (IPC-to-HTTP client forwarding)
+│   │       ├── main/           Main process, IPC handlers, API client
 │   │       ├── preload/        Typed context bridge
-│   │       └── renderer/src/   React renderer mirroring desktop styles
-│   └── web/                    React web app for browser operations
-│       ├── public/             Favicon and public assets
+│   │       └── renderer/src/   React renderer
+│   └── web/                    Browser client
 │       ├── src/
-│       │   ├── components/     UI widgets, CRM forms, dashboard charts
-│       │   ├── fixtures/       Local JSON fixtures (fallback)
-│       │   ├── hooks/          Data fetching and auth hooks
-│       │   ├── lib/            HTTP client and local mock API adapters
-│       │   ├── pages/          Dashboard, Create, Detail, Edit, List pages
-│       │   └── types/          Expanded 9-status domain types
+│       │   ├── components/     UI widgets, forms, dashboard charts
+│       │   ├── fixtures/       Browser fixture mode seed data
+│       │   ├── hooks/          Data and page hooks
+│       │   ├── lib/            HTTP client and fixture adapter
+│       │   ├── pages/          Dashboard, customers, public tracking, work orders
+│       │   └── types/          Shared TypeScript domain types
 │       └── vite.config.ts
 ├── iris-api/                   Go backend API
-│   ├── cmd/server/             API server entry point
+│   ├── cmd/
+│   │   ├── irisctl/            Migrations, seeding, imports, users, backup
+│   │   └── server/             API server entry point
 │   ├── internal/
-│   │   ├── api/                Chi routers, HTTP handlers, test suites
-│   │   ├── domain/             Go structs matching the expanded domain model
-│   │   └── store/              Fixture-backed memory store & seeding
-│   ├── go.mod                  Go modules configuration
-│   └── openapi.yaml            OpenAPI 3.0 specification contract
-└── docs/                       Project documentation & decisions
+│   │   ├── api/                Chi routes, middleware, handlers, tests
+│   │   ├── domain/             Go domain and payload structs
+│   │   └── store/              Store interface, fixtures, SQLite
+│   ├── testdata/fixtures/      API fixture data
+│   └── openapi.yaml
+└── docs/                       Architecture, decisions, glossary, contribution policy
 ```
 
-## Desktop Client
+## Runtime Boundaries
 
-Location: `apps/desktop/`
+### Desktop Client
 
-### Runtime Flow
-1. **IPC Forwarding**: Rather than accessing JSON files directly, the main process is updated to act as a bridge. Renderer requests to `window.api` invoke Electron IPC handlers, which delegate to a typed `IrisApiClient` that communicates with `iris-api` via HTTP.
-2. **Configuration**: Configured at runtime via `apps/desktop/src/main/shared/runtime-config.ts`, loading backend base URLs from development/production configurations.
-3. **Preload Layer**: Located in `apps/desktop/src/preload/`, offering a secure context bridge.
+- Renderer code calls `window.api`.
+- The preload bridge exposes only typed IPC methods.
+- The main process owns privileged Electron access and the HTTP API client.
+- API base URL configuration is resolved in
+  `apps/desktop/src/main/shared/runtime-config.ts`.
 
-## Web Client
+### Web Client
 
-Location: `apps/web/`
+- `apps/web/src/lib/web-api.ts` installs the browser `window.api` surface.
+- `VITE_IRIS_API_MODE=http` uses `apps/web/src/lib/api-client.ts` against
+  `iris-api`.
+- `VITE_IRIS_API_MODE=fixtures` uses in-browser state seeded from
+  `apps/web/src/fixtures`.
+- Browser routes include authenticated app pages and public work-order tracking.
 
-### Capabilities
-- **Dual API Modes**: In `apps/web/src/lib/web-api.ts`, the app checks `VITE_IRIS_API_MODE`. It can run in `fixtures` mode (in-memory stateful client using browser memory) or `http` mode (making HTTP calls to `iris-api`).
-- **Comprehensive CRM**: Features normalized `Customer` and `Location` auto-completions, client management panels, and clean creation workflows.
-- **Advanced Dashboard**: Dynamic filters (date, operators) and data visualizations showing revenue, orders, delivery distribution, and top clients.
+### Backend API
 
-## Go Backend API
+- `cmd/server` selects SQLite when `IRIS_DB_PATH` is set.
+- Empty `IRIS_DB_PATH` uses `testdata/fixtures` outside production.
+- Production requires persistent storage and a session secret.
+- `cmd/irisctl` owns migrations, demo seeding, CSV import, user creation, and
+  backup operations.
 
-Location: `iris-api/`
+## Domain Snapshot
 
-- **Tech Stack**: Built with pure Go, standard library packages, and the Chi router.
-- **Contract-First**: Defined fully in `openapi.yaml`, detailing endpoints for `/auth/login`, `/work-orders`, `/customers`, `/locations`, and public tracking.
-- **Stateless Store**: The memory store in `internal/store` loads and seeds itself from `apps/desktop/fixtures/`, providing rich testing utilities and handlers.
+Work orders use an expanded operational schema:
 
-## Expanded Domain Model
+- normalized `Customer` and `Location`
+- assignment with operator, priority, and scheduled date
+- canonical statuses: `new`, `assigned`, `inProgress`,
+  `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`,
+  `invoiced`
+- separate internal and customer notes
+- materials, time entries, attachments, events, and invoice draft fields
+- public communication token for external status lookup
 
-The domain model has transitioned from a basic 4-status model to a comprehensive print-shop operational schema.
+Keep TypeScript types, Go structs, OpenAPI schemas, fixture data, and tests in
+sync when any domain field changes.
 
-### 1. WorkOrder Lifecycle
-Managed through 9 distinct transition-controlled statuses:
-- `new` -> `assigned` -> `inProgress` -> `waitingForCustomer` / `waitingForMaterials` -> `completed` -> `cancelled` -> `invoiced`
-- An immutable `statusHistory` list tracks every transition, timestamp, and active operator.
+## Command Map
 
-### 2. Normalized Entities
-- **Customer**: `id`, `name`, `contactName`, `email`, `phone`
-- **Location**: `id`, `customerId`, `name`, `address`
-- **Assignment**: Assigned operator (`assignedTo`), operational priority (`low` | `normal` | `high` | `urgent`), and `scheduledDate`.
+Desktop:
 
-### 3. Operational Detail Layers
-- **Notes Division**: Clear separation of internal-only `internalNotes` and client-facing `customerNotes` to protect internal shop communication.
-- **Material & Labor tracking**: `materialUsage` records quantities, units, and unit costs. `timeEntries` tracks operator time logs.
-- **Billing Drafts**: `invoiceDraft` houses line items, status (`none` | `draft` | `issued` | `paid`), invoice number, and payments.
-- **Attachments**: `attachments` hosts metadata for files, designs, and order photos.
-- **Public Communication**: `communication` contains public tracking tokens, enabling secure external status pages without user authentication.
-
-## Commands
-
-### Desktop Client (`apps/desktop/`)
 ```bash
-npm install
-npm run dev
+cd apps/desktop
+npm run lint
 npm run typecheck
-npm run test
+npm test
 npm run build
 ```
 
-### Web Client (`apps/web/`)
+Web:
+
 ```bash
-npm install
-npm run dev
-npm run typecheck
-npm run test
+cd apps/web
+npm run lint
+npm run build
+npm test
 ```
 
-### Backend API (`iris-api/`)
+Backend:
+
 ```bash
-go run ./cmd/server
+cd iris-api
 go test ./...
 ```
 
 ## Docs Map
 
-- `docs/ARCHITECTURE.md`: High-level multi-application structure, runtime layers, IPC-HTTP boundaries, and data flow.
-- `docs/DECISIONS.md`: Architectural decisions, status definitions, and schema alignments.
-- `docs/DOMAIN_GLOSSARY.md`: Glossary of print-shop terms mapped between Serbian UI labels and English code.
-- `docs/CONTRIBUTING.md`: Workflow guidelines and testing rules.
-- `docs/WEB_FUTURE_FEATURES.md`: Production checklist and future functional additions.
+- `docs/ARCHITECTURE.md`: topology, runtime boundaries, request flow, and
+  verification boundaries.
+- `docs/DECISIONS.md`: accepted and temporary architecture decisions.
+- `docs/DOMAIN_GLOSSARY.md`: Serbian UI labels mapped to English code and API
+  terms.
+- `docs/CONTRIBUTING.md`: local commands, verification rules, and commit policy.
+- `iris-api/README.md`: backend endpoint, configuration, CLI, and smoke-check
+  reference.
 
 *Last verified against the checked-in repository state on 2026-05-31.*

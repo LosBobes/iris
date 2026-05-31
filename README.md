@@ -1,74 +1,78 @@
 # Iris Operations Management Suite
 
-Iris is a high-performance, full-stack operations management suite built specifically for **Stamparija Cobanovic** (print-shop operations). The repository is organized as a monorepo consisting of native desktop client interfaces, a web operational client, and a shared Go backend API.
-
----
+Iris is the operations workspace for Stamparija Cobanovic. The repository is a
+monorepo with an Electron desktop client, a React web client, and a shared Go
+backend API.
 
 ## Monorepo Topology
 
 ```text
 .
 ├── apps/
-│   ├── desktop/                Electron desktop app for local shop floor operations
-│   └── web/                    Vite-powered React web app for remote managers and customer portals
-├── iris-api/                   Shared Go HTTP API server (single source of truth)
-└── docs/                       Project specifications, decisions, and domain glossaries
+│   ├── desktop/                Electron desktop app for local shop operations
+│   └── web/                    Vite React app for browser operations and public tracking
+├── iris-api/                   Go HTTP API and SQLite persistence layer
+└── docs/                       Architecture, decisions, glossary, and contribution policy
 ```
 
-- **[apps/desktop](file:///Users/luka/Projects/iris/apps/desktop/)**: A secure native desktop shell built with Electron 39, React 19, and Tailwind CSS 4. Operates by mapping local IPC commands in the renderer to a typed `IrisApiClient` in the main process, communicating securely over HTTP with the Go backend API.
-- **[apps/web](file:///Users/luka/Projects/iris/apps/web/)**: A lightweight, responsive React web client using a dual-mode API runtime configuration. It can connect directly to `iris-api` over fetch operations (`http` mode) or execute within a persistent stateful client sandbox completely inside browser memory (`fixtures` mode).
-- **[iris-api](file:///Users/luka/Projects/iris/iris-api/)**: High-performance Go REST API built with Chi router, executing against the contract defined in `openapi.yaml`. Uses a thread-safe, fixture-backed memory store loaded from seed JSON files during startup.
+- [apps/desktop](apps/desktop/): Electron 39, React 19, Tailwind CSS 4. Renderer
+  calls pass through a typed preload bridge to main-process IPC handlers, then to
+  the Go API through `IrisApiClient`.
+- [apps/web](apps/web/): Vite React client with `http` and `fixtures` runtime
+  modes behind the same `window.api` contract.
+- [iris-api](iris-api/): Go REST API built with `chi`, documented in
+  `openapi.yaml`, backed by SQLite in production and fixtures in tests/local
+  fallback mode.
 
----
+## Development Commands
 
-## Quick Start
+Backend API:
 
-### 1. Launch Backend API
-Ensure Go 1.22+ is installed:
 ```bash
 cd iris-api
-go run ./cmd/server
+IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl migrate
+IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
+IRIS_DB_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
 ```
-*API runs at `http://localhost:8080`.*
 
-### 2. Launch Web Client
+Web client:
+
 ```bash
 cd apps/web
 npm install
 npm run dev
 ```
 
-### 3. Launch Desktop Client
+Desktop client:
+
 ```bash
 cd apps/desktop
 npm install
 npm run dev
 ```
 
-For thorough command listings, testing guidelines, and repository contribution policies, consult the **[Contributing Guide](file:///Users/luka/Projects/iris/docs/CONTRIBUTING.md)**.
-
----
-
-## AI Assets for Contributors
-
-This repository includes specialized GitHub Copilot and AI agent profiles under `.github/` to accelerate common development activities:
-
-### Shared Baseline Instructions
-- **[copilot-instructions.md](file:///Users/luka/Projects/iris/.github/copilot-instructions.md)**: Universal repository principles, domain glossary alignments, and monorepo code conventions. Use this as your baseline instructions.
-
-### Specialized AI Agent Handbooks
-- **[react-frontend-agent.agent.md](file:///Users/luka/Projects/iris/.github/agents/react-frontend-agent.agent.md)**: Optimized for React UI updates, Tailwind v4 layouts, forms, and client-side page aggregates in `apps/web` or `apps/desktop/src/renderer/`.
-- **[go-backend-agent.agent.md](file:///Users/luka/Projects/iris/.github/agents/go-backend-agent.agent.md)**: Crafted for editing OpenAPI contracts, writing new Chi endpoints, testing router layers, or maintaining mock stores in `iris-api`.
-- **[electron-code-review-mode.md](file:///Users/luka/Projects/iris/.github/agents/electron-code-review-mode.md)**: Tailored for validating sandboxing boundaries, context bridge security, and type safety across Electron main, preload, and renderer boundaries.
-
----
-
 ## Documentation Index
 
-Explore our extensive documentation folder for architectural context:
-- 🗺️ **[Architecture Overview](file:///Users/luka/Projects/iris/docs/ARCHITECTURE.md)**: Topology drawings, system interfaces, and end-to-end network flows.
-- 🎯 **[Project Context](file:///Users/luka/Projects/iris/docs/PROJECT_CONTEXT.md)**: Expanded domain models, structure definitions, and unified print lifecycle.
-- 📋 **[Decisions Register](file:///Users/luka/Projects/iris/docs/DECISIONS.md)**: History of architectural boundaries, storage choices, and runtime scopes.
-- 📖 **[Domain Glossary](file:///Users/luka/Projects/iris/docs/DOMAIN_GLOSSARY.md)**: Comprehensive vocabulary mapping Serbian interface text (`sr-Latn`) to backend English entities.
+- [Architecture Overview](docs/ARCHITECTURE.md): system topology, runtime
+  boundaries, and request flows.
+- [Project Context](docs/PROJECT_CONTEXT.md): compact repository map and domain
+  model snapshot.
+- [Decisions Register](docs/DECISIONS.md): accepted and temporary architectural
+  decisions.
+- [Domain Glossary](docs/DOMAIN_GLOSSARY.md): Serbian UI vocabulary mapped to
+  English code and API tokens.
+- [Contributing Guide](docs/CONTRIBUTING.md): development rules, verification
+  commands, and commit expectations.
+- [API README](iris-api/README.md): backend configuration, CLI operations, and
+  endpoint reference.
+
+## AI Contributor Assets
+
+Specialized Copilot and agent profiles live under `.github/`:
+
+- [.github/copilot-instructions.md](.github/copilot-instructions.md)
+- [.github/agents/react-frontend-agent.agent.md](.github/agents/react-frontend-agent.agent.md)
+- [.github/agents/go-backend-agent.agent.md](.github/agents/go-backend-agent.agent.md)
+- [.github/agents/electron-code-review-mode.md](.github/agents/electron-code-review-mode.md)
 
 *Last verified against the checked-in repository state on 2026-05-31.*

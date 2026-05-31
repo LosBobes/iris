@@ -44,7 +44,7 @@ This glossary maps the business, operational, and database terms used across the
 
 ---
 
-## 9-Status Operational Lifecycle
+## Operational Lifecycle
 
 Work orders progress sequentially through a defined lifecycle. Transitions are strictly validated at both client and server boundaries.
 
