@@ -82,18 +82,30 @@ function FieldShell({
   children,
 }: FieldShellProps): React.JSX.Element {
   const labelId = id ? `${id}-label` : undefined;
+  const errorId = error && id ? `${id}-error` : undefined;
+  const hasError = Boolean(error);
 
   return (
-    <div className={full ? "col-span-full" : undefined}>
+    <div
+      className={full ? "col-span-full" : undefined}
+      data-work-order-field
+      data-invalid={hasError ? "true" : undefined}
+    >
       <label
         id={labelId}
         htmlFor={id}
-        className="mb-1.5 block text-[11px] text-[color:var(--iris-ink-soft)]"
+        className={`mb-1.5 block text-[11px] ${
+          hasError ? "text-destructive" : "text-[color:var(--iris-ink-soft)]"
+        }`}
       >
         {label}
       </label>
       {children}
-      {error && <p className="mt-1 text-[11px] text-destructive">{error}</p>}
+      {error && (
+        <p id={errorId} role="alert" className="mt-1 text-[11px] text-destructive">
+          {error}
+        </p>
+      )}
       {hint && !error && (
         <p className="mt-1 text-[10px] text-[color:var(--iris-ink-faint)]">{hint}</p>
       )}
@@ -108,6 +120,14 @@ const underlineTrigger =
   "w-full justify-between border-0 border-b border-border bg-transparent py-2 !h-auto text-[13px] text-foreground rounded-none shadow-none focus-visible:border-foreground focus-visible:ring-0";
 
 const ERROR_FIELD_IDS: Partial<Record<string, string>> = {
+  "internalNotes.0.id": "internalNotes.0.body",
+  "internalNotes.0.visibility": "internalNotes.0.body",
+  "internalNotes.0.author": "internalNotes.0.body",
+  "internalNotes.0.createdAt": "internalNotes.0.body",
+  "customerNotes.0.id": "customerNotes.0.body",
+  "customerNotes.0.visibility": "customerNotes.0.body",
+  "customerNotes.0.author": "customerNotes.0.body",
+  "customerNotes.0.createdAt": "customerNotes.0.body",
   "shipping.shippingAddress": "shippingAddress",
 };
 
@@ -139,6 +159,20 @@ function getFirstErrorPath(
   return null;
 }
 
+function getFirstValidationMessage(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (hasValidationMessage(value)) return value.message as string;
+
+  if (typeof value === "object") {
+    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+      const nestedMessage = getFirstValidationMessage(nestedValue);
+      if (nestedMessage) return nestedMessage;
+    }
+  }
+
+  return undefined;
+}
+
 export function getFirstWorkOrderFormErrorTarget(
   errors: FieldErrors<WorkOrderFormValues>,
 ): string | null {
@@ -168,6 +202,22 @@ function createDraftNote(visibility: WorkOrderNoteVisibility): WorkOrderFormValu
   };
 }
 
+export function normalizeWorkOrderFormDefaultValues(
+  values: WorkOrderFormValues,
+): WorkOrderFormValues {
+  return {
+    ...values,
+    internalNotes:
+      values.internalNotes.length > 0
+        ? values.internalNotes
+        : [createDraftNote("internal")],
+    customerNotes:
+      values.customerNotes.length > 0
+        ? values.customerNotes
+        : [createDraftNote("customer")],
+  };
+}
+
 export function WorkOrderForm({
   initialData,
   initialValues,
@@ -179,7 +229,7 @@ export function WorkOrderForm({
   const [submitting, setSubmitting] = useState(false);
   const isEdit = !!initialData;
 
-  const defaultValues: WorkOrderFormValues =
+  const rawDefaultValues: WorkOrderFormValues =
     initialValues ??
     (initialData
       ? {
@@ -259,6 +309,7 @@ export function WorkOrderForm({
             signedAt: null,
           },
         });
+  const defaultValues = normalizeWorkOrderFormDefaultValues(rawDefaultValues);
 
   const {
     register,
@@ -287,6 +338,10 @@ export function WorkOrderForm({
     deliveryMethod !== null && deliveryMethod !== "pickup";
 
   const [showJobDetails, setShowJobDetails] = useState(!!defaultValues.jobDetails);
+  const paperWeightError = errors.jobDetails?.paperWeightGsm?.message;
+  const quantityError = errors.jobDetails?.quantity?.message;
+  const internalNoteError = getFirstValidationMessage(errors.internalNotes?.[0]);
+  const customerNoteError = getFirstValidationMessage(errors.customerNotes?.[0]);
 
   useEffect(() => {
     const nextAddress = resolveShippingAddress(
@@ -529,6 +584,7 @@ export function WorkOrderForm({
                 <FieldShell
                   id="jobDetails.paperWeightGsm"
                   label="Gramatura papira (gsm)"
+                  error={paperWeightError}
                 >
                   <input
                     id="jobDetails.paperWeightGsm"
@@ -548,7 +604,11 @@ export function WorkOrderForm({
                     })}
                   />
                 </FieldShell>
-                <FieldShell id="jobDetails.quantity" label="Količina">
+                <FieldShell
+                  id="jobDetails.quantity"
+                  label="Količina"
+                  error={quantityError}
+                >
                   <input
                     id="jobDetails.quantity"
                     type="number"
@@ -922,7 +982,12 @@ export function WorkOrderForm({
               />
             </FieldShell>
 
-            <FieldShell id="internalNotes.0.body" label="Interna beleška" full>
+            <FieldShell
+              id="internalNotes.0.body"
+              label="Interna beleška"
+              error={internalNoteError}
+              full
+            >
               <textarea
                 id="internalNotes.0.body"
                 rows={3}
@@ -932,7 +997,12 @@ export function WorkOrderForm({
               />
             </FieldShell>
 
-            <FieldShell id="customerNotes.0.body" label="Beleška za klijenta" full>
+            <FieldShell
+              id="customerNotes.0.body"
+              label="Beleška za klijenta"
+              error={customerNoteError}
+              full
+            >
               <textarea
                 id="customerNotes.0.body"
                 rows={3}

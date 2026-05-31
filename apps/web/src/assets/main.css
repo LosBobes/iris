@@ -148,6 +148,16 @@
   }
 }
 
+[data-work-order-field][data-invalid="true"] :is(input, textarea, button, [data-slot="select-trigger"]) {
+  border-color: var(--destructive);
+}
+
+[data-work-order-field][data-invalid="true"] :is(input, textarea, button, [data-slot="select-trigger"]):focus,
+[data-work-order-field][data-invalid="true"] :is(input, textarea, button, [data-slot="select-trigger"]):focus-visible {
+  border-color: var(--destructive);
+  outline-color: color-mix(in oklch, var(--destructive), transparent 35%);
+}
+
 @layer utilities {
   /* Page entrance — gentle fade + lift, set to fill-mode both so initial paint is hidden. */
   @keyframes iris-fade-up {
