@@ -173,6 +173,58 @@ func TestCustomerLocationEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("create and delete customer and location update subsequent lists", func(t *testing.T) {
+		server := newTestServer(t)
+
+		customerPayload := `{"id":"cust-codex","name":"Codex Test","contactName":"Mina","email":"codex@example.test","phone":"+381 60 111 222"}`
+		customerResponse := performRequest(t, server, http.MethodPut, "/customers/cust-codex", customerPayload)
+		if customerResponse.Code != http.StatusOK {
+			t.Fatalf("create customer status = %d, want %d", customerResponse.Code, http.StatusOK)
+		}
+
+		locationPayload := `{"id":"loc-codex","customerId":"cust-codex","name":"Codex Test Lokacija","address":"Bulevar testiranja 1"}`
+		locationResponse := performRequest(t, server, http.MethodPut, "/locations/loc-codex", locationPayload)
+		if locationResponse.Code != http.StatusOK {
+			t.Fatalf("create location status = %d, want %d", locationResponse.Code, http.StatusOK)
+		}
+
+		customersResponse := performRequest(t, server, http.MethodGet, "/customers", "")
+		var customers []domain.Customer
+		if err := json.Unmarshal(customersResponse.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode customers response: %v", err)
+		}
+		assertCustomerPresence(t, customers, "cust-codex", true)
+
+		locationsResponse := performRequest(t, server, http.MethodGet, "/locations", "")
+		var locations []domain.Location
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations response: %v", err)
+		}
+		assertLocationPresence(t, locations, "loc-codex", true)
+
+		deleteLocationResponse := performRequest(t, server, http.MethodDelete, "/locations/loc-codex", "")
+		if deleteLocationResponse.Code != http.StatusOK {
+			t.Fatalf("delete location status = %d, want %d", deleteLocationResponse.Code, http.StatusOK)
+		}
+
+		locationsResponse = performRequest(t, server, http.MethodGet, "/locations", "")
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations after delete: %v", err)
+		}
+		assertLocationPresence(t, locations, "loc-codex", false)
+
+		deleteCustomerResponse := performRequest(t, server, http.MethodDelete, "/customers/cust-codex", "")
+		if deleteCustomerResponse.Code != http.StatusOK {
+			t.Fatalf("delete customer status = %d, want %d", deleteCustomerResponse.Code, http.StatusOK)
+		}
+
+		customersResponse = performRequest(t, server, http.MethodGet, "/customers", "")
+		if err := json.Unmarshal(customersResponse.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode customers after delete: %v", err)
+		}
+		assertCustomerPresence(t, customers, "cust-codex", false)
+	})
+
 	t.Run("delete customer and location update subsequent lists", func(t *testing.T) {
 		server := newTestServer(t)
 
@@ -218,6 +270,69 @@ func TestCustomerLocationEndpoints(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCORSMiddlewareAllowsWebClientMutations(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "upsert customer", method: http.MethodPut, path: "/customers/cust-cors"},
+		{name: "upsert location", method: http.MethodPut, path: "/locations/loc-cors"},
+		{name: "delete customer", method: http.MethodDelete, path: "/customers/cust-cors"},
+		{name: "delete location", method: http.MethodDelete, path: "/locations/loc-cors"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodOptions, test.path, nil)
+			req.Header.Set("Origin", "http://localhost:5173")
+			req.Header.Set("Access-Control-Request-Method", test.method)
+			req.Header.Set("Access-Control-Request-Headers", "content-type")
+
+			rec := httptest.NewRecorder()
+			newTestServer(t).Routes().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+			}
+			methods := rec.Header().Get("Access-Control-Allow-Methods")
+			if !strings.Contains(methods, test.method) {
+				t.Fatalf("Access-Control-Allow-Methods = %q, want to include %s", methods, test.method)
+			}
+		})
+	}
+}
+
+func assertCustomerPresence(t *testing.T, customers []domain.Customer, id string, want bool) {
+	t.Helper()
+	for _, customer := range customers {
+		if customer.ID == id {
+			if !want {
+				t.Fatalf("customers still contains %q: %#v", id, customer)
+			}
+			return
+		}
+	}
+	if want {
+		t.Fatalf("customers does not contain %q", id)
+	}
+}
+
+func assertLocationPresence(t *testing.T, locations []domain.Location, id string, want bool) {
+	t.Helper()
+	for _, location := range locations {
+		if location.ID == id {
+			if !want {
+				t.Fatalf("locations still contains %q: %#v", id, location)
+			}
+			return
+		}
+	}
+	if want {
+		t.Fatalf("locations does not contain %q", id)
+	}
 }
 
 func TestCreateWorkOrderEndpoint(t *testing.T) {

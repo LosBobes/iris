@@ -4,6 +4,8 @@ import {
   formatMandatoryFieldsMessage,
   getMissingCustomerFields,
   getMissingLocationFields,
+  removeDeletedCustomer,
+  removeDeletedLocation,
 } from "./CustomersPage";
 
 const completeCustomer: Customer = {
@@ -22,7 +24,7 @@ const completeLocation: Location = {
 };
 
 describe("customer and location mandatory fields", () => {
-  it("requires every visible customer field before saving", () => {
+  it("lets customer ID stay empty so save can auto-generate it", () => {
     expect(
       getMissingCustomerFields({
         ...completeCustomer,
@@ -30,7 +32,7 @@ describe("customer and location mandatory fields", () => {
         email: "   ",
         phone: null,
       }),
-    ).toEqual(["ID", "Email", "Telefon"]);
+    ).toEqual(["Email", "Telefon"]);
   });
 
   it("accepts customer drafts with every visible field populated", () => {
@@ -52,5 +54,39 @@ describe("customer and location mandatory fields", () => {
     expect(formatMandatoryFieldsMessage("lokaciju", ["Klijent", "Adresa"])).toBe(
       "Popunite sva obavezna polja za lokaciju: Klijent, Adresa.",
     );
+  });
+});
+
+describe("customer and location deletion state", () => {
+  const customers: Customer[] = [
+    completeCustomer,
+    {
+      id: "cust-7",
+      name: "Druga Firma",
+      contactName: "Milica Milic",
+      email: "milica@example.test",
+      phone: "+381 11 700 700",
+    },
+  ];
+
+  const locations: Location[] = [
+    completeLocation,
+    {
+      id: "loc-7",
+      customerId: "cust-7",
+      name: "Magacin",
+      address: "Industrijska 7, Novi Sad",
+    },
+  ];
+
+  it("removes a deleted location from the visible list", () => {
+    expect(removeDeletedLocation(locations, "loc-6")).toEqual([locations[1]]);
+  });
+
+  it("removes a deleted customer and its locations from visible lists", () => {
+    expect(removeDeletedCustomer(customers, locations, "cust-6")).toEqual({
+      customers: [customers[1]],
+      locations: [locations[1]],
+    });
   });
 });

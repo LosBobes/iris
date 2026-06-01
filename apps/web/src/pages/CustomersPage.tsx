@@ -25,7 +25,6 @@ type RequiredField<T> = {
 };
 
 const customerRequiredFields = [
-  { label: "ID", value: (customer: Customer) => customer.id },
   { label: "Naziv", value: (customer: Customer) => customer.name },
   { label: "Kontakt", value: (customer: Customer) => customer.contactName },
   { label: "Email", value: (customer: Customer) => customer.email },
@@ -52,6 +51,38 @@ export function formatMandatoryFieldsMessage(
   missingFields: string[],
 ): string {
   return `Popunite sva obavezna polja za ${formName}: ${missingFields.join(", ")}.`;
+}
+
+export function removeDeletedLocation(
+  currentLocations: Location[],
+  locationId: string,
+): Location[] {
+  return currentLocations.filter((location) => location.id !== locationId);
+}
+
+function removeCustomerById(
+  currentCustomers: Customer[],
+  customerId: string,
+): Customer[] {
+  return currentCustomers.filter((customer) => customer.id !== customerId);
+}
+
+function removeLocationsForCustomer(
+  currentLocations: Location[],
+  customerId: string,
+): Location[] {
+  return currentLocations.filter((location) => location.customerId !== customerId);
+}
+
+export function removeDeletedCustomer(
+  currentCustomers: Customer[],
+  currentLocations: Location[],
+  customerId: string,
+): { customers: Customer[]; locations: Location[] } {
+  return {
+    customers: removeCustomerById(currentCustomers, customerId),
+    locations: removeLocationsForCustomer(currentLocations, customerId),
+  };
 }
 
 function CustomersPage(): React.JSX.Element {
@@ -117,7 +148,7 @@ function CustomersPage(): React.JSX.Element {
 
     const customer = {
       ...customerDraft,
-      id: customerDraft.id || slugId("cust", customerDraft.name),
+      id: customerDraft.id.trim() || slugId("cust", customerDraft.name),
       contactName: blankToNull(customerDraft.contactName),
       email: blankToNull(customerDraft.email),
       phone: blankToNull(customerDraft.phone),
@@ -128,8 +159,8 @@ function CustomersPage(): React.JSX.Element {
       setCustomerMissingFields([]);
       await load();
       toast.success("Klijent je sačuvan.");
-    } catch {
-      toast.error("Greška pri čuvanju klijenta.");
+    } catch (error) {
+      toast.error(formatActionError("Greška pri čuvanju klijenta", error));
     }
   }, [customerDraft, load]);
 
@@ -153,8 +184,8 @@ function CustomersPage(): React.JSX.Element {
       setLocationMissingFields([]);
       await load();
       toast.success("Lokacija je sačuvana.");
-    } catch {
-      toast.error("Greška pri čuvanju lokacije.");
+    } catch (error) {
+      toast.error(formatActionError("Greška pri čuvanju lokacije", error));
     }
   }, [locationDraft, load]);
 
@@ -162,26 +193,41 @@ function CustomersPage(): React.JSX.Element {
     async (id: string) => {
       try {
         await window.api.deleteCustomer(id);
-        await load();
+        setCustomers((currentCustomers) => removeCustomerById(currentCustomers, id));
+        setLocations((currentLocations) =>
+          removeLocationsForCustomer(currentLocations, id),
+        );
+        setCustomerDraft((currentDraft) =>
+          currentDraft.id === id ? emptyCustomer : currentDraft,
+        );
+        setLocationDraft((currentDraft) =>
+          currentDraft.customerId === id ? emptyLocation : currentDraft,
+        );
+        setCustomerMissingFields([]);
+        setLocationMissingFields([]);
         toast.success("Klijent je obrisan.");
       } catch {
         toast.error("Greška pri brisanju klijenta.");
       }
     },
-    [load],
+    [],
   );
 
   const deleteLocation = useCallback(
     async (id: string) => {
       try {
         await window.api.deleteLocation(id);
-        await load();
+        setLocations((currentLocations) => removeDeletedLocation(currentLocations, id));
+        setLocationDraft((currentDraft) =>
+          currentDraft.id === id ? emptyLocation : currentDraft,
+        );
+        setLocationMissingFields([]);
         toast.success("Lokacija je obrisana.");
       } catch {
         toast.error("Greška pri brisanju lokacije.");
       }
     },
-    [load],
+    [],
   );
 
   return (
@@ -206,7 +252,7 @@ function CustomersPage(): React.JSX.Element {
           </div>
         ) : (
           <div className="grid gap-6 px-5 pb-8 sm:px-8 xl:grid-cols-2">
-            <section className="border border-border bg-card">
+            <section className="min-w-0 border border-border bg-card">
               <Header title="Klijenti" />
               <CustomerForm
                 value={customerDraft}
@@ -232,7 +278,7 @@ function CustomersPage(): React.JSX.Element {
               </div>
             </section>
 
-            <section className="border border-border bg-card">
+            <section className="min-w-0 border border-border bg-card">
               <Header title="Lokacije" />
               <LocationForm
                 value={locationDraft}
@@ -288,8 +334,7 @@ function CustomerForm({
       <TextInput
         label="ID"
         value={value.id}
-        required
-        isInvalid={isFieldMissing(missingFields, "ID")}
+        placeholder="Automatski ako ostane prazno"
         onChange={(id) => onChange({ ...value, id })}
       />
       <TextInput
@@ -389,12 +434,14 @@ function TextInput({
   value,
   required = false,
   isInvalid = false,
+  placeholder,
   onChange,
 }: {
   label: string;
   value: string;
   required?: boolean;
   isInvalid?: boolean;
+  placeholder?: string;
   onChange: (value: string) => void;
 }): React.JSX.Element {
   return (
@@ -403,6 +450,7 @@ function TextInput({
       <input
         value={value}
         required={required}
+        placeholder={placeholder}
         aria-invalid={isInvalid || undefined}
         onChange={(event) => onChange(event.target.value)}
         className={fieldControlClassName(isInvalid)}
@@ -502,6 +550,13 @@ function fieldControlClassName(isInvalid: boolean): string {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function formatActionError(prefix: string, error: unknown): string {
+  if (error instanceof Error && error.message.trim() !== "") {
+    return `${prefix}: ${error.message}`;
+  }
+  return `${prefix}.`;
 }
 
 function slugId(prefix: string, value: string): string {
