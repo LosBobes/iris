@@ -1,56 +1,89 @@
-# Iris
+# Iris Operations Management Suite
 
-Full-stack application for Stamparija Cobanovic.
+Iris is the operations workspace for Stamparija Cobanovic. The repository is a
+monorepo with an Electron desktop client, a React web client, and a shared Go
+backend API.
 
-## Workspace
+## Monorepo Topology
 
-This repository currently contains:
+```text
+.
+├── apps/
+│   ├── desktop/                Electron desktop app for local shop operations
+│   └── web/                    Vite React app for browser operations and public tracking
+├── iris-api/                   Go HTTP API and SQLite persistence layer
+└── docs/                       Architecture, decisions, glossary, and contribution policy
+```
 
-- `apps/desktop`: the Electron desktop application built with React and TypeScript
-- `iris-api`: a Go HTTP API that mirrors the data needs of the desktop app
+- [apps/desktop](apps/desktop/): Electron 39, React 19, Tailwind CSS 4. Renderer
+  calls pass through a typed preload bridge to main-process IPC handlers, then to
+  the Go API through `IrisApiClient`.
+- [apps/web](apps/web/): Vite React client with `http` and `fixtures` runtime
+  modes behind the same `window.api` contract.
+- [iris-api](iris-api/): Go REST API built with `chi`, documented in
+  `openapi.yaml`, backed by SQLite in local and Docker runtimes.
 
-## Purpose
+## Development Commands
 
-The desktop application currently focuses on:
+Backend API:
 
-- user authentication
-- work order browsing and dashboard reporting
-- operator-based work order analysis
+```bash
+cd iris-api
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
+DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+```
 
-The API module is now the source of truth for those same capabilities, and the desktop app reaches it through Electron main-process IPC handlers.
+Docker backend:
 
-## AI Assets for Contributors
+```bash
+docker compose up -d --build
+docker compose logs -f iris-api
+docker compose down
+```
 
-This repository includes specialized GitHub Copilot assets under `.github/` to help with common kinds of work.
+Compose persists SQLite at `/data/iris.db` through the named volume
+`iris_sqlite_data`. Do not run `docker compose down -v` unless you intentionally
+want to delete that database volume.
 
-### Shared baseline instructions
+Web client:
 
-- **`.github/copilot-instructions.md`**
-  Repository-wide coding rules, architecture guidance, and conventions.
-  Use this as the default baseline for all tasks.
+```bash
+cd apps/web
+npm install
+npm run dev
+```
 
-### Custom agents
+Desktop client:
 
-- **`.github/agents/react-frontend-agent.agent.md`**
-  Use for new React UI features, component work, forms, routing, and renderer-layer improvements.
+```bash
+cd apps/desktop
+npm install
+npm run dev
+```
 
-- **`.github/agents/go-backend-agent.agent.md`**
-  Use for OpenAPI changes, chi handlers, fixture-store behavior, and Go tests in `iris-api`.
+## Documentation Index
 
-- **`.github/agents/electron-code-review-mode.md`**
-  Use for code reviews across the Electron stack — main process IPC handlers, preload bridge, and renderer.
+- [Architecture Overview](docs/ARCHITECTURE.md): system topology, runtime
+  boundaries, and request flows.
+- [Project Context](docs/PROJECT_CONTEXT.md): compact repository map and domain
+  model snapshot.
+- [Decisions Register](docs/DECISIONS.md): accepted and temporary architectural
+  decisions.
+- [Domain Glossary](docs/DOMAIN_GLOSSARY.md): Serbian UI vocabulary mapped to
+  English code and API tokens.
+- [Contributing Guide](docs/CONTRIBUTING.md): development rules, verification
+  commands, and commit expectations.
+- [API README](iris-api/README.md): backend configuration, CLI operations, and
+  endpoint reference.
 
-### How to choose
+## AI Contributor Assets
 
-| Task | Agent |
-|------|-------|
-| Building or modifying React UI components, forms, or pages | `react-frontend-agent` |
-| Changing Go routes, OpenAPI, fixture-backed API behavior, or backend tests | `go-backend-agent` |
-| Reviewing code across any Electron layer | `electron-code-review-mode` |
-| Unsure? | Start with the shared baseline in `.github/copilot-instructions.md`, then pick the agent whose mission best matches the task |
+Specialized Copilot and agent profiles live under `.github/`:
 
-### Recommended workflow
+- [.github/copilot-instructions.md](.github/copilot-instructions.md)
+- [.github/agents/react-frontend-agent.agent.md](.github/agents/react-frontend-agent.agent.md)
+- [.github/agents/go-backend-agent.agent.md](.github/agents/go-backend-agent.agent.md)
+- [.github/agents/electron-code-review-mode.md](.github/agents/electron-code-review-mode.md)
 
-1. Read the shared baseline in `.github/copilot-instructions.md`.
-2. Choose the matching agent in `.github/agents/`.
-3. Follow the normal repo workflow: inspect docs first, update tests, and run the relevant commands from `apps/desktop/` or `iris-api/` depending on the slice you changed.
+*Last verified against the checked-in repository state on 2026-06-01.*

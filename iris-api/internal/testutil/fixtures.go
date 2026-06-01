@@ -11,8 +11,8 @@ func FixtureDir(t *testing.T) string {
 	t.Helper()
 
 	candidates := []string{
-		filepath.Join("..", "..", "..", "apps", "desktop", "fixtures"),
-		filepath.Join("/Users/vbatocanin/Dev/GitHub/iris", "apps", "desktop", "fixtures"),
+		filepath.Join("..", "..", "testdata", "fixtures"),
+		filepath.Join("testdata", "fixtures"),
 	}
 
 	for _, candidate := range candidates {

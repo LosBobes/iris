@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -79,12 +81,12 @@ func TestWorkOrderReadEndpoints(t *testing.T) {
 			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 		}
 
-		var workOrders []domain.WorkOrder
+		var workOrders store.WorkOrderListResult
 		if err := json.Unmarshal(response.Body.Bytes(), &workOrders); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if len(workOrders) != 25 {
-			t.Fatalf("len(workOrders) = %d, want 25", len(workOrders))
+		if len(workOrders.Items) != 28 || workOrders.Total != 28 {
+			t.Fatalf("workOrders = %#v, want 28 items and total", workOrders)
 		}
 	})
 
@@ -134,6 +136,205 @@ func TestWorkOrderReadEndpoints(t *testing.T) {
 	})
 }
 
+func TestCustomerLocationEndpoints(t *testing.T) {
+	t.Run("list customers", func(t *testing.T) {
+		response := performRequest(t, newTestServer(t), http.MethodGet, "/customers", "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+
+		var customers []domain.Customer
+		if err := json.Unmarshal(response.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(customers) == 0 {
+			t.Fatal("len(customers) = 0, want fixture-backed customers")
+		}
+		if customers[0].Name == "" {
+			t.Fatalf("customers[0] = %#v, want named customer", customers[0])
+		}
+	})
+
+	t.Run("list locations", func(t *testing.T) {
+		response := performRequest(t, newTestServer(t), http.MethodGet, "/locations", "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+
+		var locations []domain.Location
+		if err := json.Unmarshal(response.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(locations) == 0 {
+			t.Fatal("len(locations) = 0, want fixture-backed locations")
+		}
+		if locations[0].CustomerID == "" {
+			t.Fatalf("locations[0] = %#v, want customer linkage", locations[0])
+		}
+	})
+
+	t.Run("create and delete customer and location update subsequent lists", func(t *testing.T) {
+		server := newTestServer(t)
+
+		customerPayload := `{"id":"cust-codex","name":"Codex Test","contactName":"Mina","email":"codex@example.test","phone":"+381 60 111 222"}`
+		customerResponse := performRequest(t, server, http.MethodPut, "/customers/cust-codex", customerPayload)
+		if customerResponse.Code != http.StatusOK {
+			t.Fatalf("create customer status = %d, want %d", customerResponse.Code, http.StatusOK)
+		}
+
+		locationPayload := `{"id":"loc-codex","customerId":"cust-codex","name":"Codex Test Lokacija","address":"Bulevar testiranja 1"}`
+		locationResponse := performRequest(t, server, http.MethodPut, "/locations/loc-codex", locationPayload)
+		if locationResponse.Code != http.StatusOK {
+			t.Fatalf("create location status = %d, want %d", locationResponse.Code, http.StatusOK)
+		}
+
+		customersResponse := performRequest(t, server, http.MethodGet, "/customers", "")
+		var customers []domain.Customer
+		if err := json.Unmarshal(customersResponse.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode customers response: %v", err)
+		}
+		assertCustomerPresence(t, customers, "cust-codex", true)
+
+		locationsResponse := performRequest(t, server, http.MethodGet, "/locations", "")
+		var locations []domain.Location
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations response: %v", err)
+		}
+		assertLocationPresence(t, locations, "loc-codex", true)
+
+		deleteLocationResponse := performRequest(t, server, http.MethodDelete, "/locations/loc-codex", "")
+		if deleteLocationResponse.Code != http.StatusOK {
+			t.Fatalf("delete location status = %d, want %d", deleteLocationResponse.Code, http.StatusOK)
+		}
+
+		locationsResponse = performRequest(t, server, http.MethodGet, "/locations", "")
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations after delete: %v", err)
+		}
+		assertLocationPresence(t, locations, "loc-codex", false)
+
+		deleteCustomerResponse := performRequest(t, server, http.MethodDelete, "/customers/cust-codex", "")
+		if deleteCustomerResponse.Code != http.StatusOK {
+			t.Fatalf("delete customer status = %d, want %d", deleteCustomerResponse.Code, http.StatusOK)
+		}
+
+		customersResponse = performRequest(t, server, http.MethodGet, "/customers", "")
+		if err := json.Unmarshal(customersResponse.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode customers after delete: %v", err)
+		}
+		assertCustomerPresence(t, customers, "cust-codex", false)
+	})
+
+	t.Run("delete customer and location update subsequent lists", func(t *testing.T) {
+		server := newTestServer(t)
+
+		deleteLocationResponse := performRequest(t, server, http.MethodDelete, "/locations/loc-5", "")
+		if deleteLocationResponse.Code != http.StatusOK {
+			t.Fatalf("delete location status = %d, want %d", deleteLocationResponse.Code, http.StatusOK)
+		}
+
+		locationsResponse := performRequest(t, server, http.MethodGet, "/locations", "")
+		var locations []domain.Location
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations response: %v", err)
+		}
+		for _, location := range locations {
+			if location.ID == "loc-5" {
+				t.Fatalf("locations still contains deleted location %#v", location)
+			}
+		}
+
+		deleteCustomerResponse := performRequest(t, server, http.MethodDelete, "/customers/cust-4", "")
+		if deleteCustomerResponse.Code != http.StatusOK {
+			t.Fatalf("delete customer status = %d, want %d", deleteCustomerResponse.Code, http.StatusOK)
+		}
+
+		customersResponse := performRequest(t, server, http.MethodGet, "/customers", "")
+		var customers []domain.Customer
+		if err := json.Unmarshal(customersResponse.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode customers response: %v", err)
+		}
+		for _, customer := range customers {
+			if customer.ID == "cust-4" {
+				t.Fatalf("customers still contains deleted customer %#v", customer)
+			}
+		}
+
+		locationsResponse = performRequest(t, server, http.MethodGet, "/locations", "")
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations after customer delete: %v", err)
+		}
+		for _, location := range locations {
+			if location.CustomerID == "cust-4" {
+				t.Fatalf("locations still contains cascade-deleted customer location %#v", location)
+			}
+		}
+	})
+}
+
+func TestCORSMiddlewareAllowsWebClientMutations(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "upsert customer", method: http.MethodPut, path: "/customers/cust-cors"},
+		{name: "upsert location", method: http.MethodPut, path: "/locations/loc-cors"},
+		{name: "delete customer", method: http.MethodDelete, path: "/customers/cust-cors"},
+		{name: "delete location", method: http.MethodDelete, path: "/locations/loc-cors"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodOptions, test.path, nil)
+			req.Header.Set("Origin", "http://localhost:5173")
+			req.Header.Set("Access-Control-Request-Method", test.method)
+			req.Header.Set("Access-Control-Request-Headers", "content-type")
+
+			rec := httptest.NewRecorder()
+			newTestServer(t).Routes().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+			}
+			methods := rec.Header().Get("Access-Control-Allow-Methods")
+			if !strings.Contains(methods, test.method) {
+				t.Fatalf("Access-Control-Allow-Methods = %q, want to include %s", methods, test.method)
+			}
+		})
+	}
+}
+
+func assertCustomerPresence(t *testing.T, customers []domain.Customer, id string, want bool) {
+	t.Helper()
+	for _, customer := range customers {
+		if customer.ID == id {
+			if !want {
+				t.Fatalf("customers still contains %q: %#v", id, customer)
+			}
+			return
+		}
+	}
+	if want {
+		t.Fatalf("customers does not contain %q", id)
+	}
+}
+
+func assertLocationPresence(t *testing.T, locations []domain.Location, id string, want bool) {
+	t.Helper()
+	for _, location := range locations {
+		if location.ID == id {
+			if !want {
+				t.Fatalf("locations still contains %q: %#v", id, location)
+			}
+			return
+		}
+	}
+	if want {
+		t.Fatalf("locations does not contain %q", id)
+	}
+}
+
 func TestCreateWorkOrderEndpoint(t *testing.T) {
 	server := newTestServer(t)
 	payload := `{"clientName":"Novi klijent","contactPerson":null,"jobDescription":"Štampa brošure","jobDetails":null,"billingDocumentType":null,"billingDocumentNumber":null,"shipping":{"deliveryMethod":null,"hasPackaging":false,"hasLabeling":false,"isFragile":false,"requiresSignature":false,"hasInsurance":false,"shippingAddress":null},"issuedBy":"admin","issueDate":"2026-04-25","dueDate":null,"price":null,"note":null}`
@@ -147,20 +348,38 @@ func TestCreateWorkOrderEndpoint(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if created.ClientName != "Novi klijent" || created.Status != domain.WorkOrderStatusActive {
-		t.Fatalf("created = %#v, want active created work order", created)
+	if created.ClientName != "Novi klijent" || created.Status != domain.WorkOrderStatusNew {
+		t.Fatalf("created = %#v, want new created work order", created)
 	}
 	if !strings.HasPrefix(created.OrderNumber, "RN-") {
 		t.Fatalf("OrderNumber = %q, want RN- prefix", created.OrderNumber)
 	}
 
 	listResponse := performRequest(t, server, http.MethodGet, "/work-orders", "")
-	var workOrders []domain.WorkOrder
+	var workOrders store.WorkOrderListResult
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &workOrders); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
-	if len(workOrders) != 26 {
-		t.Fatalf("len(workOrders) = %d, want 26 after create", len(workOrders))
+	if len(workOrders.Items) != 29 || workOrders.Total != 29 {
+		t.Fatalf("workOrders = %#v, want 29 after create", workOrders)
+	}
+}
+
+func TestCreateWorkOrderAcceptsDecimalPrice(t *testing.T) {
+	server := newTestServer(t)
+	payload := `{"clientName":"Novi klijent","contactPerson":null,"jobDescription":"Štampa brošure","jobDetails":null,"billingDocumentType":null,"billingDocumentNumber":null,"shipping":{"deliveryMethod":null,"hasPackaging":false,"hasLabeling":false,"isFragile":false,"requiresSignature":false,"hasInsurance":false,"shippingAddress":null},"issuedBy":"admin","issueDate":"2026-04-25","dueDate":null,"price":12000.5,"note":null}`
+
+	response := performRequest(t, server, http.MethodPost, "/work-orders", payload)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if created["price"] != 12000.5 {
+		t.Fatalf("price = %#v, want 12000.5", created["price"])
 	}
 }
 
@@ -184,7 +403,7 @@ func TestUpdateWorkOrderEndpoint(t *testing.T) {
 		newTestServer(t),
 		http.MethodPatch,
 		"/work-orders/3",
-		`{"status":"completed","isCompleted":true,"completionDate":"2026-04-25"}`,
+		`{"status":"waitingForMaterials"}`,
 	)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -194,8 +413,64 @@ func TestUpdateWorkOrderEndpoint(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if updated.Status != domain.WorkOrderStatusCompleted || !updated.IsCompleted {
-		t.Fatalf("updated = %#v, want completed order", updated)
+	if updated.Status != domain.WorkOrderStatusWaitingForMaterials || updated.IsCompleted {
+		t.Fatalf("updated = %#v, want waiting-for-materials order", updated)
+	}
+}
+
+func TestUpdateWorkOrderRejectsInvalidTransition(t *testing.T) {
+	response := performRequest(
+		t,
+		newTestServer(t),
+		http.MethodPatch,
+		"/work-orders/3",
+		`{"status":"invoiced"}`,
+	)
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnprocessableEntity)
+	}
+	assertErrorResponse(t, response.Body.Bytes(), "Promena statusa nije dozvoljena.")
+}
+
+func TestReportAndPublicTrackingEndpoints(t *testing.T) {
+	server := newTestServer(t)
+
+	reportResponse := performRequest(t, server, http.MethodGet, "/work-orders/1/report", "")
+	if reportResponse.Code != http.StatusOK {
+		t.Fatalf("report status = %d, want %d", reportResponse.Code, http.StatusOK)
+	}
+	if contentType := reportResponse.Header().Get("Content-Type"); contentType != "application/pdf" {
+		t.Fatalf("Content-Type = %q, want application/pdf", contentType)
+	}
+	if !bytes.HasPrefix(reportResponse.Body.Bytes(), []byte("%PDF-")) {
+		t.Fatalf("report body prefix = %q, want PDF header", reportResponse.Body.String()[:5])
+	}
+
+	workOrderResponse := performRequest(t, server, http.MethodGet, "/work-orders/1", "")
+	var workOrder domain.WorkOrder
+	if err := json.Unmarshal(workOrderResponse.Body.Bytes(), &workOrder); err != nil {
+		t.Fatalf("decode work order: %v", err)
+	}
+	if workOrder.Communication.PublicToken == "" {
+		t.Fatal("PublicToken = empty, want public tracking token")
+	}
+
+	publicResponse := performRequest(
+		t,
+		server,
+		http.MethodGet,
+		"/public/work-orders/"+workOrder.Communication.PublicToken,
+		"",
+	)
+	if publicResponse.Code != http.StatusOK {
+		t.Fatalf("public status = %d, want %d", publicResponse.Code, http.StatusOK)
+	}
+	var publicStatus domain.PublicWorkOrderStatus
+	if err := json.Unmarshal(publicResponse.Body.Bytes(), &publicStatus); err != nil {
+		t.Fatalf("decode public status: %v", err)
+	}
+	if publicStatus.OrderNumber != workOrder.OrderNumber || publicStatus.InternalNoteCount != 0 {
+		t.Fatalf("public status = %#v, want sanitized status for %s", publicStatus, workOrder.OrderNumber)
 	}
 }
 
@@ -263,10 +538,31 @@ func performRequest(t *testing.T, server *Server, method string, path string, bo
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if needsTestSession(path) {
+		user, err := server.store.AuthenticateUser(context.Background(), "admin", "admin123")
+		if err != nil {
+			t.Fatalf("authenticate test user: %v", err)
+		}
+		token, err := server.store.CreateSession(
+			context.Background(),
+			user.ID,
+			time.Now().Add(time.Hour),
+		)
+		if err != nil {
+			t.Fatalf("create test session: %v", err)
+		}
+		req.AddCookie(&http.Cookie{Name: server.config.SessionCookieName, Value: token})
+	}
 
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 	return rec
+}
+
+func needsTestSession(path string) bool {
+	return !strings.HasPrefix(path, "/auth/") &&
+		!strings.HasPrefix(path, "/public/") &&
+		path != "/healthz"
 }
 
 func assertErrorResponse(t *testing.T, body []byte, want string) {

@@ -10,6 +10,9 @@ export type SortField =
   | "orderNumber"
   | "clientName"
   | "jobDescription"
+  | "assignment.assignedTo"
+  | "assignment.priority"
+  | "assignment.scheduledDate"
   | "billingDocumentType"
   | "shipping.deliveryMethod"
   | "price"
@@ -25,6 +28,7 @@ export interface WorkOrdersFiltersState {
   status: WorkOrderStatus | "all";
   billingDocumentType: BillingDocumentType | "all";
   deliveryMethod: DeliveryMethod | "all";
+  queue: "all" | "unassigned" | "overdue" | "today" | "thisWeek";
   dateFrom: string;
   dateTo: string;
 }
@@ -54,6 +58,7 @@ const INITIAL_FILTERS: WorkOrdersFiltersState = {
   status: "all",
   billingDocumentType: "all",
   deliveryMethod: "all",
+  queue: "all",
   dateFrom: "",
   dateTo: "",
 };
@@ -76,7 +81,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
       setLoading(true);
       setError(null);
       const data = await window.api.getWorkOrders();
-      setOrders(data);
+      setOrders(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Nepoznata greška");
     } finally {
@@ -110,6 +115,31 @@ export function useWorkOrders(): UseWorkOrdersResult {
         order.shipping.deliveryMethod !== filters.deliveryMethod
       )
         return false;
+      if (filters.queue !== "all") {
+        const today = new Date().toISOString().slice(0, 10);
+        const dueDate = order.dueDate ?? order.assignment.scheduledDate;
+        if (filters.queue === "unassigned" && order.assignment.assignedTo) {
+          return false;
+        }
+        if (
+          filters.queue === "overdue" &&
+          (!dueDate || dueDate >= today || order.isCompleted)
+        ) {
+          return false;
+        }
+        if (filters.queue === "today" && dueDate !== today) {
+          return false;
+        }
+        if (filters.queue === "thisWeek") {
+          if (!dueDate) return false;
+          const due = new Date(`${dueDate}T00:00:00`);
+          const now = new Date(`${today}T00:00:00`);
+          const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+          if (due.getTime() < now.getTime() || due.getTime() > now.getTime() + sevenDaysMs) {
+            return false;
+          }
+        }
+      }
       if (filters.dateFrom && order.issueDate < filters.dateFrom) return false;
       if (filters.dateTo && order.issueDate > filters.dateTo) return false;
       return true;
@@ -126,6 +156,18 @@ export function useWorkOrders(): UseWorkOrdersResult {
         case "shipping.deliveryMethod":
           aVal = a.shipping.deliveryMethod;
           bVal = b.shipping.deliveryMethod;
+          break;
+        case "assignment.assignedTo":
+          aVal = a.assignment.assignedTo;
+          bVal = b.assignment.assignedTo;
+          break;
+        case "assignment.priority":
+          aVal = a.assignment.priority;
+          bVal = b.assignment.priority;
+          break;
+        case "assignment.scheduledDate":
+          aVal = a.assignment.scheduledDate;
+          bVal = b.assignment.scheduledDate;
           break;
         case "price":
           aVal = a.price;

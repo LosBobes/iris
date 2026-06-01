@@ -14,6 +14,7 @@ const NAV_ITEMS: NavItemDef[] = [
   { label: "Kontrolna tabla", to: "/", end: true },
   { label: "Radni nalozi", to: "/work-orders" },
   { label: "Novi nalog", to: "/work-orders/new" },
+  { label: "Klijenti", to: "/customers" },
 ];
 
 interface AppShellProps {
@@ -92,10 +93,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
   }, [recomputeIndicator]);
 
   return (
-    <div className="fixed inset-0 flex min-w-[1024px] overflow-hidden bg-background text-foreground">
-      <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-5 pt-7 pb-5">
-        <div className="mb-10">
-          <div className="flex items-baseline gap-2">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground lg:flex-row">
+      <aside className="flex h-auto w-full shrink-0 flex-col border-b border-sidebar-border bg-sidebar px-5 py-4 lg:h-full lg:w-[220px] lg:border-r lg:border-b-0 lg:pt-7 lg:pb-5">
+        <div className="mb-4 lg:mb-10">
+          <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-[22px] font-medium tracking-[-0.5px] text-foreground">
               Iris
             </span>
@@ -103,19 +104,16 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               Grafika Čobanović
             </span>
           </div>
-          {/* TODO: Change this based on the feedback from the team */}
-          {/* <div className="mt-1 text-[10px] tracking-[0.3px] text-[color:var(--iris-ink-faint)]">
-            Radni nalozi · v0.0.1
-          </div> */}
         </div>
 
-        <div className="mb-3 pl-1 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Sekcija
-        </div>
-        <nav ref={navRef} className="relative flex flex-col gap-0.5">
+        <div
+          role="separator"
+          className="mb-3 hidden border-t border-[color:var(--iris-border-soft)] lg:block"
+        />
+        <nav ref={navRef} className="relative flex flex-wrap gap-1 lg:flex-col lg:gap-0.5">
           <span
             aria-hidden
-            className="pointer-events-none absolute -left-5 w-0.5 bg-[color:var(--iris-accent)] motion-reduce:transition-none"
+            className="pointer-events-none absolute -left-5 hidden w-0.5 bg-[color:var(--iris-accent)] motion-reduce:transition-none lg:block"
             style={{
               top: indicator.top,
               height: indicator.height,
@@ -148,8 +146,8 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           ))}
         </nav>
 
-        <div className="mt-auto text-[11px] text-[color:var(--iris-ink-mute)] leading-[1.5]">
-          <div className="flex items-center gap-2 border-t border-[color:var(--iris-border-soft)] py-2">
+        <div className="mt-3 flex items-center justify-between gap-4 border-t border-[color:var(--iris-border-soft)] pt-3 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)] lg:mt-auto lg:block lg:border-t-0 lg:pt-0">
+          <div className="flex items-center gap-2 lg:border-t lg:border-[color:var(--iris-border-soft)] lg:py-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[color:var(--iris-accent)] text-[11px] font-medium text-white">
               {initials}
             </div>
@@ -164,14 +162,14 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           </div>
           <button
             onClick={onLogout}
-            className="iris-focusable iris-press flex w-full items-center gap-2 bg-transparent py-1.5 text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+            className="iris-focusable iris-press flex items-center gap-2 bg-transparent py-1.5 text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground lg:w-full"
           >
             <LogOut size={12} />
             Odjava
           </button>
         </div>
       </aside>
-      <main className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
         {children}
       </main>
     </div>

@@ -1,0 +1,21 @@
+services:
+  iris-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      IRIS_API_ADDR: ":8080"
+      IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+      IRIS_ENV: "${IRIS_ENV:-development}"
+      IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:-docker-dev-secret-change-me}"
+      DATABASE_PATH: "/data/iris.db"
+    ports:
+      - "${IRIS_API_PORT:-8080}:8080"
+    volumes:
+      # SQLite lives in this internal backend-only mount.
+      # Recreating the container keeps iris.db; removing this named volume deletes it.
+      - iris_sqlite_data:/data
+    restart: unless-stopped
+
+volumes:
+  iris_sqlite_data:

@@ -7,8 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { getMockMonthlyRevenue } from './mockMonthlyData'
-import { formatMonthLabel, formatRSD, getLast12Months } from './utils'
+import { formatMonthLabel, formatRSD, formatRevenueAxisTick, resolveChartMonths } from './utils'
 
 interface RevenuePerMonthChartProps {
   monthlyRevenue: { month: string; revenue: number }[]
@@ -17,22 +16,14 @@ interface RevenuePerMonthChartProps {
 export function RevenuePerMonthChart({
   monthlyRevenue,
 }: RevenuePerMonthChartProps): React.JSX.Element {
-  const last12 = getLast12Months()
+  const chartMonths = resolveChartMonths(monthlyRevenue.map(({ month }) => month))
   const revenueLookup = new Map(
     monthlyRevenue.map(({ month, revenue }) => [month, revenue]),
   )
-  const fallbackLookup = new Map(
-    getMockMonthlyRevenue().map(({ month, revenue }) => [month, revenue]),
-  )
-  const data = last12.map((month) => {
-    const actualRevenue = revenueLookup.get(month)
-
+  const data = chartMonths.map((month) => {
     return {
       label: formatMonthLabel(month),
-      revenue:
-        actualRevenue !== undefined && actualRevenue > 0
-          ? actualRevenue
-          : (fallbackLookup.get(month) ?? 0),
+      revenue: revenueLookup.get(month) ?? 0,
     }
   })
 
@@ -56,7 +47,7 @@ export function RevenuePerMonthChart({
             tickLine={false}
             axisLine={false}
             width={56}
-            tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+            tickFormatter={formatRevenueAxisTick}
           />
           <Tooltip
             formatter={(value, _name, item) => [

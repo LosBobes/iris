@@ -148,6 +148,16 @@
   }
 }
 
+[data-work-order-field][data-invalid="true"] :is(input, textarea, button, [data-slot="select-trigger"]) {
+  border-color: var(--destructive);
+}
+
+[data-work-order-field][data-invalid="true"] :is(input, textarea, button, [data-slot="select-trigger"]):focus,
+[data-work-order-field][data-invalid="true"] :is(input, textarea, button, [data-slot="select-trigger"]):focus-visible {
+  border-color: var(--destructive);
+  outline-color: color-mix(in oklch, var(--destructive), transparent 35%);
+}
+
 @layer utilities {
   /* Page entrance — gentle fade + lift, set to fill-mode both so initial paint is hidden. */
   @keyframes iris-fade-up {
@@ -226,4 +236,320 @@
 
 #root {
   min-height: 100vh;
+}
+
+.work-order-print-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body {
+    margin: 0 !important;
+    -webkit-print-color-adjust: economy;
+    print-color-adjust: economy;
+  }
+
+  body * {
+    animation: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transition: none !important;
+  }
+
+  .work-order-screen-root {
+    display: none !important;
+  }
+
+  .work-order-print-sheet {
+    display: block !important;
+    box-sizing: border-box;
+    width: 194mm;
+    min-height: 0;
+    margin: 0 auto;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.15;
+  }
+
+  .work-order-print-sheet *,
+  .work-order-print-sheet *::before,
+  .work-order-print-sheet *::after {
+    box-sizing: border-box;
+    background-color: #fff !important;
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+
+  .work-order-print-title {
+    margin: 0;
+    border-bottom: 2px solid #000;
+    padding: 0 0 3mm;
+    text-align: center;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  .work-order-print-hero {
+    display: grid;
+    grid-template-columns: 1fr 55mm;
+    min-height: 132mm;
+    border-bottom: 2px solid #000;
+  }
+
+  .work-order-print-main-panel {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    border-right: 1px solid #000;
+  }
+
+  .work-order-print-top-grid {
+    display: grid;
+    grid-template-columns: 1fr 45mm;
+    border-bottom: 1px solid #000;
+  }
+
+  .work-order-print-client-box,
+  .work-order-print-issue-box {
+    min-height: 25mm;
+  }
+
+  .work-order-print-client-box {
+    border-right: 1px solid #000;
+  }
+
+  .work-order-print-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .work-order-print-client-box .work-order-print-label {
+    padding: 3mm 4mm 0;
+  }
+
+  .work-order-print-client-name {
+    padding: 4mm 4mm 5mm;
+    font-size: 25px;
+    font-weight: 800;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-subline {
+    border-top: 1px solid #000;
+    padding: 2mm 4mm;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .work-order-print-issue-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3mm;
+    text-align: center;
+  }
+
+  .work-order-print-date {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .work-order-print-job-box {
+    display: flex;
+    min-height: 107mm;
+    flex-direction: column;
+    padding: 8mm 5mm 7mm;
+  }
+
+  .work-order-print-job-lines {
+    font-size: 27px;
+    font-weight: 800;
+    line-height: 1.28;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-contact {
+    margin-top: auto;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-delivery-box {
+    display: flex;
+    flex-direction: column;
+    padding-top: 4mm;
+  }
+
+  .work-order-print-check-row {
+    display: grid;
+    grid-template-columns: 1fr 11mm;
+    align-items: center;
+    min-height: 11.5mm;
+    border-bottom: 1px solid #000;
+    padding-left: 3mm;
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 7mm;
+    height: 7mm;
+    margin: 0 auto;
+    border: 1px solid #000;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .work-order-print-empty-field {
+    margin-top: auto;
+    border: 1px solid #000;
+    padding: 2mm 5mm;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .work-order-print-document-row {
+    display: grid;
+    grid-template-columns: 78mm 1fr;
+    min-height: 30mm;
+    border-bottom: 2px solid #000;
+  }
+
+  .work-order-print-planned-date {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #000;
+    font-size: 36px;
+    font-weight: 500;
+  }
+
+  .work-order-print-billing-box {
+    display: grid;
+    grid-template-columns: 50mm 1fr;
+    padding: 3mm 3mm 3mm 7mm;
+  }
+
+  .work-order-print-billing-row {
+    display: contents;
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .work-order-print-billing-row > span:first-child {
+    display: flex;
+    align-items: center;
+  }
+
+  .work-order-print-mark {
+    min-height: 8mm;
+    margin: 1mm 0;
+    border: 1px solid #000;
+    padding-left: 3mm;
+    font-size: 28px;
+    line-height: 1.05;
+  }
+
+  .work-order-print-notes-row {
+    display: grid;
+    grid-template-columns: 78mm 1fr;
+    min-height: 44mm;
+    border-bottom: 2px solid #000;
+  }
+
+  .work-order-print-note-box,
+  .work-order-print-address-box {
+    padding: 3mm 4mm;
+  }
+
+  .work-order-print-note-box {
+    border-right: 1px solid #000;
+  }
+
+  .work-order-print-note-lines,
+  .work-order-print-address {
+    margin-top: 6mm;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-completion-row {
+    display: grid;
+    grid-template-columns: 78mm 1fr;
+    align-items: center;
+    min-height: 12mm;
+    border-bottom: 2px solid #000;
+    font-size: 13px;
+  }
+
+  .work-order-print-completion-state,
+  .work-order-print-completion-date {
+    display: flex;
+    align-items: center;
+    gap: 8mm;
+    padding: 2mm 4mm;
+  }
+
+  .work-order-print-completion-date {
+    justify-content: flex-end;
+  }
+
+  .work-order-print-date-line {
+    min-width: 45mm;
+    border-bottom: 1px solid #000;
+    padding-bottom: 0.5mm;
+    text-align: right;
+    font-size: 24px;
+    font-weight: 500;
+  }
+
+  .work-order-print-signatures {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 34mm;
+    padding: 6mm 4mm 0;
+  }
+
+  .work-order-print-align-right {
+    text-align: right;
+  }
+
+  .work-order-print-signature-value {
+    min-height: 13mm;
+    border-bottom: 1px solid #000;
+    padding-top: 4mm;
+    text-align: center;
+    font-size: 24px;
+    font-style: italic;
+    line-height: 1;
+  }
 }

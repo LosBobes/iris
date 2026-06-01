@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Copy, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
+import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { WorkOrder } from "@/types/work-order";
 import {
   WORK_ORDER_BILLING_LABELS,
@@ -60,8 +61,10 @@ function WorkOrderDetailPage(): React.JSX.Element {
   }, [id]);
 
   return (
-    <AppShell>
-      <div>
+    <>
+      <div className="work-order-screen-root">
+        <AppShell>
+          <div>
         <div className="animate-iris-enter border-b border-border px-10 pt-5 pb-6">
           <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-mute)]">
             <button
@@ -99,6 +102,25 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   Štampaj
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(window.api.getWorkOrderReportUrl(order.id), "_blank")}
+                  className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                >
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(
+                      window.api.getPublicTrackingUrl(order.communication.publicToken),
+                    );
+                  }}
+                  className="iris-focusable iris-press flex items-center gap-1 border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                >
+                  <Copy className="h-3 w-3" />
+                  Javni link
                 </button>
                 <button
                   type="button"
@@ -146,8 +168,11 @@ function WorkOrderDetailPage(): React.JSX.Element {
             <DetailBody order={order} />
           </div>
         )}
+          </div>
+        </AppShell>
       </div>
-    </AppShell>
+      {order && <WorkOrderPrintSheet order={order} />}
+    </>
   );
 }
 
@@ -159,6 +184,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
         ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
         : "-",
     ],
+    ["Operater", order.assignment.assignedTo ?? "Nedodeljeno"],
+    ["Planirano", order.assignment.scheduledDate ? formatWorkOrderDate(order.assignment.scheduledDate) : "-"],
     ["Datum izdavanja", formatWorkOrderDate(order.issueDate)],
     [
       "Dostava",
@@ -177,58 +204,26 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
   const base = total / 1.2;
   const pdv = total - base;
 
-  const timeline: Array<{ time: string; label: string; who: string; state: "done" | "current" | "pending" }> = [
-    {
-      time: formatWorkOrderDateTime(order.createdAt),
-      label: "Nalog kreiran",
-      who: order.issuedBy,
-      state: "done",
-    },
-    ...(order.status === "active"
-      ? ([
+  const timeline: Array<{ time: string; label: string; who: string; state: "done" | "current" | "pending" }> =
+    order.events.length > 0
+      ? order.events.map((event, index) => ({
+          time: formatWorkOrderDateTime(event.createdAt),
+          label: event.label,
+          who: event.actor,
+          state: index === order.events.length - 1 ? "current" : "done",
+        }))
+      : [
           {
-            time: "-",
-            label: "U proizvodnji",
-            who: "u toku",
-            state: "current",
-          },
-        ] as const)
-      : []),
-    ...(order.status === "completed" && order.completionDate
-      ? ([
-          {
-            time: formatWorkOrderDateTime(order.completionDate),
-            label: "Nalog završen",
-            who: order.executedBy ?? "-",
+            time: formatWorkOrderDateTime(order.createdAt),
+            label: "Nalog kreiran",
+            who: order.issuedBy,
             state: "done",
           },
-        ] as const)
-      : []),
-    ...(order.status === "cancelled"
-      ? ([
-          {
-            time: formatWorkOrderDateTime(order.updatedAt),
-            label: "Nalog otkazan",
-            who: order.executedBy ?? "-",
-            state: "done",
-          },
-        ] as const)
-      : []),
-    ...(order.status !== "completed" && order.status !== "cancelled"
-      ? ([
-          {
-            time: order.dueDate ? formatWorkOrderDate(order.dueDate) : "-",
-            label: "Isporuka",
-            who: order.dueDate ? "zakazana" : "-",
-            state: "pending",
-          },
-        ] as const)
-      : []),
-  ];
+        ];
 
   return (
     <>
-      <div className="grid grid-cols-5 border-b border-border bg-card">
+      <div className="grid grid-cols-7 border-b border-border bg-card">
         {metaCells.map(([k, v], i) => (
           <div
             key={k}
@@ -299,7 +294,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {order.note && (
             <div className="mt-6 border-t border-[color:var(--iris-border-soft)] pt-5">
               <div className="mb-3 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Beleške
+                Nasleđena napomena
               </div>
               <div
                 className="px-3.5 py-2.5 text-[12px] leading-[1.6] text-[color:var(--iris-ink-soft)]"
@@ -309,6 +304,32 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 }}
               >
                 {order.note}
+              </div>
+            </div>
+          )}
+
+          {(order.internalNotes.length > 0 || order.customerNotes.length > 0) && (
+            <div className="mt-6 border-t border-[color:var(--iris-border-soft)] pt-5">
+              <div className="mb-3 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                Beleške
+              </div>
+              <div className="space-y-3">
+                {order.internalNotes.map((note) => (
+                  <div key={note.id} className="border-l-2 border-foreground bg-background px-3.5 py-2.5 text-[12px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
+                    <div className="mb-1 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                      Interno
+                    </div>
+                    {note.body}
+                  </div>
+                ))}
+                {order.customerNotes.map((note) => (
+                  <div key={note.id} className="border-l-2 border-[color:var(--iris-accent)] bg-background px-3.5 py-2.5 text-[12px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
+                    <div className="mb-1 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                      Za klijenta
+                    </div>
+                    {note.body}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -330,16 +351,57 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-[color:var(--iris-border-soft)]">
-                <td className="py-3 text-foreground">
-                  {order.jobDescription}
-                </td>
-                <td className="tnum py-3 text-right font-medium text-foreground">
-                  {formatWorkOrderPrice(order.price)}
-                </td>
-              </tr>
+              {(order.invoiceDraft.lineItems.length > 0
+                ? order.invoiceDraft.lineItems
+                : [{ id: "legacy", description: order.jobDescription, quantity: 1, unitPrice: order.price ?? 0 }]
+              ).map((line) => (
+                <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
+                  <td className="py-3 text-foreground">
+                    {line.description}
+                  </td>
+                  <td className="tnum py-3 text-right font-medium text-foreground">
+                    {formatWorkOrderPrice(line.quantity * line.unitPrice)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+
+          <div className="mt-8 grid grid-cols-2 gap-6">
+            <InfoList
+              title="Materijal"
+              empty="Nema evidentiranog materijala."
+              rows={order.materialUsage.map((item) => [
+                item.name,
+                `${item.quantity} ${item.unit}`,
+              ])}
+            />
+            <InfoList
+              title="Vreme"
+              empty="Nema evidentiranog vremena."
+              rows={order.timeEntries.map((entry) => [
+                entry.operator,
+                `${entry.minutes} min`,
+              ])}
+            />
+            <InfoList
+              title="Prilozi"
+              empty="Nema priloga."
+              rows={order.attachments.map((attachment) => [
+                attachment.fileName,
+                attachment.url ? "otvori" : attachment.fileType,
+              ])}
+            />
+            <InfoList
+              title="Faktura"
+              empty="Nema nacrta fakture."
+              rows={[
+                ["Status", order.invoiceDraft.status],
+                ["Broj", order.invoiceDraft.invoiceNumber ?? "-"],
+                ["Plaćeno", order.invoiceDraft.paidAt ? formatWorkOrderDate(order.invoiceDraft.paidAt) : "-"],
+              ]}
+            />
+          </div>
 
           {order.price !== null && (
             <div className="mt-4 flex justify-end">
@@ -374,6 +436,36 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
         </div>
       </div>
     </>
+  );
+}
+
+function InfoList({
+  title,
+  empty,
+  rows,
+}: {
+  title: string;
+  empty: string;
+  rows: Array<[string, string]>;
+}): React.JSX.Element {
+  return (
+    <div>
+      <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+        {title}
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-[12px] text-[color:var(--iris-ink-mute)]">{empty}</div>
+      ) : (
+        <div className="space-y-1.5 text-[12px]">
+          {rows.map(([label, value]) => (
+            <div key={`${label}-${value}`} className="flex justify-between gap-4">
+              <span className="text-[color:var(--iris-ink-soft)]">{label}</span>
+              <span className="tnum text-foreground">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

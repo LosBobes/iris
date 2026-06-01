@@ -92,7 +92,10 @@ function WorkOrderCreatePage(): React.JSX.Element {
           </div>
         </div>
 
-        <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
+        <div
+          className="animate-iris-enter pl-10 pr-0"
+          style={{ animationDelay: "80ms" }}
+        >
           <WorkOrderForm
             initialValues={duplicateInitialValues}
             onSubmit={handleSubmit}

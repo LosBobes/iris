@@ -7,15 +7,28 @@ import { Button } from "@/components/ui/button";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import {
   canToggleWorkOrderCompletion,
+  getPrimaryWorkOrderTransition,
   getLocalIsoDate,
+  WORK_ORDER_STATUS_LABELS,
 } from "@/shared/utils/work-orders";
-import type { WorkOrder } from "@/types/work-order";
+import type {
+  Customer,
+  Location,
+  WorkOrder,
+  WorkOrderNote,
+} from "@/types/work-order";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
+
+function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
+  return notes.filter((note) => note.body.trim() !== "");
+}
 
 function WorkOrderEditPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,12 +69,23 @@ function WorkOrderEditPage(): React.JSX.Element {
     };
   }, [id]);
 
+  useEffect(() => {
+    void Promise.all([window.api.getCustomers(), window.api.getLocations()]).then(
+      ([nextCustomers, nextLocations]) => {
+        setCustomers(nextCustomers);
+        setLocations(nextLocations);
+      },
+    );
+  }, []);
+
   const handleSubmit = useCallback(
     async (values: WorkOrderFormValues) => {
       if (!id || !order) return;
 
       try {
         const updated = await window.api.updateWorkOrder(id, {
+          customerId: values.customerId,
+          locationId: values.locationId,
           clientName: values.clientName,
           contactPerson: values.contactPerson,
           jobDescription: values.jobDescription,
@@ -69,11 +93,19 @@ function WorkOrderEditPage(): React.JSX.Element {
           billingDocumentType: values.billingDocumentType,
           billingDocumentNumber: values.billingDocumentNumber,
           shipping: values.shipping,
+          assignment: values.assignment,
           executedBy: values.executedBy,
           issueDate: values.issueDate,
           dueDate: values.dueDate,
           price: values.price,
           note: values.note,
+          internalNotes: cleanNotes(values.internalNotes),
+          customerNotes: cleanNotes(values.customerNotes),
+          attachments: values.attachments,
+          materialUsage: values.materialUsage,
+          timeEntries: values.timeEntries,
+          invoiceDraft: values.invoiceDraft,
+          communication: values.communication,
         });
         if (!updated) {
           toast.error("Radni nalog nije pronađen.");
@@ -90,9 +122,10 @@ function WorkOrderEditPage(): React.JSX.Element {
 
   const handleToggleStatus = useCallback(async () => {
     if (!id || !order) return;
-    const isCompleting = order.status === "active";
-    const newStatus = isCompleting ? "completed" : "active";
+    const newStatus = getPrimaryWorkOrderTransition(order.status);
+    if (!newStatus) return;
     const now = getLocalIsoDate();
+    const isCompleting = newStatus === "completed" || newStatus === "invoiced";
 
     try {
       const updated = await window.api.updateWorkOrder(id, {
@@ -105,11 +138,7 @@ function WorkOrderEditPage(): React.JSX.Element {
         return;
       }
       setOrder(updated);
-      toast.success(
-        isCompleting
-          ? `Nalog ${updated.orderNumber} označen kao završen`
-          : `Nalog ${updated.orderNumber} označen kao aktivan`,
-      );
+      toast.success(`Nalog ${updated.orderNumber}: ${WORK_ORDER_STATUS_LABELS[newStatus]}`);
     } catch {
       toast.error("Greška pri promeni statusa");
     }
@@ -149,9 +178,7 @@ function WorkOrderEditPage(): React.JSX.Element {
                 size="sm"
                 onClick={handleToggleStatus}
               >
-                {order.status === "active"
-                  ? "Označi kao završeno"
-                  : "Označi kao aktivno"}
+                Pomeri u {WORK_ORDER_STATUS_LABELS[getPrimaryWorkOrderTransition(order.status)!]}
               </Button>
             )}
           </div>
@@ -181,6 +208,8 @@ function WorkOrderEditPage(): React.JSX.Element {
           <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
             <WorkOrderForm
               initialData={order}
+              customers={customers}
+              locations={locations}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
             />

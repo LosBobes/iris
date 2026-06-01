@@ -8,6 +8,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Pencil,
   Trash2,
   Copy,
@@ -26,10 +31,11 @@ import {
 } from "@/hooks/useWorkOrders";
 import {
   WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
   canToggleWorkOrderCompletion,
   formatWorkOrderDate,
   formatWorkOrderPrice,
+  getPrimaryWorkOrderTransition,
+  WORK_ORDER_STATUS_LABELS,
 } from "@/shared/utils/work-orders";
 
 interface ColDef {
@@ -44,11 +50,12 @@ const COLUMNS: ColDef[] = [
   { key: "orderNumber", label: "Br. naloga", field: "orderNumber", width: "110px" },
   { key: "clientName", label: "Klijent", field: "clientName", width: "140px" },
   { key: "jobDescription", label: "Opis posla", field: "jobDescription" },
+  { key: "assigned", label: "Operater", field: "assignment.assignedTo", width: "120px" },
+  { key: "priority", label: "Prioritet", field: "assignment.priority", width: "90px" },
   { key: "billing", label: "Tip dokumenta", field: "billingDocumentType", width: "130px" },
-  { key: "delivery", label: "Dostava", field: "shipping.deliveryMethod", width: "150px" },
+  { key: "schedule", label: "Plan", field: "assignment.scheduledDate", width: "110px" },
   { key: "price", label: "Cena", field: "price", width: "110px", align: "right" },
   { key: "status", label: "Status", field: "status", width: "110px" },
-  { key: "date", label: "Datum", field: "issueDate", width: "110px" },
   { key: "actions", label: "", width: "110px" },
 ];
 
@@ -68,6 +75,23 @@ interface WorkOrdersTableProps {
   onEdit: (order: WorkOrder) => void;
   onToggleStatus: (order: WorkOrder) => void;
   onOpen?: (order: WorkOrder) => void;
+}
+
+function ActionTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactElement;
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{children}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 function SortIcon({
@@ -114,8 +138,8 @@ export function WorkOrdersTable({
   }, []);
   const shouldStagger = isFirstPaintRef.current;
   return (
-    <div className="border border-border bg-card">
-      <table className="w-full border-collapse text-[12px]">
+    <div className="overflow-x-auto border border-border bg-card">
+      <table className="min-w-[1180px] w-full border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-border">
             {COLUMNS.map((col) => {
@@ -167,6 +191,10 @@ export function WorkOrdersTable({
         <tbody>
           {orders.map((order, idx) => {
             const canToggleStatus = canToggleWorkOrderCompletion(order.status);
+            const statusTransition = getPrimaryWorkOrderTransition(order.status);
+            const statusActionLabel = canToggleStatus
+              ? `Promeni u ${WORK_ORDER_STATUS_LABELS[statusTransition!]}`
+              : "Status ovog naloga se ne menja iz liste";
             // Cap stagger so a 100-row page doesn't take 3s to settle.
             const rowDelayMs = Math.min(idx, 12) * 22;
             return (
@@ -197,14 +225,22 @@ export function WorkOrdersTable({
                   {order.jobDescription}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
+                  {order.assignment.assignedTo ?? "Nedodeljeno"}
+                </td>
+                <td className="px-4 text-[color:var(--iris-ink-soft)]">
+                  {order.assignment.priority}
+                </td>
+                <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.billingDocumentType
                     ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
                     : "-"}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
-                  {order.shipping.deliveryMethod
-                    ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
-                    : "-"}
+                  {order.assignment.scheduledDate
+                    ? formatWorkOrderDate(order.assignment.scheduledDate)
+                    : order.dueDate
+                      ? formatWorkOrderDate(order.dueDate)
+                      : "-"}
                 </td>
                 <td
                   className={`tnum px-4 text-right ${
@@ -218,73 +254,64 @@ export function WorkOrdersTable({
                 <td className="px-4">
                   <IrisBadge status={order.status} />
                 </td>
-                <td className="tnum px-4 text-[color:var(--iris-ink-soft)]">
-                  {formatWorkOrderDate(order.issueDate)}
-                </td>
                 <td className="px-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2.5 text-[color:var(--iris-ink-mute)]">
-                    <button
-                      type="button"
-                      disabled={!canToggleStatus}
-                      title={
-                        canToggleStatus
-                          ? order.status === "completed"
-                            ? "Označi kao aktivan"
-                            : "Označi kao završen"
-                          : "Status ovog naloga se ne menja iz liste"
-                      }
-                      aria-label={
-                        canToggleStatus
-                          ? order.status === "completed"
-                            ? "Označi kao aktivan"
-                            : "Označi kao završen"
-                          : "Status ovog naloga se ne menja iz liste"
-                      }
-                      onClick={() => onToggleStatus(order)}
-                      className="iris-focusable iris-press relative grid size-3.5 place-items-center bg-transparent p-0 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <Check
-                        className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
-                          order.status === "completed"
-                            ? "scale-100 opacity-100"
-                            : "scale-50 opacity-0"
-                        }`}
-                      />
-                      <Circle
-                        className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
-                          order.status === "completed"
-                            ? "scale-50 opacity-0"
-                            : "scale-100 opacity-100"
-                        }`}
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      title="Izmeni"
-                      aria-label="Izmeni"
-                      onClick={() => onEdit(order)}
-                      className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Dupliraj"
-                      aria-label="Dupliraj"
-                      onClick={() => onDuplicate(order)}
-                      className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Obriši"
-                      aria-label="Obriši"
-                      onClick={() => onDelete(order)}
-                      className="iris-focusable iris-press bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <ActionTooltip label={statusActionLabel}>
+                      <button
+                        type="button"
+                        disabled={!canToggleStatus}
+                        aria-label={statusActionLabel}
+                        onClick={() => onToggleStatus(order)}
+                        className="iris-focusable iris-press relative grid size-3.5 place-items-center bg-transparent p-0 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Check
+                          className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
+                            order.status === "completed"
+                              || order.status === "invoiced"
+                              ? "scale-100 opacity-100"
+                              : "scale-50 opacity-0"
+                          }`}
+                        />
+                        <Circle
+                          className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
+                            order.status === "completed"
+                              || order.status === "invoiced"
+                              ? "scale-50 opacity-0"
+                              : "scale-100 opacity-100"
+                          }`}
+                        />
+                      </button>
+                    </ActionTooltip>
+                    <ActionTooltip label="Izmeni">
+                      <button
+                        type="button"
+                        aria-label="Izmeni"
+                        onClick={() => onEdit(order)}
+                        className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </ActionTooltip>
+                    <ActionTooltip label="Dupliraj">
+                      <button
+                        type="button"
+                        aria-label="Dupliraj"
+                        onClick={() => onDuplicate(order)}
+                        className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </ActionTooltip>
+                    <ActionTooltip label="Obriši">
+                      <button
+                        type="button"
+                        aria-label="Obriši"
+                        onClick={() => onDelete(order)}
+                        className="iris-focusable iris-press bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </ActionTooltip>
                   </div>
                 </td>
               </tr>

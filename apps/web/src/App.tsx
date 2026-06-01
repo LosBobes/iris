@@ -1,14 +1,18 @@
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, startTransition, useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Login } from "@/components/Login/Login";
-import DashboardPage from "@/pages/DashboardPage";
-import WorkOrderCreatePage from "@/pages/WorkOrderCreatePage";
-import WorkOrderDetailPage from "@/pages/WorkOrderDetailPage";
-import WorkOrderEditPage from "@/pages/WorkOrderEditPage";
-import WorkOrdersPage from "@/pages/WorkOrdersPage";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthContext } from "@/contexts/AuthContext";
+
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
+const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
+const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
+const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
+const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
+const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
 
 function AccessDenied(): React.JSX.Element {
   return (
@@ -34,6 +38,17 @@ function StartupLoadingScreen(): React.JSX.Element {
       <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
         <Loader2 className="h-5 w-5 animate-spin" />
         <span>Povezivanje sa backend servisom...</span>
+      </div>
+    </main>
+  );
+}
+
+function RouteLoadingScreen(): React.JSX.Element {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+      <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span>Učitavanje...</span>
       </div>
     </main>
   );
@@ -85,18 +100,23 @@ function App(): React.JSX.Element {
 
     try {
       const status = await window.api.getBackendStatus();
+      if (!status.ready) {
+        startTransition(() => {
+          setBootstrapState({
+            kind: "error",
+            message:
+              status.message ??
+              "Backend servis trenutno nije dostupan.",
+          });
+        });
+        return;
+      }
+
+      const session = await window.api.getCurrentSession();
 
       startTransition(() => {
-        setBootstrapState(
-          status.ready
-            ? { kind: "ready" }
-            : {
-                kind: "error",
-                message:
-                  status.message ??
-                  "Backend servis trenutno nije dostupan.",
-              },
-        );
+        setCurrentUser(session.success && session.user ? session.user : null);
+        setBootstrapState({ kind: "ready" });
       });
     } catch {
       startTransition(() => {
@@ -113,7 +133,9 @@ function App(): React.JSX.Element {
     void checkBackendStatus();
   }, [checkBackendStatus]);
 
-  const handleLogout = useCallback(() => setCurrentUser(null), []);
+  const handleLogout = useCallback(() => {
+    void window.api.logout().finally(() => setCurrentUser(null));
+  }, []);
 
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser) => setCurrentUser(user),
@@ -135,27 +157,38 @@ function App(): React.JSX.Element {
     );
   }
 
-  if (!currentUser) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  if (currentUser.role !== "admin") {
-    return <AccessDenied />;
-  }
-
   return (
-    <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-      <MemoryRouter>
+    <BrowserRouter>
+      <Suspense fallback={<RouteLoadingScreen />}>
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/work-orders" element={<WorkOrdersPage />} />
-          <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
-          <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
-          <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
+          <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
+          <Route
+            path="*"
+            element={
+              !currentUser ? (
+                <Login onLoginSuccess={handleLoginSuccess} />
+              ) : currentUser.role !== "admin" ? (
+                <AccessDenied />
+              ) : (
+                <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
+                  <TooltipProvider>
+                    <Routes>
+                      <Route path="/" element={<DashboardPage />} />
+                      <Route path="/customers" element={<CustomersPage />} />
+                      <Route path="/work-orders" element={<WorkOrdersPage />} />
+                      <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
+                      <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
+                      <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
+                    </Routes>
+                    <Toaster />
+                  </TooltipProvider>
+                </AuthContext.Provider>
+              )
+            }
+          />
         </Routes>
-      </MemoryRouter>
-      <Toaster />
-    </AuthContext.Provider>
+      </Suspense>
+    </BrowserRouter>
   );
 }
 

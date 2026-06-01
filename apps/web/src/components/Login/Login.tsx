@@ -90,7 +90,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
       const details =
         err instanceof Error && err.message ? ` (${err.message})` : "";
       setError(
-        `Greška u komunikaciji sa glavnim procesom aplikacije.${details}`,
+        `Greška u komunikaciji sa backend servisom.${details}`,
       );
       setErrorKey((k) => k + 1);
     } finally {
@@ -101,7 +101,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   function handleForgottenPassword(): void {
     setError(null);
     setNotice(
-      "Za reset lozinke obratite se administratoru sistema. Reset lozinke trenutno nije povezan sa backend API-jem.",
+      "Za reset lozinke obratite se administratoru sistema.",
     );
   }
 

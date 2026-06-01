@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -12,7 +13,7 @@ import (
 func TestFixtureStoreUsers(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
-	users, err := store.Users()
+	users, err := store.Users(context.Background())
 	if err != nil {
 		t.Fatalf("Users() returned error: %v", err)
 	}
@@ -29,7 +30,7 @@ func TestFixtureStoreUsers(t *testing.T) {
 func TestFixtureStoreOperatorsSortedUnique(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
-	operators, err := store.Operators()
+	operators, err := store.Operators(context.Background())
 	if err != nil {
 		t.Fatalf("Operators() returned error: %v", err)
 	}
@@ -46,10 +47,33 @@ func TestFixtureStoreOperatorsSortedUnique(t *testing.T) {
 	}
 }
 
+func TestFixtureStoreCustomersAndLocations(t *testing.T) {
+	store := NewFixtureStore(testutil.FixtureDir(t))
+
+	customers, err := store.Customers(context.Background())
+	if err != nil {
+		t.Fatalf("Customers() returned error: %v", err)
+	}
+	if len(customers) == 0 {
+		t.Fatal("Customers() length = 0, want fixture-backed customers")
+	}
+
+	locations, err := store.Locations(context.Background())
+	if err != nil {
+		t.Fatalf("Locations() returned error: %v", err)
+	}
+	if len(locations) == 0 {
+		t.Fatal("Locations() length = 0, want fixture-backed locations")
+	}
+	if locations[0].CustomerID == "" {
+		t.Fatalf("Locations()[0] = %#v, want customer linkage", locations[0])
+	}
+}
+
 func TestFixtureStoreWorkOrderByID(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
-	workOrder, err := store.WorkOrderByID("1")
+	workOrder, err := store.WorkOrderByID(context.Background(), "1")
 	if err != nil {
 		t.Fatalf("WorkOrderByID() returned error: %v", err)
 	}
@@ -60,7 +84,7 @@ func TestFixtureStoreWorkOrderByID(t *testing.T) {
 		t.Fatalf("OrderNumber = %q, want %q", workOrder.OrderNumber, "RN-2024-0001")
 	}
 
-	missing, err := store.WorkOrderByID("missing")
+	missing, err := store.WorkOrderByID(context.Background(), "missing")
 	if err != nil {
 		t.Fatalf("WorkOrderByID(missing) returned error: %v", err)
 	}
@@ -69,10 +93,41 @@ func TestFixtureStoreWorkOrderByID(t *testing.T) {
 	}
 }
 
+func TestFixtureStoreNormalizesCollectionFields(t *testing.T) {
+	store := NewFixtureStore(testutil.FixtureDir(t))
+
+	workOrder, err := store.WorkOrderByID(context.Background(), "13")
+	if err != nil {
+		t.Fatalf("WorkOrderByID() returned error: %v", err)
+	}
+	if workOrder == nil {
+		t.Fatal("WorkOrderByID() = nil, want non-nil")
+	}
+
+	if workOrder.InternalNotes == nil {
+		t.Fatal("InternalNotes = nil, want empty slice")
+	}
+	if workOrder.CustomerNotes == nil {
+		t.Fatal("CustomerNotes = nil, want empty slice")
+	}
+	if workOrder.Attachments == nil {
+		t.Fatal("Attachments = nil, want empty slice")
+	}
+	if workOrder.MaterialUsage == nil {
+		t.Fatal("MaterialUsage = nil, want empty slice")
+	}
+	if workOrder.TimeEntries == nil {
+		t.Fatal("TimeEntries = nil, want empty slice")
+	}
+	if workOrder.InvoiceDraft.LineItems == nil {
+		t.Fatal("InvoiceDraft.LineItems = nil, want empty slice")
+	}
+}
+
 func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
-	created, err := store.CreateWorkOrder(domain.CreateWorkOrderInput{
+	created, err := store.CreateWorkOrder(context.Background(), domain.CreateWorkOrderInput{
 		ClientName:     "Novi klijent",
 		ContactPerson:  nil,
 		JobDescription: "Štampa brošure",
@@ -98,17 +153,21 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 	if created == nil {
 		t.Fatal("CreateWorkOrder() = nil, want non-nil")
 	}
-	if created.Status != domain.WorkOrderStatusActive {
-		t.Fatalf("Status = %q, want %q", created.Status, domain.WorkOrderStatusActive)
+	if created.Status != domain.WorkOrderStatusNew {
+		t.Fatalf("Status = %q, want %q", created.Status, domain.WorkOrderStatusNew)
+	}
+	if created.Assignment.Priority != domain.WorkOrderPriorityNormal {
+		t.Fatalf("Assignment.Priority = %q, want normal", created.Assignment.Priority)
+	}
+	if created.Communication.PublicToken == "" {
+		t.Fatal("Communication.PublicToken = empty, want generated public token")
 	}
 	if !strings.HasPrefix(created.OrderNumber, "RN-") {
 		t.Fatalf("OrderNumber = %q, want RN- prefix", created.OrderNumber)
 	}
 
-	updated, err := store.UpdateWorkOrder(created.ID, domain.UpdateWorkOrderInput{
-		"status":         json.RawMessage(`"completed"`),
-		"isCompleted":    json.RawMessage(`true`),
-		"completionDate": json.RawMessage(`"2026-04-26"`),
+	updated, err := store.UpdateWorkOrder(context.Background(), created.ID, domain.UpdateWorkOrderInput{
+		"status": json.RawMessage(`"assigned"`),
 	})
 	if err != nil {
 		t.Fatalf("UpdateWorkOrder() returned error: %v", err)
@@ -116,11 +175,11 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 	if updated == nil {
 		t.Fatal("UpdateWorkOrder() = nil, want non-nil")
 	}
-	if updated.Status != domain.WorkOrderStatusCompleted || !updated.IsCompleted {
-		t.Fatalf("updated = %#v, want completed work order", updated)
+	if updated.Status != domain.WorkOrderStatusAssigned || updated.IsCompleted {
+		t.Fatalf("updated = %#v, want assigned work order", updated)
 	}
 
-	deleted, err := store.DeleteWorkOrder(created.ID)
+	deleted, err := store.DeleteWorkOrder(context.Background(), created.ID)
 	if err != nil {
 		t.Fatalf("DeleteWorkOrder() returned error: %v", err)
 	}
@@ -128,7 +187,7 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 		t.Fatalf("DeleteWorkOrder().Success = %v, want true", deleted.Success)
 	}
 
-	afterDelete, err := store.WorkOrderByID(created.ID)
+	afterDelete, err := store.WorkOrderByID(context.Background(), created.ID)
 	if err != nil {
 		t.Fatalf("WorkOrderByID(after delete) returned error: %v", err)
 	}
@@ -136,7 +195,7 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 		t.Fatalf("WorkOrderByID(after delete) = %#v, want nil", afterDelete)
 	}
 
-	missingDelete, err := store.DeleteWorkOrder("missing")
+	missingDelete, err := store.DeleteWorkOrder(context.Background(), "missing")
 	if err != nil {
 		t.Fatalf("DeleteWorkOrder(missing) returned error: %v", err)
 	}
@@ -148,10 +207,27 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 	}
 }
 
+func TestFixtureStoreRejectsInvalidStatusTransition(t *testing.T) {
+	store := NewFixtureStore(testutil.FixtureDir(t))
+
+	updated, err := store.UpdateWorkOrder(context.Background(), "3", domain.UpdateWorkOrderInput{
+		"status": json.RawMessage(`"invoiced"`),
+	})
+	if err == nil {
+		t.Fatal("UpdateWorkOrder() error = nil, want invalid transition error")
+	}
+	if updated != nil {
+		t.Fatalf("UpdateWorkOrder() = %#v, want nil on invalid transition", updated)
+	}
+	if err.Error() != "Promena statusa nije dozvoljena." {
+		t.Fatalf("error = %q, want invalid transition message", err.Error())
+	}
+}
+
 func TestFixtureStoreRejectsInvalidUpdateField(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
-	updated, err := store.UpdateWorkOrder("1", domain.UpdateWorkOrderInput{
+	updated, err := store.UpdateWorkOrder(context.Background(), "1", domain.UpdateWorkOrderInput{
 		"unknownField": json.RawMessage(`true`),
 	})
 	if err == nil {
@@ -166,7 +242,7 @@ func TestFixtureStoreMissingFile(t *testing.T) {
 	tempDir := t.TempDir()
 	store := NewFixtureStore(tempDir)
 
-	_, err := store.Users()
+	_, err := store.Users(context.Background())
 	if err == nil {
 		t.Fatal("Users() error = nil, want non-nil for missing file")
 	}

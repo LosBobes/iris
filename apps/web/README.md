@@ -1,23 +1,46 @@
 # Iris Web
 
-Browser version of the Iris admin UI.
+Browser client for Iris operations, dashboard reporting, customer management,
+work-order handling, and public tracking.
 
-This app intentionally mirrors the Electron renderer in `apps/desktop/src/renderer/src`.
-The React pages, layout, UI primitives, dashboard widgets, work-order table, and
-work-order form were copied so the browser surface matches the desktop app.
+## Runtime Modes
 
-## Local Development
+`src/lib/web-api.ts` installs the same `window.api` shape used by the Electron
+renderer.
+
+- `VITE_IRIS_API_MODE=http`: calls `iris-api` through `src/lib/api-client.ts`.
+- `VITE_IRIS_API_MODE=fixtures`: runs against a stateful in-browser fixture
+  adapter seeded from `src/fixtures`.
+
+Default development configuration lives in `.env.development`.
+
+Production web builds read Vite environment variables at build time. Use a
+server-local `apps/web/.env.production` or shell variables for production, and
+do not commit files that contain real hostnames or secrets.
+
+Same-origin production example:
+
+```bash
+VITE_IRIS_API_MODE=http
+VITE_IRIS_API_BASE_URL=https://iris.example.com
+```
+
+Split-origin production example:
+
+```bash
+VITE_IRIS_API_MODE=http
+VITE_IRIS_API_BASE_URL=https://api.example.com
+```
+
+## Local Commands
 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
-The dev server runs through Vite. During local development the browser app uses
-`src/lib/web-api.ts`, which exposes the same `window.api` shape as the Electron
-preload bridge and serves data from `src/fixtures`.
-
-Seeded login:
+Seeded demo login:
 
 - username: `admin`
 - password: `admin123`
@@ -27,4 +50,5 @@ Seeded login:
 ```bash
 npm run lint
 npm run build
+npm test
 ```

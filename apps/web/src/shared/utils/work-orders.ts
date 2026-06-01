@@ -20,20 +20,69 @@ export const WORK_ORDER_BILLING_LABELS: Record<BillingDocumentType, string> = {
 };
 
 export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
-  draft: "Nacrt",
-  active: "Aktivan",
+  new: "Nov",
+  assigned: "Dodeljen",
+  inProgress: "U toku",
+  waitingForCustomer: "Čeka klijenta",
+  waitingForMaterials: "Čeka materijal",
   completed: "Završen",
   cancelled: "Otkazan",
+  invoiced: "Fakturisan",
 };
 
 export const WORK_ORDER_STATUS_VARIANTS: Record<
   WorkOrderStatus,
   "default" | "secondary" | "destructive" | "outline"
 > = {
-  draft: "outline",
-  active: "default",
+  new: "outline",
+  assigned: "default",
+  inProgress: "default",
+  waitingForCustomer: "outline",
+  waitingForMaterials: "outline",
   completed: "secondary",
   cancelled: "destructive",
+  invoiced: "secondary",
+};
+
+export const WORK_ORDER_STATUS_ORDER: WorkOrderStatus[] = [
+  "new",
+  "assigned",
+  "inProgress",
+  "waitingForCustomer",
+  "waitingForMaterials",
+  "completed",
+  "invoiced",
+  "cancelled",
+];
+
+export const WORK_ORDER_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
+  new: ["assigned", "cancelled"],
+  assigned: ["inProgress", "waitingForMaterials", "cancelled"],
+  inProgress: [
+    "waitingForCustomer",
+    "waitingForMaterials",
+    "completed",
+    "cancelled",
+  ],
+  waitingForCustomer: ["inProgress", "cancelled"],
+  waitingForMaterials: ["inProgress", "cancelled"],
+  completed: ["invoiced"],
+  invoiced: [],
+  cancelled: [],
+};
+
+export const WORK_ORDER_PRIMARY_TRANSITION: Record<
+  WorkOrderStatus,
+  WorkOrderStatus | null
+> = {
+  new: "assigned",
+  assigned: "inProgress",
+  inProgress: "completed",
+  waitingForCustomer: "inProgress",
+  waitingForMaterials: "inProgress",
+  completed: "invoiced",
+  invoiced: null,
+  cancelled: null,
 };
 
 export function getLocalIsoDate(date = new Date()): string {
@@ -42,7 +91,23 @@ export function getLocalIsoDate(date = new Date()): string {
 }
 
 export function canToggleWorkOrderCompletion(status: WorkOrderStatus): boolean {
-  return status === "active" || status === "completed";
+  return getPrimaryWorkOrderTransition(status) !== null;
+}
+
+export function getAllowedWorkOrderTransitions(
+  status: WorkOrderStatus,
+): WorkOrderStatus[] {
+  return WORK_ORDER_TRANSITIONS[status];
+}
+
+export function getPrimaryWorkOrderTransition(
+  status: WorkOrderStatus,
+): WorkOrderStatus | null {
+  return WORK_ORDER_PRIMARY_TRANSITION[status];
+}
+
+export function isWorkOrderStatusTerminal(status: WorkOrderStatus): boolean {
+  return WORK_ORDER_TRANSITIONS[status].length === 0;
 }
 
 export function formatWorkOrderDateTime(iso: string): string {

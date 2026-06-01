@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getMockMonthlyRevenue } from '@/components/dashboard/charts/mockMonthlyData'
 import type { DashboardFilters, WorkOrder } from '@/types/work-order'
 import {
   deliveryDistribution,
@@ -8,6 +7,7 @@ import {
   monthlyBuckets,
   topClients
 } from '@/lib/dashboard/aggregations'
+import { getLocalIsoDate } from '@/shared/utils/work-orders'
 
 const DEFAULT_FILTERS: DashboardFilters = {
   dateFrom: null,
@@ -25,7 +25,7 @@ export function useDashboardData() {
   useEffect(() => {
     Promise.all([window.api.getWorkOrders(), window.api.getWorkOrderOperators()])
       .then(([orders, ops]) => {
-        setAllOrders(orders)
+        setAllOrders(orders.items)
         setOperators(ops)
       })
       .catch((err: unknown) => {
@@ -51,15 +51,26 @@ export function useDashboardData() {
   )
 
   const monthlyRevenue = useMemo(() => {
-    const revenueSeries = buckets.map(({ month, revenue }) => ({ month, revenue }))
-    return revenueSeries.some(({ revenue }) => revenue > 0)
-      ? revenueSeries
-      : getMockMonthlyRevenue()
+    return buckets.map(({ month, revenue }) => ({ month, revenue }))
   }, [buckets])
 
   const deliveryDist = useMemo(() => deliveryDistribution(filtered), [filtered])
 
   const topClientsList = useMemo(() => topClients(filtered), [filtered])
+
+  const queueSummary = useMemo(() => {
+    const today = getLocalIsoDate()
+    return {
+      today: allOrders.filter((order) => (order.dueDate ?? order.assignment.scheduledDate) === today).length,
+      overdue: allOrders.filter((order) => {
+        const dueDate = order.dueDate ?? order.assignment.scheduledDate
+        return Boolean(dueDate && dueDate < today && !order.isCompleted)
+      }).length,
+      waitingForCustomer: allOrders.filter((order) => order.status === 'waitingForCustomer').length,
+      waitingForMaterials: allOrders.filter((order) => order.status === 'waitingForMaterials').length,
+      unassigned: allOrders.filter((order) => !order.assignment.assignedTo).length,
+    }
+  }, [allOrders])
 
   return {
     summary,
@@ -67,6 +78,7 @@ export function useDashboardData() {
     monthlyRevenue,
     deliveryDistribution: deliveryDist,
     topClients: topClientsList,
+    queueSummary,
     operators,
     filters,
     setFilters,

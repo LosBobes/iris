@@ -2,10 +2,14 @@ import type { WorkOrderStatus } from "@/types/work-order";
 import { WORK_ORDER_STATUS_LABELS } from "@/shared/utils/work-orders";
 
 const STATUS_CSS_VAR: Record<WorkOrderStatus, string> = {
+  new: "var(--iris-status-draft)",
+  assigned: "var(--iris-status-active)",
+  inProgress: "var(--iris-status-active)",
+  waitingForCustomer: "var(--iris-accent)",
+  waitingForMaterials: "var(--iris-accent)",
   completed: "var(--iris-status-done)",
-  active: "var(--iris-status-active)",
-  draft: "var(--iris-status-draft)",
   cancelled: "var(--iris-status-cancelled)",
+  invoiced: "var(--iris-status-done)",
 };
 
 interface IrisBadgeProps {

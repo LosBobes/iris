@@ -3,8 +3,6 @@ import { AppShell } from '@/components/layout/AppShell'
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { DashboardSummaryCards } from '@/components/dashboard/DashboardSummaryCards'
-import { RevenuePerMonthChart } from '@/components/dashboard/charts/RevenuePerMonthChart'
-import { WorkOrdersPerMonthChart } from '@/components/dashboard/charts/WorkOrdersPerMonthChart'
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
@@ -14,6 +12,7 @@ function DashboardPage(): React.JSX.Element {
     monthlyRevenue,
     deliveryDistribution,
     topClients,
+    queueSummary,
     operators,
     filters,
     setFilters,
@@ -25,7 +24,6 @@ function DashboardPage(): React.JSX.Element {
   const isFilteredEmpty = !loading && !error && hasSourceData && summary.totalOrders === 0
   const isGlobalEmpty = !loading && !error && !hasSourceData
   const showWidgets = !loading && !error && summary.totalOrders > 0
-  const showMockMonthlyCharts = !loading && !error && !hasSourceData
 
   return (
     <AppShell>
@@ -78,21 +76,6 @@ function DashboardPage(): React.JSX.Element {
           </div>
         )}
 
-        {showMockMonthlyCharts && (
-          <div
-            className="animate-iris-enter space-y-4 px-8"
-            style={{ animationDelay: "120ms" }}
-          >
-            <p className="text-sm text-muted-foreground">
-              Prikazan je demo pregled mesečnih trendova dok podaci ne budu dostupni.
-            </p>
-            <div className="grid grid-cols-2 gap-5">
-              <WorkOrdersPerMonthChart monthlyOrders={[]} />
-              <RevenuePerMonthChart monthlyRevenue={[]} />
-            </div>
-          </div>
-        )}
-
         {isFilteredEmpty && (
           <div className="px-8">
             <div className="animate-iris-fade py-20 text-center">
@@ -105,6 +88,13 @@ function DashboardPage(): React.JSX.Element {
 
         {showWidgets && (
           <div className="space-y-8 px-8">
+            <div className="grid gap-3 md:grid-cols-5">
+              <QueueMetric label="Danas" value={queueSummary.today} />
+              <QueueMetric label="Kasni" value={queueSummary.overdue} />
+              <QueueMetric label="Čeka klijenta" value={queueSummary.waitingForCustomer} />
+              <QueueMetric label="Čeka materijal" value={queueSummary.waitingForMaterials} />
+              <QueueMetric label="Nedodeljeni" value={queueSummary.unassigned} />
+            </div>
             <DashboardSummaryCards summary={summary} />
             <div className="animate-iris-enter" style={{ animationDelay: "320ms" }}>
               <DashboardCharts
@@ -119,6 +109,23 @@ function DashboardPage(): React.JSX.Element {
         )}
       </div>
     </AppShell>
+  )
+}
+
+function QueueMetric({
+  label,
+  value,
+}: {
+  label: string
+  value: number
+}): React.JSX.Element {
+  return (
+    <div className="border border-border bg-card px-4 py-3">
+      <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+        {label}
+      </div>
+      <div className="tnum mt-1 text-[24px] font-normal text-foreground">{value}</div>
+    </div>
   )
 }
 

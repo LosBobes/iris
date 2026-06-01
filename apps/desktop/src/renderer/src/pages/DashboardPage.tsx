@@ -3,6 +3,10 @@ import { AppShell } from '@/components/layout/AppShell'
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
 import { DashboardSummaryCards } from '@/components/dashboard/DashboardSummaryCards'
+import {
+  getMockMonthlyOrders,
+  getMockMonthlyRevenue,
+} from '@/components/dashboard/charts/mockMonthlyData'
 import { RevenuePerMonthChart } from '@/components/dashboard/charts/RevenuePerMonthChart'
 import { WorkOrdersPerMonthChart } from '@/components/dashboard/charts/WorkOrdersPerMonthChart'
 import { useDashboardData } from '@/hooks/useDashboardData'
@@ -87,8 +91,8 @@ function DashboardPage(): React.JSX.Element {
               Prikazan je demo pregled mesečnih trendova dok podaci ne budu dostupni.
             </p>
             <div className="grid grid-cols-2 gap-5">
-              <WorkOrdersPerMonthChart monthlyOrders={[]} />
-              <RevenuePerMonthChart monthlyRevenue={[]} />
+              <WorkOrdersPerMonthChart monthlyOrders={getMockMonthlyOrders()} />
+              <RevenuePerMonthChart monthlyRevenue={getMockMonthlyRevenue()} />
             </div>
           </div>
         )}

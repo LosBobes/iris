@@ -1,117 +1,139 @@
-# Contributing
+# Contributing to Iris
 
-This repository currently contains Iris, a desktop application for Stamparija Cobanovic.
-The active code lives in `apps/desktop/`.
+Iris is a monorepo for Stamparija Cobanovic operations. Keep changes narrow,
+verify the affected runtime, and keep domain contracts aligned across clients,
+API, fixtures, and documentation.
 
-Use this guide together with:
+Related references:
 
-- `docs/ARCHITECTURE.md`
-- `docs/DOMAIN_GLOSSARY.md`
-- `docs/DECISIONS.md`
+- [Project Context](PROJECT_CONTEXT.md)
+- [Architecture](ARCHITECTURE.md)
+- [Domain Glossary](DOMAIN_GLOSSARY.md)
+- [Decisions](DECISIONS.md)
 
-## Current Scope
+## Repository Scope
 
-- The working application in this checkout is `apps/desktop`.
-- The root `README.md` mentions an `iris-api` module, but that directory is not present in the current repository state.
-- Unless a task explicitly says otherwise, run project commands from `apps/desktop/`.
+- `apps/desktop/`: Electron desktop app for local shop operations.
+- `apps/web/`: React web app for browser operations, dashboards, customer
+  management, and public tracking.
+- `iris-api/`: Go HTTP API, authentication, SQLite persistence, fixtures, and
+  operational CLI.
+- `docs/`: project-level architecture, decisions, glossary, and workflow policy.
 
 ## Prerequisites
 
-- Node.js and npm
-- A desktop environment capable of running Electron during local development
+- Node.js 18+ and npm for frontend work.
+- Go 1.25+ for backend work.
+- Desktop environment capable of running Electron for desktop-client work.
 
-## Setup
+## Local Runtime Commands
+
+Backend API:
+
+```bash
+cd iris-api
+IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl migrate
+IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
+IRIS_DB_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+```
+
+Web client:
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Desktop client:
 
 ```bash
 cd apps/desktop
 npm install
+npm run dev
 ```
 
-## Common Commands
+## Verification Commands
+
+Backend:
 
 ```bash
-npm run dev
+cd iris-api
+go test ./...
+```
+
+Web:
+
+```bash
+cd apps/web
+npm run lint
+npm run build
+npm test
+```
+
+Desktop:
+
+```bash
+cd apps/desktop
 npm run lint
 npm run typecheck
-npm run test
-npm run build
+npm test
 ```
 
-Useful one-off test command:
+Use the smallest verification set that proves the change, then broaden it when
+runtime boundaries, shared domain types, auth, persistence, or public APIs are
+affected.
 
-```bash
-npx vitest run src/renderer/src/lib/dashboard/aggregations.test.ts
-```
+## Development Rules
 
-## Development Workflow
+Domain model changes must update all relevant layers:
 
-1. Start from a focused branch.
-2. Keep changes narrow and reviewable.
-3. Follow the existing Electron split:
-   - `src/main/` for main-process logic
-   - `src/preload/` for the typed bridge
-   - `src/renderer/src/` for React UI
-4. If you add a new IPC method, update all three layers:
-   - main handler
-   - preload runtime bridge
-   - preload TypeScript declarations
-5. Run `npm run lint`, `npm run typecheck`, and `npm run test` before handing work off.
-6. Update docs when behavior, architecture, or terminology changes.
+- `iris-api/openapi.yaml`
+- `iris-api/internal/domain/types.go`
+- `apps/web/src/types/work-order.ts`
+- `apps/desktop/model/work-order.ts`
+- fixtures and tests for affected payloads
 
-## Code Organization Rules
+Desktop IPC changes must update:
 
-- Organize by feature, not by file type.
-- Keep shared domain models in `apps/desktop/model/`.
-- Keep renderer-specific types in `apps/desktop/src/renderer/src/types/` when the UI needs a richer shape.
-- Keep hooks that call `window.api` in `apps/desktop/src/renderer/src/hooks/`.
-- Register new IPC handlers in `apps/desktop/src/main/index.ts`.
-- Keep `apps/desktop/src/preload/index.ts` and `apps/desktop/src/preload/index.d.ts` in sync.
-- Use the `@` alias for renderer imports. It resolves to `apps/desktop/src/renderer/src/`.
+- `apps/desktop/src/main/index.ts`
+- the relevant main-process handler
+- `apps/desktop/src/preload/index.ts`
+- `apps/desktop/src/preload/index.d.ts`
 
-## UI And Language Conventions
-
-- Visible UI text should be Serbian, in Latin script.
-- Code identifiers, filenames, and comments should stay in English.
-- Tailwind is v4. Use the existing Tailwind setup instead of older v3 patterns.
-- Reuse existing UI primitives and utilities before adding new ones.
-
-## Data And Environment Expectations
-
-- Authentication and work-order data are currently loaded from JSON fixtures in `apps/desktop/fixtures/`.
-- Treat fixture-backed auth and data access as temporary implementation choices, not final production architecture.
-- If you change work-order fields, update both:
-  - `apps/desktop/model/work-order.ts`
-  - `apps/desktop/src/renderer/src/types/work-order.ts`
-
-## Testing Expectations
-
-- Renderer tests run in jsdom with Vitest.
-- Stub preload APIs in tests with `vi.stubGlobal('api', ...)`.
-- Prefer colocated test files near the code they validate.
-- Add or update regression tests when changing filtering, aggregation, auth flow, or dashboard rendering behavior.
+Visible UI text must stay in Serbian Latin (`sr-Latn`). Code identifiers,
+database columns, API JSON fields, and developer comments stay in English. Use
+[DOMAIN_GLOSSARY.md](DOMAIN_GLOSSARY.md) for terminology.
 
 ## Pull Requests And Commits
 
-- Keep PRs scoped to one feature slice when possible.
-- Explain why the change exists, not just what changed.
-- Commit messages should follow the repository's Lore-style structure:
-  - intent-first subject
-  - optional explanatory body
-  - useful trailers such as `Constraint:`, `Rejected:`, `Confidence:`, `Scope-risk:`, `Directive:`, `Tested:`, and `Not-tested:`
-- Call out any temporary behavior, follow-up work, or known gaps in the PR description.
+Keep commits and pull requests focused on one logical slice.
 
-## When To Update Docs
+Commit messages follow the repository Lore protocol:
 
-Update docs in the same change when you:
+```text
+<intent-first subject>
 
-- add or rename IPC channels
-- change domain types or glossary terms
-- change developer workflow or required commands
-- introduce or retire an architectural boundary
-- replace fixture data with a persistent or remote data source
+<context and rationale>
 
-## Security Notes For Contributors
+Constraint: <external constraint>
+Rejected: <alternative> | <reason>
+Confidence: <low|medium|high>
+Scope-risk: <narrow|moderate|broad>
+Tested: <verification>
+Not-tested: <known gap>
+```
 
-- Do not treat the renderer role gate as a strong security boundary.
-- Be careful when changing preload exposure; anything added there becomes reachable from renderer code.
-- If you change auth, data loading, or Electron window security settings, review `apps/desktop/desktop-threat-model.md`.
+Useful trailers are preferred over filler trailers. Always include honest
+verification coverage and known gaps.
+
+## Documentation Updates
+
+Update docs in the same change when modifying:
+
+- backend API routes or desktop IPC channels
+- runtime data flow or persistence boundaries
+- domain models, statuses, or print-shop vocabulary
+- roadmap items that have become active service behavior
+
+*Last verified against the checked-in repository state on 2026-05-31.*

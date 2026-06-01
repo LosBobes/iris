@@ -1,9 +1,14 @@
 /// <reference types="vite/client" />
 
 import type {
+  Customer,
   CreateWorkOrderInput,
+  Location,
+  PublicWorkOrderStatus,
   UpdateWorkOrderInput,
   WorkOrder,
+  WorkOrderListQuery,
+  WorkOrderListResult,
 } from '@/types/work-order'
 
 declare global {
@@ -37,7 +42,15 @@ declare global {
         username: string
         password: string
       }) => Promise<LoginResponse>
-      getWorkOrders: () => Promise<WorkOrder[]>
+      getCurrentSession: () => Promise<LoginResponse>
+      logout: () => Promise<void>
+      getCustomers: () => Promise<Customer[]>
+      upsertCustomer: (customer: Customer) => Promise<Customer>
+      deleteCustomer: (id: string) => Promise<{ success: boolean }>
+      getLocations: () => Promise<Location[]>
+      upsertLocation: (location: Location) => Promise<Location>
+      deleteLocation: (id: string) => Promise<{ success: boolean }>
+      getWorkOrders: (query?: WorkOrderListQuery) => Promise<WorkOrderListResult>
       getWorkOrderOperators: () => Promise<string[]>
       getWorkOrderById: (id: string) => Promise<WorkOrder | null>
       createWorkOrder: (input: CreateWorkOrderInput) => Promise<WorkOrder>
@@ -46,6 +59,9 @@ declare global {
         changes: UpdateWorkOrderInput,
       ) => Promise<WorkOrder | null>
       deleteWorkOrder: (id: string) => Promise<DeleteWorkOrderResponse>
+      getPublicWorkOrderStatus: (token: string) => Promise<PublicWorkOrderStatus | null>
+      getPublicTrackingUrl: (token: string) => string
+      getWorkOrderReportUrl: (id: string) => string
     }
   }
 }

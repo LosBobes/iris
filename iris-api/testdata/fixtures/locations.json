@@ -1,0 +1,32 @@
+[
+  {
+    "id": "loc-1",
+    "customerId": "cust-1",
+    "name": "Centrala",
+    "address": "Bulevar oslobodjenja 10, Beograd"
+  },
+  {
+    "id": "loc-2",
+    "customerId": "cust-2",
+    "name": "Magacin",
+    "address": "Industrijska 4, Novi Sad"
+  },
+  {
+    "id": "loc-3",
+    "customerId": "cust-3",
+    "name": "Studio",
+    "address": "Kneza Milosa 22, Beograd"
+  },
+  {
+    "id": "loc-4",
+    "customerId": "cust-4",
+    "name": "Agencija",
+    "address": "Kralja Petra 8, Nis"
+  },
+  {
+    "id": "loc-5",
+    "customerId": "cust-5",
+    "name": "Servis",
+    "address": "Zanatska 12, Kragujevac"
+  }
+]

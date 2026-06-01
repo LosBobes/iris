@@ -39,11 +39,18 @@ interface DashboardSummaryCardsProps {
 export function DashboardSummaryCards({
   summary,
 }: DashboardSummaryCardsProps): React.JSX.Element {
+  const openOrders =
+    summary.statusCounts.new +
+    summary.statusCounts.assigned +
+    summary.statusCounts.inProgress +
+    summary.statusCounts.waitingForCustomer +
+    summary.statusCounts.waitingForMaterials
+
   return (
     <div className="flex border border-border bg-card">
       <SummaryCell label="Ukupno naloga" value={summary.totalOrders} delayMs={120} />
       <SummaryCell label="Završeni" value={summary.statusCounts.completed} delayMs={180} />
-      <SummaryCell label="Aktivni" value={summary.statusCounts.active} delayMs={240} />
+      <SummaryCell label="Otvoreni" value={openOrders} delayMs={240} />
       <SummaryCell
         label="Ukupan prihod"
         value={formatRsd(summary.totalRevenue)}

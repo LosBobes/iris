@@ -1,0 +1,37 @@
+[
+  {
+    "id": "cust-1",
+    "name": "Firma Doo",
+    "contactName": "Milan Petrovic",
+    "email": "kontakt@firma.test",
+    "phone": "+381 11 100 100"
+  },
+  {
+    "id": "cust-2",
+    "name": "Kompanija AB",
+    "contactName": "Ana Jovanovic",
+    "email": "office@kompanija.test",
+    "phone": "+381 11 200 200"
+  },
+  {
+    "id": "cust-3",
+    "name": "Studio XYZ",
+    "contactName": "Jelena Markovic",
+    "email": "studio@xyz.test",
+    "phone": "+381 11 300 300"
+  },
+  {
+    "id": "cust-4",
+    "name": "Agencija Pro",
+    "contactName": "Nikola Savic",
+    "email": "produkcija@agencijapro.test",
+    "phone": "+381 11 400 400"
+  },
+  {
+    "id": "cust-5",
+    "name": "TehnoServis",
+    "contactName": "Ivan Ilic",
+    "email": "servis@tehnoservis.test",
+    "phone": "+381 11 500 500"
+  }
+]

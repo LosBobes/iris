@@ -1,15 +1,17 @@
 openapi: 3.1.0
 info:
-  title: Iris Desktop Support API
-  version: 0.2.0
+  title: Iris Operations API
+  version: 0.3.0
   description: |
-    HTTP API that mirrors the full work-order workflow used by the Electron desktop application.
-    The desktop app talks to Electron IPC, and Electron main forwards those requests to this REST API.
+    Shared HTTP API for Iris work-order operations. Production runtime persists
+    data in SQLite, while fixture-backed data remains available for development
+    and automated tests.
 servers:
   - url: http://localhost:8080
 tags:
   - name: System
   - name: Auth
+  - name: Customers
   - name: Work Orders
 paths:
   /healthz:
@@ -48,20 +50,113 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /work-orders:
+  /auth/session:
     get:
-      tags: [Work Orders]
-      summary: Return all work orders needed by the desktop application
-      operationId: listWorkOrders
+      tags: [Auth]
+      summary: Return the current cookie-backed session
+      operationId: getCurrentSession
       responses:
         '200':
-          description: Ordered collection of work orders
+          description: Current session result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Clear the current session
+      operationId: logout
+      responses:
+        '200':
+          description: Logout result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+  /customers:
+    get:
+      tags: [Customers]
+      summary: Return normalized customers for work-order entry
+      operationId: listCustomers
+      responses:
+        '200':
+          description: Customer records
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/WorkOrder'
+                  $ref: '#/components/schemas/Customer'
+  /locations:
+    get:
+      tags: [Customers]
+      summary: Return normalized customer locations
+      operationId: listLocations
+      responses:
+        '200':
+          description: Customer location records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Location'
+  /work-orders:
+    get:
+      tags: [Work Orders]
+      summary: Return filtered and paginated work orders
+      operationId: listWorkOrders
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: sort
+          in: query
+          schema:
+            type: string
+            example: -issueDate
+      responses:
+        '200':
+          description: Filtered work-order page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderListResponse'
     post:
       tags: [Work Orders]
       summary: Create a new work order
@@ -175,7 +270,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeleteWorkOrderResponse'
+  /work-orders/{id}/report:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Work Orders]
+      summary: Return a PDF work-order report
+      operationId: getWorkOrderReport
+      responses:
+        '200':
+          description: PDF report
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Unknown work-order id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /public/work-orders/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Work Orders]
+      summary: Return public customer-safe work-order status
+      operationId: getPublicWorkOrderStatus
+      responses:
+        '200':
+          description: Public work-order status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicWorkOrderStatus'
+        '404':
+          description: Unknown public token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
+  securitySchemes:
+    IrisSession:
+      type: apiKey
+      in: cookie
+      name: iris_session
   schemas:
     HealthResponse:
       type: object
@@ -259,10 +408,138 @@ components:
         shippingAddress:
           type: [string, 'null']
           example: Bulevar 1
+    Customer:
+      type: object
+      required: [id, name, contactName, email, phone]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        contactName:
+          type: [string, 'null']
+        email:
+          type: [string, 'null']
+        phone:
+          type: [string, 'null']
+    Location:
+      type: object
+      required: [id, customerId, name, address]
+      properties:
+        id:
+          type: string
+        customerId:
+          type: string
+        name:
+          type: string
+        address:
+          type: [string, 'null']
+    Assignment:
+      type: object
+      required: [assignedTo, priority, scheduledDate]
+      properties:
+        assignedTo:
+          type: [string, 'null']
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        scheduledDate:
+          type: [string, 'null']
+          format: date
+    WorkOrderNote:
+      type: object
+      required: [id, visibility, author, body, createdAt]
+      properties:
+        id:
+          type: string
+        visibility:
+          type: string
+          enum: [internal, customer]
+        author:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    WorkOrderEvent:
+      type: object
+      required: [id, kind, label, actor, createdAt]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        label:
+          type: string
+        actor:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Attachment:
+      type: object
+      required: [id, fileName, fileType, url, uploadedAt]
+      properties:
+        id:
+          type: string
+        fileName:
+          type: string
+        fileType:
+          type: string
+        url:
+          type: [string, 'null']
+        uploadedAt:
+          type: string
+          format: date-time
+    InvoiceDraft:
+      type: object
+      required: [status, invoiceNumber, lineItems, paidAt]
+      properties:
+        status:
+          type: string
+          enum: [none, draft, issued, paid]
+        invoiceNumber:
+          type: [string, 'null']
+        lineItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLineItem'
+        paidAt:
+          type: [string, 'null']
+          format: date
+    InvoiceLineItem:
+      type: object
+      required: [id, description, quantity, unitPrice]
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+          format: double
+    CustomerCommunication:
+      type: object
+      required: [publicToken, notificationEmail, emailNotificationsEnabled, signedBy, signedAt]
+      properties:
+        publicToken:
+          type: string
+        notificationEmail:
+          type: [string, 'null']
+        emailNotificationsEnabled:
+          type: boolean
+        signedBy:
+          type: [string, 'null']
+        signedAt:
+          type: [string, 'null']
+          format: date-time
     WorkOrder:
       type: object
       required:
-        [id, orderNumber, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, issueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate]
+        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
         id:
           type: string
@@ -270,6 +547,10 @@ components:
         orderNumber:
           type: string
           example: RN-2025-0042
+        customerId:
+          type: [string, 'null']
+        locationId:
+          type: [string, 'null']
         clientName:
           type: string
           example: Demo Klijent
@@ -298,6 +579,8 @@ components:
         executedBy:
           type: [string, 'null']
           example: pera
+        assignment:
+          $ref: '#/components/schemas/Assignment'
         issueDate:
           type: string
           format: date
@@ -310,11 +593,12 @@ components:
           type: boolean
         status:
           type: string
-          enum: [draft, active, completed, cancelled]
-          example: completed
+          enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+          example: inProgress
         price:
-          type: [integer, 'null']
-          example: 12000
+          type: [number, 'null']
+          format: double
+          example: 12000.5
         note:
           type: [string, 'null']
           example: Hitno
@@ -330,11 +614,54 @@ components:
           type: [string, 'null']
           format: date
           example: '2025-04-05'
+        internalNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderNote'
+        customerNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderNote'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderEvent'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        materialUsage:
+          type: array
+          items:
+            type: object
+        timeEntries:
+          type: array
+          items:
+            type: object
+        invoiceDraft:
+          $ref: '#/components/schemas/InvoiceDraft'
+        communication:
+          $ref: '#/components/schemas/CustomerCommunication'
+    WorkOrderListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrder'
+        total:
+          type: integer
+          minimum: 0
     CreateWorkOrderInput:
       type: object
       required:
-        [clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, issueDate, dueDate, price, note]
+        [customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, assignment, issuedBy, issueDate, dueDate, price, note, internalNotes, customerNotes, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
+        customerId:
+          type: [string, 'null']
+        locationId:
+          type: [string, 'null']
         clientName:
           type: string
         contactPerson:
@@ -352,6 +679,8 @@ components:
           type: [string, 'null']
         shipping:
           $ref: '#/components/schemas/Shipping'
+        assignment:
+          $ref: '#/components/schemas/Assignment'
         issuedBy:
           type: string
         issueDate:
@@ -361,12 +690,41 @@ components:
           type: [string, 'null']
           format: date
         price:
-          type: [integer, 'null']
+          type: [number, 'null']
+          format: double
         note:
           type: [string, 'null']
+        internalNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderNote'
+        customerNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderNote'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        materialUsage:
+          type: array
+          items:
+            type: object
+        timeEntries:
+          type: array
+          items:
+            type: object
+        invoiceDraft:
+          $ref: '#/components/schemas/InvoiceDraft'
+        communication:
+          $ref: '#/components/schemas/CustomerCommunication'
     UpdateWorkOrderInput:
       type: object
       properties:
+        customerId:
+          type: [string, 'null']
+        locationId:
+          type: [string, 'null']
         clientName:
           type: string
         contactPerson:
@@ -384,6 +742,8 @@ components:
           type: [string, 'null']
         shipping:
           $ref: '#/components/schemas/Shipping'
+        assignment:
+          $ref: '#/components/schemas/Assignment'
         issuedBy:
           type: string
         executedBy:
@@ -398,14 +758,69 @@ components:
           type: boolean
         status:
           type: string
-          enum: [draft, active, completed, cancelled]
+          enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
         price:
-          type: [integer, 'null']
+          type: [number, 'null']
+          format: double
         note:
           type: [string, 'null']
         completionDate:
           type: [string, 'null']
           format: date
+        internalNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderNote'
+        customerNotes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderNote'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOrderEvent'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        materialUsage:
+          type: array
+          items:
+            type: object
+        timeEntries:
+          type: array
+          items:
+            type: object
+        invoiceDraft:
+          $ref: '#/components/schemas/InvoiceDraft'
+        communication:
+          $ref: '#/components/schemas/CustomerCommunication'
+    PublicWorkOrderStatus:
+      type: object
+      required:
+        [orderNumber, clientName, jobDescription, status, dueDate, customerNoteCount, internalNoteCount, signedBy, signedAt]
+      properties:
+        orderNumber:
+          type: string
+        clientName:
+          type: string
+        jobDescription:
+          type: string
+        status:
+          type: string
+          enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+        dueDate:
+          type: [string, 'null']
+          format: date
+        customerNoteCount:
+          type: integer
+        internalNoteCount:
+          type: integer
+        signedBy:
+          type: [string, 'null']
+        signedAt:
+          type: [string, 'null']
+          format: date-time
     DeleteWorkOrderResponse:
       type: object
       required: [success]

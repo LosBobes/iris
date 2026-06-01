@@ -10,7 +10,9 @@ import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDi
 import { useWorkOrders } from "@/hooks/useWorkOrders";
 import {
   canToggleWorkOrderCompletion,
+  getPrimaryWorkOrderTransition,
   getLocalIsoDate,
+  WORK_ORDER_STATUS_LABELS,
 } from "@/shared/utils/work-orders";
 import type { WorkOrder } from "@/types/work-order";
 
@@ -45,9 +47,10 @@ function WorkOrdersPage(): React.JSX.Element {
         return;
       }
 
-      const isCompleting = order.status === "active";
-      const newStatus = isCompleting ? "completed" : "active";
+      const newStatus = getPrimaryWorkOrderTransition(order.status);
+      if (!newStatus) return;
       const now = getLocalIsoDate();
+      const isCompleting = newStatus === "completed" || newStatus === "invoiced";
 
       try {
         const updated = await window.api.updateWorkOrder(order.id, {
@@ -60,11 +63,7 @@ function WorkOrdersPage(): React.JSX.Element {
           return;
         }
         await refreshOrders();
-        toast.success(
-          isCompleting
-            ? `Nalog ${order.orderNumber} označen kao završen`
-            : `Nalog ${order.orderNumber} označen kao aktivan`,
-        );
+        toast.success(`Nalog ${order.orderNumber}: ${WORK_ORDER_STATUS_LABELS[newStatus]}`);
       } catch {
         toast.error("Greška pri promeni statusa");
       }
@@ -121,14 +120,15 @@ function WorkOrdersPage(): React.JSX.Element {
     filters.status !== "all" ||
     filters.billingDocumentType !== "all" ||
     filters.deliveryMethod !== "all" ||
+    filters.queue !== "all" ||
     filters.dateFrom !== "" ||
     filters.dateTo !== "";
 
   return (
     <AppShell>
       <div className="space-y-8">
-        <div className="animate-iris-enter border-b border-border px-10 pt-7 pb-5">
-          <div className="flex items-end justify-between">
+        <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
                 Iris · nalozi
@@ -153,7 +153,7 @@ function WorkOrdersPage(): React.JSX.Element {
           </div>
         </div>
 
-        <div className="animate-iris-enter px-8" style={{ animationDelay: "60ms" }}>
+        <div className="animate-iris-enter px-5 sm:px-8" style={{ animationDelay: "60ms" }}>
           <WorkOrdersFilters
             filters={filters}
             updateFilters={updateFilters}
@@ -162,7 +162,7 @@ function WorkOrdersPage(): React.JSX.Element {
         </div>
 
         {loading && (
-          <div className="px-8">
+          <div className="px-5 sm:px-8">
             <div
               className="flex items-center justify-center py-20 text-muted-foreground"
               style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
@@ -174,7 +174,7 @@ function WorkOrdersPage(): React.JSX.Element {
         )}
 
         {!loading && error && (
-          <div className="px-8">
+          <div className="px-5 sm:px-8">
             <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               Greška pri učitavanju naloga: {error}
             </div>
@@ -182,7 +182,7 @@ function WorkOrdersPage(): React.JSX.Element {
         )}
 
         {!loading && !error && allOrdersCount === 0 && (
-          <div className="px-8">
+          <div className="px-5 sm:px-8">
             <div className="animate-iris-fade py-20 text-center">
               <p className="mb-4 text-sm text-muted-foreground">
                 Nema radnih naloga. Kreirajte prvi radni nalog.
@@ -200,7 +200,7 @@ function WorkOrdersPage(): React.JSX.Element {
           allOrdersCount > 0 &&
           totalFiltered === 0 &&
           hasActiveFilters && (
-            <div className="px-8">
+            <div className="px-5 sm:px-8">
               <div className="animate-iris-fade py-20 text-center">
                 <p className="mb-4 text-sm text-muted-foreground">
                   Nema radnih naloga koji odgovaraju izabranim filterima.
@@ -214,7 +214,7 @@ function WorkOrdersPage(): React.JSX.Element {
 
         {!loading && !error && totalFiltered > 0 && (
           <div
-            className="animate-iris-enter px-8 pb-8"
+            className="animate-iris-enter px-5 pb-8 sm:px-8"
             style={{ animationDelay: "120ms" }}
           >
             <WorkOrdersTable
