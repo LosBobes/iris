@@ -75,9 +75,6 @@ iris-api/
 | `IRIS_ALLOWED_ORIGINS` | Comma-separated CORS origins. Empty allows local dev origins. | empty |
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |
 
-For production `.env`, Docker Compose, and Hetzner VPS setup, see
-[`docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md).
-
 ## Commands
 
 Run commands from `iris-api/`.

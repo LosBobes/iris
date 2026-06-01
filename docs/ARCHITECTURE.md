@@ -116,6 +116,5 @@ Vite app
 - `apps/desktop/`: `npm run lint`, `npm run typecheck`, `npm test`
 - Contract changes require synchronized updates to OpenAPI, Go domain types,
   TypeScript types, fixtures, and API/client tests.
-- Production deployment configuration is documented in `docs/DEPLOYMENT.md`.
 
 *Last verified against the checked-in repository state on 2026-06-01.*

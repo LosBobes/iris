@@ -46,10 +46,6 @@ Compose persists SQLite at `/data/iris.db` through the named volume
 `iris_sqlite_data`. Do not run `docker compose down -v` unless you intentionally
 want to delete that database volume.
 
-Production and VPS deployment guidance lives in
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), including `.env` handling for Docker,
-the backend API, and the web app.
-
 Web client:
 
 ```bash
@@ -78,8 +74,6 @@ npm run dev
   English code and API tokens.
 - [Contributing Guide](docs/CONTRIBUTING.md): development rules, verification
   commands, and commit expectations.
-- [Deployment Guide](docs/DEPLOYMENT.md): production environment variables,
-  Docker Compose, web builds, and Hetzner VPS notes.
 - [API README](iris-api/README.md): backend configuration, CLI operations, and
   endpoint reference.
 

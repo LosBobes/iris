@@ -16,9 +16,7 @@ Default development configuration lives in `.env.development`.
 
 Production web builds read Vite environment variables at build time. Use a
 server-local `apps/web/.env.production` or shell variables for production, and
-do not commit files that contain real hostnames or secrets. See
-[`../../docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md) for Docker and Hetzner
-deployment notes.
+do not commit files that contain real hostnames or secrets.
 
 Same-origin production example:
 
