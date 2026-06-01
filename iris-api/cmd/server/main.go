@@ -11,6 +11,8 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/store"
 )
 
+const defaultDatabasePath = "./data/iris.db"
+
 // Start here if you are new to this API.
 //
 // This file is intentionally small because its only job is application wiring:
@@ -23,11 +25,11 @@ import (
 func main() {
 	ctx := context.Background()
 	env := getenv("IRIS_ENV", "development")
-	dbPath := os.Getenv("IRIS_DB_PATH")
+	dbPath, explicitDBPath := databasePathFromEnv(env)
 	sessionSecret := os.Getenv("IRIS_SESSION_SECRET")
 	if env == "production" {
-		if dbPath == "" {
-			log.Fatal("IRIS_DB_PATH is required in production")
+		if !explicitDBPath {
+			log.Fatal("DATABASE_PATH is required in production")
 		}
 		if sessionSecret == "" {
 			log.Fatal("IRIS_SESSION_SECRET is required in production")
@@ -35,28 +37,21 @@ func main() {
 	}
 
 	var persistence store.Store
-	if dbPath != "" {
-		sqliteStore, err := store.OpenSQLite(ctx, dbPath)
+	sqliteStore, err := store.OpenSQLite(ctx, dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer sqliteStore.Close()
+	if env == "production" {
+		hasDemoAdmin, err := sqliteStore.HasUserPassword(ctx, "admin", "admin123")
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer sqliteStore.Close()
-		if env == "production" {
-			hasDemoAdmin, err := sqliteStore.HasUserPassword(ctx, "admin", "admin123")
-			if err != nil {
-				log.Fatal(err)
-			}
-			if hasDemoAdmin {
-				log.Fatal("refusing production startup with demo admin credentials")
-			}
+		if hasDemoAdmin {
+			log.Fatal("refusing production startup with demo admin credentials")
 		}
-		persistence = sqliteStore
-	} else {
-		if env == "production" {
-			log.Fatal("production cannot run against fixture data")
-		}
-		persistence = store.NewFixtureStore("testdata/fixtures")
 	}
+	persistence = sqliteStore
 
 	server := api.NewServer(persistence, api.Config{
 		AllowedOrigins:    splitCSV(os.Getenv("IRIS_ALLOWED_ORIGINS")),
@@ -74,6 +69,19 @@ func main() {
 	if err := http.ListenAndServe(addr, server.Routes()); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func databasePathFromEnv(env string) (string, bool) {
+	if value := strings.TrimSpace(os.Getenv("DATABASE_PATH")); value != "" {
+		return value, true
+	}
+	if value := strings.TrimSpace(os.Getenv("IRIS_DB_PATH")); value != "" {
+		return value, true
+	}
+	if env == "production" {
+		return "", false
+	}
+	return defaultDatabasePath, false
 }
 
 func getenv(name string, fallback string) string {

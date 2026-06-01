@@ -16,6 +16,8 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/store"
 )
 
+const defaultDatabasePath = "./data/iris.db"
+
 func main() {
 	log.SetFlags(0)
 	if len(os.Args) < 2 {
@@ -285,11 +287,13 @@ func emptyStringToPtr(value string) *string {
 }
 
 func dbPathFromEnv() string {
-	value := os.Getenv("IRIS_DB_PATH")
-	if value == "" {
-		log.Fatal("IRIS_DB_PATH je obavezan za irisctl")
+	if value := strings.TrimSpace(os.Getenv("DATABASE_PATH")); value != "" {
+		return value
 	}
-	return value
+	if value := strings.TrimSpace(os.Getenv("IRIS_DB_PATH")); value != "" {
+		return value
+	}
+	return defaultDatabasePath
 }
 
 func mustOpen(ctx context.Context, path string) *store.SQLiteStore {
@@ -313,5 +317,5 @@ func usage() {
   irisctl import-csv --apply --dir import/
   irisctl backup [-out backups/iris.db]
 
-IRIS_DB_PATH mora biti podešen.`)
+DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }

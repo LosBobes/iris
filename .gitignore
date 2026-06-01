@@ -5,6 +5,16 @@ node_modules/
 out/
 dist/
 build/
+data/
+*.db
+*.db-*
+.env
+.env.local
+.env.production
+apps/web/.env.local
+apps/web/.env.production
+apps/desktop/.env.local
+apps/desktop/.env.production
 apps/desktop/.eslintcache
 apps/desktop/.env
 PLAN.md

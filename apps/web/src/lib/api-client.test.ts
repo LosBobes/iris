@@ -96,6 +96,21 @@ describe('createHttpApi', () => {
     ])
   })
 
+  it('normalizes nullable list responses to empty arrays', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(null))
+      .mockResolvedValueOnce(response(null))
+      .mockResolvedValueOnce(response({ items: null, total: 0 }))
+      .mockResolvedValueOnce(response(null))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getCustomers()).resolves.toEqual([])
+    await expect(api.getLocations()).resolves.toEqual([])
+    await expect(api.getWorkOrders()).resolves.toEqual({ items: [], total: 0 })
+    await expect(api.getWorkOrderOperators()).resolves.toEqual([])
+  })
+
   it('passes work-order list filters to the API', async () => {
     const fetchMock = vi.fn(async () => response({ items: [], total: 0 }))
     const api = createHttpApi('http://127.0.0.1:8080', fetchMock)

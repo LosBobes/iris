@@ -124,8 +124,10 @@ go test ./...
 - `docs/DECISIONS.md`: accepted and temporary architecture decisions.
 - `docs/DOMAIN_GLOSSARY.md`: Serbian UI labels mapped to English code and API
   terms.
+- `docs/DEPLOYMENT.md`: production `.env`, Docker Compose, web build, and
+  Hetzner VPS operations.
 - `docs/CONTRIBUTING.md`: local commands, verification rules, and commit policy.
 - `iris-api/README.md`: backend endpoint, configuration, CLI, and smoke-check
   reference.
 
-*Last verified against the checked-in repository state on 2026-05-31.*
+*Last verified against the checked-in repository state on 2026-06-01.*

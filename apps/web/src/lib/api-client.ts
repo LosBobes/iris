@@ -25,6 +25,18 @@ async function readJSON<T>(response: Response): Promise<T> {
   return payload as T
 }
 
+function readArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : []
+}
+
+function normalizeWorkOrderListResult(value: WorkOrderListResult): WorkOrderListResult {
+  return {
+    ...value,
+    items: readArray(value.items),
+    total: value.total ?? 0,
+  }
+}
+
 function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path}`
 }
@@ -97,7 +109,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async getCustomers() {
       const response = await fetchImpl(url('/customers'), credentialedRequest())
-      return readJSON<Customer[]>(response)
+      return readArray(await readJSON<Customer[] | null>(response))
     },
 
     async upsertCustomer(customer) {
@@ -118,7 +130,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async getLocations() {
       const response = await fetchImpl(url('/locations'), credentialedRequest())
-      return readJSON<Location[]>(response)
+      return readArray(await readJSON<Location[] | null>(response))
     },
 
     async upsertLocation(location) {
@@ -139,12 +151,12 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async getWorkOrders(query) {
       const response = await fetchImpl(url(`/work-orders${queryString(query)}`), credentialedRequest())
-      return readJSON<WorkOrderListResult>(response)
+      return normalizeWorkOrderListResult(await readJSON<WorkOrderListResult>(response))
     },
 
     async getWorkOrderOperators() {
       const response = await fetchImpl(url('/work-orders/operators'), credentialedRequest())
-      return readJSON<string[]>(response)
+      return readArray(await readJSON<string[] | null>(response))
     },
 
     async getWorkOrderById(id) {

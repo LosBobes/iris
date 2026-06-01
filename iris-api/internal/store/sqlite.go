@@ -35,6 +35,12 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
 	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	if err := configureSQLite(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 
 	if err := RunMigrations(ctx, db); err != nil {
 		_ = db.Close()
@@ -42,6 +48,24 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 	}
 
 	return &SQLiteStore{db: db}, nil
+}
+
+func configureSQLite(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+		return fmt.Errorf("set sqlite busy timeout: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		return fmt.Errorf("enable sqlite foreign keys: %w", err)
+	}
+
+	var journalMode string
+	if err := db.QueryRowContext(ctx, `PRAGMA journal_mode = WAL`).Scan(&journalMode); err != nil {
+		return fmt.Errorf("enable sqlite WAL: %w", err)
+	}
+	if !strings.EqualFold(journalMode, "wal") {
+		return fmt.Errorf("enable sqlite WAL: journal mode is %q", journalMode)
+	}
+	return nil
 }
 
 func (s *SQLiteStore) Close() error {
@@ -135,7 +159,7 @@ func (s *SQLiteStore) Customers(ctx context.Context) ([]domain.Customer, error) 
 	}
 	defer rows.Close()
 
-	var customers []domain.Customer
+	customers := make([]domain.Customer, 0)
 	for rows.Next() {
 		var customer domain.Customer
 		var contactName, email, phone sql.NullString
@@ -160,7 +184,7 @@ func (s *SQLiteStore) Locations(ctx context.Context) ([]domain.Location, error) 
 	}
 	defer rows.Close()
 
-	var locations []domain.Location
+	locations := make([]domain.Location, 0)
 	for rows.Next() {
 		var location domain.Location
 		var address sql.NullString

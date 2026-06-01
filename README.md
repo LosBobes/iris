@@ -21,8 +21,7 @@ backend API.
 - [apps/web](apps/web/): Vite React client with `http` and `fixtures` runtime
   modes behind the same `window.api` contract.
 - [iris-api](iris-api/): Go REST API built with `chi`, documented in
-  `openapi.yaml`, backed by SQLite in production and fixtures in tests/local
-  fallback mode.
+  `openapi.yaml`, backed by SQLite in local and Docker runtimes.
 
 ## Development Commands
 
@@ -30,10 +29,26 @@ Backend API:
 
 ```bash
 cd iris-api
-IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl migrate
-IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-IRIS_DB_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
+DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
 ```
+
+Docker backend:
+
+```bash
+docker compose up -d --build
+docker compose logs -f iris-api
+docker compose down
+```
+
+Compose persists SQLite at `/data/iris.db` through the named volume
+`iris_sqlite_data`. Do not run `docker compose down -v` unless you intentionally
+want to delete that database volume.
+
+Production and VPS deployment guidance lives in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), including `.env` handling for Docker,
+the backend API, and the web app.
 
 Web client:
 
@@ -63,6 +78,8 @@ npm run dev
   English code and API tokens.
 - [Contributing Guide](docs/CONTRIBUTING.md): development rules, verification
   commands, and commit expectations.
+- [Deployment Guide](docs/DEPLOYMENT.md): production environment variables,
+  Docker Compose, web builds, and Hetzner VPS notes.
 - [API README](iris-api/README.md): backend configuration, CLI operations, and
   endpoint reference.
 
@@ -75,4 +92,4 @@ Specialized Copilot and agent profiles live under `.github/`:
 - [.github/agents/go-backend-agent.agent.md](.github/agents/go-backend-agent.agent.md)
 - [.github/agents/electron-code-review-mode.md](.github/agents/electron-code-review-mode.md)
 
-*Last verified against the checked-in repository state on 2026-05-31.*
+*Last verified against the checked-in repository state on 2026-06-01.*

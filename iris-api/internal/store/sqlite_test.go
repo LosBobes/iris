@@ -22,8 +22,8 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WorkOrders() returned error: %v", err)
 	}
-	if result.Total != 25 || len(result.Items) != 10 {
-		t.Fatalf("result = %#v, want total 25 and limited page", result)
+	if result.Total != 28 || len(result.Items) != 10 {
+		t.Fatalf("result = %#v, want total 28 and limited page", result)
 	}
 	if err := sqliteStore.Close(); err != nil {
 		t.Fatalf("Close() returned error: %v", err)
@@ -73,6 +73,75 @@ func TestSQLiteStoreAuthSessionsAndBackup(t *testing.T) {
 	backupPath := filepath.Join(t.TempDir(), "backup.db")
 	if err := sqliteStore.Backup(ctx, backupPath); err != nil {
 		t.Fatalf("Backup() returned error: %v", err)
+	}
+}
+
+func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
+	ctx := context.Background()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	customers, err := sqliteStore.Customers(ctx)
+	if err != nil {
+		t.Fatalf("Customers() returned error: %v", err)
+	}
+	if customers == nil {
+		t.Fatal("Customers() = nil, want empty slice")
+	}
+
+	locations, err := sqliteStore.Locations(ctx)
+	if err != nil {
+		t.Fatalf("Locations() returned error: %v", err)
+	}
+	if locations == nil {
+		t.Fatal("Locations() = nil, want empty slice")
+	}
+
+	workOrders, err := sqliteStore.WorkOrders(ctx, WorkOrderListQuery{})
+	if err != nil {
+		t.Fatalf("WorkOrders() returned error: %v", err)
+	}
+	if workOrders.Items == nil {
+		t.Fatal("WorkOrders().Items = nil, want empty slice")
+	}
+
+	operators, err := sqliteStore.Operators(ctx)
+	if err != nil {
+		t.Fatalf("Operators() returned error: %v", err)
+	}
+	if operators == nil {
+		t.Fatal("Operators() = nil, want empty slice")
+	}
+}
+
+func TestOpenSQLiteCreatesParentDirectoryAndConfiguresConnection(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "nested", "data", "iris.db")
+	sqliteStore := newSQLiteStoreForTest(t, ctx, dbPath)
+	defer sqliteStore.Close()
+
+	var busyTimeout int
+	if err := sqliteStore.db.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatalf("PRAGMA busy_timeout returned error: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy_timeout = %d, want 5000", busyTimeout)
+	}
+
+	var foreignKeys int
+	if err := sqliteStore.db.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+		t.Fatalf("PRAGMA foreign_keys returned error: %v", err)
+	}
+	if foreignKeys != 1 {
+		t.Fatalf("foreign_keys = %d, want 1", foreignKeys)
+	}
+
+	var journalMode string
+	if err := sqliteStore.db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+		t.Fatalf("PRAGMA journal_mode returned error: %v", err)
+	}
+	if journalMode != "wal" {
+		t.Fatalf("journal_mode = %q, want wal", journalMode)
 	}
 }
 

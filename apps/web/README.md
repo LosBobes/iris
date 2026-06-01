@@ -14,11 +14,32 @@ renderer.
 
 Default development configuration lives in `.env.development`.
 
+Production web builds read Vite environment variables at build time. Use a
+server-local `apps/web/.env.production` or shell variables for production, and
+do not commit files that contain real hostnames or secrets. See
+[`../../docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md) for Docker and Hetzner
+deployment notes.
+
+Same-origin production example:
+
+```bash
+VITE_IRIS_API_MODE=http
+VITE_IRIS_API_BASE_URL=https://iris.example.com
+```
+
+Split-origin production example:
+
+```bash
+VITE_IRIS_API_MODE=http
+VITE_IRIS_API_BASE_URL=https://api.example.com
+```
+
 ## Local Commands
 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
 Seeded demo login:
