@@ -39,11 +39,14 @@ func newValidationError(message string) error {
 type FixtureStore struct {
 	basePath string
 
-	mu           sync.Mutex
-	workOrders   []domain.WorkOrder
-	nextSequence int
-	loaded       bool
-	sessions     map[string]fixtureSession
+	mu               sync.Mutex
+	customers        []domain.Customer
+	locations        []domain.Location
+	workOrders       []domain.WorkOrder
+	nextSequence     int
+	loaded           bool
+	referencesLoaded bool
+	sessions         map[string]fixtureSession
 }
 
 type fixtureSession struct {
@@ -139,20 +142,24 @@ func (s *FixtureStore) Users(_ context.Context) ([]domain.FixtureUser, error) {
 
 // Customers reads normalized customer fixture data.
 func (s *FixtureStore) Customers(_ context.Context) ([]domain.Customer, error) {
-	var customers []domain.Customer
-	if err := s.readJSON("customers.json", &customers); err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
 		return nil, err
 	}
-	return customers, nil
+	return cloneCustomers(s.customers), nil
 }
 
 // Locations reads normalized customer location fixture data.
 func (s *FixtureStore) Locations(_ context.Context) ([]domain.Location, error) {
-	var locations []domain.Location
-	if err := s.readJSON("locations.json", &locations); err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
 		return nil, err
 	}
-	return locations, nil
+	return cloneLocations(s.locations), nil
 }
 
 func (s *FixtureStore) UpsertCustomer(
@@ -162,7 +169,25 @@ func (s *FixtureStore) UpsertCustomer(
 	if strings.TrimSpace(customer.ID) == "" || strings.TrimSpace(customer.Name) == "" {
 		return nil, newValidationError(invalidWorkOrderMessage)
 	}
-	return &customer, nil
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
+		return nil, err
+	}
+
+	stored := cloneCustomer(customer)
+	for index, candidate := range s.customers {
+		if candidate.ID == customer.ID {
+			s.customers[index] = stored
+			result := cloneCustomer(stored)
+			return &result, nil
+		}
+	}
+	s.customers = append(s.customers, stored)
+	result := cloneCustomer(stored)
+	return &result, nil
 }
 
 func (s *FixtureStore) UpsertLocation(
@@ -174,14 +199,70 @@ func (s *FixtureStore) UpsertLocation(
 		strings.TrimSpace(location.Name) == "" {
 		return nil, newValidationError(invalidWorkOrderMessage)
 	}
-	return &location, nil
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
+		return nil, err
+	}
+
+	stored := cloneLocation(location)
+	for index, candidate := range s.locations {
+		if candidate.ID == location.ID {
+			s.locations[index] = stored
+			result := cloneLocation(stored)
+			return &result, nil
+		}
+	}
+	s.locations = append(s.locations, stored)
+	result := cloneLocation(stored)
+	return &result, nil
 }
 
-func (s *FixtureStore) DeleteCustomer(_ context.Context, _ string) error {
+func (s *FixtureStore) DeleteCustomer(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
+		return err
+	}
+
+	customers := make([]domain.Customer, 0, len(s.customers))
+	for _, customer := range s.customers {
+		if customer.ID != id {
+			customers = append(customers, customer)
+		}
+	}
+	s.customers = customers
+
+	locations := make([]domain.Location, 0, len(s.locations))
+	for _, location := range s.locations {
+		if location.CustomerID != id {
+			locations = append(locations, location)
+		}
+	}
+	s.locations = locations
+
 	return nil
 }
 
-func (s *FixtureStore) DeleteLocation(_ context.Context, _ string) error {
+func (s *FixtureStore) DeleteLocation(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
+		return err
+	}
+
+	locations := make([]domain.Location, 0, len(s.locations))
+	for _, location := range s.locations {
+		if location.ID != id {
+			locations = append(locations, location)
+		}
+	}
+	s.locations = locations
+
 	return nil
 }
 
@@ -475,16 +556,38 @@ func (s *FixtureStore) ensureWorkOrdersLoaded() error {
 	if err := s.readJSON("work-orders.json", &rawOrders); err != nil {
 		return err
 	}
-	customers, _ := s.Customers(context.Background())
-	locations, _ := s.Locations(context.Background())
+	if err := s.ensureReferenceDataLoaded(); err != nil {
+		return err
+	}
 
 	s.workOrders = make([]domain.WorkOrder, len(rawOrders))
 	for index, rawOrder := range rawOrders {
-		s.workOrders[index] = normalizeWorkOrder(rawOrder, customers, locations)
+		s.workOrders[index] = normalizeWorkOrder(rawOrder, s.customers, s.locations)
 	}
 	s.nextSequence = nextSequenceStart(s.workOrders)
 	s.loaded = true
 
+	return nil
+}
+
+func (s *FixtureStore) ensureReferenceDataLoaded() error {
+	if s.referencesLoaded {
+		return nil
+	}
+
+	var customers []domain.Customer
+	if err := s.readJSON("customers.json", &customers); err != nil {
+		return err
+	}
+
+	var locations []domain.Location
+	if err := s.readJSON("locations.json", &locations); err != nil {
+		return err
+	}
+
+	s.customers = cloneCustomers(customers)
+	s.locations = cloneLocations(locations)
+	s.referencesLoaded = true
 	return nil
 }
 
@@ -1213,6 +1316,36 @@ func cloneWorkOrders(workOrders []domain.WorkOrder) []domain.WorkOrder {
 	for i, workOrder := range workOrders {
 		cloned[i] = deepCopyWorkOrder(workOrder)
 	}
+	return cloned
+}
+
+func cloneCustomers(customers []domain.Customer) []domain.Customer {
+	cloned := make([]domain.Customer, len(customers))
+	for index, customer := range customers {
+		cloned[index] = cloneCustomer(customer)
+	}
+	return cloned
+}
+
+func cloneCustomer(customer domain.Customer) domain.Customer {
+	cloned := customer
+	cloned.ContactName = clonePtrString(customer.ContactName)
+	cloned.Email = clonePtrString(customer.Email)
+	cloned.Phone = clonePtrString(customer.Phone)
+	return cloned
+}
+
+func cloneLocations(locations []domain.Location) []domain.Location {
+	cloned := make([]domain.Location, len(locations))
+	for index, location := range locations {
+		cloned[index] = cloneLocation(location)
+	}
+	return cloned
+}
+
+func cloneLocation(location domain.Location) domain.Location {
+	cloned := location
+	cloned.Address = clonePtrString(location.Address)
 	return cloned
 }
 

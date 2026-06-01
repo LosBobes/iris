@@ -172,6 +172,52 @@ func TestCustomerLocationEndpoints(t *testing.T) {
 			t.Fatalf("locations[0] = %#v, want customer linkage", locations[0])
 		}
 	})
+
+	t.Run("delete customer and location update subsequent lists", func(t *testing.T) {
+		server := newTestServer(t)
+
+		deleteLocationResponse := performRequest(t, server, http.MethodDelete, "/locations/loc-5", "")
+		if deleteLocationResponse.Code != http.StatusOK {
+			t.Fatalf("delete location status = %d, want %d", deleteLocationResponse.Code, http.StatusOK)
+		}
+
+		locationsResponse := performRequest(t, server, http.MethodGet, "/locations", "")
+		var locations []domain.Location
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations response: %v", err)
+		}
+		for _, location := range locations {
+			if location.ID == "loc-5" {
+				t.Fatalf("locations still contains deleted location %#v", location)
+			}
+		}
+
+		deleteCustomerResponse := performRequest(t, server, http.MethodDelete, "/customers/cust-4", "")
+		if deleteCustomerResponse.Code != http.StatusOK {
+			t.Fatalf("delete customer status = %d, want %d", deleteCustomerResponse.Code, http.StatusOK)
+		}
+
+		customersResponse := performRequest(t, server, http.MethodGet, "/customers", "")
+		var customers []domain.Customer
+		if err := json.Unmarshal(customersResponse.Body.Bytes(), &customers); err != nil {
+			t.Fatalf("decode customers response: %v", err)
+		}
+		for _, customer := range customers {
+			if customer.ID == "cust-4" {
+				t.Fatalf("customers still contains deleted customer %#v", customer)
+			}
+		}
+
+		locationsResponse = performRequest(t, server, http.MethodGet, "/locations", "")
+		if err := json.Unmarshal(locationsResponse.Body.Bytes(), &locations); err != nil {
+			t.Fatalf("decode locations after customer delete: %v", err)
+		}
+		for _, location := range locations {
+			if location.CustomerID == "cust-4" {
+				t.Fatalf("locations still contains cascade-deleted customer location %#v", location)
+			}
+		}
+	})
 }
 
 func TestCreateWorkOrderEndpoint(t *testing.T) {

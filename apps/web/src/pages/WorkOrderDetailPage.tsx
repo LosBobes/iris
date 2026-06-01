@@ -3,6 +3,7 @@ import { ArrowLeft, Copy, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
+import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { WorkOrder } from "@/types/work-order";
 import {
   WORK_ORDER_BILLING_LABELS,
@@ -60,8 +61,10 @@ function WorkOrderDetailPage(): React.JSX.Element {
   }, [id]);
 
   return (
-    <AppShell>
-      <div>
+    <>
+      <div className="work-order-screen-root">
+        <AppShell>
+          <div>
         <div className="animate-iris-enter border-b border-border px-10 pt-5 pb-6">
           <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-mute)]">
             <button
@@ -165,8 +168,11 @@ function WorkOrderDetailPage(): React.JSX.Element {
             <DetailBody order={order} />
           </div>
         )}
+          </div>
+        </AppShell>
       </div>
-    </AppShell>
+      {order && <WorkOrderPrintSheet order={order} />}
+    </>
   );
 }
 
