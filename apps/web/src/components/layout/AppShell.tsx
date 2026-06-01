@@ -104,15 +104,12 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               Grafika Čobanović
             </span>
           </div>
-          {/* TODO: Change this based on the feedback from the team */}
-          {/* <div className="mt-1 text-[10px] tracking-[0.3px] text-[color:var(--iris-ink-faint)]">
-            Radni nalozi · v0.0.1
-          </div> */}
         </div>
 
-        <div className="mb-3 hidden pl-1 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] lg:block">
-          Sekcija
-        </div>
+        <div
+          role="separator"
+          className="mb-3 hidden border-t border-[color:var(--iris-border-soft)] lg:block"
+        />
         <nav ref={navRef} className="relative flex flex-wrap gap-1 lg:flex-col lg:gap-0.5">
           <span
             aria-hidden

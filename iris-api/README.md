@@ -119,8 +119,10 @@ Compose reads server-local variables from a root `.env` file automatically. Do
 not commit that file; keep production values such as `IRIS_SESSION_SECRET` only
 on the server.
 
-The API is published on host port `8080` by default. If that port is already in
-use, set `IRIS_API_PORT`:
+The Docker image also builds `apps/web/dist` and serves it from the API process
+with `IRIS_WEB_DIR=/app/web`, so `http://localhost:8080/` is the same-origin web
+app and `http://localhost:8080/healthz` is the API health check. If host port
+`8080` is already in use, set `IRIS_API_PORT`:
 
 ```bash
 IRIS_API_PORT=18080 docker compose up -d --build
