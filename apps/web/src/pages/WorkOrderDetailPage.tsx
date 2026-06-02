@@ -13,6 +13,14 @@ import {
   formatWorkOrderPrice,
 } from "@/shared/utils/work-orders";
 
+export function printWorkOrder(): void {
+  window.print();
+}
+
+export function openWorkOrderPdf(orderId: string): void {
+  window.open(window.api.getWorkOrderReportUrl(orderId), "_blank", "noopener,noreferrer");
+}
+
 function WorkOrderDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -98,14 +106,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
               <div className="flex gap-1.5">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={printWorkOrder}
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   Štampaj
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.open(window.api.getWorkOrderReportUrl(order.id), "_blank")}
+                  onClick={() => openWorkOrderPdf(order.id)}
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   PDF
