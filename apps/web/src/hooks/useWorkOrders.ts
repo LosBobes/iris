@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type {
   WorkOrder,
   WorkOrderStatus,
   BillingDocumentType,
   DeliveryMethod,
 } from "@/types/work-order";
+import {
+  getLocalIsoDate,
+  WORK_ORDER_STATUS_ORDER,
+} from "@/shared/utils/work-orders";
 
 export type SortField =
   | "orderNumber"
@@ -29,6 +34,7 @@ export interface WorkOrdersFiltersState {
   billingDocumentType: BillingDocumentType | "all";
   deliveryMethod: DeliveryMethod | "all";
   queue: "all" | "unassigned" | "overdue" | "today" | "thisWeek";
+  customerId: string;
   dateFrom: string;
   dateTo: string;
 }
@@ -59,18 +65,176 @@ const INITIAL_FILTERS: WorkOrdersFiltersState = {
   billingDocumentType: "all",
   deliveryMethod: "all",
   queue: "all",
+  customerId: "",
   dateFrom: "",
   dateTo: "",
 };
 
 const DEFAULT_PAGE_SIZE: PageSize = 10;
 
+const QUEUE_VALUES = ["all", "unassigned", "overdue", "today", "thisWeek"] as const;
+const BILLING_VALUES: BillingDocumentType[] = [
+  "invoice",
+  "cashCollection",
+  "proforma",
+];
+const DELIVERY_VALUES: DeliveryMethod[] = [
+  "pickup",
+  "postExpress",
+  "cityExpress",
+  "fieldVisit",
+];
+
+function readEnumParam<T extends string>(
+  searchParams: URLSearchParams,
+  key: string,
+  values: readonly T[],
+  fallback: T,
+): T {
+  const value = searchParams.get(key);
+  if (value && values.includes(value as T)) return value as T;
+  return fallback;
+}
+
+export function filtersFromSearchParams(
+  searchParams: URLSearchParams,
+): WorkOrdersFiltersState {
+  return {
+    search: searchParams.get("search") ?? "",
+    status: readEnumParam(
+      searchParams,
+      "status",
+      ["all", ...WORK_ORDER_STATUS_ORDER],
+      "all",
+    ),
+    billingDocumentType: readEnumParam(
+      searchParams,
+      "billingDocumentType",
+      ["all", ...BILLING_VALUES],
+      "all",
+    ),
+    deliveryMethod: readEnumParam(
+      searchParams,
+      "deliveryMethod",
+      ["all", ...DELIVERY_VALUES],
+      "all",
+    ),
+    queue: readEnumParam(searchParams, "queue", QUEUE_VALUES, "all"),
+    customerId: searchParams.get("customerId") ?? "",
+    dateFrom: searchParams.get("dateFrom") ?? "",
+    dateTo: searchParams.get("dateTo") ?? "",
+  };
+}
+
+export function filtersToSearchParams(
+  filters: WorkOrdersFiltersState,
+): URLSearchParams {
+  const searchParams = new URLSearchParams();
+
+  if (filters.search) searchParams.set("search", filters.search);
+  if (filters.status !== "all") searchParams.set("status", filters.status);
+  if (filters.billingDocumentType !== "all") {
+    searchParams.set("billingDocumentType", filters.billingDocumentType);
+  }
+  if (filters.deliveryMethod !== "all") {
+    searchParams.set("deliveryMethod", filters.deliveryMethod);
+  }
+  if (filters.queue !== "all") searchParams.set("queue", filters.queue);
+  if (filters.customerId) searchParams.set("customerId", filters.customerId);
+  if (filters.dateFrom) searchParams.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) searchParams.set("dateTo", filters.dateTo);
+
+  return searchParams;
+}
+
+function areFiltersEqual(
+  left: WorkOrdersFiltersState,
+  right: WorkOrdersFiltersState,
+): boolean {
+  return (
+    left.search === right.search &&
+    left.status === right.status &&
+    left.billingDocumentType === right.billingDocumentType &&
+    left.deliveryMethod === right.deliveryMethod &&
+    left.queue === right.queue &&
+    left.customerId === right.customerId &&
+    left.dateFrom === right.dateFrom &&
+    left.dateTo === right.dateTo
+  );
+}
+
+export function filterWorkOrdersForList(
+  orders: WorkOrder[],
+  filters: WorkOrdersFiltersState,
+  today = getLocalIsoDate(),
+): WorkOrder[] {
+  return orders.filter((order) => {
+    if (filters.customerId && order.customerId !== filters.customerId) {
+      return false;
+    }
+
+    if (filters.search && !filters.customerId) {
+      const q = filters.search.toLowerCase();
+      const matches =
+        order.orderNumber.toLowerCase().includes(q) ||
+        order.clientName.toLowerCase().includes(q) ||
+        order.jobDescription.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    if (filters.status !== "all" && order.status !== filters.status)
+      return false;
+    if (
+      filters.billingDocumentType !== "all" &&
+      order.billingDocumentType !== filters.billingDocumentType
+    )
+      return false;
+    if (
+      filters.deliveryMethod !== "all" &&
+      order.shipping.deliveryMethod !== filters.deliveryMethod
+    )
+      return false;
+    if (filters.queue !== "all") {
+      const dueDate = order.dueDate ?? order.assignment.scheduledDate;
+      if (filters.queue === "unassigned" && order.assignment.assignedTo) {
+        return false;
+      }
+      if (
+        filters.queue === "overdue" &&
+        (!dueDate || dueDate >= today || order.isCompleted)
+      ) {
+        return false;
+      }
+      if (filters.queue === "today" && dueDate !== today) {
+        return false;
+      }
+      if (filters.queue === "thisWeek") {
+        if (!dueDate) return false;
+        const due = new Date(`${dueDate}T00:00:00`);
+        const now = new Date(`${today}T00:00:00`);
+        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        if (
+          due.getTime() < now.getTime() ||
+          due.getTime() > now.getTime() + sevenDaysMs
+        ) {
+          return false;
+        }
+      }
+    }
+    if (filters.dateFrom && order.issueDate < filters.dateFrom) return false;
+    if (filters.dateTo && order.issueDate > filters.dateTo) return false;
+    return true;
+  });
+}
+
 export function useWorkOrders(): UseWorkOrdersResult {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchParamsKey = searchParams.toString();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] =
-    useState<WorkOrdersFiltersState>(INITIAL_FILTERS);
+  const [filters, setFilters] = useState<WorkOrdersFiltersState>(() =>
+    filtersFromSearchParams(searchParams),
+  );
   const [sortField, setSortField] = useState<SortField>("issueDate");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -93,57 +257,19 @@ export function useWorkOrders(): UseWorkOrdersResult {
     fetchOrders();
   }, [fetchOrders]);
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
-        const matches =
-          order.orderNumber.toLowerCase().includes(q) ||
-          order.clientName.toLowerCase().includes(q) ||
-          order.jobDescription.toLowerCase().includes(q);
-        if (!matches) return false;
-      }
-      if (filters.status !== "all" && order.status !== filters.status)
-        return false;
-      if (
-        filters.billingDocumentType !== "all" &&
-        order.billingDocumentType !== filters.billingDocumentType
-      )
-        return false;
-      if (
-        filters.deliveryMethod !== "all" &&
-        order.shipping.deliveryMethod !== filters.deliveryMethod
-      )
-        return false;
-      if (filters.queue !== "all") {
-        const today = new Date().toISOString().slice(0, 10);
-        const dueDate = order.dueDate ?? order.assignment.scheduledDate;
-        if (filters.queue === "unassigned" && order.assignment.assignedTo) {
-          return false;
-        }
-        if (
-          filters.queue === "overdue" &&
-          (!dueDate || dueDate >= today || order.isCompleted)
-        ) {
-          return false;
-        }
-        if (filters.queue === "today" && dueDate !== today) {
-          return false;
-        }
-        if (filters.queue === "thisWeek") {
-          if (!dueDate) return false;
-          const due = new Date(`${dueDate}T00:00:00`);
-          const now = new Date(`${today}T00:00:00`);
-          const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-          if (due.getTime() < now.getTime() || due.getTime() > now.getTime() + sevenDaysMs) {
-            return false;
-          }
-        }
-      }
-      if (filters.dateFrom && order.issueDate < filters.dateFrom) return false;
-      if (filters.dateTo && order.issueDate > filters.dateTo) return false;
-      return true;
+  useEffect(() => {
+    const nextFilters = filtersFromSearchParams(
+      new URLSearchParams(searchParamsKey),
+    );
+    setFilters((prev) => {
+      if (areFiltersEqual(prev, nextFilters)) return prev;
+      setCurrentPage(1);
+      return nextFilters;
     });
+  }, [searchParamsKey]);
+
+  const filteredOrders = useMemo(() => {
+    return filterWorkOrdersForList(orders, filters);
   }, [orders, filters]);
 
   const sortedOrders = useMemo(() => {
@@ -217,14 +343,21 @@ export function useWorkOrders(): UseWorkOrdersResult {
   const resetFilters = useCallback(() => {
     setFilters(INITIAL_FILTERS);
     setCurrentPage(1);
-  }, []);
+    setSearchParams(new URLSearchParams(), { replace: true });
+  }, [setSearchParams]);
 
   const updateFilters = useCallback(
     (patch: Partial<WorkOrdersFiltersState>) => {
-      setFilters((prev) => ({ ...prev, ...patch }));
+      const nextFilters = {
+        ...filters,
+        ...patch,
+        customerId: patch.search !== undefined ? "" : (patch.customerId ?? filters.customerId),
+      };
+      setFilters(nextFilters);
       setCurrentPage(1);
+      setSearchParams(filtersToSearchParams(nextFilters), { replace: true });
     },
-    [],
+    [filters, setSearchParams],
   );
 
   const handlePageSizeChange = useCallback((nextPageSize: PageSize) => {

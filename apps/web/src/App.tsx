@@ -14,16 +14,6 @@ const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
 const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
 const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
 
-function AccessDenied(): React.JSX.Element {
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="animate-iris-fade text-muted-foreground">
-        Nemate dozvolu za pristup ovoj stranici.
-      </p>
-    </main>
-  );
-}
-
 type AppBootstrapState =
   | { kind: "loading" }
   | { kind: "ready" }
@@ -167,8 +157,6 @@ function App(): React.JSX.Element {
             element={
               !currentUser ? (
                 <Login onLoginSuccess={handleLoginSuccess} />
-              ) : currentUser.role !== "admin" ? (
-                <AccessDenied />
               ) : (
                 <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
                   <TooltipProvider>

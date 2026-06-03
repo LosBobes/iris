@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildWorkOrderCustomerNotice,
   getAllowedWorkOrderTransitions,
+  getWorkOrderCustomerNextStep,
   getPrimaryWorkOrderTransition,
   isWorkOrderStatusTerminal,
 } from './work-orders'
@@ -33,5 +35,36 @@ describe('work-order lifecycle transitions', () => {
     expect(isWorkOrderStatusTerminal('invoiced')).toBe(true)
     expect(isWorkOrderStatusTerminal('cancelled')).toBe(true)
     expect(isWorkOrderStatusTerminal('waitingForCustomer')).toBe(false)
+  })
+
+  it('returns customer-safe next step copy by status', () => {
+    expect(getWorkOrderCustomerNextStep('waitingForCustomer')).toBe(
+      'Čekamo vašu potvrdu materijala/dizajna.',
+    )
+    expect(getWorkOrderCustomerNextStep('completed')).toBe(
+      'Nalog je završen i spreman za preuzimanje ili isporuku.',
+    )
+  })
+
+  it('builds a plain-text customer notice with due date fallback', () => {
+    expect(
+      buildWorkOrderCustomerNotice({
+        orderNumber: 'RN-42',
+        status: 'waitingForCustomer',
+        dueDate: null,
+        assignment: {
+          assignedTo: 'ana',
+          priority: 'normal',
+          scheduledDate: '2026-06-03',
+        },
+      }),
+    ).toBe(
+      [
+        'Radni nalog RN-42',
+        'Status: Čeka klijenta',
+        'Rok: 03.06.2026',
+        'Sledeći korak: Čekamo vašu potvrdu materijala/dizajna.',
+      ].join('\n'),
+    )
   })
 })

@@ -129,6 +129,7 @@ export function WorkOrdersFilters({
     filters.billingDocumentType !== "all" ||
     filters.deliveryMethod !== "all" ||
     filters.queue !== "all" ||
+    filters.customerId !== "" ||
     filters.dateFrom !== "" ||
     filters.dateTo !== "";
 

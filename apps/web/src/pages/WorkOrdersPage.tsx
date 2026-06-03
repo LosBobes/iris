@@ -121,6 +121,7 @@ function WorkOrdersPage(): React.JSX.Element {
     filters.billingDocumentType !== "all" ||
     filters.deliveryMethod !== "all" ||
     filters.queue !== "all" ||
+    filters.customerId !== "" ||
     filters.dateFrom !== "" ||
     filters.dateTo !== "";
 

@@ -5,7 +5,10 @@ import type {
   DashboardSummary,
   DeliveryMethod
 } from '@/types/work-order'
-import { WORK_ORDER_STATUS_ORDER } from '@/shared/utils/work-orders'
+import {
+  getLocalIsoDate,
+  WORK_ORDER_STATUS_ORDER,
+} from '@/shared/utils/work-orders'
 
 // ---------------------------------------------------------------------------
 // Public data shapes returned by aggregation functions
@@ -29,6 +32,87 @@ export interface ClientCount {
   count: number
 }
 
+export const CORE_ATTENTION_SIGNALS = [
+  'overdue',
+  'dueToday',
+  'dueThisWeek',
+  'waitingForCustomer',
+] as const
+
+export const INTERNAL_ATTENTION_SIGNALS = [
+  'waitingForMaterials',
+  'unassigned',
+] as const
+
+export const ATTENTION_SIGNALS = [
+  ...CORE_ATTENTION_SIGNALS,
+  ...INTERNAL_ATTENTION_SIGNALS,
+] as const
+
+export type AttentionSignal = (typeof ATTENTION_SIGNALS)[number]
+
+export type AttentionSignalCounts = Record<AttentionSignal, number>
+
+export interface ClientAttentionRow {
+  groupKey: string
+  customerId: string | null
+  displayName: string
+  counts: AttentionSignalCounts
+  orders: WorkOrder[]
+  severity: number
+}
+
+const ATTENTION_SIGNAL_SEVERITY: Record<AttentionSignal, number> = {
+  overdue: 600,
+  dueToday: 500,
+  dueThisWeek: 400,
+  waitingForCustomer: 300,
+  waitingForMaterials: 200,
+  unassigned: 100,
+}
+
+function emptyAttentionCounts(): AttentionSignalCounts {
+  return Object.fromEntries(
+    ATTENTION_SIGNALS.map((signal) => [signal, 0]),
+  ) as AttentionSignalCounts
+}
+
+function dateToLocalTimestamp(date: string): number {
+  return new Date(`${date}T00:00:00`).getTime()
+}
+
+function getAttentionDueDate(order: WorkOrder): string | null {
+  return order.dueDate ?? order.assignment.scheduledDate
+}
+
+function totalSignalCount(counts: AttentionSignalCounts): number {
+  return ATTENTION_SIGNALS.reduce((total, signal) => total + counts[signal], 0)
+}
+
+function compareOrderAttention(
+  a: WorkOrder,
+  b: WorkOrder,
+  today: string,
+): number {
+  const aSeverity = Math.max(
+    0,
+    ...getWorkOrderAttentionSignals(a, today).map(
+      (signal) => ATTENTION_SIGNAL_SEVERITY[signal],
+    ),
+  )
+  const bSeverity = Math.max(
+    0,
+    ...getWorkOrderAttentionSignals(b, today).map(
+      (signal) => ATTENTION_SIGNAL_SEVERITY[signal],
+    ),
+  )
+
+  return (
+    bSeverity - aSeverity ||
+    a.orderNumber.localeCompare(b.orderNumber, 'sr-Latn')
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Filtering
 // ---------------------------------------------------------------------------
@@ -47,6 +131,129 @@ export function filterWorkOrders(
     if (filters.issuedBy !== null && order.issuedBy !== filters.issuedBy) return false
     return true
   })
+}
+
+// ---------------------------------------------------------------------------
+// Attention signals
+// ---------------------------------------------------------------------------
+
+export function normalizeClientGroupName(clientName: string): string {
+  return clientName.trim().replace(/\s+/g, ' ').toLocaleLowerCase('sr-Latn')
+}
+
+export function getWorkOrderAttentionSignals(
+  order: WorkOrder,
+  today = getLocalIsoDate(),
+): AttentionSignal[] {
+  const signals: AttentionSignal[] = []
+  const dueDate = getAttentionDueDate(order)
+
+  if (dueDate !== null) {
+    if (dueDate < today && !order.isCompleted) {
+      signals.push('overdue')
+    }
+    if (dueDate === today) {
+      signals.push('dueToday')
+    }
+
+    const dueTimestamp = dateToLocalTimestamp(dueDate)
+    const todayTimestamp = dateToLocalTimestamp(today)
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+    if (
+      dueTimestamp >= todayTimestamp &&
+      dueTimestamp <= todayTimestamp + sevenDaysMs
+    ) {
+      signals.push('dueThisWeek')
+    }
+  }
+
+  if (order.status === 'waitingForCustomer') {
+    signals.push('waitingForCustomer')
+  }
+  if (order.status === 'waitingForMaterials') {
+    signals.push('waitingForMaterials')
+  }
+  if (!order.assignment.assignedTo) {
+    signals.push('unassigned')
+  }
+
+  return signals
+}
+
+export function buildSignalCounts(
+  orders: WorkOrder[],
+  today = getLocalIsoDate(),
+): AttentionSignalCounts {
+  const counts = emptyAttentionCounts()
+
+  for (const order of orders) {
+    for (const signal of getWorkOrderAttentionSignals(order, today)) {
+      counts[signal]++
+    }
+  }
+
+  return counts
+}
+
+export function buildClientAttentionRows(
+  orders: WorkOrder[],
+  selectedSignals: readonly AttentionSignal[] = CORE_ATTENTION_SIGNALS,
+  today = getLocalIsoDate(),
+): ClientAttentionRow[] {
+  const selected = new Set<AttentionSignal>(selectedSignals)
+  const rows = new Map<
+    string,
+    ClientAttentionRow & { latestUpdatedAt: string }
+  >()
+
+  for (const order of orders) {
+    const matchingSignals = getWorkOrderAttentionSignals(order, today).filter(
+      (signal) => selected.has(signal),
+    )
+    if (matchingSignals.length === 0) continue
+
+    const groupKey = order.customerId ?? normalizeClientGroupName(order.clientName)
+    const existing = rows.get(groupKey)
+    const row =
+      existing ??
+      {
+        groupKey,
+        customerId: order.customerId,
+        displayName: order.clientName,
+        counts: emptyAttentionCounts(),
+        orders: [],
+        severity: 0,
+        latestUpdatedAt: order.updatedAt,
+      }
+
+    if (order.updatedAt >= row.latestUpdatedAt) {
+      row.displayName = order.clientName
+      row.latestUpdatedAt = order.updatedAt
+    }
+
+    for (const signal of matchingSignals) {
+      row.counts[signal]++
+      row.severity = Math.max(row.severity, ATTENTION_SIGNAL_SEVERITY[signal])
+    }
+    row.orders.push(order)
+    rows.set(groupKey, row)
+  }
+
+  return Array.from(rows.values())
+    .map((row) => ({
+      groupKey: row.groupKey,
+      customerId: row.customerId,
+      displayName: row.displayName,
+      counts: row.counts,
+      severity: row.severity + totalSignalCount(row.counts) / 100,
+      orders: [...row.orders].sort((a, b) => compareOrderAttention(a, b, today)),
+    }))
+    .sort(
+      (a, b) =>
+        b.severity - a.severity ||
+        totalSignalCount(b.counts) - totalSignalCount(a.counts) ||
+        a.displayName.localeCompare(b.displayName, 'sr-Latn'),
+    )
 }
 
 // ---------------------------------------------------------------------------

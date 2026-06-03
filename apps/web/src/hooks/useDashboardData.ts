@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { DashboardFilters, WorkOrder } from '@/types/work-order'
 import {
+  buildClientAttentionRows,
+  buildSignalCounts,
+  CORE_ATTENTION_SIGNALS,
   deliveryDistribution,
   deriveSummary,
   filterWorkOrders,
+  INTERNAL_ATTENTION_SIGNALS,
   monthlyBuckets,
-  topClients
+  topClients,
+  type AttentionSignal,
 } from '@/lib/dashboard/aggregations'
 import { getLocalIsoDate } from '@/shared/utils/work-orders'
+import { useAuth } from '@/hooks/useAuth'
 
 const DEFAULT_FILTERS: DashboardFilters = {
   dateFrom: null,
@@ -16,9 +22,11 @@ const DEFAULT_FILTERS: DashboardFilters = {
 }
 
 export function useDashboardData() {
+  const { currentUser } = useAuth()
   const [allOrders, setAllOrders] = useState<WorkOrder[]>([])
   const [operators, setOperators] = useState<string[]>([])
   const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS)
+  const [activeSignal, setActiveSignal] = useState<AttentionSignal | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -58,6 +66,18 @@ export function useDashboardData() {
 
   const topClientsList = useMemo(() => topClients(filtered), [filtered])
 
+  const clientAttentionRows = useMemo(
+    () => buildClientAttentionRows(allOrders, CORE_ATTENTION_SIGNALS),
+    [allOrders]
+  )
+
+  const internalAttentionRows = useMemo(
+    () => buildClientAttentionRows(allOrders, INTERNAL_ATTENTION_SIGNALS),
+    [allOrders]
+  )
+
+  const signalCounts = useMemo(() => buildSignalCounts(allOrders), [allOrders])
+
   const queueSummary = useMemo(() => {
     const today = getLocalIsoDate()
     return {
@@ -82,6 +102,12 @@ export function useDashboardData() {
     operators,
     filters,
     setFilters,
+    clientAttentionRows,
+    internalAttentionRows,
+    signalCounts,
+    activeSignal,
+    setActiveSignal,
+    showFinance: currentUser.role === 'admin',
     loading,
     error,
     hasSourceData: allOrders.length > 0,

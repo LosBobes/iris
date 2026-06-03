@@ -1,6 +1,7 @@
 import type {
   BillingDocumentType,
   DeliveryMethod,
+  WorkOrder,
   WorkOrderStatus,
 } from "@/types/work-order";
 
@@ -28,6 +29,17 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   completed: "Završen",
   cancelled: "Otkazan",
   invoiced: "Fakturisan",
+};
+
+export const WORK_ORDER_CUSTOMER_NEXT_STEPS: Record<WorkOrderStatus, string> = {
+  new: "Nalog je evidentiran i čeka dodelu operateru.",
+  assigned: "Nalog je dodeljen operateru i priprema je u toku.",
+  inProgress: "Rad je u toku; javljamo se čim bude spremno za sledeći korak.",
+  waitingForCustomer: "Čekamo vašu potvrdu materijala/dizajna.",
+  waitingForMaterials: "Čekamo potreban materijal pre nastavka izrade.",
+  completed: "Nalog je završen i spreman za preuzimanje ili isporuku.",
+  invoiced: "Nalog je fakturisan; ostaje još administrativna obrada po dokumentu.",
+  cancelled: "Nalog je otkazan.",
 };
 
 export const WORK_ORDER_STATUS_VARIANTS: Record<
@@ -104,6 +116,23 @@ export function getPrimaryWorkOrderTransition(
   status: WorkOrderStatus,
 ): WorkOrderStatus | null {
   return WORK_ORDER_PRIMARY_TRANSITION[status];
+}
+
+export function getWorkOrderCustomerNextStep(status: WorkOrderStatus): string {
+  return WORK_ORDER_CUSTOMER_NEXT_STEPS[status];
+}
+
+export function buildWorkOrderCustomerNotice(
+  order: Pick<WorkOrder, "orderNumber" | "status" | "dueDate" | "assignment">,
+): string {
+  const customerDueDate = order.dueDate ?? order.assignment.scheduledDate;
+
+  return [
+    `Radni nalog ${order.orderNumber}`,
+    `Status: ${WORK_ORDER_STATUS_LABELS[order.status]}`,
+    `Rok: ${customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}`,
+    `Sledeći korak: ${getWorkOrderCustomerNextStep(order.status)}`,
+  ].join("\n");
 }
 
 export function isWorkOrderStatusTerminal(status: WorkOrderStatus): boolean {
