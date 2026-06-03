@@ -2,6 +2,7 @@ import type {
   BillingDocumentType,
   DeliveryMethod,
   WorkOrder,
+  WorkOrderPriority,
   WorkOrderStatus,
 } from "@/types/work-order";
 
@@ -33,6 +34,37 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
 
 export function getWorkOrderStatusLabel(status: WorkOrderStatus): string {
   return WORK_ORDER_STATUS_LABELS[status];
+}
+
+export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
+  low: "Nizak",
+  normal: "Normalan",
+  high: "Visok",
+  urgent: "Hitno",
+};
+
+export function getWorkOrderPriorityLabel(priority: WorkOrderPriority): string {
+  return WORK_ORDER_PRIORITY_LABELS[priority];
+}
+
+const WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX = "Status promenjen na ";
+
+function isWorkOrderStatus(value: string): value is WorkOrderStatus {
+  return value in WORK_ORDER_STATUS_LABELS;
+}
+
+/** Localizes status-change timeline labels that still store raw enum values. */
+export function formatWorkOrderEventLabel(label: string, kind?: string): string {
+  if (kind !== "status" || !label.startsWith(WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX)) {
+    return label;
+  }
+
+  const rawStatus = label.slice(WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX.length);
+  if (!isWorkOrderStatus(rawStatus)) {
+    return label;
+  }
+
+  return `${WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX}${getWorkOrderStatusLabel(rawStatus)}`;
 }
 
 export const WORK_ORDER_CUSTOMER_NEXT_STEPS: Record<WorkOrderStatus, string> = {

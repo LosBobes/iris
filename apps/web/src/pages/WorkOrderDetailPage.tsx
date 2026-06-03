@@ -11,6 +11,7 @@ import {
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
   getWorkOrderStatusLabel,
+  formatWorkOrderEventLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -226,7 +227,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     order.events.length > 0
       ? order.events.map((event, index) => ({
           time: formatWorkOrderDateTime(event.createdAt),
-          label: event.label,
+          label: formatWorkOrderEventLabel(event.label, event.kind),
           who: event.actor,
           state: index === order.events.length - 1 ? "current" : "done",
         }))

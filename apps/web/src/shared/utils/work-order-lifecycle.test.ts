@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildWorkOrderCustomerNotice,
+  formatWorkOrderEventLabel,
   getAllowedWorkOrderTransitions,
+  getWorkOrderPriorityLabel,
   getWorkOrderStatusLabel,
   getWorkOrderCustomerNextStep,
   getPrimaryWorkOrderTransition,
@@ -47,12 +49,29 @@ describe('work-order lifecycle transitions', () => {
     )
   })
 
+  it('formats work order priorities as Serbian UI labels', () => {
+    expect(getWorkOrderPriorityLabel('low')).toBe('Nizak')
+    expect(getWorkOrderPriorityLabel('normal')).toBe('Normalan')
+    expect(getWorkOrderPriorityLabel('high')).toBe('Visok')
+    expect(getWorkOrderPriorityLabel('urgent')).toBe('Hitno')
+  })
+
   it('formats lifecycle statuses as Serbian UI labels', () => {
     expect(getWorkOrderStatusLabel('new')).toBe('Nov')
     expect(getWorkOrderStatusLabel('assigned')).toBe('Dodeljen')
     expect(getWorkOrderStatusLabel('inProgress')).toBe('U toku')
     expect(getWorkOrderStatusLabel('waitingForCustomer')).toBe('Čeka klijenta')
     expect(getWorkOrderStatusLabel('waitingForMaterials')).toBe('Čeka materijal')
+  })
+
+  it('localizes status-change timeline labels with raw enum values', () => {
+    expect(
+      formatWorkOrderEventLabel('Status promenjen na assigned', 'status'),
+    ).toBe('Status promenjen na Dodeljen')
+    expect(formatWorkOrderEventLabel('Nalog kreiran', 'created')).toBe('Nalog kreiran')
+    expect(
+      formatWorkOrderEventLabel('Status promenjen na Dodeljen', 'status'),
+    ).toBe('Status promenjen na Dodeljen')
   })
 
   it('builds a plain-text customer notice with due date fallback', () => {

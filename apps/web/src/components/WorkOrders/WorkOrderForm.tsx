@@ -34,7 +34,9 @@ import {
 import {
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
+  WORK_ORDER_PRIORITY_LABELS,
   WORK_ORDER_SELECT_NONE_VALUE,
+  getWorkOrderPriorityLabel,
   getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
@@ -754,10 +756,13 @@ export function WorkOrderForm({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Nizak</SelectItem>
-                      <SelectItem value="normal">Normalan</SelectItem>
-                      <SelectItem value="high">Visok</SelectItem>
-                      <SelectItem value="urgent">Hitno</SelectItem>
+                      {(Object.entries(WORK_ORDER_PRIORITY_LABELS) as Array<
+                        [keyof typeof WORK_ORDER_PRIORITY_LABELS, string]
+                      >).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -1355,7 +1360,7 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
     ],
     ["Dostava", deliveryMethod ? WORK_ORDER_DELIVERY_LABELS[deliveryMethod] : "-"],
     ["Operater", assignedTo || "Nedodeljeno"],
-    ["Prioritet", priority],
+    ["Prioritet", getWorkOrderPriorityLabel(priority)],
     ["Planirano", scheduledDate ? formatWorkOrderDate(scheduledDate) : "-"],
     ["Datum izdavanja", issueDate ? formatWorkOrderDate(issueDate) : "-"],
     ["Rok", dueDate ? formatWorkOrderDate(dueDate) : "-"],

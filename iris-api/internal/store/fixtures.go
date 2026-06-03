@@ -1341,6 +1341,29 @@ func canTransition(from domain.WorkOrderStatus, to domain.WorkOrderStatus) bool 
 	return false
 }
 
+func workOrderStatusLabel(status domain.WorkOrderStatus) string {
+	switch status {
+	case domain.WorkOrderStatusNew:
+		return "Nov"
+	case domain.WorkOrderStatusAssigned:
+		return "Dodeljen"
+	case domain.WorkOrderStatusInProgress:
+		return "U toku"
+	case domain.WorkOrderStatusWaitingForCustomer:
+		return "Čeka klijenta"
+	case domain.WorkOrderStatusWaitingForMaterials:
+		return "Čeka materijal"
+	case domain.WorkOrderStatusCompleted:
+		return "Završen"
+	case domain.WorkOrderStatusCancelled:
+		return "Otkazan"
+	case domain.WorkOrderStatusInvoiced:
+		return "Fakturisan"
+	default:
+		return string(status)
+	}
+}
+
 func applyStatus(workOrder *domain.WorkOrder, status domain.WorkOrderStatus) {
 	workOrder.Status = status
 	now := time.Now().UTC()
@@ -1362,7 +1385,7 @@ func applyStatus(workOrder *domain.WorkOrder, status domain.WorkOrderStatus) {
 	workOrder.Events = append(workOrder.Events, domain.WorkOrderEvent{
 		ID:        fmt.Sprintf("event-%d", len(workOrder.Events)+1),
 		Kind:      "status",
-		Label:     fmt.Sprintf("Status promenjen na %s", status),
+		Label:     fmt.Sprintf("Status promenjen na %s", workOrderStatusLabel(status)),
 		Actor:     workOrder.IssuedBy,
 		CreatedAt: timestamp,
 	})

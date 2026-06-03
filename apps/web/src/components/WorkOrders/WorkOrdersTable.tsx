@@ -35,6 +35,7 @@ import {
   formatWorkOrderDate,
   formatWorkOrderPrice,
   getPrimaryWorkOrderTransition,
+  getWorkOrderPriorityLabel,
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 
@@ -228,7 +229,7 @@ export function WorkOrdersTable({
                   {order.assignment.assignedTo ?? "Nedodeljeno"}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
-                  {order.assignment.priority}
+                  {getWorkOrderPriorityLabel(order.assignment.priority)}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.billingDocumentType
