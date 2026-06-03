@@ -817,6 +817,27 @@ func normalizeMaterialUsage(materials []domain.MaterialUsage) []domain.MaterialU
 	return materials
 }
 
+func normalizeInvoiceLineItems(items []domain.InvoiceLineItem) []domain.InvoiceLineItem {
+	if items == nil {
+		return []domain.InvoiceLineItem{}
+	}
+	for index := range items {
+		if items[index].ID == "" {
+			items[index].ID = fmt.Sprintf("line-%d", index+1)
+		}
+		if items[index].Kind == "" {
+			items[index].Kind = domain.InvoiceLineItemKindService
+		}
+		if items[index].Unit == "" || !isInvoiceUnitAllowed(items[index].Kind, items[index].Unit) {
+			items[index].Unit = domain.InvoiceUnitKom
+		}
+		if items[index].Quantity == 0 {
+			items[index].Quantity = 1
+		}
+	}
+	return items
+}
+
 func normalizeTimeEntries(entries []domain.TimeEntry, operator string, createdAt string) []domain.TimeEntry {
 	if entries == nil {
 		return []domain.TimeEntry{}
@@ -853,9 +874,17 @@ func normalizeInvoiceDraft(
 	}
 	if price != nil && len(normalized.LineItems) == 0 {
 		normalized.LineItems = []domain.InvoiceLineItem{
-			{ID: "line-1", Description: jobDescription, Quantity: 1, UnitPrice: *price},
+			{
+				ID:          "line-1",
+				Kind:        domain.InvoiceLineItemKindService,
+				Description: jobDescription,
+				Quantity:    1,
+				Unit:        domain.InvoiceUnitKom,
+				UnitPrice:   *price,
+			},
 		}
 	}
+	normalized.LineItems = normalizeInvoiceLineItems(normalized.LineItems)
 	return normalized
 }
 
@@ -1170,6 +1199,17 @@ func validateInvoiceDraft(value domain.InvoiceDraft) error {
 	if value.Status != "" && !isValidInvoiceDraftStatus(value.Status) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
+	for _, line := range value.LineItems {
+		if line.Kind != "" && !isValidInvoiceLineItemKind(line.Kind) {
+			return newValidationError(invalidWorkOrderMessage)
+		}
+		if line.Unit != "" && !isValidInvoiceUnit(line.Unit) {
+			return newValidationError(invalidWorkOrderMessage)
+		}
+		if line.Kind != "" && line.Unit != "" && !isInvoiceUnitAllowed(line.Kind, line.Unit) {
+			return newValidationError(invalidWorkOrderMessage)
+		}
+	}
 	return nil
 }
 
@@ -1234,6 +1274,31 @@ func isValidInvoiceDraftStatus(value domain.InvoiceDraftStatus) bool {
 	default:
 		return false
 	}
+}
+
+func isValidInvoiceLineItemKind(value domain.InvoiceLineItemKind) bool {
+	switch value {
+	case domain.InvoiceLineItemKindService,
+		domain.InvoiceLineItemKindGoods:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidInvoiceUnit(value domain.InvoiceUnit) bool {
+	switch value {
+	case domain.InvoiceUnitKom,
+		domain.InvoiceUnitM2,
+		domain.InvoiceUnitSet:
+		return true
+	default:
+		return false
+	}
+}
+
+func isInvoiceUnitAllowed(kind domain.InvoiceLineItemKind, unit domain.InvoiceUnit) bool {
+	return kind == domain.InvoiceLineItemKindService || unit != domain.InvoiceUnitSet
 }
 
 func canTransition(from domain.WorkOrderStatus, to domain.WorkOrderStatus) bool {

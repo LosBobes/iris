@@ -72,6 +72,21 @@ const (
 	InvoiceDraftStatusPaid   InvoiceDraftStatus = "paid"
 )
 
+type InvoiceLineItemKind string
+
+const (
+	InvoiceLineItemKindService InvoiceLineItemKind = "service"
+	InvoiceLineItemKindGoods   InvoiceLineItemKind = "goods"
+)
+
+type InvoiceUnit string
+
+const (
+	InvoiceUnitKom InvoiceUnit = "kom"
+	InvoiceUnitM2  InvoiceUnit = "m2"
+	InvoiceUnitSet InvoiceUnit = "set"
+)
+
 type User struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`
@@ -170,10 +185,12 @@ type TimeEntry struct {
 }
 
 type InvoiceLineItem struct {
-	ID          string  `json:"id"`
-	Description string  `json:"description"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unitPrice"`
+	ID          string              `json:"id"`
+	Kind        InvoiceLineItemKind `json:"kind"`
+	Description string              `json:"description"`
+	Quantity    int                 `json:"quantity"`
+	Unit        InvoiceUnit         `json:"unit"`
+	UnitPrice   float64             `json:"unitPrice"`
 }
 
 type InvoiceDraft struct {

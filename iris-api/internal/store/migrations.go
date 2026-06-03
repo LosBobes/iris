@@ -131,8 +131,10 @@ CREATE TABLE IF NOT EXISTS work_order_time_entries (
 CREATE TABLE IF NOT EXISTS invoice_line_items (
 	id TEXT NOT NULL,
 	work_order_id TEXT NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+	kind TEXT NOT NULL DEFAULT 'service',
 	description TEXT NOT NULL,
 	quantity INTEGER NOT NULL,
+	unit TEXT NOT NULL DEFAULT 'kom',
 	unit_price REAL NOT NULL,
 	PRIMARY KEY (work_order_id, id)
 );

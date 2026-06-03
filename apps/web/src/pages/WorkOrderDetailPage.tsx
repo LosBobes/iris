@@ -13,6 +13,11 @@ import {
   formatWorkOrderPrice,
 } from "@/shared/utils/work-orders";
 
+const INVOICE_LINE_ITEM_KIND_LABELS = {
+  service: "Usluga",
+  goods: "Roba",
+} as const;
+
 export function printWorkOrder(): void {
   window.print();
 }
@@ -353,6 +358,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="py-2 text-left text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   Opis
                 </th>
+                <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  Količina
+                </th>
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   Iznos
                 </th>
@@ -361,11 +369,26 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             <tbody>
               {(order.invoiceDraft.lineItems.length > 0
                 ? order.invoiceDraft.lineItems
-                : [{ id: "legacy", description: order.jobDescription, quantity: 1, unitPrice: order.price ?? 0 }]
+                : [
+                    {
+                      id: "legacy",
+                      kind: "service" as const,
+                      description: order.jobDescription,
+                      quantity: 1,
+                      unit: "kom" as const,
+                      unitPrice: order.price ?? 0,
+                    },
+                  ]
               ).map((line) => (
                 <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
                   <td className="py-3 text-foreground">
-                    {line.description}
+                    <div>{line.description}</div>
+                    <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
+                      {INVOICE_LINE_ITEM_KIND_LABELS[line.kind]}
+                    </div>
+                  </td>
+                  <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                    {line.quantity} {line.unit}
                   </td>
                   <td className="tnum py-3 text-right font-medium text-foreground">
                     {formatWorkOrderPrice(line.quantity * line.unitPrice)}

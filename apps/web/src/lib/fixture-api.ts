@@ -8,6 +8,9 @@ import type {
   Customer,
   CustomerCommunication,
   InvoiceDraft,
+  InvoiceLineItem,
+  InvoiceLineItemKind,
+  InvoiceUnit,
   JobDetails,
   Location,
   MaterialUsage,
@@ -138,6 +141,34 @@ function normalizeAssignment(
   }
 }
 
+function isInvoiceLineItemKind(value: unknown): value is InvoiceLineItemKind {
+  return value === 'service' || value === 'goods'
+}
+
+function isInvoiceUnit(value: unknown): value is InvoiceUnit {
+  return value === 'kom' || value === 'm2' || value === 'set'
+}
+
+function isInvoiceUnitAllowed(kind: InvoiceLineItemKind, unit: unknown): unit is InvoiceUnit {
+  if (!isInvoiceUnit(unit)) return false
+  return kind === 'service' || unit !== 'set'
+}
+
+function normalizeInvoiceLineItem(
+  line: Partial<InvoiceLineItem>,
+  index: number,
+): InvoiceLineItem {
+  const kind = isInvoiceLineItemKind(line.kind) ? line.kind : 'service'
+  return {
+    id: line.id || `line-${index + 1}`,
+    kind,
+    description: line.description ?? '',
+    quantity: line.quantity ?? 1,
+    unit: isInvoiceUnitAllowed(kind, line.unit) ? line.unit : 'kom',
+    unitPrice: line.unitPrice ?? 0,
+  }
+}
+
 function normalizeInvoiceDraft(
   invoiceDraft: Partial<InvoiceDraft> | null | undefined,
   raw: FixtureWorkOrder,
@@ -147,15 +178,19 @@ function normalizeInvoiceDraft(
     status: invoiceDraft?.status ?? (hasPrice ? 'draft' : 'none'),
     invoiceNumber: normalizeNullableString(invoiceDraft?.invoiceNumber),
     lineItems:
-      invoiceDraft?.lineItems ??
+      invoiceDraft?.lineItems?.map((line, index) =>
+        normalizeInvoiceLineItem(line, index)
+      ) ??
       (hasPrice
         ? [
-            {
+            normalizeInvoiceLineItem({
               id: 'line-1',
+              kind: 'service',
               description: raw.jobDescription,
               quantity: 1,
+              unit: 'kom',
               unitPrice: raw.price ?? 0,
-            },
+            }, 0),
           ]
         : []),
     paidAt: normalizeNullableString(invoiceDraft?.paidAt),

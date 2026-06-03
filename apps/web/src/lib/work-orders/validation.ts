@@ -4,6 +4,8 @@ const deliveryMethodEnum = z.enum(['pickup', 'postExpress', 'cityExpress', 'fiel
 const billingDocumentTypeEnum = z.enum(['invoice', 'cashCollection', 'proforma'])
 const priorityEnum = z.enum(['low', 'normal', 'high', 'urgent'])
 const invoiceDraftStatusEnum = z.enum(['none', 'draft', 'issued', 'paid'])
+const invoiceLineItemKindEnum = z.enum(['service', 'goods'])
+const invoiceUnitEnum = z.enum(['kom', 'm2', 'set'])
 
 const emptyToNullString = z
   .union([z.string(), z.null()])
@@ -68,17 +70,29 @@ const timeEntrySchema = z.object({
   loggedAt: z.string(),
 })
 
+const invoiceLineItemSchema = z
+  .object({
+    id: z.string(),
+    kind: invoiceLineItemKindEnum,
+    description: z.string(),
+    quantity: z.number().int().positive(),
+    unit: invoiceUnitEnum,
+    unitPrice: z.number().min(0),
+  })
+  .superRefine((line, ctx) => {
+    if (line.kind === 'goods' && line.unit === 'set') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Set je dozvoljen samo za usluge',
+        path: ['unit'],
+      })
+    }
+  })
+
 const invoiceDraftSchema = z.object({
   status: invoiceDraftStatusEnum,
   invoiceNumber: emptyToNullString,
-  lineItems: z.array(
-    z.object({
-      id: z.string(),
-      description: z.string(),
-      quantity: z.number().int().positive(),
-      unitPrice: z.number().min(0),
-    })
-  ),
+  lineItems: z.array(invoiceLineItemSchema),
   paidAt: emptyToNullString,
 })
 

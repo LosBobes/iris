@@ -15,6 +15,8 @@ export type WorkOrderStatus =
 export type WorkOrderPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type WorkOrderNoteVisibility = 'internal' | 'customer'
 export type InvoiceDraftStatus = 'none' | 'draft' | 'issued' | 'paid'
+export type InvoiceLineItemKind = 'service' | 'goods'
+export type InvoiceUnit = 'kom' | 'm2' | 'set'
 
 export interface JobDetails {
   productCode: string | null
@@ -102,8 +104,10 @@ export interface TimeEntry {
 
 export interface InvoiceLineItem {
   id: string
+  kind: InvoiceLineItemKind
   description: string
   quantity: number
+  unit: InvoiceUnit
   unitPrice: number
 }
 
