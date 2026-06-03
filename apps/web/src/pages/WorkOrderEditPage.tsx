@@ -9,7 +9,7 @@ import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
   getLocalIsoDate,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type {
   Customer,
@@ -138,7 +138,7 @@ function WorkOrderEditPage(): React.JSX.Element {
         return;
       }
       setOrder(updated);
-      toast.success(`Nalog ${updated.orderNumber}: ${WORK_ORDER_STATUS_LABELS[newStatus]}`);
+      toast.success(`Nalog ${updated.orderNumber}: ${getWorkOrderStatusLabel(newStatus)}`);
     } catch {
       toast.error("Greška pri promeni statusa");
     }
@@ -178,7 +178,7 @@ function WorkOrderEditPage(): React.JSX.Element {
                 size="sm"
                 onClick={handleToggleStatus}
               >
-                Pomeri u {WORK_ORDER_STATUS_LABELS[getPrimaryWorkOrderTransition(order.status)!]}
+                Pomeri u {getWorkOrderStatusLabel(getPrimaryWorkOrderTransition(order.status)!)}
               </Button>
             )}
           </div>

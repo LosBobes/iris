@@ -31,6 +31,10 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   invoiced: "Fakturisan",
 };
 
+export function getWorkOrderStatusLabel(status: WorkOrderStatus): string {
+  return WORK_ORDER_STATUS_LABELS[status];
+}
+
 export const WORK_ORDER_CUSTOMER_NEXT_STEPS: Record<WorkOrderStatus, string> = {
   new: "Nalog je evidentiran i čeka dodelu operateru.",
   assigned: "Nalog je dodeljen operateru i priprema je u toku.",
@@ -129,7 +133,7 @@ export function buildWorkOrderCustomerNotice(
 
   return [
     `Radni nalog ${order.orderNumber}`,
-    `Status: ${WORK_ORDER_STATUS_LABELS[order.status]}`,
+    `Status: ${getWorkOrderStatusLabel(order.status)}`,
     `Rok: ${customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}`,
     `Sledeći korak: ${getWorkOrderCustomerNextStep(order.status)}`,
   ].join("\n");

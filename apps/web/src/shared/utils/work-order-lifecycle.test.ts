@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildWorkOrderCustomerNotice,
   getAllowedWorkOrderTransitions,
+  getWorkOrderStatusLabel,
   getWorkOrderCustomerNextStep,
   getPrimaryWorkOrderTransition,
   isWorkOrderStatusTerminal,
@@ -44,6 +45,14 @@ describe('work-order lifecycle transitions', () => {
     expect(getWorkOrderCustomerNextStep('completed')).toBe(
       'Nalog je završen i spreman za preuzimanje ili isporuku.',
     )
+  })
+
+  it('formats lifecycle statuses as Serbian UI labels', () => {
+    expect(getWorkOrderStatusLabel('new')).toBe('Nov')
+    expect(getWorkOrderStatusLabel('assigned')).toBe('Dodeljen')
+    expect(getWorkOrderStatusLabel('inProgress')).toBe('U toku')
+    expect(getWorkOrderStatusLabel('waitingForCustomer')).toBe('Čeka klijenta')
+    expect(getWorkOrderStatusLabel('waitingForMaterials')).toBe('Čeka materijal')
   })
 
   it('builds a plain-text customer notice with due date fallback', () => {

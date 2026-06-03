@@ -10,7 +10,7 @@ import {
   buildWorkOrderCustomerNotice,
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -520,7 +520,7 @@ function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Elemen
             Status
           </div>
           <div className="mt-1.5 text-[13px] text-foreground">
-            {WORK_ORDER_STATUS_LABELS[order.status]}
+            {getWorkOrderStatusLabel(order.status)}
           </div>
         </div>
         <div

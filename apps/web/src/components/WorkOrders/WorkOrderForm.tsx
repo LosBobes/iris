@@ -35,7 +35,7 @@ import {
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
   WORK_ORDER_SELECT_NONE_VALUE,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -507,7 +507,7 @@ export function WorkOrderForm({
                 Status
               </div>
               <div className="mt-1 text-foreground">
-                {WORK_ORDER_STATUS_LABELS[initialData.status]}
+                {getWorkOrderStatusLabel(initialData.status)}
               </div>
             </div>
             <div>

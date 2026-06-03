@@ -5,7 +5,7 @@ import type {
   AttentionSignal,
   ClientAttentionRow,
 } from "@/lib/dashboard/aggregations";
-import { WORK_ORDER_STATUS_LABELS } from "@/shared/utils/work-orders";
+import { getWorkOrderStatusLabel } from "@/shared/utils/work-orders";
 
 const SIGNAL_LABELS: Record<AttentionSignal, string> = {
   overdue: "Kasni",
@@ -177,7 +177,7 @@ export function ClientAttentionList({
                         {order.jobDescription}
                       </span>
                       <span className="shrink-0 text-[color:var(--iris-ink-mute)]">
-                        {WORK_ORDER_STATUS_LABELS[order.status]}
+                        {getWorkOrderStatusLabel(order.status)}
                       </span>
                     </Link>
                   ))}

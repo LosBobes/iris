@@ -1,5 +1,5 @@
 import type { WorkOrderStatus } from "@/types/work-order";
-import { WORK_ORDER_STATUS_LABELS } from "@/shared/utils/work-orders";
+import { getWorkOrderStatusLabel } from "@/shared/utils/work-orders";
 
 const STATUS_CSS_VAR: Record<WorkOrderStatus, string> = {
   new: "var(--iris-status-draft)",
@@ -27,7 +27,7 @@ export function IrisBadge({ status }: IrisBadgeProps): React.JSX.Element {
         background: `color-mix(in oklch, ${color} 12%, transparent)`,
       }}
     >
-      {WORK_ORDER_STATUS_LABELS[status]}
+      {getWorkOrderStatusLabel(status)}
     </span>
   );
 }

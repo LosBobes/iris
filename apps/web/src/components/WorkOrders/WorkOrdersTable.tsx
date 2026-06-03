@@ -35,7 +35,7 @@ import {
   formatWorkOrderDate,
   formatWorkOrderPrice,
   getPrimaryWorkOrderTransition,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 
 interface ColDef {
@@ -193,7 +193,7 @@ export function WorkOrdersTable({
             const canToggleStatus = canToggleWorkOrderCompletion(order.status);
             const statusTransition = getPrimaryWorkOrderTransition(order.status);
             const statusActionLabel = canToggleStatus
-              ? `Promeni u ${WORK_ORDER_STATUS_LABELS[statusTransition!]}`
+              ? `Promeni u ${getWorkOrderStatusLabel(statusTransition!)}`
               : "Status ovog naloga se ne menja iz liste";
             // Cap stagger so a 100-row page doesn't take 3s to settle.
             const rowDelayMs = Math.min(idx, 12) * 22;

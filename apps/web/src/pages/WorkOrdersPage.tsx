@@ -12,7 +12,7 @@ import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
   getLocalIsoDate,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type { WorkOrder } from "@/types/work-order";
 
@@ -63,7 +63,7 @@ function WorkOrdersPage(): React.JSX.Element {
           return;
         }
         await refreshOrders();
-        toast.success(`Nalog ${order.orderNumber}: ${WORK_ORDER_STATUS_LABELS[newStatus]}`);
+        toast.success(`Nalog ${order.orderNumber}: ${getWorkOrderStatusLabel(newStatus)}`);
       } catch {
         toast.error("Greška pri promeni statusa");
       }
