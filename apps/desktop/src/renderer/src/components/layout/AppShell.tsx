@@ -1,19 +1,28 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { LogOut } from "lucide-react";
+import {
+  LogOut,
+  Home,
+  LayoutDashboard,
+  ClipboardList,
+  PlusCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 interface NavItemDef {
   label: string;
   to: string;
   end?: boolean;
+  icon: React.ComponentType<{ className?: string; size?: number }>;
 }
 
 const NAV_ITEMS: NavItemDef[] = [
-  { label: "Kontrolna tabla", to: "/", end: true },
-  { label: "Radni nalozi", to: "/work-orders" },
-  { label: "Novi nalog", to: "/work-orders/new" },
+  { label: "Kontrolna tabla", to: "/", end: true, icon: LayoutDashboard },
+  { label: "Radni nalozi", to: "/work-orders", icon: ClipboardList },
+  { label: "Novi nalog", to: "/work-orders/new", icon: PlusCircle },
 ];
 
 interface AppShellProps {
@@ -47,6 +56,26 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
     height: number;
     visible: boolean;
   }>({ top: 0, height: 0, visible: false });
+
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sidebar-collapsed", String(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  }, []);
 
   const initials = (currentUser?.username ?? "??")
     .split(/[.\s_-]+/)
@@ -93,29 +122,57 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
 
   return (
     <div className="fixed inset-0 flex min-w-[1024px] overflow-hidden bg-background text-foreground">
-      <aside className="flex h-full w-[220px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-5 pt-7 pb-5">
-        <div className="mb-10">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[22px] font-medium tracking-[-0.5px] text-foreground">
-              Iris
-            </span>
-            <span className="text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-              Grafika Čobanović
-            </span>
-          </div>
-          {/* TODO: Change this based on the feedback from the team */}
-          {/* <div className="mt-1 text-[10px] tracking-[0.3px] text-[color:var(--iris-ink-faint)]">
-            Radni nalozi · v0.0.1
-          </div> */}
+      <aside className={cn(
+        "flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar pt-7 pb-5 transition-[width,padding] duration-300 ease-[var(--iris-ease-out-decisive)]",
+        isCollapsed ? "w-[68px] px-3" : "w-[220px] px-5"
+      )}>
+        <div className={cn(
+          "mb-10 flex items-center",
+          isCollapsed ? "flex-col items-center gap-4 justify-center" : "flex-row justify-between gap-2"
+        )}>
+          <NavLink
+            to="/"
+            className={cn(
+              "flex items-center font-medium text-foreground hover:opacity-90 transition-all duration-300",
+              isCollapsed ? "gap-0 justify-center w-full" : "gap-2.5"
+            )}
+          >
+            <Home className="h-5 w-5 shrink-0 text-[color:var(--iris-accent)]" />
+            <div className={cn(
+              "flex flex-col transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
+              isCollapsed ? "w-0 opacity-0 overflow-hidden pointer-events-none" : "w-auto opacity-100"
+            )}>
+              <span className="text-[18px] font-semibold leading-none tracking-[-0.5px] whitespace-nowrap">
+                Iris
+              </span>
+              <span className="text-[9px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)] mt-0.5 whitespace-nowrap">
+                Grafika Čobanović
+              </span>
+            </div>
+          </NavLink>
+
+          <button
+            onClick={toggleCollapse}
+            className="flex h-6 w-6 items-center justify-center rounded-md border border-[color:var(--iris-border-soft)] bg-background text-[color:var(--iris-ink-soft)] hover:text-foreground hover:bg-black/[0.03] transition-colors iris-focusable iris-press shrink-0"
+            title={isCollapsed ? "Proširi" : "Skupi"}
+          >
+            {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
         </div>
 
-        <div className="mb-3 pl-1 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+        <div className={cn(
+          "mb-3 pl-1 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] transition-all duration-300",
+          isCollapsed ? "opacity-0 h-0 mb-0 overflow-hidden" : "opacity-100"
+        )}>
           Sekcija
         </div>
         <nav ref={navRef} className="relative flex flex-col gap-0.5">
           <span
             aria-hidden
-            className="pointer-events-none absolute -left-5 w-0.5 bg-[color:var(--iris-accent)] motion-reduce:transition-none"
+            className={cn(
+              "pointer-events-none absolute w-0.5 bg-[color:var(--iris-accent)] motion-reduce:transition-none transition-all duration-300",
+              isCollapsed ? "-left-3" : "-left-5"
+            )}
             style={{
               top: indicator.top,
               height: indicator.height,
@@ -123,51 +180,83 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               transform: indicator.visible ? "scaleY(1)" : "scaleY(0.5)",
               transformOrigin: "center",
               transition:
-                "top 320ms var(--iris-ease-out-decisive), height 320ms var(--iris-ease-out-decisive), opacity 220ms var(--iris-ease-out), transform 220ms var(--iris-ease-out)",
+                "top 320ms var(--iris-ease-out-decisive), height 320ms var(--iris-ease-out-decisive), opacity 220ms var(--iris-ease-out), transform 220ms var(--iris-ease-out), left 300ms var(--iris-ease-out-decisive)",
             }}
           />
-          {NAV_ITEMS.map((item, idx) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              ref={(el) => {
-                itemRefs.current[idx] = el;
-              }}
-              className={() =>
-                cn(
-                  "iris-focusable iris-press relative flex items-center gap-2.5 rounded-sm px-2 py-2 text-[13px]",
-                  idx === activeNavIndex
-                    ? "bg-black/5 font-medium text-foreground"
-                    : "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
-                )
-              }
-            >
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {NAV_ITEMS.map((item, idx) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                ref={(el) => {
+                  itemRefs.current[idx] = el;
+                }}
+                className={() =>
+                  cn(
+                    "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
+                    isCollapsed ? "w-full justify-center px-0 gap-0" : "gap-2.5",
+                    idx === activeNavIndex
+                      ? "bg-black/5 font-medium text-foreground"
+                      : "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
+                  )
+                }
+                title={isCollapsed ? item.label : undefined}
+              >
+                <Icon size={16} className="shrink-0" />
+                <span className={cn(
+                  "whitespace-nowrap transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
+                  isCollapsed ? "hidden" : "inline"
+                )}>
+                  {item.label}
+                </span>
+              </NavLink>
+            );
+          })}
         </nav>
 
-        <div className="mt-auto text-[11px] text-[color:var(--iris-ink-mute)] leading-[1.5]">
-          <div className="flex items-center gap-2 border-t border-[color:var(--iris-border-soft)] py-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[color:var(--iris-accent)] text-[11px] font-medium text-white">
+        <div className={cn(
+          "mt-auto text-[11px] text-[color:var(--iris-ink-mute)] leading-[1.5] flex flex-col gap-3 transition-all duration-300",
+          isCollapsed ? "items-center w-full" : "items-start w-full"
+        )}>
+          <div className={cn(
+            "flex items-center gap-2 border-t border-[color:var(--iris-border-soft)] py-2 w-full transition-all duration-300",
+            isCollapsed ? "justify-center gap-0 border-t-0 py-0" : ""
+          )}>
+            <div
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--iris-accent)] text-[11px] font-medium text-white"
+              title={isCollapsed ? currentUser?.username ?? "" : undefined}
+            >
               {initials}
             </div>
-            <div>
-              <div className="text-[12px] text-foreground">
+            <div className={cn(
+              "flex flex-col transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
+              isCollapsed ? "w-0 opacity-0 overflow-hidden pointer-events-none" : "w-auto opacity-100"
+            )}>
+              <div className="text-[12px] text-foreground font-medium whitespace-nowrap">
                 {currentUser?.username ?? ""}
               </div>
-              <div className="text-[10px] text-[color:var(--iris-ink-faint)]">
+              <div className="text-[10px] text-[color:var(--iris-ink-faint)] whitespace-nowrap">
                 Operater
               </div>
             </div>
           </div>
           <button
             onClick={onLogout}
-            className="iris-focusable iris-press flex w-full items-center gap-2 bg-transparent py-1.5 text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+            className={cn(
+              "iris-focusable iris-press flex w-full items-center bg-transparent py-1.5 text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground transition-all duration-300",
+              isCollapsed ? "justify-center gap-0 py-1" : "gap-2"
+            )}
+            title={isCollapsed ? "Odjava" : undefined}
           >
-            <LogOut size={12} />
-            Odjava
+            <LogOut size={14} className="shrink-0" />
+            <span className={cn(
+              "transition-all duration-300 ease-[var(--iris-ease-out-decisive)] whitespace-nowrap",
+              isCollapsed ? "w-0 opacity-0 overflow-hidden pointer-events-none" : "w-auto opacity-100"
+            )}>
+              Odjava
+            </span>
           </button>
         </div>
       </aside>
