@@ -112,7 +112,7 @@ function WorkOrderEditPage(): React.JSX.Element {
           return;
         }
         toast.success(`Radni nalog ${updated.orderNumber} je ažuriran`);
-        navigate("/work-orders");
+        navigate(`/work-orders/${updated.id}`);
       } catch {
         toast.error("Greška pri ažuriranju radnog naloga");
       }

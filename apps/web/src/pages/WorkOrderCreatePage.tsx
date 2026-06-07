@@ -106,7 +106,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
           communication: values.communication,
         });
         toast.success(`Radni nalog ${result.orderNumber} je kreiran`);
-        navigate("/work-orders");
+        navigate(`/work-orders/${result.id}`);
       } catch {
         toast.error("Greška pri kreiranju radnog naloga");
       }
