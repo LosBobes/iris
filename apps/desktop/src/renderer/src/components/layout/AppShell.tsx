@@ -130,10 +130,12 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           "mb-10 flex items-center",
           isCollapsed ? "flex-col items-center gap-4 justify-center" : "flex-row justify-between gap-2"
         )}>
-          <NavLink
-            to="/"
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            aria-label={isCollapsed ? "Proširi meni" : "Skupi meni"}
             className={cn(
-              "flex items-center font-medium text-foreground hover:opacity-90 transition-all duration-300",
+              "iris-focusable iris-press flex items-center font-medium text-foreground hover:opacity-90 transition-all duration-300",
               isCollapsed ? "gap-0 justify-center w-full" : "gap-2.5"
             )}
           >
@@ -149,7 +151,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 Grafika Čobanović
               </span>
             </div>
-          </NavLink>
+          </button>
 
           <button
             onClick={toggleCollapse}

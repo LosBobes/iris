@@ -24,7 +24,18 @@ const INVOICE_LINE_ITEM_KIND_LABELS = {
   goods: "Roba",
 } as const;
 
-export function printWorkOrder(): void {
+export function printWorkOrder(orderNumber: string): void {
+  const previousTitle = document.title;
+  document.title = orderNumber;
+
+  window.addEventListener(
+    "afterprint",
+    () => {
+      document.title = previousTitle;
+    },
+    { once: true },
+  );
+
   window.print();
 }
 
@@ -122,7 +133,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
               <div className="flex gap-1.5">
                 <button
                   type="button"
-                  onClick={printWorkOrder}
+                  onClick={() => printWorkOrder(order.orderNumber)}
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   Štampaj

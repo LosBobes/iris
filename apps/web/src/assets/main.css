@@ -298,6 +298,11 @@
     background-color: #fff !important;
     color: #000 !important;
     border-color: #000 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-feature-settings: normal !important;
+    font-variant-numeric: normal !important;
+    -webkit-font-smoothing: auto !important;
+    -moz-osx-font-smoothing: auto !important;
   }
 
   .work-order-print-title {
@@ -313,7 +318,8 @@
 
   .work-order-print-hero {
     display: grid;
-    grid-template-columns: 1fr 55mm;
+    grid-template-columns: minmax(0, 1fr) 55mm;
+    align-items: stretch;
     flex: 1 1 auto;
     min-height: 0;
     border-bottom: 2px solid #000;
@@ -406,14 +412,18 @@
   .work-order-print-delivery-box {
     display: flex;
     flex-direction: column;
+    align-self: stretch;
     min-height: 0;
+    min-width: 0;
+    border-right: 1px solid #000;
     padding-top: 2mm;
   }
 
   .work-order-print-check-row {
     display: grid;
-    grid-template-columns: 1fr 10mm;
+    grid-template-columns: minmax(0, 1fr) 10mm;
     align-items: center;
+    width: 100%;
     min-height: 8.5mm;
     border-bottom: 1px solid #000;
     padding-left: 2mm;

@@ -154,11 +154,16 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
         isCollapsed ? "lg:w-[68px] lg:px-3" : "lg:w-[220px] lg:px-5"
       )}>
         <div className="mb-4 lg:mb-10 flex items-center">
-          <SidebarTooltip label="Iris" enabled={isCollapsed}>
-            <NavLink
-              to="/"
+          <SidebarTooltip
+            label={isCollapsed ? "Proširi meni" : "Skupi meni"}
+            enabled={isCollapsed}
+          >
+            <button
+              type="button"
+              onClick={toggleCollapse}
+              aria-label={isCollapsed ? "Proširi meni" : "Skupi meni"}
               className={cn(
-                "flex min-w-0 items-center font-medium text-foreground hover:opacity-90 transition-all duration-300",
+                "iris-focusable iris-press flex min-w-0 items-center font-medium text-foreground hover:opacity-90 transition-all duration-300",
                 isCollapsed ? "lg:w-full lg:justify-center lg:gap-0" : "gap-2.5"
               )}
             >
@@ -174,7 +179,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                   Grafika Čobanović
                 </span>
               </div>
-            </NavLink>
+            </button>
           </SidebarTooltip>
         </div>
 

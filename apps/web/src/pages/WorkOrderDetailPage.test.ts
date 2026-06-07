@@ -8,14 +8,25 @@ describe("work-order document actions", () => {
 
   it("uses the browser print flow for the print action", () => {
     const print = vi.fn();
+    const addEventListener = vi.fn();
 
+    vi.stubGlobal("document", {
+      title: "Iris",
+    });
     vi.stubGlobal("window", {
       print,
+      addEventListener,
     });
 
-    printWorkOrder();
+    printWorkOrder("RN-2026-0042");
 
+    expect(document.title).toBe("RN-2026-0042");
     expect(print).toHaveBeenCalledTimes(1);
+    expect(addEventListener).toHaveBeenCalledWith(
+      "afterprint",
+      expect.any(Function),
+      { once: true },
+    );
   });
 
   it("opens the backend PDF report URL for the PDF action", () => {
