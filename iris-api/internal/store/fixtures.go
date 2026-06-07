@@ -1176,8 +1176,23 @@ func validateShipping(shipping domain.Shipping) error {
 	if shipping.DeliveryMethod != nil && !isValidDeliveryMethod(*shipping.DeliveryMethod) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
+	if shipping.PostagePaymentType != nil && !isValidPostagePaymentType(*shipping.PostagePaymentType) {
+		return newValidationError(invalidWorkOrderMessage)
+	}
 
 	return nil
+}
+
+func isValidPostagePaymentType(value domain.PostagePaymentType) bool {
+	switch value {
+	case domain.PostagePaymentTypeCOD,
+		domain.PostagePaymentTypeOurAccount,
+		domain.PostagePaymentTypeAdvance,
+		domain.PostagePaymentTypeViaInvoice:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateBillingDocumentType(value *domain.BillingDocumentType) error {
@@ -1480,6 +1495,7 @@ func cloneJobDetails(value *domain.JobDetails) *domain.JobDetails {
 func cloneShipping(value domain.Shipping) domain.Shipping {
 	cloned := value
 	cloned.DeliveryMethod = clonePtrDeliveryMethod(value.DeliveryMethod)
+	cloned.PostagePaymentType = clonePtrPostagePaymentType(value.PostagePaymentType)
 	cloned.ShippingAddress = clonePtrString(value.ShippingAddress)
 	return cloned
 }
@@ -1501,6 +1517,14 @@ func clonePtrInt(value *int) *int {
 }
 
 func clonePtrFloat64(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	v := *value
+	return &v
+}
+
+func clonePtrPostagePaymentType(value *domain.PostagePaymentType) *domain.PostagePaymentType {
 	if value == nil {
 		return nil
 	}

@@ -23,6 +23,15 @@ const (
 	DeliveryMethodFieldVisit  DeliveryMethod = "fieldVisit"
 )
 
+type PostagePaymentType string
+
+const (
+	PostagePaymentTypeCOD        PostagePaymentType = "cod"
+	PostagePaymentTypeOurAccount PostagePaymentType = "ourAccount"
+	PostagePaymentTypeAdvance    PostagePaymentType = "advance"
+	PostagePaymentTypeViaInvoice PostagePaymentType = "viaInvoice"
+)
+
 type BillingDocumentType string
 
 const (
@@ -109,13 +118,16 @@ type JobDetails struct {
 }
 
 type Shipping struct {
-	DeliveryMethod    *DeliveryMethod `json:"deliveryMethod"`
-	HasPackaging      bool            `json:"hasPackaging"`
-	HasLabeling       bool            `json:"hasLabeling"`
-	IsFragile         bool            `json:"isFragile"`
-	RequiresSignature bool            `json:"requiresSignature"`
-	HasInsurance      bool            `json:"hasInsurance"`
-	ShippingAddress   *string         `json:"shippingAddress"`
+	DeliveryMethod     *DeliveryMethod     `json:"deliveryMethod"`
+	DrivesOut          bool                `json:"drivesOut"`
+	PostagePaymentType *PostagePaymentType `json:"postagePaymentType"`
+	WaitForPayment     bool                `json:"waitForPayment"`
+	HasPackaging       bool                `json:"hasPackaging"`
+	HasLabeling        bool                `json:"hasLabeling"`
+	IsFragile          bool                `json:"isFragile"`
+	RequiresSignature  bool                `json:"requiresSignature"`
+	HasInsurance       bool                `json:"hasInsurance"`
+	ShippingAddress    *string             `json:"shippingAddress"`
 }
 
 type Customer struct {
