@@ -1,4 +1,4 @@
-# Iris — Copilot Instructions
+# Iris - Copilot Instructions
 
 Iris is a multi-project workspace:
 

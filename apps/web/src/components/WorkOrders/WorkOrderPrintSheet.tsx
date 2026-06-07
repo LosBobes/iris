@@ -1,6 +1,7 @@
 import type {
   BillingDocumentType,
-  DeliveryMethod,
+  Location,
+  Shipping,
   WorkOrder,
 } from "@/types/work-order";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
@@ -9,22 +10,6 @@ interface PrintCheckRow {
   label: string;
   checked: boolean;
 }
-
-const PRINT_DELIVERY_ROWS: Array<{
-  label: string;
-  deliveryMethod?: DeliveryMethod;
-}> = [
-  { label: "VOZI SE" },
-  { label: "LIČNO", deliveryMethod: "pickup" },
-  { label: "POST EXPRES", deliveryMethod: "postExpress" },
-  { label: "CITY EXPRES", deliveryMethod: "cityExpress" },
-  { label: "POŠTARINA POUZEĆEM" },
-  { label: "POŠTARINA NA NAŠ RAČUN" },
-  { label: "AVANS POŠTARINA" },
-  { label: "POŠTARINA SE NAPLAĆUJE PREKO FAKTURE" },
-  { label: "ČEKA SE UPLATA" },
-  { label: "IZLAZAK NA TEREN", deliveryMethod: "fieldVisit" },
-];
 
 const PRINT_BILLING_ROWS: Array<{
   label: string;
@@ -56,13 +41,36 @@ function formatOptionalDate(value: string | null | undefined): string {
   return value ? `${formatWorkOrderDate(value)}.` : "/";
 }
 
-export function getPrintDeliveryRows(
-  deliveryMethod: DeliveryMethod | null,
-): PrintCheckRow[] {
-  return PRINT_DELIVERY_ROWS.map((row) => ({
-    label: row.label,
-    checked: row.deliveryMethod === deliveryMethod,
-  }));
+export function resolvePrintShippingAddress(
+  order: WorkOrder,
+  locations: Location[] = [],
+): string | null {
+  const explicit = uppercaseLine(order.shipping.shippingAddress);
+  if (explicit) return explicit;
+  if (!order.locationId) return null;
+  const location = locations.find((entry) => entry.id === order.locationId);
+  return uppercaseLine(location?.address);
+}
+
+export function getPrintDeliveryRows(shipping: Shipping): PrintCheckRow[] {
+  const method = shipping.deliveryMethod;
+  const postage = shipping.postagePaymentType;
+
+  return [
+    { label: "VOZI SE", checked: shipping.drivesOut },
+    { label: "LIČNO", checked: method === "pickup" },
+    { label: "POST EXPRES", checked: method === "postExpress" },
+    { label: "CITY EXPRES", checked: method === "cityExpress" },
+    { label: "POŠTARINA POUZEĆEM", checked: postage === "cod" },
+    { label: "POŠTARINA NA NAŠ RAČUN", checked: postage === "ourAccount" },
+    { label: "AVANS POŠTARINA", checked: postage === "advance" },
+    {
+      label: "POŠTARINA SE NAPLAĆUJE PREKO FAKTURE",
+      checked: postage === "viaInvoice",
+    },
+    { label: "ČEKA SE UPLATA", checked: shipping.waitForPayment },
+    { label: "IZLAZAK NA TEREN", checked: method === "fieldVisit" },
+  ];
 }
 
 export function getPrintBillingRows(
@@ -74,21 +82,37 @@ export function getPrintBillingRows(
   }));
 }
 
+function jobDetailsHasContent(
+  details: WorkOrder["jobDetails"],
+): boolean {
+  if (!details) return false;
+  return Boolean(
+    details.productCode?.trim() ||
+      details.paperWeightGsm != null ||
+      details.dimensions?.trim() ||
+      details.quantity != null ||
+      details.finishingNote?.trim(),
+  );
+}
+
 export function buildPrintJobLines(order: WorkOrder): string[] {
   const details = order.jobDetails;
-  const detailLines = details
+  const detailLines = jobDetailsHasContent(details)
     ? [
-        uppercaseLine(details.productCode),
-        details.paperWeightGsm ? `${details.paperWeightGsm}G` : null,
-        uppercaseLine(details.dimensions),
-        details.quantity ? `${details.quantity}KOM` : null,
-        uppercaseLine(details.finishingNote),
-      ]
+        uppercaseLine(details?.productCode),
+        details?.paperWeightGsm ? `${details.paperWeightGsm}G` : null,
+        uppercaseLine(details?.dimensions),
+        details?.quantity ? `${details.quantity}KOM` : null,
+        uppercaseLine(details?.finishingNote),
+      ].filter((line): line is string => Boolean(line))
     : [];
 
-  const lines = (detailLines.length > 0 ? detailLines : [
-    uppercaseLine(order.jobDescription),
-  ]).filter((line): line is string => Boolean(line));
+  const lines =
+    detailLines.length > 0
+      ? detailLines
+      : [uppercaseLine(order.jobDescription)].filter((line): line is string =>
+          Boolean(line),
+        );
 
   const price = formatPrintPrice(order.price);
   if (price) lines.push(`CENA: ${price}`);
@@ -116,13 +140,16 @@ function PrintCheckBox({ checked }: { checked: boolean }): React.JSX.Element {
 
 export function WorkOrderPrintSheet({
   order,
+  locations = [],
 }: {
   order: WorkOrder;
+  locations?: Location[];
 }): React.JSX.Element {
   const jobLines = buildPrintJobLines(order);
-  const deliveryRows = getPrintDeliveryRows(order.shipping.deliveryMethod);
+  const deliveryRows = getPrintDeliveryRows(order.shipping);
   const billingRows = getPrintBillingRows(order.billingDocumentType);
   const noteLines = buildPrintNoteLines(order);
+  const shippingAddress = resolvePrintShippingAddress(order, locations);
   const plannedDate =
     order.dueDate ?? order.assignment.scheduledDate ?? order.completionDate;
   const completed = order.isCompleted || order.status === "invoiced";
@@ -173,7 +200,7 @@ export function WorkOrderPrintSheet({
               <PrintCheckBox checked={row.checked} />
             </div>
           ))}
-          <div className="work-order-print-empty-field">/</div>
+          <div className="work-order-print-empty-field" />
         </div>
       </div>
 
@@ -186,7 +213,7 @@ export function WorkOrderPrintSheet({
             <div className="work-order-print-billing-row" key={row.label}>
               <span>{row.label}</span>
               <span className="work-order-print-mark">
-                {row.checked ? "X /" : ""}
+                {row.checked ? "X" : ""}
               </span>
             </div>
           ))}
@@ -204,10 +231,8 @@ export function WorkOrderPrintSheet({
         </div>
         <div className="work-order-print-address-box">
           <div className="work-order-print-label">ADRESA ZA SLANJE:</div>
-          {order.shipping.shippingAddress && (
-            <div className="work-order-print-address">
-              {uppercaseLine(order.shipping.shippingAddress)}
-            </div>
+          {shippingAddress && (
+            <div className="work-order-print-address">{shippingAddress}</div>
           )}
         </div>
       </div>

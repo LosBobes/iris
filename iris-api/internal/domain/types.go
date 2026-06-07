@@ -23,6 +23,15 @@ const (
 	DeliveryMethodFieldVisit  DeliveryMethod = "fieldVisit"
 )
 
+type PostagePaymentType string
+
+const (
+	PostagePaymentTypeCOD        PostagePaymentType = "cod"
+	PostagePaymentTypeOurAccount PostagePaymentType = "ourAccount"
+	PostagePaymentTypeAdvance    PostagePaymentType = "advance"
+	PostagePaymentTypeViaInvoice PostagePaymentType = "viaInvoice"
+)
+
 type BillingDocumentType string
 
 const (
@@ -72,6 +81,21 @@ const (
 	InvoiceDraftStatusPaid   InvoiceDraftStatus = "paid"
 )
 
+type InvoiceLineItemKind string
+
+const (
+	InvoiceLineItemKindService InvoiceLineItemKind = "service"
+	InvoiceLineItemKindGoods   InvoiceLineItemKind = "goods"
+)
+
+type InvoiceUnit string
+
+const (
+	InvoiceUnitKom InvoiceUnit = "kom"
+	InvoiceUnitM2  InvoiceUnit = "m2"
+	InvoiceUnitSet InvoiceUnit = "set"
+)
+
 type User struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`
@@ -94,13 +118,16 @@ type JobDetails struct {
 }
 
 type Shipping struct {
-	DeliveryMethod    *DeliveryMethod `json:"deliveryMethod"`
-	HasPackaging      bool            `json:"hasPackaging"`
-	HasLabeling       bool            `json:"hasLabeling"`
-	IsFragile         bool            `json:"isFragile"`
-	RequiresSignature bool            `json:"requiresSignature"`
-	HasInsurance      bool            `json:"hasInsurance"`
-	ShippingAddress   *string         `json:"shippingAddress"`
+	DeliveryMethod     *DeliveryMethod     `json:"deliveryMethod"`
+	DrivesOut          bool                `json:"drivesOut"`
+	PostagePaymentType *PostagePaymentType `json:"postagePaymentType"`
+	WaitForPayment     bool                `json:"waitForPayment"`
+	HasPackaging       bool                `json:"hasPackaging"`
+	HasLabeling        bool                `json:"hasLabeling"`
+	IsFragile          bool                `json:"isFragile"`
+	RequiresSignature  bool                `json:"requiresSignature"`
+	HasInsurance       bool                `json:"hasInsurance"`
+	ShippingAddress    *string             `json:"shippingAddress"`
 }
 
 type Customer struct {
@@ -170,10 +197,12 @@ type TimeEntry struct {
 }
 
 type InvoiceLineItem struct {
-	ID          string  `json:"id"`
-	Description string  `json:"description"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unitPrice"`
+	ID          string              `json:"id"`
+	Kind        InvoiceLineItemKind `json:"kind"`
+	Description string              `json:"description"`
+	Quantity    int                 `json:"quantity"`
+	Unit        InvoiceUnit         `json:"unit"`
+	UnitPrice   float64             `json:"unitPrice"`
 }
 
 type InvoiceDraft struct {

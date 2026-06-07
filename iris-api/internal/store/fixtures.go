@@ -817,6 +817,27 @@ func normalizeMaterialUsage(materials []domain.MaterialUsage) []domain.MaterialU
 	return materials
 }
 
+func normalizeInvoiceLineItems(items []domain.InvoiceLineItem) []domain.InvoiceLineItem {
+	if items == nil {
+		return []domain.InvoiceLineItem{}
+	}
+	for index := range items {
+		if items[index].ID == "" {
+			items[index].ID = fmt.Sprintf("line-%d", index+1)
+		}
+		if items[index].Kind == "" {
+			items[index].Kind = domain.InvoiceLineItemKindService
+		}
+		if items[index].Unit == "" || !isInvoiceUnitAllowed(items[index].Kind, items[index].Unit) {
+			items[index].Unit = domain.InvoiceUnitKom
+		}
+		if items[index].Quantity == 0 {
+			items[index].Quantity = 1
+		}
+	}
+	return items
+}
+
 func normalizeTimeEntries(entries []domain.TimeEntry, operator string, createdAt string) []domain.TimeEntry {
 	if entries == nil {
 		return []domain.TimeEntry{}
@@ -853,9 +874,17 @@ func normalizeInvoiceDraft(
 	}
 	if price != nil && len(normalized.LineItems) == 0 {
 		normalized.LineItems = []domain.InvoiceLineItem{
-			{ID: "line-1", Description: jobDescription, Quantity: 1, UnitPrice: *price},
+			{
+				ID:          "line-1",
+				Kind:        domain.InvoiceLineItemKindService,
+				Description: jobDescription,
+				Quantity:    1,
+				Unit:        domain.InvoiceUnitKom,
+				UnitPrice:   *price,
+			},
 		}
 	}
+	normalized.LineItems = normalizeInvoiceLineItems(normalized.LineItems)
 	return normalized
 }
 
@@ -1147,8 +1176,23 @@ func validateShipping(shipping domain.Shipping) error {
 	if shipping.DeliveryMethod != nil && !isValidDeliveryMethod(*shipping.DeliveryMethod) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
+	if shipping.PostagePaymentType != nil && !isValidPostagePaymentType(*shipping.PostagePaymentType) {
+		return newValidationError(invalidWorkOrderMessage)
+	}
 
 	return nil
+}
+
+func isValidPostagePaymentType(value domain.PostagePaymentType) bool {
+	switch value {
+	case domain.PostagePaymentTypeCOD,
+		domain.PostagePaymentTypeOurAccount,
+		domain.PostagePaymentTypeAdvance,
+		domain.PostagePaymentTypeViaInvoice:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateBillingDocumentType(value *domain.BillingDocumentType) error {
@@ -1169,6 +1213,17 @@ func validateAssignment(value domain.Assignment) error {
 func validateInvoiceDraft(value domain.InvoiceDraft) error {
 	if value.Status != "" && !isValidInvoiceDraftStatus(value.Status) {
 		return newValidationError(invalidWorkOrderMessage)
+	}
+	for _, line := range value.LineItems {
+		if line.Kind != "" && !isValidInvoiceLineItemKind(line.Kind) {
+			return newValidationError(invalidWorkOrderMessage)
+		}
+		if line.Unit != "" && !isValidInvoiceUnit(line.Unit) {
+			return newValidationError(invalidWorkOrderMessage)
+		}
+		if line.Kind != "" && line.Unit != "" && !isInvoiceUnitAllowed(line.Kind, line.Unit) {
+			return newValidationError(invalidWorkOrderMessage)
+		}
 	}
 	return nil
 }
@@ -1236,6 +1291,31 @@ func isValidInvoiceDraftStatus(value domain.InvoiceDraftStatus) bool {
 	}
 }
 
+func isValidInvoiceLineItemKind(value domain.InvoiceLineItemKind) bool {
+	switch value {
+	case domain.InvoiceLineItemKindService,
+		domain.InvoiceLineItemKindGoods:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidInvoiceUnit(value domain.InvoiceUnit) bool {
+	switch value {
+	case domain.InvoiceUnitKom,
+		domain.InvoiceUnitM2,
+		domain.InvoiceUnitSet:
+		return true
+	default:
+		return false
+	}
+}
+
+func isInvoiceUnitAllowed(kind domain.InvoiceLineItemKind, unit domain.InvoiceUnit) bool {
+	return kind == domain.InvoiceLineItemKindService || unit != domain.InvoiceUnitSet
+}
+
 func canTransition(from domain.WorkOrderStatus, to domain.WorkOrderStatus) bool {
 	if from == to {
 		return true
@@ -1276,6 +1356,29 @@ func canTransition(from domain.WorkOrderStatus, to domain.WorkOrderStatus) bool 
 	return false
 }
 
+func workOrderStatusLabel(status domain.WorkOrderStatus) string {
+	switch status {
+	case domain.WorkOrderStatusNew:
+		return "Nov"
+	case domain.WorkOrderStatusAssigned:
+		return "Dodeljen"
+	case domain.WorkOrderStatusInProgress:
+		return "U toku"
+	case domain.WorkOrderStatusWaitingForCustomer:
+		return "Čeka klijenta"
+	case domain.WorkOrderStatusWaitingForMaterials:
+		return "Čeka materijal"
+	case domain.WorkOrderStatusCompleted:
+		return "Završen"
+	case domain.WorkOrderStatusCancelled:
+		return "Otkazan"
+	case domain.WorkOrderStatusInvoiced:
+		return "Fakturisan"
+	default:
+		return string(status)
+	}
+}
+
 func applyStatus(workOrder *domain.WorkOrder, status domain.WorkOrderStatus) {
 	workOrder.Status = status
 	now := time.Now().UTC()
@@ -1297,7 +1400,7 @@ func applyStatus(workOrder *domain.WorkOrder, status domain.WorkOrderStatus) {
 	workOrder.Events = append(workOrder.Events, domain.WorkOrderEvent{
 		ID:        fmt.Sprintf("event-%d", len(workOrder.Events)+1),
 		Kind:      "status",
-		Label:     fmt.Sprintf("Status promenjen na %s", status),
+		Label:     fmt.Sprintf("Status promenjen na %s", workOrderStatusLabel(status)),
 		Actor:     workOrder.IssuedBy,
 		CreatedAt: timestamp,
 	})
@@ -1392,6 +1495,7 @@ func cloneJobDetails(value *domain.JobDetails) *domain.JobDetails {
 func cloneShipping(value domain.Shipping) domain.Shipping {
 	cloned := value
 	cloned.DeliveryMethod = clonePtrDeliveryMethod(value.DeliveryMethod)
+	cloned.PostagePaymentType = clonePtrPostagePaymentType(value.PostagePaymentType)
 	cloned.ShippingAddress = clonePtrString(value.ShippingAddress)
 	return cloned
 }
@@ -1413,6 +1517,14 @@ func clonePtrInt(value *int) *int {
 }
 
 func clonePtrFloat64(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	v := *value
+	return &v
+}
+
+func clonePtrPostagePaymentType(value *domain.PostagePaymentType) *domain.PostagePaymentType {
 	if value == nil {
 		return nil
 	}

@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import type { PublicWorkOrderStatus } from "@/types/work-order";
 import {
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
   formatWorkOrderDate,
 } from "@/shared/utils/work-orders";
 
@@ -72,7 +72,7 @@ function PublicWorkOrderPage(): React.JSX.Element {
               <PublicField label="Opis posla" value={status.jobDescription} />
               <PublicField
                 label="Status"
-                value={WORK_ORDER_STATUS_LABELS[status.status]}
+                value={getWorkOrderStatusLabel(status.status)}
               />
               <PublicField
                 label="Rok"

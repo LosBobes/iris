@@ -22,5 +22,5 @@ jobs:
         run: npm install
         working-directory: apps/desktop
         env:
-          # Skip Electron download and postinstall native deps — not needed for linting/typechecking/testing
+          # Skip Electron download and postinstall native deps - not needed for linting/typechecking/testing
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"

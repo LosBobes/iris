@@ -510,14 +510,20 @@ components:
           format: date
     InvoiceLineItem:
       type: object
-      required: [id, description, quantity, unitPrice]
+      required: [id, kind, description, quantity, unit, unitPrice]
       properties:
         id:
           type: string
+        kind:
+          type: string
+          enum: [service, goods]
         description:
           type: string
         quantity:
           type: integer
+        unit:
+          type: string
+          enum: [kom, m2, set]
         unitPrice:
           type: number
           format: double

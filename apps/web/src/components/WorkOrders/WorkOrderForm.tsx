@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   useForm,
   Controller,
+  useFieldArray,
   type FieldErrors,
   type UseFormWatch,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,8 +20,12 @@ import {
 } from "@/components/ui/select";
 import type {
   Customer,
+  BillingDocumentType,
   DeliveryMethod,
+  InvoiceLineItemKind,
+  InvoiceUnit,
   Location,
+  PostagePaymentType,
   WorkOrder,
   WorkOrderNoteVisibility,
 } from "@/types/work-order";
@@ -31,8 +36,11 @@ import {
 import {
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
+  WORK_ORDER_POSTAGE_LABELS,
+  WORK_ORDER_PRIORITY_LABELS,
   WORK_ORDER_SELECT_NONE_VALUE,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderPriorityLabel,
+  getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -119,6 +127,74 @@ const underlineInput =
 const underlineTrigger =
   "w-full justify-between border-0 border-b border-border bg-transparent py-2 !h-auto text-[13px] text-foreground rounded-none shadow-none focus-visible:border-foreground focus-visible:ring-0";
 
+const INVOICE_LINE_ITEM_KIND_LABELS: Record<InvoiceLineItemKind, string> = {
+  service: "Usluga",
+  goods: "Roba",
+};
+
+const INVOICE_UNIT_LABELS: Record<InvoiceUnit, string> = {
+  kom: "Kom",
+  m2: "m2",
+  set: "Set",
+};
+
+const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, InvoiceUnit[]> = {
+  service: ["kom", "m2", "set"],
+  goods: ["kom", "m2"],
+};
+
+type InvoiceLineItemFormValue =
+  WorkOrderFormValues["invoiceDraft"]["lineItems"][number];
+
+export function getInvoiceUnitOptions(kind: InvoiceLineItemKind): InvoiceUnit[] {
+  return INVOICE_UNITS_BY_KIND[kind];
+}
+
+function isInvoiceLineItemKind(value: unknown): value is InvoiceLineItemKind {
+  return value === "service" || value === "goods";
+}
+
+function isInvoiceUnit(value: unknown): value is InvoiceUnit {
+  return value === "kom" || value === "m2" || value === "set";
+}
+
+function isInvoiceUnitAllowed(
+  kind: InvoiceLineItemKind,
+  unit: unknown,
+): unit is InvoiceUnit {
+  return isInvoiceUnit(unit) && getInvoiceUnitOptions(kind).includes(unit);
+}
+
+function createInvoiceLineItem(
+  kind: InvoiceLineItemKind,
+): InvoiceLineItemFormValue {
+  return {
+    id: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    kind,
+    description: "",
+    quantity: 1,
+    unit: "kom",
+    unitPrice: 0,
+  };
+}
+
+function normalizeInvoiceLineItem(
+  line: Partial<InvoiceLineItemFormValue>,
+  index: number,
+): InvoiceLineItemFormValue {
+  const kind = isInvoiceLineItemKind(line.kind) ? line.kind : "service";
+  const unit = isInvoiceUnitAllowed(kind, line.unit) ? line.unit : "kom";
+
+  return {
+    id: line.id || `line-${index + 1}`,
+    kind,
+    description: line.description ?? "",
+    quantity: line.quantity ?? 1,
+    unit,
+    unitPrice: line.unitPrice ?? 0,
+  };
+}
+
 const ERROR_FIELD_IDS: Partial<Record<string, string>> = {
   "internalNotes.0.id": "internalNotes.0.body",
   "internalNotes.0.visibility": "internalNotes.0.body",
@@ -180,6 +256,19 @@ export function getFirstWorkOrderFormErrorTarget(
   return path ? ERROR_FIELD_IDS[path] ?? path : null;
 }
 
+export function isEmptyJobDetails(
+  details: WorkOrderFormValues["jobDetails"],
+): boolean {
+  if (!details) return true;
+  return !(
+    details.productCode?.trim() ||
+    details.paperWeightGsm != null ||
+    details.dimensions?.trim() ||
+    details.quantity != null ||
+    details.finishingNote?.trim()
+  );
+}
+
 export function resolveShippingAddress(
   currentAddress: string | null,
   deliveryMethod: DeliveryMethod | null,
@@ -202,11 +291,34 @@ function createDraftNote(visibility: WorkOrderNoteVisibility): WorkOrderFormValu
   };
 }
 
+const EMPTY_SHIPPING: WorkOrderFormValues["shipping"] = {
+  deliveryMethod: null,
+  drivesOut: false,
+  postagePaymentType: null,
+  waitForPayment: false,
+  hasPackaging: false,
+  hasLabeling: false,
+  isFragile: false,
+  requiresSignature: false,
+  hasInsurance: false,
+  shippingAddress: null,
+};
+
 export function normalizeWorkOrderFormDefaultValues(
   values: WorkOrderFormValues,
 ): WorkOrderFormValues {
+  const invoiceLineItems = Array.isArray(values.invoiceDraft.lineItems)
+    ? values.invoiceDraft.lineItems.map((line, index) =>
+        normalizeInvoiceLineItem(line, index),
+      )
+    : [];
+
   return {
     ...values,
+    invoiceDraft: {
+      ...values.invoiceDraft,
+      lineItems: invoiceLineItems,
+    },
     internalNotes:
       values.internalNotes.length > 0
         ? values.internalNotes
@@ -241,7 +353,7 @@ export function WorkOrderForm({
           jobDetails: initialData.jobDetails,
           billingDocumentType: initialData.billingDocumentType,
           billingDocumentNumber: initialData.billingDocumentNumber,
-          shipping: initialData.shipping,
+          shipping: { ...EMPTY_SHIPPING, ...initialData.shipping },
           assignment: initialData.assignment,
           price: initialData.price,
           note: initialData.note,
@@ -271,15 +383,7 @@ export function WorkOrderForm({
           jobDetails: null,
           billingDocumentType: null,
           billingDocumentNumber: null,
-          shipping: {
-            deliveryMethod: null,
-            hasPackaging: false,
-            hasLabeling: false,
-            isFragile: false,
-            requiresSignature: false,
-            hasInsurance: false,
-            shippingAddress: null,
-          },
+          shipping: { ...EMPTY_SHIPPING },
           assignment: {
             assignedTo: null,
             priority: "normal",
@@ -322,11 +426,20 @@ export function WorkOrderForm({
     resolver: zodResolver(workOrderFormSchema),
     defaultValues,
   });
+  const {
+    fields: invoiceLineItemFields,
+    append: appendInvoiceLineItem,
+    remove: removeInvoiceLineItem,
+  } = useFieldArray({
+    control,
+    name: "invoiceDraft.lineItems",
+  });
 
   const deliveryMethod = watch("shipping.deliveryMethod");
   const selectedCustomerId = watch("customerId");
   const selectedLocationId = watch("locationId");
   const shippingAddress = watch("shipping.shippingAddress");
+  const invoiceLineItems = watch("invoiceDraft.lineItems");
   const filteredLocations = useMemo(
     () =>
       selectedCustomerId
@@ -336,6 +449,8 @@ export function WorkOrderForm({
   );
   const showShippingAddress =
     deliveryMethod !== null && deliveryMethod !== "pickup";
+  const showPostageOptions =
+    deliveryMethod === "postExpress" || deliveryMethod === "cityExpress";
 
   const [showJobDetails, setShowJobDetails] = useState(!!defaultValues.jobDetails);
   const paperWeightError = errors.jobDetails?.paperWeightGsm?.message;
@@ -359,7 +474,19 @@ export function WorkOrderForm({
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
     try {
-      await onSubmit(values);
+      await onSubmit({
+        ...values,
+        jobDetails: isEmptyJobDetails(values.jobDetails) ? null : values.jobDetails,
+        shipping: {
+          ...values.shipping,
+          shippingAddress: resolveShippingAddress(
+            values.shipping.shippingAddress,
+            values.shipping.deliveryMethod,
+            values.locationId,
+            locations,
+          ),
+        },
+      });
     } finally {
       setSubmitting(false);
     }
@@ -382,6 +509,10 @@ export function WorkOrderForm({
         target.focus({ preventScroll: true });
       }
     });
+  };
+
+  const handleAddInvoiceLineItem = (kind: InvoiceLineItemKind): void => {
+    appendInvoiceLineItem(createInvoiceLineItem(kind));
   };
 
   useEffect(() => {
@@ -413,7 +544,7 @@ export function WorkOrderForm({
                 Status
               </div>
               <div className="mt-1 text-foreground">
-                {WORK_ORDER_STATUS_LABELS[initialData.status]}
+                {getWorkOrderStatusLabel(initialData.status)}
               </div>
             </div>
             <div>
@@ -660,10 +791,13 @@ export function WorkOrderForm({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Nizak</SelectItem>
-                      <SelectItem value="normal">Normalan</SelectItem>
-                      <SelectItem value="high">Visok</SelectItem>
-                      <SelectItem value="urgent">Hitno</SelectItem>
+                      {(Object.entries(WORK_ORDER_PRIORITY_LABELS) as Array<
+                        [keyof typeof WORK_ORDER_PRIORITY_LABELS, string]
+                      >).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -701,7 +835,7 @@ export function WorkOrderForm({
                       const nextValue =
                         v === WORK_ORDER_SELECT_NONE_VALUE
                           ? null
-                          : (v as DeliveryMethod);
+                          : (v as BillingDocumentType);
                       field.onChange(nextValue);
                     }}
                   >
@@ -833,6 +967,91 @@ export function WorkOrderForm({
                 />
               </FieldShell>
             )}
+
+            <FieldShell id="shipping.drivesOut" label="Prevoz">
+              <Controller
+                name="shipping.drivesOut"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center gap-2 py-2">
+                    <Checkbox
+                      id="shipping.drivesOut"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                    <label
+                      htmlFor="shipping.drivesOut"
+                      className="text-[12px] text-[color:var(--iris-ink-soft)]"
+                    >
+                      Vozi se
+                    </label>
+                  </div>
+                )}
+              />
+            </FieldShell>
+
+            {showPostageOptions && (
+              <FieldShell id="shipping.postagePaymentType" label="Poštarina">
+                <Controller
+                  name="shipping.postagePaymentType"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
+                      onValueChange={(v) =>
+                        field.onChange(
+                          v === WORK_ORDER_SELECT_NONE_VALUE
+                            ? null
+                            : (v as PostagePaymentType),
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        id="shipping.postagePaymentType"
+                        aria-labelledby="shipping.postagePaymentType-label"
+                        className={underlineTrigger}
+                      >
+                        <SelectValue placeholder="Način plaćanja poštarine" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                          Nije izabrano
+                        </SelectItem>
+                        {Object.entries(WORK_ORDER_POSTAGE_LABELS).map(
+                          ([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </FieldShell>
+            )}
+
+            <FieldShell id="shipping.waitForPayment" label="Uplata">
+              <Controller
+                name="shipping.waitForPayment"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center gap-2 py-2">
+                    <Checkbox
+                      id="shipping.waitForPayment"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                    <label
+                      htmlFor="shipping.waitForPayment"
+                      className="text-[12px] text-[color:var(--iris-ink-soft)]"
+                    >
+                      Čeka se uplata
+                    </label>
+                  </div>
+                )}
+              />
+            </FieldShell>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
@@ -932,6 +1151,199 @@ export function WorkOrderForm({
                 {...register("invoiceDraft.invoiceNumber")}
               />
             </FieldShell>
+
+            <div className="col-span-full border-t border-border pt-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                  Stavke
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleAddInvoiceLineItem("service")}
+                    className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Usluga
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddInvoiceLineItem("goods")}
+                    className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Roba
+                  </button>
+                </div>
+              </div>
+
+              {invoiceLineItemFields.length === 0 ? (
+                <div className="border border-dashed border-border bg-background px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
+                  Nema stavki
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {invoiceLineItemFields.map((lineItem, index) => {
+                    const selectedKind =
+                      invoiceLineItems[index]?.kind === "goods"
+                        ? "goods"
+                        : "service";
+                    const unitOptions = getInvoiceUnitOptions(selectedKind);
+                    const lineItemError = errors.invoiceDraft?.lineItems?.[index];
+
+                    return (
+                      <div
+                        key={lineItem.id}
+                        className="grid grid-cols-1 gap-4 border-b border-[color:var(--iris-border-soft)] pb-4 last:border-b-0 last:pb-0 xl:grid-cols-[120px_minmax(0,1fr)_80px_100px_110px_36px]"
+                      >
+                        <FieldShell
+                          id={`invoiceDraft.lineItems.${index}.kind`}
+                          label="Tip"
+                        >
+                          <Controller
+                            name={`invoiceDraft.lineItems.${index}.kind` as const}
+                            control={control}
+                            render={({ field }) => (
+                              <Select
+                                value={field.value}
+                                onValueChange={(value) => {
+                                  const nextKind = isInvoiceLineItemKind(value)
+                                    ? value
+                                    : "service";
+                                  field.onChange(nextKind);
+
+                                  if (
+                                    !isInvoiceUnitAllowed(
+                                      nextKind,
+                                      invoiceLineItems[index]?.unit,
+                                    )
+                                  ) {
+                                    setValue(
+                                      `invoiceDraft.lineItems.${index}.unit`,
+                                      "kom",
+                                    );
+                                  }
+                                }}
+                              >
+                                <SelectTrigger
+                                  id={`invoiceDraft.lineItems.${index}.kind`}
+                                  aria-labelledby={`invoiceDraft.lineItems.${index}.kind-label`}
+                                  className={underlineTrigger}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Object.entries(INVOICE_LINE_ITEM_KIND_LABELS).map(
+                                    ([value, label]) => (
+                                      <SelectItem key={value} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    ),
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </FieldShell>
+
+                        <FieldShell
+                          id={`invoiceDraft.lineItems.${index}.description`}
+                          label="Opis"
+                          error={lineItemError?.description?.message}
+                        >
+                          <input
+                            id={`invoiceDraft.lineItems.${index}.description`}
+                            className={underlineInput}
+                            {...register(
+                              `invoiceDraft.lineItems.${index}.description` as const,
+                            )}
+                          />
+                        </FieldShell>
+
+                        <FieldShell
+                          id={`invoiceDraft.lineItems.${index}.quantity`}
+                          label="Kol."
+                          error={lineItemError?.quantity?.message}
+                        >
+                          <input
+                            id={`invoiceDraft.lineItems.${index}.quantity`}
+                            type="number"
+                            className={`${underlineInput} tnum`}
+                            {...register(
+                              `invoiceDraft.lineItems.${index}.quantity` as const,
+                              {
+                                setValueAs: (v: string) =>
+                                  v === "" ? 1 : Number(v),
+                              },
+                            )}
+                          />
+                        </FieldShell>
+
+                        <FieldShell
+                          id={`invoiceDraft.lineItems.${index}.unit`}
+                          label="Jedinica"
+                          error={lineItemError?.unit?.message}
+                        >
+                          <Controller
+                            name={`invoiceDraft.lineItems.${index}.unit` as const}
+                            control={control}
+                            render={({ field }) => (
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <SelectTrigger
+                                  id={`invoiceDraft.lineItems.${index}.unit`}
+                                  aria-labelledby={`invoiceDraft.lineItems.${index}.unit-label`}
+                                  className={underlineTrigger}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {unitOptions.map((unit) => (
+                                    <SelectItem key={unit} value={unit}>
+                                      {INVOICE_UNIT_LABELS[unit]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </FieldShell>
+
+                        <FieldShell
+                          id={`invoiceDraft.lineItems.${index}.unitPrice`}
+                          label="Cena"
+                          error={lineItemError?.unitPrice?.message}
+                        >
+                          <input
+                            id={`invoiceDraft.lineItems.${index}.unitPrice`}
+                            type="number"
+                            step="0.01"
+                            className={`${underlineInput} tnum`}
+                            {...register(
+                              `invoiceDraft.lineItems.${index}.unitPrice` as const,
+                              {
+                                setValueAs: (v: string) =>
+                                  v === "" ? 0 : Number(v),
+                              },
+                            )}
+                          />
+                        </FieldShell>
+
+                        <div className="self-end">
+                          <button
+                            type="button"
+                            aria-label={`Ukloni stavku ${index + 1}`}
+                            onClick={() => removeInvoiceLineItem(index)}
+                            className="iris-focusable iris-press flex h-9 w-9 items-center justify-center border border-border bg-background text-[color:var(--iris-ink-soft)] hover:border-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <FieldShell id="communication.notificationEmail" label="Email za obaveštenja">
               <input
@@ -1068,7 +1480,7 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
     ],
     ["Dostava", deliveryMethod ? WORK_ORDER_DELIVERY_LABELS[deliveryMethod] : "-"],
     ["Operater", assignedTo || "Nedodeljeno"],
-    ["Prioritet", priority],
+    ["Prioritet", getWorkOrderPriorityLabel(priority)],
     ["Planirano", scheduledDate ? formatWorkOrderDate(scheduledDate) : "-"],
     ["Datum izdavanja", issueDate ? formatWorkOrderDate(issueDate) : "-"],
     ["Rok", dueDate ? formatWorkOrderDate(dueDate) : "-"],

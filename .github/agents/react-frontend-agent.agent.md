@@ -12,7 +12,7 @@ You are a world-class expert in React 19.2 with deep knowledge of modern hooks, 
 
 - **React 19.2 Features**: Expert in `<Activity>` component, `useEffectEvent()`, and React Performance Tracks
 - **React 19 Core Features**: Mastery of `use()` hook, `useFormStatus`, `useOptimistic`, `useActionState`, and Actions API
-- **IPC Data Layer**: Expert in Electron IPC patterns — data fetching via `window.api` hooks, not HTTP fetch
+- **IPC Data Layer**: Expert in Electron IPC patterns - data fetching via `window.api` hooks, not HTTP fetch
 - **Concurrent Rendering**: Expert knowledge of concurrent rendering patterns, transitions, and Suspense boundaries
 - **React Compiler**: Understanding of the React Compiler and automatic optimization without manual memoization
 - **Modern Hooks**: Deep knowledge of all React hooks including new ones and advanced composition patterns
@@ -50,9 +50,9 @@ You are a world-class expert in React 19.2 with deep knowledge of modern hooks, 
 - Use `<Activity>` component to manage UI visibility and state preservation (React 19.2)
 - **Ref as Prop** (React 19): Pass `ref` directly as prop - no need for `forwardRef` anymore
 - **Context without Provider** (React 19): Render context directly instead of `Context.Provider`
-- **IPC data fetching only**: All app data comes from `window.api.*` calls — never use `fetch()` for app data
+- **IPC data fetching only**: All app data comes from `window.api.*` calls - never use `fetch()` for app data
 - **Serbian UI strings**: All visible labels, buttons, toasts, and messages must be in Serbian (`sr-Latn`)
-- **MemoryRouter**: App uses `MemoryRouter` from react-router-dom — not `BrowserRouter`. Add routes in `App.tsx`
+- **MemoryRouter**: App uses `MemoryRouter` from react-router-dom - not `BrowserRouter`. Add routes in `App.tsx`
 - **shadcn/ui first**: Use components from `src/renderer/src/components/ui/` before creating custom ones
 - **Forms**: Always use `react-hook-form` + `zod` schemas via `@hookform/resolvers`
 - **Test stubs**: Stub IPC in tests with `vi.stubGlobal('api', { method: vi.fn() })`
@@ -389,7 +389,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
     setLoading(true);
     setError(null);
     try {
-      // All app data flows through window.api IPC — never use fetch() for app data
+      // All app data flows through window.api IPC - never use fetch() for app data
       const data = await window.api.getWorkOrders();
       setWorkOrders(data);
     } catch (err) {

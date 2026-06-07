@@ -53,7 +53,7 @@ function loadEnvFile(): Map<string, string> {
       map.set(key, stripWrappingQuotes(rawValue))
     }
   } catch {
-    // No .env file (or unreadable) — leave the cache empty so we don't retry on every call.
+    // No .env file (or unreadable) - leave the cache empty so we don't retry on every call.
   }
 
   cachedEnvFile = map

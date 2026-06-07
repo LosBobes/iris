@@ -302,6 +302,7 @@ func (s *SQLiteStore) WorkOrders(
 		if err := json.Unmarshal([]byte(payload), &workOrder); err != nil {
 			return WorkOrderListResult{}, fmt.Errorf("decode work order payload: %w", err)
 		}
+		workOrder = normalizeStoredWorkOrder(workOrder)
 		items = append(items, workOrder)
 	}
 	if err := rows.Err(); err != nil {
@@ -328,7 +329,18 @@ func (s *SQLiteStore) WorkOrderByID(ctx context.Context, id string) (*domain.Wor
 	if err := json.Unmarshal([]byte(payload), &workOrder); err != nil {
 		return nil, fmt.Errorf("decode work order payload: %w", err)
 	}
+	workOrder = normalizeStoredWorkOrder(workOrder)
 	return &workOrder, nil
+}
+
+func normalizeStoredWorkOrder(workOrder domain.WorkOrder) domain.WorkOrder {
+	workOrder.MaterialUsage = normalizeMaterialUsage(workOrder.MaterialUsage)
+	workOrder.InvoiceDraft = normalizeInvoiceDraft(
+		workOrder.InvoiceDraft,
+		workOrder.JobDescription,
+		workOrder.Price,
+	)
+	return workOrder
 }
 
 func (s *SQLiteStore) CreateWorkOrder(

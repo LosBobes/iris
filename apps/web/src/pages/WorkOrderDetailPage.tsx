@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Copy, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
-import type { WorkOrder } from "@/types/work-order";
+import type { Location, WorkOrder } from "@/types/work-order";
 import {
+  buildWorkOrderCustomerNotice,
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
+  getWorkOrderStatusLabel,
+  formatWorkOrderEventLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
+  getLocalIsoDate,
+  getWorkOrderCustomerNextStep,
 } from "@/shared/utils/work-orders";
+
+const INVOICE_LINE_ITEM_KIND_LABELS = {
+  service: "Usluga",
+  goods: "Roba",
+} as const;
 
 export function printWorkOrder(): void {
   window.print();
@@ -25,6 +36,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +79,10 @@ function WorkOrderDetailPage(): React.JSX.Element {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    void window.api.getLocations().then(setLocations);
+  }, []);
 
   return (
     <>
@@ -179,7 +195,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
         </AppShell>
       </div>
-      {order && <WorkOrderPrintSheet order={order} />}
+      {order && <WorkOrderPrintSheet order={order} locations={locations} />}
     </>
   );
 }
@@ -216,7 +232,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     order.events.length > 0
       ? order.events.map((event, index) => ({
           time: formatWorkOrderDateTime(event.createdAt),
-          label: event.label,
+          label: formatWorkOrderEventLabel(event.label, event.kind),
           who: event.actor,
           state: index === order.events.length - 1 ? "current" : "done",
         }))
@@ -231,6 +247,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
 
   return (
     <>
+      <CustomerSummaryPanel order={order} />
+
       <div className="grid grid-cols-7 border-b border-border bg-card">
         {metaCells.map(([k, v], i) => (
           <div
@@ -353,6 +371,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="py-2 text-left text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   Opis
                 </th>
+                <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  Količina
+                </th>
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   Iznos
                 </th>
@@ -361,11 +382,26 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             <tbody>
               {(order.invoiceDraft.lineItems.length > 0
                 ? order.invoiceDraft.lineItems
-                : [{ id: "legacy", description: order.jobDescription, quantity: 1, unitPrice: order.price ?? 0 }]
+                : [
+                    {
+                      id: "legacy",
+                      kind: "service" as const,
+                      description: order.jobDescription,
+                      quantity: 1,
+                      unit: "kom" as const,
+                      unitPrice: order.price ?? 0,
+                    },
+                  ]
               ).map((line) => (
                 <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
                   <td className="py-3 text-foreground">
-                    {line.description}
+                    <div>{line.description}</div>
+                    <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
+                      {INVOICE_LINE_ITEM_KIND_LABELS[line.kind]}
+                    </div>
+                  </td>
+                  <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                    {line.quantity} {line.unit}
                   </td>
                   <td className="tnum py-3 text-right font-medium text-foreground">
                     {formatWorkOrderPrice(line.quantity * line.unitPrice)}
@@ -444,6 +480,85 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
         </div>
       </div>
     </>
+  );
+}
+
+function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Element {
+  const customerDueDate = order.dueDate ?? order.assignment.scheduledDate;
+  const isOverdue = Boolean(
+    customerDueDate && customerDueDate < getLocalIsoDate() && !order.isCompleted,
+  );
+  const customerNotice = buildWorkOrderCustomerNotice(order);
+
+  return (
+    <div className="border-b border-border px-8 py-5">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+            Sažetak za klijenta
+          </div>
+          <div className="mt-1 text-[13px] leading-6 text-[color:var(--iris-ink-soft)]">
+            {getWorkOrderCustomerNextStep(order.status)}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (!navigator.clipboard) {
+              toast.error("Kopiranje nije dostupno u ovom okruženju.");
+              return;
+            }
+            void navigator.clipboard
+              .writeText(customerNotice)
+              .then(() => toast.success("Obaveštenje je kopirano."))
+              .catch(() => toast.error("Kopiranje nije uspelo."));
+          }}
+          className="iris-focusable iris-press flex shrink-0 items-center gap-1.5 border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+        >
+          <Copy className="h-3 w-3" />
+          Kopiraj obaveštenje
+        </button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="border border-[color:var(--iris-border-soft)] px-3.5 py-3">
+          <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+            Status
+          </div>
+          <div className="mt-1.5 text-[13px] text-foreground">
+            {getWorkOrderStatusLabel(order.status)}
+          </div>
+        </div>
+        <div
+          className={`border px-3.5 py-3 ${
+            isOverdue
+              ? "border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10"
+              : "border-[color:var(--iris-border-soft)]"
+          }`}
+        >
+          <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+            Rok
+          </div>
+          <div
+            className={`tnum mt-1.5 text-[13px] ${
+              isOverdue
+                ? "text-[color:var(--iris-status-cancelled)]"
+                : "text-foreground"
+            }`}
+          >
+            {customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}
+          </div>
+        </div>
+        <div className="border border-[color:var(--iris-border-soft)] px-3.5 py-3">
+          <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+            Broj naloga
+          </div>
+          <div className="tnum mt-1.5 text-[13px] text-foreground">
+            {order.orderNumber}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

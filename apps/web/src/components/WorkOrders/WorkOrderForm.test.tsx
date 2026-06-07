@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getInvoiceUnitOptions,
   getFirstWorkOrderFormErrorTarget,
   normalizeWorkOrderFormDefaultValues,
   resolveShippingAddress,
@@ -9,6 +10,57 @@ import {
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
 import type { FieldErrors } from "react-hook-form";
+
+const duplicateValues: WorkOrderFormValues = {
+  customerId: "cust-1",
+  locationId: "loc-1",
+  clientName: "Firma Doo",
+  contactPerson: null,
+  jobDescription: "Stampa vizitkarti 500 kom",
+  jobDetails: null,
+  billingDocumentType: "invoice",
+  billingDocumentNumber: null,
+  shipping: {
+    deliveryMethod: "pickup",
+    drivesOut: false,
+    postagePaymentType: null,
+    waitForPayment: false,
+    hasPackaging: false,
+    hasLabeling: false,
+    isFragile: false,
+    requiresSignature: false,
+    hasInsurance: false,
+    shippingAddress: null,
+  },
+  assignment: {
+    assignedTo: null,
+    priority: "normal",
+    scheduledDate: null,
+  },
+  price: 12000,
+  note: null,
+  issueDate: "2026-05-31",
+  dueDate: null,
+  executedBy: null,
+  internalNotes: [],
+  customerNotes: [],
+  attachments: [],
+  materialUsage: [],
+  timeEntries: [],
+  invoiceDraft: {
+    status: "draft",
+    invoiceNumber: null,
+    lineItems: [],
+    paidAt: null,
+  },
+  communication: {
+    publicToken: "",
+    notificationEmail: null,
+    emailNotificationsEnabled: false,
+    signedBy: null,
+    signedAt: null,
+  },
+};
 
 describe("getFirstWorkOrderFormErrorTarget", () => {
   it("maps nested shipping address errors to the rendered input id", () => {
@@ -52,54 +104,6 @@ describe("getFirstWorkOrderFormErrorTarget", () => {
 });
 
 describe("normalizeWorkOrderFormDefaultValues", () => {
-  const duplicateValues: WorkOrderFormValues = {
-    customerId: "cust-1",
-    locationId: "loc-1",
-    clientName: "Firma Doo",
-    contactPerson: null,
-    jobDescription: "Stampa vizitkarti 500 kom",
-    jobDetails: null,
-    billingDocumentType: "invoice",
-    billingDocumentNumber: null,
-    shipping: {
-      deliveryMethod: "pickup",
-      hasPackaging: false,
-      hasLabeling: false,
-      isFragile: false,
-      requiresSignature: false,
-      hasInsurance: false,
-      shippingAddress: null,
-    },
-    assignment: {
-      assignedTo: null,
-      priority: "normal",
-      scheduledDate: null,
-    },
-    price: 12000,
-    note: null,
-    issueDate: "2026-05-31",
-    dueDate: null,
-    executedBy: null,
-    internalNotes: [],
-    customerNotes: [],
-    attachments: [],
-    materialUsage: [],
-    timeEntries: [],
-    invoiceDraft: {
-      status: "draft",
-      invoiceNumber: null,
-      lineItems: [],
-      paidAt: null,
-    },
-    communication: {
-      publicToken: "",
-      notificationEmail: null,
-      emailNotificationsEnabled: false,
-      signedBy: null,
-      signedAt: null,
-    },
-  };
-
   it("adds valid draft note rows when duplicated orders start with empty notes", () => {
     const normalized = normalizeWorkOrderFormDefaultValues(duplicateValues);
 
@@ -114,6 +118,64 @@ describe("normalizeWorkOrderFormDefaultValues", () => {
       body: "",
     });
     expect(workOrderFormSchema.safeParse(normalized).success).toBe(true);
+  });
+
+  it("adds default service units to legacy invoice lines", () => {
+    const normalized = normalizeWorkOrderFormDefaultValues({
+      ...duplicateValues,
+      invoiceDraft: {
+        status: "draft",
+        invoiceNumber: null,
+        lineItems: [
+          {
+            id: "line-1",
+            description: "Stampa",
+            quantity: 1,
+            unitPrice: 12000,
+          },
+        ],
+        paidAt: null,
+      },
+    } as unknown as WorkOrderFormValues);
+
+    expect(normalized.invoiceDraft.lineItems[0]).toMatchObject({
+      kind: "service",
+      unit: "kom",
+    });
+    expect(workOrderFormSchema.safeParse(normalized).success).toBe(true);
+  });
+});
+
+describe("getInvoiceUnitOptions", () => {
+  it("allows kom, m2, and set for services", () => {
+    expect(getInvoiceUnitOptions("service")).toEqual(["kom", "m2", "set"]);
+  });
+
+  it("allows only kom and m2 for goods", () => {
+    expect(getInvoiceUnitOptions("goods")).toEqual(["kom", "m2"]);
+  });
+
+  it("rejects set for goods in form validation", () => {
+    const result = workOrderFormSchema.safeParse({
+      ...duplicateValues,
+      invoiceDraft: {
+        status: "draft",
+        invoiceNumber: null,
+        lineItems: [
+          {
+            id: "line-1",
+            kind: "goods",
+            description: "Materijal",
+            quantity: 1,
+            unit: "set",
+            unitPrice: 1000,
+          },
+        ],
+        paidAt: null,
+      },
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 

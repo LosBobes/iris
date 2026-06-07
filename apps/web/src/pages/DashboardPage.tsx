@@ -1,8 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
-import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
-import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
-import { DashboardSummaryCards } from '@/components/dashboard/DashboardSummaryCards'
+import { DashboardActionSection } from '@/components/dashboard/DashboardActionSection'
+import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
@@ -12,10 +11,15 @@ function DashboardPage(): React.JSX.Element {
     monthlyRevenue,
     deliveryDistribution,
     topClients,
-    queueSummary,
     operators,
     filters,
     setFilters,
+    clientAttentionRows,
+    internalAttentionRows,
+    signalCounts,
+    activeSignal,
+    setActiveSignal,
+    showFinance,
     loading,
     error,
     hasSourceData,
@@ -23,7 +27,7 @@ function DashboardPage(): React.JSX.Element {
 
   const isFilteredEmpty = !loading && !error && hasSourceData && summary.totalOrders === 0
   const isGlobalEmpty = !loading && !error && !hasSourceData
-  const showWidgets = !loading && !error && summary.totalOrders > 0
+  const showDashboard = !loading && !error && hasSourceData
 
   return (
     <AppShell>
@@ -38,12 +42,8 @@ function DashboardPage(): React.JSX.Element {
             Kontrolna tabla
           </h1>
           <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-            Sažetak poslovanja
+            Klijenti, rokovi i otvoreni redovi rada
           </div>
-        </div>
-
-        <div className="animate-iris-enter px-8" style={{ animationDelay: "60ms" }}>
-          <DashboardFilters filters={filters} setFilters={setFilters} operators={operators} />
         </div>
 
         {loading && (
@@ -76,56 +76,33 @@ function DashboardPage(): React.JSX.Element {
           </div>
         )}
 
-        {isFilteredEmpty && (
-          <div className="px-8">
-            <div className="animate-iris-fade py-20 text-center">
-              <p className="text-sm text-muted-foreground">
-                Nema radnih naloga koji odgovaraju izabranim filterima.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {showWidgets && (
+        {showDashboard && (
           <div className="space-y-8 px-8">
-            <div className="grid gap-3 md:grid-cols-5">
-              <QueueMetric label="Danas" value={queueSummary.today} />
-              <QueueMetric label="Kasni" value={queueSummary.overdue} />
-              <QueueMetric label="Čeka klijenta" value={queueSummary.waitingForCustomer} />
-              <QueueMetric label="Čeka materijal" value={queueSummary.waitingForMaterials} />
-              <QueueMetric label="Nedodeljeni" value={queueSummary.unassigned} />
-            </div>
-            <DashboardSummaryCards summary={summary} />
-            <div className="animate-iris-enter" style={{ animationDelay: "320ms" }}>
-              <DashboardCharts
+            <DashboardActionSection
+              clientAttentionRows={clientAttentionRows}
+              internalAttentionRows={internalAttentionRows}
+              signalCounts={signalCounts}
+              activeSignal={activeSignal}
+              onActiveSignalChange={setActiveSignal}
+            />
+
+            {showFinance && (
+              <DashboardFinanceSection
+                summary={summary}
                 monthlyOrders={monthlyOrders}
                 monthlyRevenue={monthlyRevenue}
                 deliveryDistribution={deliveryDistribution}
                 topClients={topClients}
-                summary={summary}
+                operators={operators}
+                filters={filters}
+                setFilters={setFilters}
+                isFilteredEmpty={isFilteredEmpty}
               />
-            </div>
+            )}
           </div>
         )}
       </div>
     </AppShell>
-  )
-}
-
-function QueueMetric({
-  label,
-  value,
-}: {
-  label: string
-  value: number
-}): React.JSX.Element {
-  return (
-    <div className="border border-border bg-card px-4 py-3">
-      <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
-        {label}
-      </div>
-      <div className="tnum mt-1 text-[24px] font-normal text-foreground">{value}</div>
-    </div>
   )
 }
 

@@ -107,7 +107,7 @@ export function WorkOrdersTable({
   onOpen,
 }: WorkOrdersTableProps): React.JSX.Element {
   // Stagger the entrance animation only on the very first paint. Subsequent
-  // sort / filter / page changes should swap rows in place — no shimmer.
+  // sort / filter / page changes should swap rows in place - no shimmer.
   const isFirstPaintRef = useRef(true);
   useEffect(() => {
     isFirstPaintRef.current = false;

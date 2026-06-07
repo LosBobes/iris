@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
+	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -141,9 +142,6 @@ const currentUserContextKey contextKey = "currentUser"
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.serveWebIfHTML(w, r) {
-			return
-		}
 		user, ok := s.userFromRequest(w, r)
 		if !ok {
 			return
@@ -278,6 +276,9 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCustomers(w http.ResponseWriter, r *http.Request) {
+	if s.serveWebIfHTML(w, r) {
+		return
+	}
 	customers, err := s.store.Customers(r.Context())
 	if err != nil {
 		writeServerError(w, err)
@@ -471,11 +472,32 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var locationAddress *string
+	if workOrder.LocationID != nil {
+		locations, locErr := s.store.Locations(r.Context())
+		if locErr != nil {
+			writeServerError(w, locErr)
+			return
+		}
+		for _, location := range locations {
+			if location.ID == *workOrder.LocationID {
+				locationAddress = location.Address
+				break
+			}
+		}
+	}
+
+	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, locationAddress)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+
 	filename := fmt.Sprintf("%s.pdf", workOrder.OrderNumber)
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(buildWorkOrderPDF(*workOrder))
+	_, _ = w.Write(pdfBytes)
 }
 
 func (s *Server) handlePublicWorkOrderStatus(w http.ResponseWriter, r *http.Request) {
@@ -510,54 +532,7 @@ func (s *Server) handlePublicWorkOrderStatus(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
 }
 
-func buildWorkOrderPDF(workOrder domain.WorkOrder) []byte {
-	lines := []string{
-		"Iris radni nalog",
-		workOrder.OrderNumber,
-		workOrder.ClientName,
-		workOrder.JobDescription,
-		fmt.Sprintf("Status: %s", workOrder.Status),
-	}
-	content := "BT /F1 12 Tf 72 760 Td "
-	for index, line := range lines {
-		if index > 0 {
-			content += "0 -18 Td "
-		}
-		content += fmt.Sprintf("(%s) Tj ", escapePDFText(line))
-	}
-	content += "ET"
 
-	objects := []string{
-		"<< /Type /Catalog /Pages 2 0 R >>",
-		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(content), content),
-	}
-
-	var builder strings.Builder
-	builder.WriteString("%PDF-1.4\n")
-	offsets := make([]int, 0, len(objects)+1)
-	offsets = append(offsets, 0)
-	for index, object := range objects {
-		offsets = append(offsets, builder.Len())
-		builder.WriteString(fmt.Sprintf("%d 0 obj\n%s\nendobj\n", index+1, object))
-	}
-	xrefOffset := builder.Len()
-	builder.WriteString(fmt.Sprintf("xref\n0 %d\n0000000000 65535 f \n", len(objects)+1))
-	for _, offset := range offsets[1:] {
-		builder.WriteString(fmt.Sprintf("%010d 00000 n \n", offset))
-	}
-	builder.WriteString(fmt.Sprintf("trailer\n<< /Root 1 0 R /Size %d >>\nstartxref\n%d\n%%%%EOF\n", len(objects)+1, xrefOffset))
-	return []byte(builder.String())
-}
-
-func escapePDFText(value string) string {
-	value = strings.ReplaceAll(value, `\`, `\\`)
-	value = strings.ReplaceAll(value, "(", `\(`)
-	value = strings.ReplaceAll(value, ")", `\)`)
-	return value
-}
 
 func (s *Server) serveWebIfHTML(w http.ResponseWriter, r *http.Request) bool {
 	if s.config.WebDir == "" || !wantsHTML(r) {

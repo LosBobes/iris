@@ -1,8 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Save, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { Customer, Location } from "@/types/work-order";
+
+type DeleteTarget =
+  | { kind: "customer"; id: string; name: string; locationCount: number }
+  | { kind: "location"; id: string; name: string };
 
 const emptyCustomer: Customer = {
   id: "",
@@ -93,6 +107,7 @@ function CustomersPage(): React.JSX.Element {
   const [customerMissingFields, setCustomerMissingFields] = useState<string[]>([]);
   const [locationMissingFields, setLocationMissingFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -230,6 +245,18 @@ function CustomersPage(): React.JSX.Element {
     [],
   );
 
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.kind === "customer") {
+      await deleteCustomer(deleteTarget.id);
+    } else {
+      await deleteLocation(deleteTarget.id);
+    }
+
+    setDeleteTarget(null);
+  }, [deleteCustomer, deleteLocation, deleteTarget]);
+
   return (
     <AppShell>
       <div className="space-y-8">
@@ -272,7 +299,16 @@ function CustomersPage(): React.JSX.Element {
                       setCustomerDraft(customer);
                       setCustomerMissingFields([]);
                     }}
-                    onDelete={() => void deleteCustomer(customer.id)}
+                    onDelete={() =>
+                      setDeleteTarget({
+                        kind: "customer",
+                        id: customer.id,
+                        name: customer.name,
+                        locationCount: locations.filter(
+                          (location) => location.customerId === customer.id,
+                        ).length,
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -297,7 +333,13 @@ function CustomersPage(): React.JSX.Element {
                       setLocationDraft(location);
                       setLocationMissingFields([]);
                     }}
-                    onDelete={() => void deleteLocation(location.id)}
+                    onDelete={() =>
+                      setDeleteTarget({
+                        kind: "location",
+                        id: location.id,
+                        name: location.name,
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -305,6 +347,39 @@ function CustomersPage(): React.JSX.Element {
           </div>
         )}
       </div>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.kind === "customer" ? "Brisanje klijenta" : "Brisanje lokacije"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.kind === "customer" ? (
+                <>
+                  Da li ste sigurni da želite da obrišete klijenta {deleteTarget.name}?
+                  {deleteTarget.locationCount > 0
+                    ? ` Biće obrisano i ${deleteTarget.locationCount} povezan${deleteTarget.locationCount === 1 ? "a" : "e"} lokacij${deleteTarget.locationCount === 1 ? "a" : "e"}.`
+                    : null}
+                </>
+              ) : deleteTarget?.kind === "location" ? (
+                <>Da li ste sigurni da želite da obrišete lokaciju {deleteTarget.name}?</>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Otkaži</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void handleDeleteConfirm()}>
+              Obriši
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
@@ -503,20 +578,30 @@ function Row({
 }): React.JSX.Element {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <button type="button" onClick={onEdit} className="min-w-0 text-left">
+      <div className="min-w-0">
         <div className="truncate text-[13px] text-foreground">{title}</div>
         <div className="truncate text-[11px] text-[color:var(--iris-ink-soft)]">
           {detail || "-"}
         </div>
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="iris-focusable iris-press text-[color:var(--iris-status-cancelled)]"
-        aria-label="Obriši"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="iris-focusable iris-press text-[color:var(--iris-ink-soft)] hover:text-foreground"
+          aria-label="Izmeni"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="iris-focusable iris-press text-[color:var(--iris-status-cancelled)] hover:opacity-80"
+          aria-label="Obriši"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

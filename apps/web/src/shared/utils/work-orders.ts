@@ -1,6 +1,9 @@
 import type {
   BillingDocumentType,
   DeliveryMethod,
+  PostagePaymentType,
+  WorkOrder,
+  WorkOrderPriority,
   WorkOrderStatus,
 } from "@/types/work-order";
 
@@ -19,6 +22,13 @@ export const WORK_ORDER_BILLING_LABELS: Record<BillingDocumentType, string> = {
   proforma: "Profaktura",
 };
 
+export const WORK_ORDER_POSTAGE_LABELS: Record<PostagePaymentType, string> = {
+  cod: "Poštarina pouzećem",
+  ourAccount: "Poštarina na naš račun",
+  advance: "Avans poštarina",
+  viaInvoice: "Poštarina preko fakture",
+};
+
 export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   new: "Nov",
   assigned: "Dodeljen",
@@ -28,6 +38,52 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   completed: "Završen",
   cancelled: "Otkazan",
   invoiced: "Fakturisan",
+};
+
+export function getWorkOrderStatusLabel(status: WorkOrderStatus): string {
+  return WORK_ORDER_STATUS_LABELS[status];
+}
+
+export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
+  low: "Nizak",
+  normal: "Normalan",
+  high: "Visok",
+  urgent: "Hitno",
+};
+
+export function getWorkOrderPriorityLabel(priority: WorkOrderPriority): string {
+  return WORK_ORDER_PRIORITY_LABELS[priority];
+}
+
+const WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX = "Status promenjen na ";
+
+function isWorkOrderStatus(value: string): value is WorkOrderStatus {
+  return value in WORK_ORDER_STATUS_LABELS;
+}
+
+/** Localizes status-change timeline labels that still store raw enum values. */
+export function formatWorkOrderEventLabel(label: string, kind?: string): string {
+  if (kind !== "status" || !label.startsWith(WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX)) {
+    return label;
+  }
+
+  const rawStatus = label.slice(WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX.length);
+  if (!isWorkOrderStatus(rawStatus)) {
+    return label;
+  }
+
+  return `${WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX}${getWorkOrderStatusLabel(rawStatus)}`;
+}
+
+export const WORK_ORDER_CUSTOMER_NEXT_STEPS: Record<WorkOrderStatus, string> = {
+  new: "Nalog je evidentiran i čeka dodelu operateru.",
+  assigned: "Nalog je dodeljen operateru i priprema je u toku.",
+  inProgress: "Rad je u toku; javljamo se čim bude spremno za sledeći korak.",
+  waitingForCustomer: "Čekamo vašu potvrdu materijala/dizajna.",
+  waitingForMaterials: "Čekamo potreban materijal pre nastavka izrade.",
+  completed: "Nalog je završen i spreman za preuzimanje ili isporuku.",
+  invoiced: "Nalog je fakturisan; ostaje još administrativna obrada po dokumentu.",
+  cancelled: "Nalog je otkazan.",
 };
 
 export const WORK_ORDER_STATUS_VARIANTS: Record<
@@ -104,6 +160,23 @@ export function getPrimaryWorkOrderTransition(
   status: WorkOrderStatus,
 ): WorkOrderStatus | null {
   return WORK_ORDER_PRIMARY_TRANSITION[status];
+}
+
+export function getWorkOrderCustomerNextStep(status: WorkOrderStatus): string {
+  return WORK_ORDER_CUSTOMER_NEXT_STEPS[status];
+}
+
+export function buildWorkOrderCustomerNotice(
+  order: Pick<WorkOrder, "orderNumber" | "status" | "dueDate" | "assignment">,
+): string {
+  const customerDueDate = order.dueDate ?? order.assignment.scheduledDate;
+
+  return [
+    `Radni nalog ${order.orderNumber}`,
+    `Status: ${getWorkOrderStatusLabel(order.status)}`,
+    `Rok: ${customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}`,
+    `Sledeći korak: ${getWorkOrderCustomerNextStep(order.status)}`,
+  ].join("\n");
 }
 
 export function isWorkOrderStatusTerminal(status: WorkOrderStatus): boolean {

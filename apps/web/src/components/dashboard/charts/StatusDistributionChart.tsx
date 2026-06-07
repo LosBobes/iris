@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import type { DashboardSummary, WorkOrderStatus } from "@/types/work-order";
 import {
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
   WORK_ORDER_STATUS_ORDER,
 } from "@/shared/utils/work-orders";
 
@@ -31,7 +31,7 @@ export function StatusDistributionChart({
   summary,
 }: StatusDistributionChartProps): React.JSX.Element {
   const data = WORK_ORDER_STATUS_ORDER.map((status) => ({
-    name: WORK_ORDER_STATUS_LABELS[status],
+    name: getWorkOrderStatusLabel(status),
     value: summary.statusCounts[status],
     status,
   })).filter((d) => d.value > 0);

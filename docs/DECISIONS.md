@@ -124,7 +124,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ## D-013: Standardize on an expanded work-order domain model
 - **Status**: `accepted`
-- **Context**: Real-world operations need detailed steps beyond basic open/closed statuses—specifically tracking scheduling, materials, client approvals, and invoicing drafts.
+- **Context**: Real-world operations need detailed steps beyond basic open/closed statuses-specifically tracking scheduling, materials, client approvals, and invoicing drafts.
 - **Decision**: Standardize all monorepo type contracts on a unified print-shop lifecycle (`new`, `assigned`, `inProgress`, `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`, `invoiced`) complete with normalized `Customer`, `Location`, `Assignment`, `InvoiceDraft`, and execution metrics. Legacy `draft` and `active` inputs are normalized at the API boundary where older fixture compatibility requires it.
 - **Consequences**:
   - Requires synchronized updates to TypeScript types, Go structs, and OpenAPI definitions when changing schemas.

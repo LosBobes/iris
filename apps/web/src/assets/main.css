@@ -124,7 +124,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Iris motion tokens — restrained, editorial. Never bouncy. */
+  /* Iris motion tokens - restrained, editorial. Never bouncy. */
   :root {
     --iris-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     --iris-ease-out-soft: cubic-bezier(0.25, 1, 0.5, 1);
@@ -159,7 +159,7 @@
 }
 
 @layer utilities {
-  /* Page entrance — gentle fade + lift, set to fill-mode both so initial paint is hidden. */
+  /* Page entrance - gentle fade + lift, set to fill-mode both so initial paint is hidden. */
   @keyframes iris-fade-up {
     from {
       opacity: 0;
@@ -211,7 +211,7 @@
     animation: iris-error-shake 360ms var(--iris-ease-out) both;
   }
 
-  /* Iris focus ring — used on bare buttons (nav, table actions, pagination). Only shows on keyboard focus. */
+  /* Iris focus ring - used on bare buttons (nav, table actions, pagination). Only shows on keyboard focus. */
   .iris-focusable {
     transition: color var(--iris-dur-fast) var(--iris-ease-out),
       background-color var(--iris-dur-fast) var(--iris-ease-out),
@@ -274,15 +274,21 @@
   }
 
   .work-order-print-sheet {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column;
     box-sizing: border-box;
     width: 194mm;
-    min-height: 0;
+    height: 281mm;
+    max-height: 281mm;
     margin: 0 auto;
+    overflow: hidden;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+    break-inside: avoid;
     background: #fff !important;
     color: #000 !important;
     font-family: Arial, Helvetica, sans-serif;
-    line-height: 1.15;
+    line-height: 1.12;
   }
 
   .work-order-print-sheet *,
@@ -296,10 +302,11 @@
 
   .work-order-print-title {
     margin: 0;
+    flex: 0 0 auto;
     border-bottom: 2px solid #000;
-    padding: 0 0 3mm;
+    padding: 0 0 2mm;
     text-align: center;
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 800;
     letter-spacing: 0;
   }
@@ -307,7 +314,8 @@
   .work-order-print-hero {
     display: grid;
     grid-template-columns: 1fr 55mm;
-    min-height: 132mm;
+    flex: 1 1 auto;
+    min-height: 0;
     border-bottom: 2px solid #000;
   }
 
@@ -325,7 +333,7 @@
 
   .work-order-print-client-box,
   .work-order-print-issue-box {
-    min-height: 25mm;
+    min-height: 20mm;
   }
 
   .work-order-print-client-box {
@@ -333,18 +341,18 @@
   }
 
   .work-order-print-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     letter-spacing: 0;
   }
 
   .work-order-print-client-box .work-order-print-label {
-    padding: 3mm 4mm 0;
+    padding: 2mm 3mm 0;
   }
 
   .work-order-print-client-name {
-    padding: 4mm 4mm 5mm;
-    font-size: 25px;
+    padding: 2mm 3mm 3mm;
+    font-size: 22px;
     font-weight: 800;
     line-height: 1.1;
     overflow-wrap: anywhere;
@@ -352,8 +360,8 @@
 
   .work-order-print-subline {
     border-top: 1px solid #000;
-    padding: 2mm 4mm;
-    font-size: 12px;
+    padding: 1.5mm 3mm;
+    font-size: 11px;
     font-weight: 500;
   }
 
@@ -362,33 +370,34 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3mm;
+    gap: 2mm;
     text-align: center;
   }
 
   .work-order-print-date {
-    font-size: 26px;
+    font-size: 23px;
     font-weight: 700;
     letter-spacing: 0;
   }
 
   .work-order-print-job-box {
     display: flex;
-    min-height: 107mm;
+    flex: 1 1 auto;
+    min-height: 0;
     flex-direction: column;
-    padding: 8mm 5mm 7mm;
+    padding: 4mm 4mm 3mm;
   }
 
   .work-order-print-job-lines {
-    font-size: 27px;
+    font-size: 24px;
     font-weight: 800;
-    line-height: 1.28;
+    line-height: 1.22;
     overflow-wrap: anywhere;
   }
 
   .work-order-print-contact {
     margin-top: auto;
-    font-size: 28px;
+    font-size: 25px;
     font-weight: 800;
     line-height: 1.1;
     overflow-wrap: anywhere;
@@ -397,19 +406,20 @@
   .work-order-print-delivery-box {
     display: flex;
     flex-direction: column;
-    padding-top: 4mm;
+    min-height: 0;
+    padding-top: 2mm;
   }
 
   .work-order-print-check-row {
     display: grid;
-    grid-template-columns: 1fr 11mm;
+    grid-template-columns: 1fr 10mm;
     align-items: center;
-    min-height: 11.5mm;
+    min-height: 8.5mm;
     border-bottom: 1px solid #000;
-    padding-left: 3mm;
-    font-size: 17px;
+    padding-left: 2mm;
+    font-size: 15px;
     font-weight: 500;
-    line-height: 1.08;
+    line-height: 1.05;
     overflow-wrap: anywhere;
   }
 
@@ -417,11 +427,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 7mm;
-    height: 7mm;
+    width: 6mm;
+    height: 6mm;
     margin: 0 auto;
     border: 1px solid #000;
-    font-size: 24px;
+    font-size: 21px;
     font-weight: 900;
     line-height: 1;
   }
@@ -429,15 +439,16 @@
   .work-order-print-empty-field {
     margin-top: auto;
     border: 1px solid #000;
-    padding: 2mm 5mm;
-    font-size: 24px;
+    padding: 1.5mm 4mm;
+    font-size: 21px;
     font-weight: 700;
   }
 
   .work-order-print-document-row {
     display: grid;
     grid-template-columns: 78mm 1fr;
-    min-height: 30mm;
+    flex: 0 0 auto;
+    min-height: 22mm;
     border-bottom: 2px solid #000;
   }
 
@@ -446,21 +457,21 @@
     align-items: center;
     justify-content: center;
     border-right: 1px solid #000;
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 500;
   }
 
   .work-order-print-billing-box {
     display: grid;
     grid-template-columns: 50mm 1fr;
-    padding: 3mm 3mm 3mm 7mm;
+    padding: 2mm 2mm 2mm 5mm;
   }
 
   .work-order-print-billing-row {
     display: contents;
-    font-size: 24px;
+    font-size: 21px;
     font-weight: 800;
-    line-height: 1.35;
+    line-height: 1.25;
   }
 
   .work-order-print-billing-row > span:first-child {
@@ -469,24 +480,25 @@
   }
 
   .work-order-print-mark {
-    min-height: 8mm;
-    margin: 1mm 0;
+    min-height: 6.5mm;
+    margin: 0.5mm 0;
     border: 1px solid #000;
-    padding-left: 3mm;
-    font-size: 28px;
+    padding-left: 2mm;
+    font-size: 25px;
     line-height: 1.05;
   }
 
   .work-order-print-notes-row {
     display: grid;
     grid-template-columns: 78mm 1fr;
-    min-height: 44mm;
+    flex: 0 0 auto;
+    min-height: 26mm;
     border-bottom: 2px solid #000;
   }
 
   .work-order-print-note-box,
   .work-order-print-address-box {
-    padding: 3mm 4mm;
+    padding: 2mm 3mm;
   }
 
   .work-order-print-note-box {
@@ -495,10 +507,10 @@
 
   .work-order-print-note-lines,
   .work-order-print-address {
-    margin-top: 6mm;
-    font-size: 26px;
+    margin-top: 3mm;
+    font-size: 23px;
     font-weight: 800;
-    line-height: 1.25;
+    line-height: 1.2;
     overflow-wrap: anywhere;
   }
 
@@ -506,17 +518,18 @@
     display: grid;
     grid-template-columns: 78mm 1fr;
     align-items: center;
-    min-height: 12mm;
+    flex: 0 0 auto;
+    min-height: 10mm;
     border-bottom: 2px solid #000;
-    font-size: 13px;
+    font-size: 11px;
   }
 
   .work-order-print-completion-state,
   .work-order-print-completion-date {
     display: flex;
     align-items: center;
-    gap: 8mm;
-    padding: 2mm 4mm;
+    gap: 5mm;
+    padding: 1.5mm 3mm;
   }
 
   .work-order-print-completion-date {
@@ -524,19 +537,20 @@
   }
 
   .work-order-print-date-line {
-    min-width: 45mm;
+    min-width: 40mm;
     border-bottom: 1px solid #000;
     padding-bottom: 0.5mm;
     text-align: right;
-    font-size: 24px;
+    font-size: 21px;
     font-weight: 500;
   }
 
   .work-order-print-signatures {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 34mm;
-    padding: 6mm 4mm 0;
+    flex: 0 0 auto;
+    gap: 24mm;
+    padding: 3mm 3mm 0;
   }
 
   .work-order-print-align-right {
@@ -544,11 +558,11 @@
   }
 
   .work-order-print-signature-value {
-    min-height: 13mm;
+    min-height: 10mm;
     border-bottom: 1px solid #000;
-    padding-top: 4mm;
+    padding-top: 2mm;
     text-align: center;
-    font-size: 24px;
+    font-size: 21px;
     font-style: italic;
     line-height: 1;
   }

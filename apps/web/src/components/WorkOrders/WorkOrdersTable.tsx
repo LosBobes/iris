@@ -35,7 +35,8 @@ import {
   formatWorkOrderDate,
   formatWorkOrderPrice,
   getPrimaryWorkOrderTransition,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderPriorityLabel,
+  getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 
 interface ColDef {
@@ -131,7 +132,7 @@ export function WorkOrdersTable({
   onOpen,
 }: WorkOrdersTableProps): React.JSX.Element {
   // Stagger the entrance animation only on the very first paint. Subsequent
-  // sort / filter / page changes should swap rows in place — no shimmer.
+  // sort / filter / page changes should swap rows in place - no shimmer.
   const isFirstPaintRef = useRef(true);
   useEffect(() => {
     isFirstPaintRef.current = false;
@@ -193,7 +194,7 @@ export function WorkOrdersTable({
             const canToggleStatus = canToggleWorkOrderCompletion(order.status);
             const statusTransition = getPrimaryWorkOrderTransition(order.status);
             const statusActionLabel = canToggleStatus
-              ? `Promeni u ${WORK_ORDER_STATUS_LABELS[statusTransition!]}`
+              ? `Promeni u ${getWorkOrderStatusLabel(statusTransition!)}`
               : "Status ovog naloga se ne menja iz liste";
             // Cap stagger so a 100-row page doesn't take 3s to settle.
             const rowDelayMs = Math.min(idx, 12) * 22;
@@ -228,7 +229,7 @@ export function WorkOrdersTable({
                   {order.assignment.assignedTo ?? "Nedodeljeno"}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
-                  {order.assignment.priority}
+                  {getWorkOrderPriorityLabel(order.assignment.priority)}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.billingDocumentType

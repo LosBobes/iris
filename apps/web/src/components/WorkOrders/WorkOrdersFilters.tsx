@@ -8,7 +8,7 @@ import {
 import type { WorkOrdersFiltersState } from "@/hooks/useWorkOrders";
 import { Search, X, ChevronDown } from "lucide-react";
 import {
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderStatusLabel,
   WORK_ORDER_STATUS_ORDER,
 } from "@/shared/utils/work-orders";
 
@@ -22,7 +22,7 @@ const STATUS_OPTIONS: Array<{ value: WorkOrdersFiltersState["status"]; label: st
   { value: "all", label: "Svi statusi" },
   ...WORK_ORDER_STATUS_ORDER.map((status) => ({
     value: status,
-    label: WORK_ORDER_STATUS_LABELS[status],
+    label: getWorkOrderStatusLabel(status),
   })),
 ];
 
@@ -129,6 +129,7 @@ export function WorkOrdersFilters({
     filters.billingDocumentType !== "all" ||
     filters.deliveryMethod !== "all" ||
     filters.queue !== "all" ||
+    filters.customerId !== "" ||
     filters.dateFrom !== "" ||
     filters.dateTo !== "";
 

@@ -1,5 +1,7 @@
 export type DeliveryMethod = 'pickup' | 'postExpress' | 'cityExpress' | 'fieldVisit'
 
+export type PostagePaymentType = 'cod' | 'ourAccount' | 'advance' | 'viaInvoice'
+
 export type BillingDocumentType = 'invoice' | 'cashCollection' | 'proforma'
 
 export type WorkOrderStatus =
@@ -15,6 +17,8 @@ export type WorkOrderStatus =
 export type WorkOrderPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type WorkOrderNoteVisibility = 'internal' | 'customer'
 export type InvoiceDraftStatus = 'none' | 'draft' | 'issued' | 'paid'
+export type InvoiceLineItemKind = 'service' | 'goods'
+export type InvoiceUnit = 'kom' | 'm2' | 'set'
 
 export interface JobDetails {
   productCode: string | null
@@ -26,6 +30,9 @@ export interface JobDetails {
 
 export interface Shipping {
   deliveryMethod: DeliveryMethod | null
+  drivesOut: boolean
+  postagePaymentType: PostagePaymentType | null
+  waitForPayment: boolean
   hasPackaging: boolean
   hasLabeling: boolean
   isFragile: boolean
@@ -102,8 +109,10 @@ export interface TimeEntry {
 
 export interface InvoiceLineItem {
   id: string
+  kind: InvoiceLineItemKind
   description: string
   quantity: number
+  unit: InvoiceUnit
   unitPrice: number
 }
 

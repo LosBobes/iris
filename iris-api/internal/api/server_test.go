@@ -446,6 +446,24 @@ func TestReportAndPublicTrackingEndpoints(t *testing.T) {
 		t.Fatalf("report body prefix = %q, want PDF header", reportResponse.Body.String()[:5])
 	}
 
+	reportHTMLResponse := performRequestWithHeaders(
+		t,
+		server,
+		http.MethodGet,
+		"/work-orders/1/report",
+		"",
+		map[string]string{"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+	)
+	if reportHTMLResponse.Code != http.StatusOK {
+		t.Fatalf("report html accept status = %d, want %d", reportHTMLResponse.Code, http.StatusOK)
+	}
+	if contentType := reportHTMLResponse.Header().Get("Content-Type"); contentType != "application/pdf" {
+		t.Fatalf("Content-Type with html accept = %q, want application/pdf", contentType)
+	}
+	if !bytes.HasPrefix(reportHTMLResponse.Body.Bytes(), []byte("%PDF-")) {
+		t.Fatalf("report html accept body prefix = %q, want PDF header", reportHTMLResponse.Body.String()[:5])
+	}
+
 	workOrderResponse := performRequest(t, server, http.MethodGet, "/work-orders/1", "")
 	var workOrder domain.WorkOrder
 	if err := json.Unmarshal(workOrderResponse.Body.Bytes(), &workOrder); err != nil {
@@ -527,6 +545,17 @@ func TestDeleteWorkOrderEndpoint(t *testing.T) {
 }
 
 func performRequest(t *testing.T, server *Server, method string, path string, body string) *httptest.ResponseRecorder {
+	return performRequestWithHeaders(t, server, method, path, body, nil)
+}
+
+func performRequestWithHeaders(
+	t *testing.T,
+	server *Server,
+	method string,
+	path string,
+	body string,
+	headers map[string]string,
+) *httptest.ResponseRecorder {
 	t.Helper()
 
 	requestBody := bytes.NewBufferString(body)
@@ -537,6 +566,9 @@ func performRequest(t *testing.T, server *Server, method string, path string, bo
 	req := httptest.NewRequest(method, path, requestBody)
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 	if needsTestSession(path) {
 		user, err := server.store.AuthenticateUser(context.Background(), "admin", "admin123")

@@ -178,6 +178,10 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 	if updated.Status != domain.WorkOrderStatusAssigned || updated.IsCompleted {
 		t.Fatalf("updated = %#v, want assigned work order", updated)
 	}
+	lastEvent := updated.Events[len(updated.Events)-1]
+	if lastEvent.Label != "Status promenjen na Dodeljen" {
+		t.Fatalf("last event label = %q, want Serbian status label", lastEvent.Label)
+	}
 
 	deleted, err := store.DeleteWorkOrder(context.Background(), created.ID)
 	if err != nil {
