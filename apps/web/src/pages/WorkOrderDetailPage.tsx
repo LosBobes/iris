@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
-import type { WorkOrder } from "@/types/work-order";
+import type { Location, WorkOrder } from "@/types/work-order";
 import {
   buildWorkOrderCustomerNotice,
   WORK_ORDER_BILLING_LABELS,
@@ -36,6 +36,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +79,10 @@ function WorkOrderDetailPage(): React.JSX.Element {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    void window.api.getLocations().then(setLocations);
+  }, []);
 
   return (
     <>
@@ -190,7 +195,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
         </AppShell>
       </div>
-      {order && <WorkOrderPrintSheet order={order} />}
+      {order && <WorkOrderPrintSheet order={order} locations={locations} />}
     </>
   );
 }
