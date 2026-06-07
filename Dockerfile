@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.25-bookworm AS build
+FROM golang:1.26-bookworm AS build
 
 WORKDIR /src/iris-api
 
@@ -22,7 +22,18 @@ RUN npm ci
 COPY apps/web/ ./
 RUN npm run build
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+	chromium \
+	ca-certificates \
+	fonts-liberation \
+	&& rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 65532 nonroot && \
+	useradd -r -u 65532 -g nonroot nonroot && \
+	mkdir -p /app /data && \
+	chown -R 65532:65532 /app /data
 
 WORKDIR /app
 
