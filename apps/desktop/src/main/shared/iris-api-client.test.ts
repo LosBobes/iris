@@ -55,7 +55,7 @@ describe('iris-api-client', () => {
   it('returns a configuration error when IRIS_API_BASE_URL is missing', async () => {
     delete process.env.IRIS_API_BASE_URL
     // Point cwd at a directory with no .env so the file fallback in
-    // runtime-config also produces no value — we want to exercise the
+    // runtime-config also produces no value - we want to exercise the
     // truly-unset branch, not paper over it with an empty string.
     vi.spyOn(process, 'cwd').mockReturnValue('/nonexistent-iris-test-dir')
     __resetEnvFileCacheForTests()

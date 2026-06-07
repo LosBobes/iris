@@ -1,4 +1,4 @@
-# Iris — Repository Map
+# Iris - Repository Map
 
 Onboarding snapshot for senior engineers. **Last verified:** 2026-06-03.
 
@@ -6,10 +6,10 @@ Onboarding snapshot for senior engineers. **Last verified:** 2026-06-03.
 
 **Iris** is the operations workspace for **Stamparija Cobanovic** (a print shop). It manages:
 
-- **Work orders** — lifecycle from `new` through `invoiced`, with assignment, materials, notes, events, and invoice drafts
-- **Customers and locations** — normalized master data (web client; API-backed)
-- **Dashboard** — revenue/status charts and queue summaries (aggregated client-side)
-- **Public tracking** — token-based status lookup at `/public/work-orders/:token` (web only)
+- **Work orders** - lifecycle from `new` through `invoiced`, with assignment, materials, notes, events, and invoice drafts
+- **Customers and locations** - normalized master data (web client; API-backed)
+- **Dashboard** - revenue/status charts and queue summaries (aggregated client-side)
+- **Public tracking** - token-based status lookup at `/public/work-orders/:token` (web only)
 
 Three deployable surfaces share one **Go REST API** and **SQLite** database:
 
@@ -106,7 +106,7 @@ IRIS_API_BASE_URL (.env or config)
 
 - `POST /auth/login` → HTTP-only **`iris_session`** cookie (12h default)
 - Protected routes use `requireAuth`; admin-only deletes use `requireAdmin`
-- No OAuth / SSO — username/password in SQLite
+- No OAuth / SSO - username/password in SQLite
 
 ### Dashboard analytics
 
@@ -114,7 +114,7 @@ IRIS_API_BASE_URL (.env or config)
 
 ### Public tracking (web)
 
-- Unauthenticated `GET /public/work-orders/{token}` — response strips internal fields
+- Unauthenticated `GET /public/work-orders/{token}` - response strips internal fields
 
 ---
 
@@ -198,7 +198,7 @@ curl http://localhost:8080/healthz
 | --- | --- |
 | `DATABASE_PATH` | **Primary** SQLite path (default dev: `./data/iris.db`) |
 | `IRIS_DB_PATH` | Legacy fallback if `DATABASE_PATH` unset |
-| `IRIS_ENV` | `development` \| `production` — production requires explicit DB path + session secret; blocks demo `admin`/`admin123` |
+| `IRIS_ENV` | `development` \| `production` - production requires explicit DB path + session secret; blocks demo `admin`/`admin123` |
 | `IRIS_SESSION_SECRET` | Session signing (required in production) |
 | `IRIS_API_ADDR` | Listen address (default `:8080`) |
 | `IRIS_ALLOWED_ORIGINS` | CORS allowlist (comma-separated) |
@@ -224,9 +224,9 @@ Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Comp
 
 ### Other config
 
-- `iris-api/openapi.yaml` — API contract
-- `apps/desktop/electron-builder.yml`, `dev-app-update.yml` — packaging / updater (placeholder metadata)
-- `apps/*/eslint.config.*`, `vitest.config.*`, `tsconfig*.json` — tooling per app
+- `iris-api/openapi.yaml` - API contract
+- `apps/desktop/electron-builder.yml`, `dev-app-update.yml` - packaging / updater (placeholder metadata)
+- `apps/*/eslint.config.*`, `vitest.config.*`, `tsconfig*.json` - tooling per app
 
 ---
 
@@ -249,33 +249,33 @@ Demo seed credentials (non-production): `admin` / `admin123`.
 
 | Area | Notes |
 | --- | --- |
-| **Dual frontend duplication** | Large parallel trees (`apps/web` vs `apps/desktop/renderer`) — components, dashboard libs, hooks. Changes often need two edits; no shared UI package. |
+| **Dual frontend duplication** | Large parallel trees (`apps/web` vs `apps/desktop/renderer`) - components, dashboard libs, hooks. Changes often need two edits; no shared UI package. |
 | **Client-side authorization** | Admin dashboard gating is UI-only ([D-006](docs/DECISIONS.md) `temporary`). API enforces session + admin on destructive routes, but not all read paths may match product intent. |
 | **Feature parity** | Web has **customers** CRUD and **public tracking**; desktop routes stop at work orders + dashboard (no customer IPC surface). |
-| **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `.github/copilot-instructions.md` still describes desktop as fixture-backed — outdated vs `IrisApiClient`. |
+| **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `.github/copilot-instructions.md` still describes desktop as fixture-backed - outdated vs `IrisApiClient`. |
 | **Electron security** | `sandbox: false` in `BrowserWindow`; preload isolation is good, but not hardened to modern Electron defaults. |
 | **No monorepo CI** | Regressions rely on manual verification per package. |
 | **Legacy statuses** | API accepts/normalizes `draft` / `active` for old fixtures. |
 | **Packaging** | `electron-builder.yml` uses placeholder `com.electron.app` / example author; `notarize: false` on macOS. |
-| **SQLite ops** | Single-file DB + volume backups — no replication, migration rollback story, or hosted DB runbook in repo. |
+| **SQLite ops** | Single-file DB + volume backups - no replication, migration rollback story, or hosted DB runbook in repo. |
 | **Contract discipline** | Four+ places must stay aligned on domain changes; easy to miss one in review. |
 
 ---
 
 ## 9. Suggested first five improvements
 
-1. **Add a GitHub Actions workflow** — matrix: `go test ./...`, `apps/web` lint/test/build, `apps/desktop` typecheck/test (with `ELECTRON_SKIP_BINARY_DOWNLOAD` where needed).
-2. **Extract a shared `@iris/contracts` or `packages/shared`** — work-order types, status enums, date helpers, and dashboard aggregation to cut web/desktop drift.
-3. **Reconcile documentation** — standardize on `DATABASE_PATH`, update Copilot/desktop README, add root `.env.example` for Compose.
-4. **Harden auth story** — document and test server-side rules for admin-only reads; reduce reliance on renderer `role === 'admin'` ([D-006](docs/DECISIONS.md)).
-5. **Desktop feature parity or explicit scope** — either expose customers/public flows via IPC + pages, or document desktop as work-order-only and trim duplicate UI investment.
+1. **Add a GitHub Actions workflow** - matrix: `go test ./...`, `apps/web` lint/test/build, `apps/desktop` typecheck/test (with `ELECTRON_SKIP_BINARY_DOWNLOAD` where needed).
+2. **Extract a shared `@iris/contracts` or `packages/shared`** - work-order types, status enums, date helpers, and dashboard aggregation to cut web/desktop drift.
+3. **Reconcile documentation** - standardize on `DATABASE_PATH`, update Copilot/desktop README, add root `.env.example` for Compose.
+4. **Harden auth story** - document and test server-side rules for admin-only reads; reduce reliance on renderer `role === 'admin'` ([D-006](docs/DECISIONS.md)).
+5. **Desktop feature parity or explicit scope** - either expose customers/public flows via IPC + pages, or document desktop as work-order-only and trim duplicate UI investment.
 
 ---
 
 ## Quick links
 
-- [README.md](README.md) — entry commands
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — topology and flows
-- [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) — Serbian UI ↔ English code
-- [iris-api/README.md](iris-api/README.md) — endpoints and Docker smoke checks
+- [README.md](README.md) - entry commands
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - topology and flows
+- [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) - Serbian UI ↔ English code
+- [iris-api/README.md](iris-api/README.md) - endpoints and Docker smoke checks
 - [apps/desktop/README.md](apps/desktop/README.md) · [apps/web/README.md](apps/web/README.md)

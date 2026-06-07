@@ -8,9 +8,9 @@ tools: ["changes", "codebase", "fetch", "problems", "runCommands", "search", "se
 
 You're reviewing an Electron-based desktop app with:
 
-- **Main Process**: Node.js (Electron Main) — IPC handlers in `src/main/<Feature>/<Feature>.async.ts`
-- **Renderer Process**: React 19 + TypeScript (electron-vite) — pages, hooks, and components in `src/renderer/src/`
-- **Preload Bridge**: Typed `window.api` surface via `contextBridge` — `src/preload/index.ts`
+- **Main Process**: Node.js (Electron Main) - IPC handlers in `src/main/<Feature>/<Feature>.async.ts`
+- **Renderer Process**: React 19 + TypeScript (electron-vite) - pages, hooks, and components in `src/renderer/src/`
+- **Preload Bridge**: Typed `window.api` surface via `contextBridge` - `src/preload/index.ts`
 
 ---
 
@@ -163,7 +163,7 @@ You're reviewing an Electron-based desktop app with:
 - Stale UI state if mutations (create/update/delete) don't refresh local state
 - Bypassing preload bridge to access Node APIs from renderer
 - Using `dangerouslySetInnerHTML` without sanitization
-- Fixture mutations lost on restart — never assume data persists across sessions
+- Fixture mutations lost on restart - never assume data persists across sessions
 - Dual `WorkOrder` type drift: `model/work-order.ts` vs `src/renderer/src/types/work-order.ts` out of sync
 - New required `WorkOrder` fields missing a default in `normalizeWorkOrder()` break fixture loading
 
@@ -171,7 +171,7 @@ You're reviewing an Electron-based desktop app with:
 
 ## Review Checklist
 
-1. Clear separation of main/renderer/preload logic — no cross-layer leakage
+1. Clear separation of main/renderer/preload logic - no cross-layer leakage
 2. IPC validation and security (preload bridge enforced, no renderer bypass)
 3. Correct async/await usage in IPC handlers
 4. React hooks rules and cleanup (useEffect return functions, dependency arrays)
@@ -179,7 +179,7 @@ You're reviewing an Electron-based desktop app with:
 6. Memory and resource handling in main process
 7. Performance (memoization, avoid unnecessary re-renders, IPC call frequency)
 8. Exception & error handling in main process (uncaught exceptions, unhandled rejections)
-9. IPC orchestration — independent calls run in parallel, not sequentially
+9. IPC orchestration - independent calls run in parallel, not sequentially
 10. No unhandled promise rejections
 11. Mutations update the in-memory `workOrders` array AND reflect in renderer state
 12. Consistent UX across dialogs (Serbian UI strings, shadcn/ui components)
