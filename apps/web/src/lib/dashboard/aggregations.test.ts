@@ -21,6 +21,9 @@ function makeOrder(overrides: Partial<WorkOrder>): WorkOrder {
     billingDocumentNumber: null,
     shipping: {
       deliveryMethod: null,
+      drivesOut: false,
+      postagePaymentType: null,
+      waitForPayment: false,
       hasPackaging: false,
       hasLabeling: false,
       isFragile: false,

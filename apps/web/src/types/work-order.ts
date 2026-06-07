@@ -1,5 +1,7 @@
 export type DeliveryMethod = 'pickup' | 'postExpress' | 'cityExpress' | 'fieldVisit'
 
+export type PostagePaymentType = 'cod' | 'ourAccount' | 'advance' | 'viaInvoice'
+
 export type BillingDocumentType = 'invoice' | 'cashCollection' | 'proforma'
 
 export type WorkOrderStatus =
@@ -28,6 +30,9 @@ export interface JobDetails {
 
 export interface Shipping {
   deliveryMethod: DeliveryMethod | null
+  drivesOut: boolean
+  postagePaymentType: PostagePaymentType | null
+  waitForPayment: boolean
   hasPackaging: boolean
   hasLabeling: boolean
   isFragile: boolean

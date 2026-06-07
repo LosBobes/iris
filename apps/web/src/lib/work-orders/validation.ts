@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 const deliveryMethodEnum = z.enum(['pickup', 'postExpress', 'cityExpress', 'fieldVisit'])
+const postagePaymentTypeEnum = z.enum(['cod', 'ourAccount', 'advance', 'viaInvoice'])
 const billingDocumentTypeEnum = z.enum(['invoice', 'cashCollection', 'proforma'])
 const priorityEnum = z.enum(['low', 'normal', 'high', 'urgent'])
 const invoiceDraftStatusEnum = z.enum(['none', 'draft', 'issued', 'paid'])
@@ -25,6 +26,9 @@ const jobDetailsSchema = z.object({
 
 const shippingSchema = z.object({
   deliveryMethod: deliveryMethodEnum.nullable(),
+  drivesOut: z.boolean(),
+  postagePaymentType: postagePaymentTypeEnum.nullable(),
+  waitForPayment: z.boolean(),
   hasPackaging: z.boolean(),
   hasLabeling: z.boolean(),
   isFragile: z.boolean(),

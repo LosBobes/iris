@@ -118,6 +118,9 @@ function normalizeJobDetails(
 function normalizeShipping(shipping: Partial<Shipping> | null | undefined): Shipping {
   return {
     deliveryMethod: shipping?.deliveryMethod ?? null,
+    drivesOut: shipping?.drivesOut ?? false,
+    postagePaymentType: shipping?.postagePaymentType ?? null,
+    waitForPayment: shipping?.waitForPayment ?? false,
     hasPackaging: shipping?.hasPackaging ?? false,
     hasLabeling: shipping?.hasLabeling ?? false,
     isFragile: shipping?.isFragile ?? false,

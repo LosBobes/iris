@@ -1,6 +1,7 @@
 import type {
   BillingDocumentType,
   DeliveryMethod,
+  PostagePaymentType,
   WorkOrder,
   WorkOrderPriority,
   WorkOrderStatus,
@@ -19,6 +20,13 @@ export const WORK_ORDER_BILLING_LABELS: Record<BillingDocumentType, string> = {
   invoice: "Faktura",
   cashCollection: "Gotovinski račun",
   proforma: "Profaktura",
+};
+
+export const WORK_ORDER_POSTAGE_LABELS: Record<PostagePaymentType, string> = {
+  cod: "Poštarina pouzećem",
+  ourAccount: "Poštarina na naš račun",
+  advance: "Avans poštarina",
+  viaInvoice: "Poštarina preko fakture",
 };
 
 export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {

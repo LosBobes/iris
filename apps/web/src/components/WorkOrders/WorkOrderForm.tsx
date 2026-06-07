@@ -20,10 +20,12 @@ import {
 } from "@/components/ui/select";
 import type {
   Customer,
+  BillingDocumentType,
   DeliveryMethod,
   InvoiceLineItemKind,
   InvoiceUnit,
   Location,
+  PostagePaymentType,
   WorkOrder,
   WorkOrderNoteVisibility,
 } from "@/types/work-order";
@@ -34,6 +36,7 @@ import {
 import {
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
+  WORK_ORDER_POSTAGE_LABELS,
   WORK_ORDER_PRIORITY_LABELS,
   WORK_ORDER_SELECT_NONE_VALUE,
   getWorkOrderPriorityLabel,
@@ -253,6 +256,19 @@ export function getFirstWorkOrderFormErrorTarget(
   return path ? ERROR_FIELD_IDS[path] ?? path : null;
 }
 
+export function isEmptyJobDetails(
+  details: WorkOrderFormValues["jobDetails"],
+): boolean {
+  if (!details) return true;
+  return !(
+    details.productCode?.trim() ||
+    details.paperWeightGsm != null ||
+    details.dimensions?.trim() ||
+    details.quantity != null ||
+    details.finishingNote?.trim()
+  );
+}
+
 export function resolveShippingAddress(
   currentAddress: string | null,
   deliveryMethod: DeliveryMethod | null,
@@ -274,6 +290,19 @@ function createDraftNote(visibility: WorkOrderNoteVisibility): WorkOrderFormValu
     createdAt: new Date().toISOString(),
   };
 }
+
+const EMPTY_SHIPPING: WorkOrderFormValues["shipping"] = {
+  deliveryMethod: null,
+  drivesOut: false,
+  postagePaymentType: null,
+  waitForPayment: false,
+  hasPackaging: false,
+  hasLabeling: false,
+  isFragile: false,
+  requiresSignature: false,
+  hasInsurance: false,
+  shippingAddress: null,
+};
 
 export function normalizeWorkOrderFormDefaultValues(
   values: WorkOrderFormValues,
@@ -324,7 +353,7 @@ export function WorkOrderForm({
           jobDetails: initialData.jobDetails,
           billingDocumentType: initialData.billingDocumentType,
           billingDocumentNumber: initialData.billingDocumentNumber,
-          shipping: initialData.shipping,
+          shipping: { ...EMPTY_SHIPPING, ...initialData.shipping },
           assignment: initialData.assignment,
           price: initialData.price,
           note: initialData.note,
@@ -354,15 +383,7 @@ export function WorkOrderForm({
           jobDetails: null,
           billingDocumentType: null,
           billingDocumentNumber: null,
-          shipping: {
-            deliveryMethod: null,
-            hasPackaging: false,
-            hasLabeling: false,
-            isFragile: false,
-            requiresSignature: false,
-            hasInsurance: false,
-            shippingAddress: null,
-          },
+          shipping: { ...EMPTY_SHIPPING },
           assignment: {
             assignedTo: null,
             priority: "normal",
@@ -428,6 +449,8 @@ export function WorkOrderForm({
   );
   const showShippingAddress =
     deliveryMethod !== null && deliveryMethod !== "pickup";
+  const showPostageOptions =
+    deliveryMethod === "postExpress" || deliveryMethod === "cityExpress";
 
   const [showJobDetails, setShowJobDetails] = useState(!!defaultValues.jobDetails);
   const paperWeightError = errors.jobDetails?.paperWeightGsm?.message;
@@ -451,7 +474,19 @@ export function WorkOrderForm({
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
     try {
-      await onSubmit(values);
+      await onSubmit({
+        ...values,
+        jobDetails: isEmptyJobDetails(values.jobDetails) ? null : values.jobDetails,
+        shipping: {
+          ...values.shipping,
+          shippingAddress: resolveShippingAddress(
+            values.shipping.shippingAddress,
+            values.shipping.deliveryMethod,
+            values.locationId,
+            locations,
+          ),
+        },
+      });
     } finally {
       setSubmitting(false);
     }
@@ -800,7 +835,7 @@ export function WorkOrderForm({
                       const nextValue =
                         v === WORK_ORDER_SELECT_NONE_VALUE
                           ? null
-                          : (v as DeliveryMethod);
+                          : (v as BillingDocumentType);
                       field.onChange(nextValue);
                     }}
                   >
@@ -932,6 +967,91 @@ export function WorkOrderForm({
                 />
               </FieldShell>
             )}
+
+            <FieldShell id="shipping.drivesOut" label="Prevoz">
+              <Controller
+                name="shipping.drivesOut"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center gap-2 py-2">
+                    <Checkbox
+                      id="shipping.drivesOut"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                    <label
+                      htmlFor="shipping.drivesOut"
+                      className="text-[12px] text-[color:var(--iris-ink-soft)]"
+                    >
+                      Vozi se
+                    </label>
+                  </div>
+                )}
+              />
+            </FieldShell>
+
+            {showPostageOptions && (
+              <FieldShell id="shipping.postagePaymentType" label="Poštarina">
+                <Controller
+                  name="shipping.postagePaymentType"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
+                      onValueChange={(v) =>
+                        field.onChange(
+                          v === WORK_ORDER_SELECT_NONE_VALUE
+                            ? null
+                            : (v as PostagePaymentType),
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        id="shipping.postagePaymentType"
+                        aria-labelledby="shipping.postagePaymentType-label"
+                        className={underlineTrigger}
+                      >
+                        <SelectValue placeholder="Način plaćanja poštarine" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                          Nije izabrano
+                        </SelectItem>
+                        {Object.entries(WORK_ORDER_POSTAGE_LABELS).map(
+                          ([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </FieldShell>
+            )}
+
+            <FieldShell id="shipping.waitForPayment" label="Uplata">
+              <Controller
+                name="shipping.waitForPayment"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center gap-2 py-2">
+                    <Checkbox
+                      id="shipping.waitForPayment"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                    <label
+                      htmlFor="shipping.waitForPayment"
+                      className="text-[12px] text-[color:var(--iris-ink-soft)]"
+                    >
+                      Čeka se uplata
+                    </label>
+                  </div>
+                )}
+              />
+            </FieldShell>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
