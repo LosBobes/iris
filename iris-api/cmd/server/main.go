@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/api"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -65,8 +66,19 @@ func main() {
 		addr = ":8080"
 	}
 
+	// Explicit timeouts so slow or stalled clients cannot hold connections
+	// (and the single SQLite connection behind them) open indefinitely.
+	httpServer := &http.Server{
+		Addr:              addr,
+		Handler:           server.Routes(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
 	log.Printf("iris-api listening on %s", addr)
-	if err := http.ListenAndServe(addr, server.Routes()); err != nil {
+	if err := httpServer.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

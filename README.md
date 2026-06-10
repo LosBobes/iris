@@ -46,6 +46,19 @@ Compose persists SQLite at `/data/iris.db` through the named volume
 `iris_sqlite_data`. Do not run `docker compose down -v` unless you intentionally
 want to delete that database volume.
 
+Helper scripts:
+
+```bash
+scripts/docker-up.sh --seed          # build, start, wait for /healthz, seed demo data
+scripts/docker-persistence-test.sh   # CI check: SQLite survives image rebuild + prune
+```
+
+`docker-persistence-test.sh` proves the deploy guarantee: it seeds data, rebuilds
+the image with `--no-cache`, force-recreates the container, runs `docker system
+prune -af`, and asserts the work-order data is byte-identical afterwards — then
+confirms `down -v` (volume removal) is the only thing that wipes it. The prune is
+machine-wide; set `PRUNE_SCOPE=image` to prune only dangling Iris layers.
+
 Web client:
 
 ```bash

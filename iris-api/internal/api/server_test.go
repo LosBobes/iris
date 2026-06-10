@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -270,6 +272,28 @@ func TestCustomerLocationEndpoints(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCORSMiddlewareAllowsAlternateLocalhostPort(t *testing.T) {
+	server := NewServer(store.NewFixtureStore(testutil.FixtureDir(t)), Config{
+		AllowedOrigins: []string{
+			"http://localhost:5173",
+			"http://127.0.0.1:5173",
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("Origin", "http://localhost:5174")
+
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5174" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want %q", got, "http://localhost:5174")
+	}
 }
 
 func TestCORSMiddlewareAllowsWebClientMutations(t *testing.T) {
@@ -612,4 +636,34 @@ func assertErrorResponse(t *testing.T, body []byte, want string) {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	return NewServer(store.NewFixtureStore(testutil.FixtureDir(t)))
+}
+
+func TestWebFallbackRejectsPathTraversal(t *testing.T) {
+	base := t.TempDir()
+	webDir := filepath.Join(base, "web")
+	if err := os.MkdirAll(webDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<html>app</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "secret.txt"), []byte("top secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	server := NewServer(store.NewFixtureStore(testutil.FixtureDir(t)), Config{WebDir: webDir})
+	router := server.Routes()
+
+	// Simulate an encoded "%2e%2e" path that arrives decoded in URL.Path.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.URL.Path = "/../secret.txt"
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+	if strings.Contains(recorder.Body.String(), "top secret") {
+		t.Fatal("response leaked file contents outside WebDir")
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -109,10 +110,12 @@ func (s *Server) Routes() http.Handler {
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Vary must be sent on every response so caches never reuse a
+		// response produced for one origin to answer another.
+		w.Header().Add("Vary", "Origin")
 		origin := r.Header.Get("Origin")
 		if origin != "" && s.isAllowedOrigin(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -131,9 +134,24 @@ func (s *Server) isAllowedOrigin(origin string) bool {
 			return true
 		}
 	}
-	return len(s.config.AllowedOrigins) == 0 &&
-		(strings.HasPrefix(origin, "http://localhost:") ||
-			strings.HasPrefix(origin, "http://127.0.0.1:"))
+	if len(s.config.AllowedOrigins) == 0 {
+		return isLocalhostOrigin(origin)
+	}
+	// When a dev allowlist includes any localhost origin, permit other local
+	// Vite ports (e.g. 5174 when 5173 is already listed).
+	if isLocalhostOrigin(origin) {
+		for _, allowed := range s.config.AllowedOrigins {
+			if isLocalhostOrigin(allowed) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isLocalhostOrigin(origin string) bool {
+	return strings.HasPrefix(origin, "http://localhost:") ||
+		strings.HasPrefix(origin, "http://127.0.0.1:")
 }
 
 type contextKey string
@@ -213,8 +231,7 @@ func clearSessionCookie(w http.ResponseWriter, config Config) {
 // handleLogin decodes credentials and creates a secure HTTP-only session.
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req domain.LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -298,8 +315,7 @@ func (s *Server) handleLocations(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpsertCustomer(w http.ResponseWriter, r *http.Request) {
 	var customer domain.Customer
-	if err := json.NewDecoder(r.Body).Decode(&customer); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+	if !decodeJSONBody(w, r, &customer) {
 		return
 	}
 	if id := chi.URLParam(r, "id"); id != "" {
@@ -315,8 +331,7 @@ func (s *Server) handleUpsertCustomer(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpsertLocation(w http.ResponseWriter, r *http.Request) {
 	var location domain.Location
-	if err := json.NewDecoder(r.Body).Decode(&location); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+	if !decodeJSONBody(w, r, &location) {
 		return
 	}
 	if id := chi.URLParam(r, "id"); id != "" {
@@ -414,8 +429,7 @@ func (s *Server) handleWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 // handleCreateWorkOrder creates a new in-memory work order backed by the shared fixtures.
 func (s *Server) handleCreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateWorkOrderInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -431,8 +445,7 @@ func (s *Server) handleCreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 // handleUpdateWorkOrder applies a partial update and preserves 404 -> null semantics for desktop callers.
 func (s *Server) handleUpdateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	var req domain.UpdateWorkOrderInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -556,12 +569,33 @@ func (s *Server) handleWebFallback(w http.ResponseWriter, r *http.Request) {
 	if cleanPath == "." {
 		cleanPath = "index.html"
 	}
+	// Reject paths that escape WebDir (e.g. encoded "../" segments survive
+	// chi routing and would otherwise reach the filesystem).
+	if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
+		http.NotFound(w, r)
+		return
+	}
 	filePath := filepath.Join(s.config.WebDir, cleanPath)
 	if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 		http.ServeFile(w, r, filePath)
 		return
 	}
 	http.ServeFile(w, r, filepath.Join(s.config.WebDir, "index.html"))
+}
+
+// maxJSONBodyBytes caps request bodies so a single client cannot exhaust
+// server memory with an oversized payload.
+const maxJSONBodyBytes = 1 << 20
+
+// decodeJSONBody centralizes request decoding: it enforces the body size cap
+// and writes the 400 response itself, so handlers only continue on success.
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return false
+	}
+	return true
 }
 
 // writeJSON centralizes response encoding so handlers stay focused on control
@@ -572,9 +606,12 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-// writeServerError keeps internal failures in one response shape.
+// writeServerError keeps internal failures in one response shape. The
+// underlying error is logged but never echoed to clients, so internals
+// (SQL fragments, file paths) cannot leak through API responses.
 func writeServerError(w http.ResponseWriter, err error) {
-	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	log.Printf("internal server error: %v", err)
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Došlo je do greške na serveru."})
 }
 
 func writeStoreError(w http.ResponseWriter, err error) {

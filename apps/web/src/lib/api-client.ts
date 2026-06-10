@@ -12,14 +12,25 @@ import type {
 type FetchLike = typeof fetch
 
 async function readJSON<T>(response: Response): Promise<T> {
-  const payload = (await response.json()) as T | { error?: string }
+  // Error responses are not guaranteed to be JSON (e.g. an HTML page from a
+  // proxy), so parse failures must not mask the HTTP status.
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch {
+    payload = undefined
+  }
 
   if (!response.ok) {
     const message =
       typeof payload === 'object' && payload !== null && 'error' in payload
-        ? payload.error
+        ? (payload as { error?: string }).error
         : undefined
     throw new Error(message ?? `HTTP ${response.status}`)
+  }
+
+  if (payload === undefined) {
+    throw new Error('Neispravan odgovor servera.')
   }
 
   return payload as T

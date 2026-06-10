@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     environment:
       IRIS_API_ADDR: ":8080"
-      IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+      IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}"
       IRIS_ENV: "${IRIS_ENV:-development}"
       IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:-docker-dev-secret-change-me}"
       DATABASE_PATH: "/data/iris.db"

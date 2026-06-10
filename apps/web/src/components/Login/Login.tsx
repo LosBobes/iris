@@ -106,7 +106,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-5 py-8 text-foreground sm:px-8 lg:px-10">
+    <div className="iris-screen flex items-center justify-center bg-background px-5 py-6 text-foreground sm:px-8 sm:py-8 lg:px-10">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -116,7 +116,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         }}
       />
 
-      <div className="relative flex w-full max-w-5xl flex-col items-stretch gap-8 sm:gap-10 lg:flex-row lg:items-center lg:justify-center lg:gap-20">
+      <div className="relative flex max-h-full min-h-0 w-full max-w-5xl flex-col items-stretch gap-6 overflow-hidden sm:gap-8 lg:flex-row lg:items-center lg:justify-center lg:gap-20">
         {/* Masthead */}
         <div
           className="w-full max-w-[340px] self-center text-center sm:max-w-[420px] lg:w-80 lg:self-auto lg:text-left"

@@ -13,6 +13,7 @@ const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
 const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
 const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 
 type AppBootstrapState =
   | { kind: "loading" }
@@ -167,6 +168,7 @@ function App(): React.JSX.Element {
                       <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
                       <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
                       <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
+                      <Route path="/settings" element={<SettingsPage />} />
                     </Routes>
                     <Toaster />
                   </TooltipProvider>

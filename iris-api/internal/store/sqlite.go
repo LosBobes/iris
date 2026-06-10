@@ -351,7 +351,16 @@ func (s *SQLiteStore) CreateWorkOrder(
 		return nil, err
 	}
 
-	sequence, err := s.nextSequence(ctx)
+	// The sequence read and the insert must share one transaction: otherwise
+	// two concurrent creates can compute the same sequence and the second
+	// upsert silently overwrites the first work order.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin create work order: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	sequence, err := nextSequence(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -395,8 +404,11 @@ func (s *SQLiteStore) CreateWorkOrder(
 		Communication: normalizeCommunication(input.Communication, sequence, nil),
 	}
 
-	if err := s.PutWorkOrder(ctx, workOrder); err != nil {
+	if err := putWorkOrder(ctx, tx, workOrder); err != nil {
 		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit create work order: %w", err)
 	}
 	return cloneWorkOrder(workOrder), nil
 }
@@ -469,13 +481,24 @@ func (s *SQLiteStore) Operators(ctx context.Context) ([]string, error) {
 	return operators, nil
 }
 
+// sqlExecutor abstracts *sql.DB and *sql.Tx so write helpers can run either
+// standalone or inside a transaction.
+type sqlExecutor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 func (s *SQLiteStore) PutWorkOrder(ctx context.Context, workOrder domain.WorkOrder) error {
+	return putWorkOrder(ctx, s.db, workOrder)
+}
+
+func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrder) error {
 	payload, err := json.Marshal(workOrder)
 	if err != nil {
 		return fmt.Errorf("encode work order payload: %w", err)
 	}
 	assignedTo := ptrStringValue(workOrder.Assignment.AssignedTo)
-	if _, err := s.db.ExecContext(
+	if _, err := db.ExecContext(
 		ctx,
 		`INSERT INTO work_orders(
 		   id, order_number, customer_id, location_id, client_name, job_description,
@@ -575,9 +598,9 @@ func (s *SQLiteStore) Backup(ctx context.Context, path string) error {
 	return nil
 }
 
-func (s *SQLiteStore) nextSequence(ctx context.Context) (int, error) {
+func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
 	var next sql.NullInt64
-	if err := s.db.QueryRowContext(
+	if err := db.QueryRowContext(
 		ctx,
 		`SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1
 		 FROM work_orders

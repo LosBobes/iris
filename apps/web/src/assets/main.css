@@ -232,6 +232,16 @@
   .iris-press:not(:disabled):active {
     transform: translate3d(0, 1px, 0);
   }
+
+  /* Full-viewport shell that stays within the visible area when root zoom scales UI. */
+  .iris-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: calc(100vw / var(--iris-font-scale, 1));
+    height: calc(100dvh / var(--iris-font-scale, 1));
+    overflow: hidden;
+  }
 }
 
 #root {
