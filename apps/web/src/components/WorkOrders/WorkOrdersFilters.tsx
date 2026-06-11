@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { parse } from "date-fns";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
@@ -70,12 +71,18 @@ function FilterPill({ label, isActive, children }: FilterPillProps): React.JSX.E
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`iris-focusable iris-press group flex items-center gap-2 border border-border bg-card px-3 py-2 text-[12px] hover:bg-black/[0.02] ${
+          className={`iris-focusable iris-press group flex items-center gap-2 border bg-card px-3 py-2 text-[12px] hover:bg-black/[0.02] ${
             isActive
-              ? "text-foreground"
-              : "text-[color:var(--iris-ink-soft)] hover:text-foreground"
+              ? "border-foreground/40 font-medium text-foreground"
+              : "border-border text-[color:var(--iris-ink-soft)] hover:text-foreground"
           }`}
         >
+          {isActive && (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-[color:var(--iris-accent)]"
+            />
+          )}
           {label}
           <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
         </button>
@@ -123,6 +130,28 @@ export function WorkOrdersFilters({
   updateFilters,
   resetFilters,
 }: WorkOrdersFiltersProps): React.JSX.Element {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // "/" focuses search from anywhere on the page (unless typing in a field).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const hasActiveFilters =
     filters.search !== "" ||
     filters.status !== "all" ||
@@ -149,12 +178,36 @@ export function WorkOrdersFilters({
       <div className="group relative flex min-w-[220px] flex-1 items-center gap-2 border border-border bg-card px-3 py-2 transition-colors duration-150 focus-within:border-foreground">
         <Search className="h-3 w-3 text-[color:var(--iris-ink-mute)] transition-colors duration-150 group-focus-within:text-foreground" />
         <input
+          ref={searchInputRef}
           type="text"
           placeholder="Pretraži naloge, klijente, opis…"
           value={filters.search}
           onChange={(e) => updateFilters({ search: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && filters.search !== "") {
+              e.stopPropagation();
+              updateFilters({ search: "" });
+            }
+          }}
           className="w-full border-none bg-transparent text-[12px] text-foreground placeholder:text-[color:var(--iris-ink-mute)] focus:outline-none"
         />
+        {filters.search !== "" ? (
+          <button
+            type="button"
+            aria-label="Obriši pretragu"
+            onClick={() => {
+              updateFilters({ search: "" });
+              searchInputRef.current?.focus();
+            }}
+            className="iris-focusable iris-press shrink-0 bg-transparent p-0.5 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        ) : (
+          <kbd className="hidden shrink-0 border border-[color:var(--iris-border-soft)] px-1.5 py-px font-sans text-[10px] text-[color:var(--iris-ink-faint)] sm:inline-block">
+            /
+          </kbd>
+        )}
       </div>
 
       <FilterPill label={statusLabel} isActive={filters.status !== "all"}>

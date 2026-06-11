@@ -33,7 +33,7 @@ function DashboardPage(): React.JSX.Element {
     <AppShell>
       <div className="space-y-8">
         <div
-          className="animate-iris-enter border-b border-border px-10 pt-7 pb-5"
+          className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10"
         >
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             Iris · pregled
@@ -47,7 +47,7 @@ function DashboardPage(): React.JSX.Element {
         </div>
 
         {loading && (
-          <div className="px-8">
+          <div className="px-5 sm:px-8">
             <div
               className="flex items-center justify-center py-20 text-muted-foreground"
               style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
@@ -59,7 +59,7 @@ function DashboardPage(): React.JSX.Element {
         )}
 
         {!loading && error && (
-          <div className="px-8">
+          <div className="px-5 sm:px-8">
             <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
               Greška pri učitavanju podataka: {error}
             </div>
@@ -67,7 +67,7 @@ function DashboardPage(): React.JSX.Element {
         )}
 
         {isGlobalEmpty && (
-          <div className="px-8">
+          <div className="px-5 sm:px-8">
             <div className="animate-iris-fade py-20 text-center">
               <p className="text-sm text-muted-foreground">
                 Nema radnih naloga u bazi podataka.
@@ -77,7 +77,7 @@ function DashboardPage(): React.JSX.Element {
         )}
 
         {showDashboard && (
-          <div className="space-y-8 px-8">
+          <div className="space-y-8 px-5 pb-8 sm:px-8">
             <DashboardActionSection
               clientAttentionRows={clientAttentionRows}
               internalAttentionRows={internalAttentionRows}

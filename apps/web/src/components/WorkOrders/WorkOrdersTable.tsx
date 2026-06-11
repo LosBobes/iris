@@ -138,8 +138,20 @@ export function WorkOrdersTable({
     isFirstPaintRef.current = false;
   }, []);
   const shouldStagger = isFirstPaintRef.current;
+
+  // When the user pages while scrolled to the pagination bar, bring the top
+  // of the new page back into view instead of leaving them at the bottom.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previousPageRef = useRef(currentPage);
+  useEffect(() => {
+    if (previousPageRef.current !== currentPage) {
+      previousPageRef.current = currentPage;
+      containerRef.current?.scrollIntoView({ block: "start" });
+    }
+  }, [currentPage]);
+
   return (
-    <div className="overflow-x-auto border border-border bg-card">
+    <div ref={containerRef} className="scroll-mt-4 overflow-x-auto border border-border bg-card">
       <table className="min-w-[1180px] w-full border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-border">
@@ -202,6 +214,23 @@ export function WorkOrdersTable({
               <tr
                 key={order.id}
                 onClick={onOpen ? () => onOpen(order) : undefined}
+                tabIndex={onOpen ? 0 : undefined}
+                aria-label={
+                  onOpen
+                    ? `Otvori nalog ${order.orderNumber} – ${order.clientName}`
+                    : undefined
+                }
+                onKeyDown={
+                  onOpen
+                    ? (e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onOpen(order);
+                        }
+                      }
+                    : undefined
+                }
                 style={
                   shouldStagger
                     ? {
@@ -212,7 +241,9 @@ export function WorkOrdersTable({
                     : undefined
                 }
                 className={`h-10 border-b border-[color:var(--iris-border-soft)] transition-colors duration-150 last:border-b-0 ${
-                  onOpen ? "cursor-pointer hover:bg-black/[0.025]" : ""
+                  onOpen
+                    ? "cursor-pointer hover:bg-black/[0.025] focus-visible:bg-black/[0.025] focus-visible:outline-none focus-visible:shadow-[inset_2px_0_0_var(--iris-accent)]"
+                    : ""
                 }`}
               >
                 <td className="tnum px-4 font-medium text-foreground">
@@ -321,7 +352,7 @@ export function WorkOrdersTable({
         </tbody>
       </table>
 
-      <div className="flex items-center justify-between border-t border-border bg-background px-6 py-3 text-[11px] text-[color:var(--iris-ink-mute)]">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-background px-6 py-3 text-[11px] text-[color:var(--iris-ink-mute)]">
         <div>
           Ukupno {totalFiltered} naloga · stranica {currentPage} od {totalPages}
         </div>

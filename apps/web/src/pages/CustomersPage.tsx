@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Save, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -128,6 +128,25 @@ function CustomersPage(): React.JSX.Element {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const editingCustomerName = useMemo(
+    () => customers.find((customer) => customer.id === customerDraft.id)?.name ?? null,
+    [customers, customerDraft.id],
+  );
+  const editingLocationName = useMemo(
+    () => locations.find((location) => location.id === locationDraft.id)?.name ?? null,
+    [locations, locationDraft.id],
+  );
+
+  const cancelCustomerEdit = useCallback(() => {
+    setCustomerDraft(emptyCustomer);
+    setCustomerMissingFields([]);
+  }, []);
+
+  const cancelLocationEdit = useCallback(() => {
+    setLocationDraft(emptyLocation);
+    setLocationMissingFields([]);
+  }, []);
 
   const customerOptions = useMemo(
     () => customers.map((customer) => ({ id: customer.id, name: customer.name })),
@@ -284,10 +303,15 @@ function CustomersPage(): React.JSX.Element {
               <CustomerForm
                 value={customerDraft}
                 missingFields={customerMissingFields}
+                editingName={editingCustomerName}
                 onChange={updateCustomerDraft}
                 onSave={saveCustomer}
+                onCancel={cancelCustomerEdit}
               />
               <div className="divide-y divide-[color:var(--iris-border-soft)]">
+                {customers.length === 0 && (
+                  <EmptyListNote text="Još nema klijenata. Dodajte prvog kroz formu iznad." />
+                )}
                 {customers.map((customer) => (
                   <Row
                     key={customer.id}
@@ -320,10 +344,15 @@ function CustomersPage(): React.JSX.Element {
                 value={locationDraft}
                 customers={customerOptions}
                 missingFields={locationMissingFields}
+                editingName={editingLocationName}
                 onChange={updateLocationDraft}
                 onSave={saveLocation}
+                onCancel={cancelLocationEdit}
               />
               <div className="divide-y divide-[color:var(--iris-border-soft)]">
+                {locations.length === 0 && (
+                  <EmptyListNote text="Još nema lokacija. Dodajte prvu kroz formu iznad." />
+                )}
                 {locations.map((location) => (
                   <Row
                     key={location.id}
@@ -395,16 +424,28 @@ function Header({ title }: { title: string }): React.JSX.Element {
 function CustomerForm({
   value,
   missingFields,
+  editingName,
   onChange,
   onSave,
+  onCancel,
 }: {
   value: Customer;
   missingFields: string[];
+  editingName: string | null;
   onChange: (value: Customer) => void;
   onSave: () => void;
+  onCancel: () => void;
 }): React.JSX.Element {
   return (
-    <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2">
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+      noValidate
+      className="grid gap-3 border-b border-border p-4 sm:grid-cols-2"
+    >
+      <EditingNote name={editingName} onCancel={onCancel} />
       <MandatoryFieldsAlert missingFields={missingFields} />
       <TextInput
         label="ID"
@@ -440,8 +481,8 @@ function CustomerForm({
         isInvalid={isFieldMissing(missingFields, "Telefon")}
         onChange={(phone) => onChange({ ...value, phone })}
       />
-      <SaveButton onClick={onSave} />
-    </div>
+      <SaveButton isEditing={editingName !== null} />
+    </form>
   );
 }
 
@@ -449,17 +490,29 @@ function LocationForm({
   value,
   customers,
   missingFields,
+  editingName,
   onChange,
   onSave,
+  onCancel,
 }: {
   value: Location;
   customers: Array<{ id: string; name: string }>;
   missingFields: string[];
+  editingName: string | null;
   onChange: (value: Location) => void;
   onSave: () => void;
+  onCancel: () => void;
 }): React.JSX.Element {
   return (
-    <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2">
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+      noValidate
+      className="grid gap-3 border-b border-border p-4 sm:grid-cols-2"
+    >
+      <EditingNote name={editingName} onCancel={onCancel} />
       <MandatoryFieldsAlert missingFields={missingFields} />
       <TextInput
         label="ID"
@@ -499,7 +552,41 @@ function LocationForm({
         isInvalid={isFieldMissing(missingFields, "Adresa")}
         onChange={(address) => onChange({ ...value, address })}
       />
-      <SaveButton onClick={onSave} />
+      <SaveButton isEditing={editingName !== null} />
+    </form>
+  );
+}
+
+function EditingNote({
+  name,
+  onCancel,
+}: {
+  name: string | null;
+  onCancel: () => void;
+}): React.JSX.Element | null {
+  if (name === null) return null;
+
+  return (
+    <div className="animate-iris-fade flex items-center justify-between gap-3 border-l-2 border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-3 py-2 text-[12px] text-[color:var(--iris-ink-soft)] sm:col-span-2">
+      <span className="min-w-0 truncate">
+        Izmena: <span className="font-medium text-foreground">{name}</span>
+      </span>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="iris-focusable iris-press flex shrink-0 items-center gap-1 bg-transparent text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+      >
+        <X className="h-3 w-3" />
+        Otkaži
+      </button>
+    </div>
+  );
+}
+
+function EmptyListNote({ text }: { text: string }): React.JSX.Element {
+  return (
+    <div className="px-4 py-8 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
+      {text}
     </div>
   );
 }
@@ -552,15 +639,14 @@ function MandatoryFieldsAlert({
   );
 }
 
-function SaveButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+function SaveButton({ isEditing }: { isEditing: boolean }): React.JSX.Element {
   return (
     <button
-      type="button"
-      onClick={onClick}
-      className="iris-focusable iris-press flex items-center justify-center gap-2 bg-foreground px-3 py-2 text-[12px] font-medium text-background"
+      type="submit"
+      className="iris-focusable iris-press flex items-center justify-center gap-2 bg-foreground px-3 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
     >
       <Save className="h-3.5 w-3.5" />
-      Sačuvaj
+      {isEditing ? "Sačuvaj izmene" : "Sačuvaj"}
     </button>
   );
 }

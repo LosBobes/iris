@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Plus } from "lucide-react";
+import { Inbox, Loader2, Plus, SearchX } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -185,6 +185,7 @@ function WorkOrdersPage(): React.JSX.Element {
         {!loading && !error && allOrdersCount === 0 && (
           <div className="px-5 sm:px-8">
             <div className="animate-iris-fade py-20 text-center">
+              <Inbox className="mx-auto mb-3 h-8 w-8 text-[color:var(--iris-ink-faint)]" strokeWidth={1.25} />
               <p className="mb-4 text-sm text-muted-foreground">
                 Nema radnih naloga. Kreirajte prvi radni nalog.
               </p>
@@ -203,6 +204,7 @@ function WorkOrdersPage(): React.JSX.Element {
           hasActiveFilters && (
             <div className="px-5 sm:px-8">
               <div className="animate-iris-fade py-20 text-center">
+                <SearchX className="mx-auto mb-3 h-8 w-8 text-[color:var(--iris-ink-faint)]" strokeWidth={1.25} />
                 <p className="mb-4 text-sm text-muted-foreground">
                   Nema radnih naloga koji odgovaraju izabranim filterima.
                 </p>
