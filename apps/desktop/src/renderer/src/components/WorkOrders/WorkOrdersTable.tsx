@@ -47,7 +47,7 @@ const COLUMNS: ColDef[] = [
   { key: "billing", label: "Tip dokumenta", field: "billingDocumentType", width: "130px" },
   { key: "delivery", label: "Dostava", field: "shipping.deliveryMethod", width: "150px" },
   { key: "price", label: "Cena", field: "price", width: "110px", align: "right" },
-  { key: "status", label: "Status", field: "status", width: "110px" },
+  { key: "status", label: "Status", field: "status", width: "130px" },
   { key: "date", label: "Datum", field: "issueDate", width: "110px" },
   { key: "actions", label: "", width: "110px" },
 ];

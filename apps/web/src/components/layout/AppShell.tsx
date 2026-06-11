@@ -268,7 +268,6 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
         <div className={cn(
           "mt-auto flex flex-col gap-0.5 border-t border-[color:var(--iris-border-soft)] pt-3 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)]",
           "lg:border-t-0 lg:pt-0",
-          isSidebarCollapsed ? "lg:items-center" : "lg:items-start"
         )}>
           <SidebarTooltip label="Podešavanja" enabled={isSidebarCollapsed}>
             <NavLink
@@ -276,10 +275,14 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               onClick={closeMobileMenu}
               className={({ isActive }) =>
                 cn(
-                  "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300 lg:w-full",
-                  isSidebarCollapsed ? "lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
+                  "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
+                  isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
                   isActive
-                    ? "bg-black/5 font-medium text-foreground"
+                    ? cn(
+                        "bg-black/5 font-medium text-foreground",
+                        !isSidebarCollapsed &&
+                          "lg:before:pointer-events-none lg:before:absolute lg:before:top-2 lg:before:bottom-2 lg:before:left-[-20px] lg:before:w-0.5 lg:before:bg-[color:var(--iris-accent)] lg:before:content-['']",
+                      )
                     : "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
                 )
               }

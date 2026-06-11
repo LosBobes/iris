@@ -56,7 +56,7 @@ const COLUMNS: ColDef[] = [
   { key: "billing", label: "Tip dokumenta", field: "billingDocumentType", width: "130px" },
   { key: "schedule", label: "Plan", field: "assignment.scheduledDate", width: "110px" },
   { key: "price", label: "Cena", field: "price", width: "110px", align: "right" },
-  { key: "status", label: "Status", field: "status", width: "110px" },
+  { key: "status", label: "Status", field: "status", width: "130px" },
   { key: "actions", label: "", width: "110px" },
 ];
 
@@ -152,7 +152,7 @@ export function WorkOrdersTable({
 
   return (
     <div ref={containerRef} className="scroll-mt-4 overflow-x-auto border border-border bg-card">
-      <table className="min-w-[1180px] w-full border-collapse text-[12px]">
+      <table className="min-w-[1200px] w-full border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-border">
             {COLUMNS.map((col) => {

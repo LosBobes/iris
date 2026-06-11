@@ -16,7 +16,7 @@ export function IrisBadge({ status }: IrisBadgeProps): React.JSX.Element {
   const color = STATUS_CSS_VAR[status];
   return (
     <span
-      className="inline-flex items-center rounded-full border px-2 py-[2px] text-[11px] font-medium tracking-[0.1px]"
+      className="inline-flex items-center whitespace-nowrap rounded-full border px-2 py-[2px] text-[11px] font-medium tracking-[0.1px]"
       style={{
         color,
         borderColor: `color-mix(in oklch, ${color} 30%, transparent)`,
