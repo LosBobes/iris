@@ -1,123 +1,135 @@
 # Iris - Copilot Instructions
 
-Iris is a multi-project workspace:
+Iris is the operations workspace for **Stamparija Cobanovic** (a print shop):
+work-order lifecycle, customers/locations, dashboard reporting, and public
+tracking. Three deployable surfaces share **one Go REST API** and **one SQLite
+database**:
 
-- `apps/desktop`: Electron desktop app for work order management, dashboard reporting, and authentication
-- `iris-api`: Go HTTP API that mirrors the desktop contract and currently reads the same fixture data
-
-Start from the source that matches the area you are changing:
-
-- Workspace overview: [README.md](../README.md)
-- Desktop business context: [docs/PROJECT_CONTEXT.md](../docs/PROJECT_CONTEXT.md)
-- Desktop architecture: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
-- Backend contract and workflow: [iris-api/README.md](../iris-api/README.md)
-- Backend HTTP contract: [iris-api/openapi.yaml](../iris-api/openapi.yaml)
-
-`docs/ARCHITECTURE.md` and `docs/CONTRIBUTING.md` are still desktop-first. For backend work, trust `iris-api/README.md`, `openapi.yaml`, and the Go source.
-
-## Workspace Boundaries
-
-| Project | Path | Role |
+| Surface | Path | Role |
 |-------|------|------|
-| Desktop app | `apps/desktop/` | Electron runtime, IPC surface, React UI |
-| Backend API | `iris-api/` | Go HTTP service, contract-first, fixture-backed |
+| API | `iris-api/` | Go HTTP service, auth, persistence, OpenAPI contract, optional static web hosting |
+| Web | `apps/web/` | Vite + React browser ops UI + public tracking |
+| Desktop | `apps/desktop/` | Electron app for on-prem shop terminals |
 
-- The desktop renderer calls only `window.api`. Do not add direct HTTP `fetch()` calls from `apps/desktop/src/renderer/src/` unless the task explicitly includes that migration.
-- The preload bridge is the only renderer-to-Electron boundary.
-- `iris-api` is a separate Go module, not part of the Electron build. Keep Go server concerns out of `apps/desktop`, and keep Electron IPC concerns out of `iris-api`.
-- The API mirrors desktop data needs, but the desktop app does not use it at runtime yet. Treat backend work and desktop integration work as separate tasks unless the user explicitly combines them.
+Start from the source nearest the area you change:
 
-## Desktop Architecture
+- Workspace overview: [REPO_MAP.md](../REPO_MAP.md) (verified onboarding snapshot — trust this first)
+- Web: [apps/web/README.md](../apps/web/README.md)
+- Desktop: [apps/desktop/README.md](../apps/desktop/README.md)
+- Backend contract: [iris-api/README.md](../iris-api/README.md), [iris-api/openapi.yaml](../iris-api/openapi.yaml)
+- Domain: [docs/DOMAIN_GLOSSARY.md](../docs/DOMAIN_GLOSSARY.md), [docs/DECISIONS.md](../docs/DECISIONS.md)
 
-Never mix these Electron layers:
+> `docs/ARCHITECTURE.md` and `docs/CONTRIBUTING.md` are still desktop-first and
+> partly predate the SQLite API. When they conflict with `REPO_MAP.md`,
+> `openapi.yaml`, or the Go/web source, trust the latter.
 
-| Layer | Path | Role |
-|-------|------|------|
-| Main process | `apps/desktop/src/main/` | Node/Electron APIs, IPC handlers, fixture loading |
-| Preload bridge | `apps/desktop/src/preload/` | Typed `window.api` surface via `contextBridge` |
-| Renderer | `apps/desktop/src/renderer/src/` | React UI, calls only `window.api` |
+## Workspace boundaries
 
-Shared domain types live in `apps/desktop/model/`. Renderer-only types live in `apps/desktop/src/renderer/src/types/`.
+- Logical monorepo with **no root `package.json`.** Each frontend app installs/runs
+  independently (npm); `iris-api` is a separate Go module.
+- Keep Go server concerns out of `apps/*`; keep Electron/IPC and React concerns out
+  of `iris-api`.
+- Canonical data path: HTTP to `iris-api` with the `iris_session` cookie. Web calls
+  `window.api` (installed by `apps/web/src/lib/web-api.ts`); the desktop renderer
+  calls `window.api` via the preload bridge → main `IrisApiClient`. Renderers never
+  call `fetch()` directly.
+- Treat each surface as a separate task unless the user explicitly combines them.
 
-Desktop commands run from `apps/desktop/`:
+## Contract-sync rule (most important invariant)
+
+A shared domain/shape change (e.g. a `WorkOrder` field) must land together across:
+
+1. `iris-api/openapi.yaml` — public HTTP contract (source of truth)
+2. `iris-api/internal/domain/types.go`
+3. `iris-api/internal/store/sqlite.go` + `migrations.go` (if persisted)
+4. fixtures + tests (`iris-api/testdata/fixtures/`, `internal/store/fixtures.go`)
+5. `apps/web/src/types/work-order.ts` (+ `apps/web/src/fixtures/`)
+6. `apps/desktop/model/work-order.ts` ↔ `apps/desktop/src/renderer/src/types/work-order.ts`
+
+New required fields also need a default where the web client normalizes data
+(`apps/web/src/lib/api-client.ts` / `fixture-api.ts` `normalizeWorkOrder()`) and a
+default for existing rows in the migration.
+
+## Backend (`iris-api/`)
+
+Go 1.26, `chi` router, `modernc.org/sqlite`. **SQLite-backed and stateful** (not
+fixture-backed at runtime; fixtures are for tests/`seed-demo`).
+
+- `cmd/server/` and `cmd/irisctl/`: process wiring only.
+- `internal/api/`: router, auth middleware, thin handlers.
+- `internal/domain/`: request/response/domain structs.
+- `internal/store/`: SQLite store, migrations, seed; fixture store for tests.
+- Endpoint change → update `openapi.yaml`, `internal/api/server.go`,
+  `internal/api/server_test.go` together. Run `go mod tidy` on dep changes.
+- Auth: `POST /auth/login` issues HTTP-only `iris_session` cookie; `requireAuth` /
+  `requireAdmin` guard protected and destructive routes.
 
 ```bash
-npm run dev
-npm run build
-npm run test
-npm run test:watch
-npm run typecheck
-npm run lint
-npm run format
+# from iris-api/
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
+DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+go test ./...   # or narrow: go test ./internal/api
 ```
 
-Desktop conventions:
+## Web (`apps/web/`)
 
-- Code identifiers, filenames, comments, and tests stay in English.
-- Visible UI text stays in Serbian (`sr-Latn`).
-- Add routes in `apps/desktop/src/renderer/src/App.tsx`; the app uses `MemoryRouter`, not filesystem routing.
-- Forms use `react-hook-form` with `zod` schemas.
-- Reuse components from `apps/desktop/src/renderer/src/components/ui/` before creating new primitives.
-- IPC uses `invoke`/`handle` only. No `send`/`on` listeners.
+Vite 8 + React 19 + TS ~6 + Tailwind v4.
 
-Desktop IPC changes always follow all 4 steps:
-
-1. Add the handler in `apps/desktop/src/main/[Feature]/[Feature].async.ts`.
-2. Register it from `apps/desktop/src/main/index.ts` inside `app.whenReady()`.
-3. Expose it in `apps/desktop/src/preload/index.ts` with `ipcRenderer.invoke(...)`.
-4. Update `apps/desktop/src/preload/index.d.ts`.
-
-Desktop testing:
-
-- Tests are colocated with the source they cover.
-- Stub the preload surface with `vi.stubGlobal('api', { ... })`.
-- Global test setup already lives in `apps/desktop/src/renderer/src/test/setup.ts`.
-
-Desktop pitfalls:
-
-- All current desktop data is fixture-backed. CRUD mutations are in-memory and are lost on restart.
-- `apps/desktop/model/work-order.ts` and `apps/desktop/src/renderer/src/types/work-order.ts` must stay in sync.
-- New required `WorkOrder` fields also need a default in `normalizeWorkOrder()`.
-- Access control is UI-only; `currentUser.role === 'admin'` is not a security boundary.
-- Desktop fixture loading checks `app.getAppPath()/fixtures/` first, then `process.cwd()/fixtures/`.
-- Dates are stored as `YYYY-MM-DD` strings and displayed as `DD.MM.YYYY` via `formatWorkOrderDate()`.
-
-## Backend Architecture
-
-Keep the Go API layered and small:
-
-- `iris-api/cmd/server/main.go`: process wiring only
-- `iris-api/internal/api/`: router and HTTP handlers
-- `iris-api/internal/domain/`: request, response, and domain shapes
-- `iris-api/internal/store/`: fixture-backed data access
-- `iris-api/internal/testutil/`: shared test helpers
-
-Backend commands run from `iris-api/`:
+- `src/lib/web-api.ts` installs `window.api`; mode via `VITE_IRIS_API_MODE`
+  (`http` → `api-client.ts`; `fixtures` dev-only → in-memory store from
+  `src/fixtures/`). Source data through `window.api.*`/hooks, never raw `fetch()`.
+- Feature folders under `src/components/<Feature>/`; shadcn primitives in
+  `src/components/ui/`. Hooks in `src/hooks/`. Pages in `src/pages/` (incl.
+  `PublicWorkOrderPage`, `CustomersPage`).
+- Dashboard aggregates client-side in `src/lib/dashboard/aggregations.ts` (pure,
+  tested). Forms: `react-hook-form` + `zod`.
 
 ```bash
-go run ./cmd/server
-go test ./...
-go test ./internal/api
-go test ./internal/store
+# from apps/web/
+npm install && npm run dev   # :5173
+npm run lint && npm test && npm run build
 ```
 
-Backend conventions:
+## Desktop (`apps/desktop/`)
 
-- Keep handler logic thin; data access stays in `internal/store`.
-- If you add or change an endpoint, update `iris-api/openapi.yaml`, `iris-api/internal/api/server.go`, and `iris-api/internal/api/server_test.go` together.
-- `go mod tidy` is required when dependencies change.
-- Default listen address is `:8080`; override with `IRIS_API_ADDR`.
-- User-facing auth messages that mirror desktop behavior stay in Serbian. Code, comments, tests, and internal docs stay in English.
+Electron 39 + electron-vite + React 19. **HTTP-backed via `IrisApiClient`** (not
+fixture-backed). API base via `apps/desktop/.env` (`IRIS_API_BASE_URL`).
 
-Backend pitfalls:
+Never mix layers: `src/main/` (Node/IPC/`IrisApiClient`), `src/preload/` (typed
+`window.api`), `src/renderer/src/` (React, calls only `window.api`).
 
-- Run server commands from `iris-api/`, not the repo root. `cmd/server/main.go` reads `../apps/desktop/fixtures`, so the working directory matters.
-- The API is fixture-backed and stateless today. There is no persistence layer yet.
-- `internal/api/server_test.go` and `internal/store/fixtures_test.go` are the main regression tests; update them with contract changes.
+IPC changes follow all 4 steps:
 
-## Shared Data Rules
+1. Handler in `src/main/<Feature>/<Feature>.async.ts`.
+2. Register from `src/main/index.ts` inside `app.whenReady()`.
+3. Expose in `src/preload/index.ts` with `ipcRenderer.invoke(...)`.
+4. Update `src/preload/index.d.ts`.
 
-- `apps/desktop/fixtures/` is the current source of truth for both the Electron app and the Go API.
-- Changes to auth or work-order shape often need coordinated updates in fixtures, desktop types, backend domain types, and `openapi.yaml`.
-- If a task is only about the desktop app, do not add backend abstractions preemptively.
-- If a task is only about the backend contract, do not rewire the renderer to use HTTP unless explicitly asked.
+IPC uses `invoke`/`handle` only; channels are `feature:action`. Routes added in
+`src/renderer/src/App.tsx` (`MemoryRouter`).
+
+```bash
+# from apps/desktop/
+npm install && npm run dev
+npm run typecheck && npm test && npm run lint && npm run build
+```
+
+## Conventions (all surfaces)
+
+- Code, filenames, comments, tests, internal docs: **English**.
+- Visible UI text and auth messages: **Serbian (`sr-Latn`)**.
+- Dates: `YYYY-MM-DD` stored, `DD.MM.YYYY` displayed.
+- Reuse `components/ui/` (shadcn) before new primitives; Tailwind v4.
+
+## Pitfalls
+
+- Authorization gating in clients is **UI-only** (`role === 'admin'`) — not a
+  security boundary; the API enforces session + admin on destructive routes.
+- `apps/web` and `apps/desktop/src/renderer` duplicate components/hooks/dashboard
+  libs — shared changes often need two edits.
+- Feature parity: web has customers CRUD + public tracking; desktop stops at work
+  orders + dashboard.
+- API normalizes legacy statuses (`draft`/`active`).
+- No automated CI beyond a manual Copilot setup workflow — run per-surface checks
+  yourself. Demo seed creds (non-prod): `admin` / `admin123`.

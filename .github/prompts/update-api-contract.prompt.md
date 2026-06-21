@@ -20,13 +20,13 @@ Requirements:
   - [server.go](../../iris-api/internal/api/server.go)
   - [server_test.go](../../iris-api/internal/api/server_test.go)
 - If request or response shapes change, update [types.go](../../iris-api/internal/domain/types.go).
-- If fixture-backed behavior changes, update [fixtures.go](../../iris-api/internal/store/fixtures.go) and the relevant tests.
+- If persisted behavior changes, update [sqlite.go](../../iris-api/internal/store/sqlite.go) + [migrations.go](../../iris-api/internal/store/migrations.go) (and [fixtures.go](../../iris-api/internal/store/fixtures.go) + relevant tests).
 - Keep handlers thin and keep data access in `internal/store/`.
 - Run validation from `iris-api/` using the narrowest useful `go test` command first.
-- If shared fixture or shape changes require desktop follow-up, call that out explicitly instead of leaving drift.
+- If shared shape changes require client follow-up (`apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`, fixtures), call that out explicitly instead of leaving drift.
 
 Return:
 
 - the files you changed
 - the validation you ran
-- any remaining desktop or fixture follow-up
+- any remaining client or fixture follow-up
