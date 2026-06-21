@@ -86,7 +86,7 @@ export function SettingsPage(): React.JSX.Element {
                 Pregled
               </div>
               <p className="mt-2 text-[14px] leading-6 text-foreground">
-                Radni nalog #2024-118 · Klijent: Grafika Čobanović
+                  Klijent: Grafika Čobanović
               </p>
               <p className="text-[12px] text-[color:var(--iris-ink-soft)]">
                 Promena se primenjuje odmah i pamti se na ovom uređaju.
