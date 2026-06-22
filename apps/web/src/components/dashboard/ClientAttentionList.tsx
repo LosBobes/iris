@@ -6,6 +6,11 @@ import type {
   ClientAttentionRow,
 } from "@/lib/dashboard/aggregations";
 import { getWorkOrderStatusLabel } from "@/shared/utils/work-orders";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const SIGNAL_LABELS: Record<AttentionSignal, string> = {
   overdue: "Kasni",
@@ -14,6 +19,15 @@ const SIGNAL_LABELS: Record<AttentionSignal, string> = {
   waitingForCustomer: "Čeka klijenta",
   waitingForMaterials: "Čeka materijal",
   unassigned: "Nedodeljeni",
+};
+
+const SIGNAL_DESCRIPTIONS: Record<AttentionSignal, string> = {
+  overdue: "Nalozi kojima je rok prošao, a još nisu završeni.",
+  dueToday: "Nalozi sa rokom isporuke za danas.",
+  dueThisWeek: "Nalozi sa rokom u narednih 7 dana.",
+  waitingForCustomer: "Nalozi koji čekaju odgovor ili odobrenje klijenta.",
+  waitingForMaterials: "Nalozi zaustavljeni dok se ne nabavi materijal.",
+  unassigned: "Nalozi koji još nisu dodeljeni operateru.",
 };
 
 const SIGNAL_COUNT_LABELS: Record<AttentionSignal, string> = {
@@ -131,11 +145,18 @@ export function ClientAttentionList({
                   <span className="truncate text-[14px] font-medium text-foreground group-hover:underline">
                     {row.displayName}
                   </span>
-                  <span
-                    className={`whitespace-nowrap border px-2 py-0.5 text-[10px] uppercase tracking-[1px] ${BADGE_STYLES[primarySignal]}`}
-                  >
-                    {SIGNAL_LABELS[primarySignal]}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className={`whitespace-nowrap border px-2 py-0.5 text-[10px] uppercase tracking-[1px] ${BADGE_STYLES[primarySignal]}`}
+                      >
+                        {SIGNAL_LABELS[primarySignal]}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {SIGNAL_DESCRIPTIONS[primarySignal]}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <div className="tnum mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
                   {countParts.join(" · ")}
@@ -196,4 +217,4 @@ export function ClientAttentionList({
   );
 }
 
-export { SIGNAL_LABELS };
+export { SIGNAL_LABELS, SIGNAL_DESCRIPTIONS };

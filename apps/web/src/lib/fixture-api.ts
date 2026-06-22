@@ -7,6 +7,8 @@ import type {
   Attachment,
   Customer,
   CustomerCommunication,
+  EnumField,
+  EnumValue,
   InvoiceDraft,
   InvoiceLineItem,
   InvoiceLineItemKind,
@@ -148,13 +150,12 @@ function isInvoiceLineItemKind(value: unknown): value is InvoiceLineItemKind {
   return value === 'service' || value === 'goods'
 }
 
-function isInvoiceUnit(value: unknown): value is InvoiceUnit {
-  return value === 'kom' || value === 'm2' || value === 'set'
-}
-
-function isInvoiceUnitAllowed(kind: InvoiceLineItemKind, unit: unknown): unit is InvoiceUnit {
-  if (!isInvoiceUnit(unit)) return false
-  return kind === 'service' || unit !== 'set'
+// Unit of measure is admin-extensible, so any non-empty string is preserved.
+// Only the built-in `set` keeps its service-only restriction.
+function normalizeInvoiceUnit(kind: InvoiceLineItemKind, unit: unknown): InvoiceUnit {
+  if (typeof unit !== 'string' || unit.trim() === '') return 'kom'
+  if (unit === 'set' && kind !== 'service') return 'kom'
+  return unit
 }
 
 function normalizeInvoiceLineItem(
@@ -167,7 +168,7 @@ function normalizeInvoiceLineItem(
     kind,
     description: line.description ?? '',
     quantity: line.quantity ?? 1,
-    unit: isInvoiceUnitAllowed(kind, line.unit) ? line.unit : 'kom',
+    unit: normalizeInvoiceUnit(kind, line.unit),
     unitPrice: line.unitPrice ?? 0,
   }
 }
@@ -273,6 +274,61 @@ let nextSequence =
 
 function generateOrderNumber(sequence: number): string {
   return `RN-${new Date().getUTCFullYear()}-${String(sequence).padStart(4, '0')}`
+}
+
+// Built-in (locked) picklist values, mirrored from the backend defaults.
+const BUILTIN_ENUM_VALUES: ReadonlyArray<Omit<EnumValue, 'id' | 'sortOrder'>> = [
+  { field: 'deliveryMethod', value: 'pickup', label: 'Lično preuzimanje', isBuiltin: true },
+  { field: 'deliveryMethod', value: 'postExpress', label: 'Post Express', isBuiltin: true },
+  { field: 'deliveryMethod', value: 'cityExpress', label: 'City Express', isBuiltin: true },
+  { field: 'deliveryMethod', value: 'fieldVisit', label: 'Terenski obilazak', isBuiltin: true },
+  { field: 'postagePaymentType', value: 'cod', label: 'Poštarina pouzećem', isBuiltin: true },
+  { field: 'postagePaymentType', value: 'ourAccount', label: 'Poštarina na naš račun', isBuiltin: true },
+  { field: 'postagePaymentType', value: 'advance', label: 'Avans poštarina', isBuiltin: true },
+  { field: 'postagePaymentType', value: 'viaInvoice', label: 'Poštarina preko fakture', isBuiltin: true },
+  { field: 'billingDocumentType', value: 'invoice', label: 'Faktura', isBuiltin: true },
+  { field: 'billingDocumentType', value: 'cashCollection', label: 'Gotovinski račun', isBuiltin: true },
+  { field: 'billingDocumentType', value: 'proforma', label: 'Profaktura', isBuiltin: true },
+  { field: 'priority', value: 'low', label: 'Nizak', isBuiltin: true },
+  { field: 'priority', value: 'normal', label: 'Normalan', isBuiltin: true },
+  { field: 'priority', value: 'high', label: 'Visok', isBuiltin: true },
+  { field: 'priority', value: 'urgent', label: 'Hitno', isBuiltin: true },
+  { field: 'invoiceUnit', value: 'kom', label: 'Kom', isBuiltin: true },
+  { field: 'invoiceUnit', value: 'm2', label: 'm²', isBuiltin: true },
+  { field: 'invoiceUnit', value: 'set', label: 'Set', isBuiltin: true },
+]
+
+const ENUM_FIELD_ORDER: EnumField[] = [
+  'deliveryMethod',
+  'postagePaymentType',
+  'billingDocumentType',
+  'priority',
+  'invoiceUnit',
+]
+
+let customEnumValues: EnumValue[] = []
+let nextEnumSequence = 1
+
+function isBuiltinEnumValue(field: EnumField, value: string): boolean {
+  return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
+}
+
+function listEnumValues(): EnumValue[] {
+  const builtins: EnumValue[] = BUILTIN_ENUM_VALUES.map((entry, index) => ({
+    ...entry,
+    id: `builtin:${entry.field}:${entry.value}`,
+    sortOrder: index,
+  }))
+  const merged = [...builtins, ...customEnumValues]
+  return cloneValue(
+    merged.sort((a, b) => {
+      const fieldDelta = ENUM_FIELD_ORDER.indexOf(a.field) - ENUM_FIELD_ORDER.indexOf(b.field)
+      if (fieldDelta !== 0) return fieldDelta
+      if (a.isBuiltin !== b.isBuiltin) return a.isBuiltin ? -1 : 1
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
+      return a.label.localeCompare(b.label)
+    }),
+  )
 }
 
 function listFixtureWorkOrders(query: WorkOrderListQuery = {}): WorkOrderListResult {
@@ -410,6 +466,66 @@ export function createFixtureApi(): Window['api'] {
     async deleteLocation(id) {
       const index = locations.findIndex((candidate) => candidate.id === id)
       if (index >= 0) locations.splice(index, 1)
+      return { success: true }
+    },
+
+    async getEnumValues() {
+      return listEnumValues()
+    },
+
+    async createEnumValue(input) {
+      const value = input.value.trim()
+      const label = input.label.trim()
+      if (!value || !label) {
+        throw new Error('Prosleđeni podaci nisu ispravni.')
+      }
+      if (isBuiltinEnumValue(input.field, value)) {
+        throw new Error('Ova vrednost je već ugrađena i ne može se menjati.')
+      }
+      if (customEnumValues.some((entry) => entry.field === input.field && entry.value === value)) {
+        throw new Error('Vrednost sa istom šifrom već postoji.')
+      }
+      const created: EnumValue = {
+        id: `enum-${nextEnumSequence++}`,
+        field: input.field,
+        value,
+        label,
+        sortOrder: input.sortOrder,
+        isBuiltin: false,
+      }
+      customEnumValues.push(created)
+      return cloneValue(created)
+    },
+
+    async updateEnumValue(id, input) {
+      const index = customEnumValues.findIndex((entry) => entry.id === id)
+      if (index === -1) throw new Error('Vrednost nije pronađena.')
+      const field = customEnumValues[index].field
+      const value = input.value.trim()
+      const label = input.label.trim()
+      if (!value || !label || isBuiltinEnumValue(field, value)) {
+        throw new Error('Prosleđeni podaci nisu ispravni.')
+      }
+      if (
+        customEnumValues.some(
+          (entry, entryIndex) =>
+            entryIndex !== index && entry.field === field && entry.value === value,
+        )
+      ) {
+        throw new Error('Vrednost sa istom šifrom već postoji.')
+      }
+      const updated: EnumValue = {
+        ...customEnumValues[index],
+        value,
+        label,
+        sortOrder: input.sortOrder,
+      }
+      customEnumValues[index] = updated
+      return cloneValue(updated)
+    },
+
+    async deleteEnumValue(id) {
+      customEnumValues = customEnumValues.filter((entry) => entry.id !== id)
       return { success: true }
     },
 

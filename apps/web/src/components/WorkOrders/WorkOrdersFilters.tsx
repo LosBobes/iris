@@ -1,17 +1,40 @@
-import { useEffect, useRef } from "react";
-import { parse } from "date-fns";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  parse,
+  format,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+} from "date-fns";
 import { DatePicker } from "@/components/ui/date-picker";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { WorkOrdersFiltersState } from "@/hooks/useWorkOrders";
-import { Search, X, ChevronDown } from "lucide-react";
+import {
+  filtersFromSearchParams,
+  filtersToSearchParams,
+  type WorkOrdersFiltersState,
+} from "@/hooks/useWorkOrders";
+import { Search, X, ChevronDown, Check, Columns3, Bookmark, Trash2 } from "lucide-react";
+import {
+  addSavedView,
+  readSavedViews,
+  removeSavedView,
+  type SavedView,
+} from "@/lib/saved-views";
 import {
   getWorkOrderStatusLabel,
   WORK_ORDER_STATUS_ORDER,
 } from "@/shared/utils/work-orders";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import {
+  WORK_ORDER_COLUMNS,
+  isColumnLocked,
+} from "@/lib/work-order-columns";
 
 interface WorkOrdersFiltersProps {
   filters: WorkOrdersFiltersState;
@@ -125,11 +148,268 @@ function OptionList<T extends string>({
   );
 }
 
+function isoDate(date: Date): string {
+  return format(date, "yyyy-MM-dd");
+}
+
+// Quick date-range presets. Weeks start Monday (Serbian convention).
+const DATE_PRESETS: Array<{ label: string; getRange: () => { from: string; to: string } }> = [
+  {
+    label: "Danas",
+    getRange: () => {
+      const today = isoDate(new Date());
+      return { from: today, to: today };
+    },
+  },
+  {
+    label: "Ova nedelja",
+    getRange: () => {
+      const now = new Date();
+      return {
+        from: isoDate(startOfWeek(now, { weekStartsOn: 1 })),
+        to: isoDate(endOfWeek(now, { weekStartsOn: 1 })),
+      };
+    },
+  },
+  {
+    label: "Ovaj mesec",
+    getRange: () => {
+      const now = new Date();
+      return { from: isoDate(startOfMonth(now)), to: isoDate(endOfMonth(now)) };
+    },
+  },
+  {
+    label: "Prošli mesec",
+    getRange: () => {
+      const prev = subMonths(new Date(), 1);
+      return {
+        from: isoDate(startOfMonth(prev)),
+        to: isoDate(endOfMonth(prev)),
+      };
+    },
+  },
+];
+
+function DateRangePresetsPill({
+  onSelect,
+}: {
+  onSelect: (range: { from: string; to: string }) => void;
+}): React.JSX.Element {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="iris-focusable iris-press group flex items-center gap-2 border border-border bg-card px-3 py-2 text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
+        >
+          Brzi opseg
+          <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 rounded-none border-border p-1" align="start">
+        <div className="flex flex-col">
+          {DATE_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => onSelect(preset.getRange())}
+              className="iris-focusable bg-transparent px-3 py-2 text-left text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SavedViewsPill({
+  filters,
+  onApply,
+}: {
+  filters: WorkOrdersFiltersState;
+  onApply: (next: WorkOrdersFiltersState) => void;
+}): React.JSX.Element {
+  const [views, setViews] = useState<SavedView[]>(() => readSavedViews());
+  const [name, setName] = useState("");
+
+  const currentQuery = useMemo(
+    () => filtersToSearchParams(filters).toString(),
+    [filters],
+  );
+  const activeViewId = views.find((view) => view.query === currentQuery)?.id;
+
+  const handleSave = () => {
+    if (name.trim() === "") return;
+    setViews(addSavedView(name, currentQuery));
+    setName("");
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`iris-focusable iris-press group flex items-center gap-2 border bg-card px-3 py-2 text-[12px] hover:bg-black/[0.02] ${
+            activeViewId
+              ? "border-foreground/40 font-medium text-foreground"
+              : "border-border text-[color:var(--iris-ink-soft)] hover:text-foreground"
+          }`}
+        >
+          <Bookmark className="h-3 w-3 text-[color:var(--iris-ink-faint)]" />
+          Pogledi
+          <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 rounded-none border-border p-1" align="start">
+        <div className="px-3 py-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+          Sačuvani pogledi
+        </div>
+        <div className="flex flex-col">
+          {views.length === 0 && (
+            <div className="px-3 py-2 text-[12px] text-[color:var(--iris-ink-faint)]">
+              Još nema sačuvanih pogleda.
+            </div>
+          )}
+          {views.map((view) => (
+            <div
+              key={view.id}
+              className={`group/view flex items-center gap-2 px-1 ${
+                view.id === activeViewId ? "bg-black/[0.03]" : ""
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  onApply(
+                    filtersFromSearchParams(new URLSearchParams(view.query)),
+                  )
+                }
+                className="iris-focusable flex-1 bg-transparent px-2 py-2 text-left text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+              >
+                {view.name}
+              </button>
+              <button
+                type="button"
+                aria-label={`Obriši pogled ${view.name}`}
+                onClick={() => setViews(removeSavedView(view.id))}
+                className="iris-focusable iris-press shrink-0 bg-transparent p-1.5 text-[color:var(--iris-ink-faint)] opacity-0 transition-opacity group-hover/view:opacity-100 hover:text-[color:var(--iris-status-cancelled)]"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="mt-1 flex items-center gap-1.5 border-t border-border p-2">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSave();
+              }
+            }}
+            placeholder="Sačuvaj trenutne filtere…"
+            className="w-full border border-border bg-card px-2 py-1.5 text-[12px] text-foreground placeholder:text-[color:var(--iris-ink-mute)] focus:border-foreground focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={name.trim() === ""}
+            className="iris-focusable iris-press shrink-0 bg-foreground px-2.5 py-1.5 text-[11px] font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Sačuvaj
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ColumnsPill(): React.JSX.Element {
+  const { isVisible, toggleColumn, resetColumns, visibleColumns } =
+    useColumnVisibility();
+  // Locked columns are always on, so "all visible" means every non-locked
+  // column is shown too.
+  const allVisible = visibleColumns.length === WORK_ORDER_COLUMNS.length;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="iris-focusable iris-press group flex items-center gap-2 border border-border bg-card px-3 py-2 text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
+        >
+          <Columns3 className="h-3 w-3 text-[color:var(--iris-ink-faint)]" />
+          Polja
+          <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 rounded-none border-border p-1" align="start">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+            Prikazana polja
+          </span>
+          {!allVisible && (
+            <button
+              type="button"
+              onClick={resetColumns}
+              className="iris-focusable text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+            >
+              Sve
+            </button>
+          )}
+        </div>
+        <div className="flex flex-col">
+          {WORK_ORDER_COLUMNS.map((col) => {
+            const checked = isVisible(col.key);
+            const locked = isColumnLocked(col.key);
+            return (
+              <button
+                key={col.key}
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                disabled={locked}
+                onClick={() => toggleColumn(col.key)}
+                className="iris-focusable flex items-center gap-2.5 bg-transparent px-3 py-2 text-left text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span
+                  aria-hidden
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
+                    checked
+                      ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)] text-white"
+                      : "border-[color:var(--iris-ink-faint)] text-transparent"
+                  }`}
+                >
+                  <Check size={11} strokeWidth={3} />
+                </span>
+                <span className={checked ? "text-foreground" : undefined}>
+                  {col.label}
+                </span>
+                {locked && (
+                  <span className="ml-auto text-[10px] text-[color:var(--iris-ink-faint)]">
+                    obavezno
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function WorkOrdersFilters({
   filters,
   updateFilters,
   resetFilters,
 }: WorkOrdersFiltersProps): React.JSX.Element {
+  const { isVisible } = useColumnVisibility();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // "/" focuses search from anywhere on the page (unless typing in a field).
@@ -180,7 +460,7 @@ export function WorkOrdersFilters({
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Pretraži naloge, klijente, opis…"
+          placeholder="Pretraži po nalogu, klijentu, opisu, operateru, ceni…"
           value={filters.search}
           onChange={(e) => updateFilters({ search: e.target.value })}
           onKeyDown={(e) => {
@@ -210,24 +490,28 @@ export function WorkOrdersFilters({
         )}
       </div>
 
-      <FilterPill label={statusLabel} isActive={filters.status !== "all"}>
-        <OptionList
-          options={STATUS_OPTIONS}
-          current={filters.status}
-          onSelect={(value) => updateFilters({ status: value })}
-        />
-      </FilterPill>
+      {isVisible("status") && (
+        <FilterPill label={statusLabel} isActive={filters.status !== "all"}>
+          <OptionList
+            options={STATUS_OPTIONS}
+            current={filters.status}
+            onSelect={(value) => updateFilters({ status: value })}
+          />
+        </FilterPill>
+      )}
 
-      <FilterPill
-        label={billingLabel}
-        isActive={filters.billingDocumentType !== "all"}
-      >
-        <OptionList
-          options={BILLING_OPTIONS}
-          current={filters.billingDocumentType}
-          onSelect={(value) => updateFilters({ billingDocumentType: value })}
-        />
-      </FilterPill>
+      {isVisible("billing") && (
+        <FilterPill
+          label={billingLabel}
+          isActive={filters.billingDocumentType !== "all"}
+        >
+          <OptionList
+            options={BILLING_OPTIONS}
+            current={filters.billingDocumentType}
+            onSelect={(value) => updateFilters({ billingDocumentType: value })}
+          />
+        </FilterPill>
+      )}
 
       <FilterPill
         label={deliveryLabel}
@@ -247,6 +531,16 @@ export function WorkOrdersFilters({
           onSelect={(value) => updateFilters({ queue: value })}
         />
       </FilterPill>
+
+      <SavedViewsPill filters={filters} onApply={updateFilters} />
+
+      <ColumnsPill />
+
+      <DateRangePresetsPill
+        onSelect={(range) =>
+          updateFilters({ dateFrom: range.from, dateTo: range.to })
+        }
+      />
 
       <div className="flex items-center gap-1.5 border border-border bg-card px-3 py-1">
         <DatePicker

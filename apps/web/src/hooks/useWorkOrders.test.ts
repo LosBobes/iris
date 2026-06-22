@@ -4,6 +4,7 @@ import {
   filtersFromSearchParams,
   filtersToSearchParams,
 } from "@/hooks/useWorkOrders";
+import type { WorkOrderColumnKey } from "@/lib/work-order-columns";
 import type { WorkOrder } from "@/types/work-order";
 
 function makeOrder(overrides: Partial<WorkOrder>): WorkOrder {
@@ -155,6 +156,157 @@ describe("work order filter query params", () => {
         dateTo: "",
       }).map((order) => order.orderNumber),
     ).toEqual(["RN-old", "RN-new"]);
+  });
+
+  it("matches search across operator, priority, document type and price", () => {
+    const orders = [
+      makeOrder({
+        id: "op",
+        orderNumber: "RN-op",
+        assignment: { assignedTo: "marko.petrovic", priority: "normal", scheduledDate: null },
+      }),
+      makeOrder({
+        id: "prio",
+        orderNumber: "RN-prio",
+        assignment: { assignedTo: "ana", priority: "urgent", scheduledDate: null },
+      }),
+      makeOrder({ id: "doc", orderNumber: "RN-doc", billingDocumentType: "proforma" }),
+      makeOrder({ id: "price", orderNumber: "RN-price", price: 67000 }),
+    ];
+
+    const baseFilters = {
+      customerId: "",
+      status: "all" as const,
+      billingDocumentType: "all" as const,
+      deliveryMethod: "all" as const,
+      queue: "all" as const,
+      dateFrom: "",
+      dateTo: "",
+    };
+
+    const run = (search: string) =>
+      filterWorkOrdersForList(orders, { ...baseFilters, search }).map(
+        (order) => order.orderNumber,
+      );
+
+    expect(run("marko.petrovic")).toEqual(["RN-op"]);
+    expect(run("Hitno")).toEqual(["RN-prio"]); // Serbian label for "urgent"
+    expect(run("urgent")).toEqual(["RN-prio"]); // raw enum value
+    expect(run("Profaktura")).toEqual(["RN-doc"]);
+    expect(run("67000")).toEqual(["RN-price"]); // raw price
+    expect(run("67.000")).toEqual(["RN-price"]); // formatted price (sr-Latn)
+  });
+
+  it("matches search across issue, due and scheduled dates", () => {
+    const orders = [
+      makeOrder({ id: "issue", orderNumber: "RN-issue", issueDate: "2026-06-01" }),
+      makeOrder({ id: "due", orderNumber: "RN-due", issueDate: "2025-01-15", dueDate: "2026-09-30" }),
+      makeOrder({
+        id: "sched",
+        orderNumber: "RN-sched",
+        issueDate: "2024-03-20",
+        assignment: { assignedTo: "ana", priority: "normal", scheduledDate: "2026-12-25" },
+      }),
+    ];
+
+    const baseFilters = {
+      customerId: "",
+      status: "all" as const,
+      billingDocumentType: "all" as const,
+      deliveryMethod: "all" as const,
+      queue: "all" as const,
+      dateFrom: "",
+      dateTo: "",
+    };
+
+    const run = (search: string) =>
+      filterWorkOrdersForList(orders, { ...baseFilters, search }).map(
+        (order) => order.orderNumber,
+      );
+
+    expect(run("2026-06-01")).toEqual(["RN-issue"]); // ISO issue date
+    expect(run("01.06.2026")).toEqual(["RN-issue"]); // formatted issue date
+    expect(run("2026-09-30")).toEqual(["RN-due"]); // ISO due date
+    expect(run("30.09.2026")).toEqual(["RN-due"]); // formatted due date
+    expect(run("25.12.2026")).toEqual(["RN-sched"]); // formatted scheduled date
+  });
+
+  it("scopes free-text search to visible columns", () => {
+    const orders = [makeOrder({ id: "p", orderNumber: "RN-p", price: 67000 })];
+    const baseFilters = {
+      search: "",
+      customerId: "",
+      status: "all" as const,
+      billingDocumentType: "all" as const,
+      deliveryMethod: "all" as const,
+      queue: "all" as const,
+      dateFrom: "",
+      dateTo: "",
+    };
+
+    const allColumns = new Set<WorkOrderColumnKey>([
+      "orderNumber",
+      "clientName",
+      "jobDescription",
+      "assigned",
+      "priority",
+      "billing",
+      "schedule",
+      "price",
+      "status",
+    ]);
+    const withoutPrice = new Set(allColumns);
+    withoutPrice.delete("price");
+
+    // Price is searchable while the column is visible...
+    expect(
+      filterWorkOrdersForList(
+        orders,
+        { ...baseFilters, search: "67000" },
+        undefined,
+        allColumns,
+      ),
+    ).toHaveLength(1);
+    // ...and excluded once the column is hidden.
+    expect(
+      filterWorkOrdersForList(
+        orders,
+        { ...baseFilters, search: "67000" },
+        undefined,
+        withoutPrice,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("ignores the status filter when the status column is hidden", () => {
+    const orders = [
+      makeOrder({ id: "a", orderNumber: "RN-a", status: "assigned" }),
+      makeOrder({ id: "b", orderNumber: "RN-b", status: "completed" }),
+    ];
+    const baseFilters = {
+      search: "",
+      customerId: "",
+      status: "completed" as const,
+      billingDocumentType: "all" as const,
+      deliveryMethod: "all" as const,
+      queue: "all" as const,
+      dateFrom: "",
+      dateTo: "",
+    };
+
+    const withStatus = new Set<WorkOrderColumnKey>(["orderNumber", "status"]);
+    const withoutStatus = new Set<WorkOrderColumnKey>(["orderNumber"]);
+
+    expect(
+      filterWorkOrdersForList(orders, baseFilters, undefined, withStatus).map(
+        (o) => o.orderNumber,
+      ),
+    ).toEqual(["RN-b"]);
+    expect(
+      filterWorkOrdersForList(orders, baseFilters, undefined, withoutStatus).map(
+        (o) => o.orderNumber,
+      ),
+    ).toEqual(["RN-a", "RN-b"]);
   });
 
   it("uses local date for today and this-week queue filters", () => {

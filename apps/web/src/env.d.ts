@@ -3,6 +3,8 @@
 import type {
   Customer,
   CreateWorkOrderInput,
+  EnumValue,
+  EnumValueInput,
   Location,
   PublicWorkOrderStatus,
   UpdateWorkOrderInput,
@@ -50,6 +52,10 @@ declare global {
       getLocations: () => Promise<Location[]>
       upsertLocation: (location: Location) => Promise<Location>
       deleteLocation: (id: string) => Promise<{ success: boolean }>
+      getEnumValues: () => Promise<EnumValue[]>
+      createEnumValue: (input: EnumValueInput) => Promise<EnumValue>
+      updateEnumValue: (id: string, input: EnumValueInput) => Promise<EnumValue>
+      deleteEnumValue: (id: string) => Promise<{ success: boolean }>
       getWorkOrders: (query?: WorkOrderListQuery) => Promise<WorkOrderListResult>
       getWorkOrderOperators: () => Promise<string[]>
       getWorkOrderById: (id: string) => Promise<WorkOrder | null>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Copy, Loader2 } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Location, WorkOrder } from "@/types/work-order";
@@ -11,6 +12,7 @@ import {
   WORK_ORDER_BILLING_LABELS,
   WORK_ORDER_DELIVERY_LABELS,
   getWorkOrderStatusLabel,
+  getPrimaryWorkOrderTransition,
   formatWorkOrderEventLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
@@ -23,6 +25,30 @@ const INVOICE_LINE_ITEM_KIND_LABELS = {
   service: "Usluga",
   goods: "Roba",
 } as const;
+
+// Renders a timeline label. Field-change events arrive as
+// "<polje>: <pre> → <posle>"; we style the before/after so the diff reads at a
+// glance. Anything else (status, created, completed) renders as plain text.
+function renderTimelineLabel(label: string, kind: string): React.ReactNode {
+  if (kind !== "change") return label;
+
+  const separator = label.indexOf(": ");
+  const arrow = label.indexOf(" → ");
+  if (separator === -1 || arrow === -1 || arrow < separator) return label;
+
+  const field = label.slice(0, separator);
+  const before = label.slice(separator + 2, arrow);
+  const after = label.slice(arrow + 3);
+
+  return (
+    <>
+      <span className="text-[color:var(--iris-ink-soft)]">{field}: </span>
+      <span className="text-[color:var(--iris-ink-mute)] line-through">{before}</span>
+      <span className="text-[color:var(--iris-ink-faint)]"> → </span>
+      <span className="text-foreground">{after}</span>
+    </>
+  );
+}
 
 export function printWorkOrder(orderNumber: string): void {
   const previousTitle = document.title;
@@ -50,6 +76,46 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const handleAdvanceStatus = async (): Promise<void> => {
+    if (!order) return;
+    const newStatus = getPrimaryWorkOrderTransition(order.status);
+    if (!newStatus) return;
+    const isCompleting = newStatus === "completed" || newStatus === "invoiced";
+    const now = getLocalIsoDate();
+    try {
+      const updated = await window.api.updateWorkOrder(order.id, {
+        status: newStatus,
+        isCompleted: isCompleting,
+        completionDate: isCompleting ? now : null,
+      });
+      if (!updated) {
+        toast.error("Radni nalog nije pronađen.");
+        return;
+      }
+      setOrder(updated);
+      toast.success(`Nalog ${updated.orderNumber}: ${getWorkOrderStatusLabel(newStatus)}`);
+    } catch {
+      toast.error("Greška pri promeni statusa");
+    }
+  };
+
+  const handleDeleteConfirm = async (): Promise<void> => {
+    if (!order) return;
+    try {
+      const result = await window.api.deleteWorkOrder(order.id);
+      if (!result.success) {
+        toast.error(result.message ?? "Greška pri brisanju naloga");
+        return;
+      }
+      setDeleteOpen(false);
+      toast.success(`Radni nalog ${order.orderNumber} je obrisan`);
+      navigate("/work-orders");
+    } catch {
+      toast.error("Neočekivana greška pri brisanju naloga");
+    }
+  };
 
   useEffect(() => {
     if (!id) {
@@ -117,7 +183,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
 
           {order && (
-            <div className="flex items-start justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-y-3">
               <div>
                 <div className="flex items-baseline gap-3.5">
                   <div className="tnum text-[28px] font-normal tracking-[-0.5px] text-foreground">
@@ -130,7 +196,19 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   <span className="text-foreground">{order.clientName}</span>
                 </div>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {getPrimaryWorkOrderTransition(order.status) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAdvanceStatus()}
+                    className="iris-focusable iris-press border border-[color:var(--iris-accent)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/10"
+                  >
+                    Pomeri u{" "}
+                    {getWorkOrderStatusLabel(
+                      getPrimaryWorkOrderTransition(order.status)!,
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => printWorkOrder(order.orderNumber)}
@@ -175,6 +253,15 @@ function WorkOrderDetailPage(): React.JSX.Element {
                 >
                   Izmeni
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(true)}
+                  aria-label="Obriši"
+                  className="iris-focusable iris-press flex items-center gap-1 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Obriši
+                </button>
               </div>
             </div>
           )}
@@ -207,6 +294,12 @@ function WorkOrderDetailPage(): React.JSX.Element {
         </AppShell>
       </div>
       {order && <WorkOrderPrintSheet order={order} locations={locations} />}
+      <DeleteWorkOrderDialog
+        orderNumber={order?.orderNumber ?? ""}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleDeleteConfirm}
+      />
     </>
   );
 }
@@ -239,11 +332,18 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
   const base = total / 1.2;
   const pdv = total - base;
 
-  const timeline: Array<{ time: string; label: string; who: string; state: "done" | "current" | "pending" }> =
+  const timeline: Array<{
+    time: string;
+    label: string;
+    kind: string;
+    who: string;
+    state: "done" | "current" | "pending";
+  }> =
     order.events.length > 0
       ? order.events.map((event, index) => ({
           time: formatWorkOrderDateTime(event.createdAt),
           label: formatWorkOrderEventLabel(event.label, event.kind),
+          kind: event.kind,
           who: event.actor,
           state: index === order.events.length - 1 ? "current" : "done",
         }))
@@ -251,6 +351,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {
             time: formatWorkOrderDateTime(order.createdAt),
             label: "Nalog kreiran",
+            kind: "created",
             who: order.issuedBy,
             state: "done",
           },
@@ -318,7 +419,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   <div
                     className={`text-[12px] text-foreground ${e.state === "current" ? "font-medium" : ""}`}
                   >
-                    {e.label}
+                    {renderTimelineLabel(e.label, e.kind)}
                   </div>
                   <div className="tnum mt-0.5 text-[11px] text-[color:var(--iris-ink-mute)]">
                     {e.time} · {e.who}

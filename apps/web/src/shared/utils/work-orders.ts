@@ -55,6 +55,13 @@ export function getWorkOrderPriorityLabel(priority: WorkOrderPriority): string {
   return WORK_ORDER_PRIORITY_LABELS[priority];
 }
 
+export function getWorkOrderBillingDocumentLabel(
+  type: BillingDocumentType | null,
+): string {
+  if (!type) return "";
+  return WORK_ORDER_BILLING_LABELS[type] ?? type;
+}
+
 const WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX = "Status promenjen na ";
 
 function isWorkOrderStatus(value: string): value is WorkOrderStatus {

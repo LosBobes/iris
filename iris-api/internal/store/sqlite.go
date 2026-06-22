@@ -347,7 +347,11 @@ func (s *SQLiteStore) CreateWorkOrder(
 	ctx context.Context,
 	input domain.CreateWorkOrderInput,
 ) (*domain.WorkOrder, error) {
-	if err := validateCreateWorkOrderInput(input); err != nil {
+	custom, err := s.customEnums(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCreateWorkOrderInput(input, custom); err != nil {
 		return nil, err
 	}
 
@@ -422,7 +426,11 @@ func (s *SQLiteStore) UpdateWorkOrder(
 	if err != nil || current == nil {
 		return current, err
 	}
-	updated, err := applyWorkOrderChanges(*current, changes)
+	custom, err := s.customEnums(ctx)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := applyWorkOrderChanges(*current, changes, custom)
 	if err != nil {
 		return nil, err
 	}

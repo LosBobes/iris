@@ -1,6 +1,8 @@
 import type {
   Customer,
   CreateWorkOrderInput,
+  EnumValue,
+  EnumValueInput,
   Location,
   PublicWorkOrderStatus,
   UpdateWorkOrderInput,
@@ -155,6 +157,32 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     async deleteLocation(id) {
       const response = await fetchImpl(
         url(`/locations/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      return readJSON<{ success: boolean }>(response)
+    },
+
+    async getEnumValues() {
+      const response = await fetchImpl(url('/enum-values'), credentialedRequest())
+      return readArray(await readJSON<EnumValue[] | null>(response))
+    },
+
+    async createEnumValue(input: EnumValueInput) {
+      const response = await fetchImpl(url('/enum-values'), jsonRequest('POST', input))
+      return readJSON<EnumValue>(response)
+    },
+
+    async updateEnumValue(id: string, input: EnumValueInput) {
+      const response = await fetchImpl(
+        url(`/enum-values/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<EnumValue>(response)
+    },
+
+    async deleteEnumValue(id: string) {
+      const response = await fetchImpl(
+        url(`/enum-values/${encodeURIComponent(id)}`),
         credentialedRequest({ method: 'DELETE' }),
       )
       return readJSON<{ success: boolean }>(response)

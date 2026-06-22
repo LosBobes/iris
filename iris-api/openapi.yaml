@@ -523,7 +523,12 @@ components:
           type: integer
         unit:
           type: string
-          enum: [kom, m2, set]
+          description: >-
+            Invoice line-item unit of measure. The built-in values are
+            `kom`, `m2`, and `set`; administrators may add custom units via the
+            `invoiceUnit` managed enum (see GET /enum-values), so any
+            non-empty string the server recognizes is accepted.
+          example: kom
         unitPrice:
           type: number
           format: double

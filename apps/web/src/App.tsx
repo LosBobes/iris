@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Login } from "@/components/Login/Login";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CommandPalette } from "@/components/CommandPalette";
 import { AuthContext } from "@/contexts/AuthContext";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
@@ -170,6 +171,7 @@ function App(): React.JSX.Element {
                       <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                     </Routes>
+                    <CommandPalette />
                     <Toaster />
                   </TooltipProvider>
                 </AuthContext.Provider>

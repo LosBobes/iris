@@ -10,8 +10,14 @@ import {
 } from "@/lib/dashboard/aggregations";
 import {
   ClientAttentionList,
+  SIGNAL_DESCRIPTIONS,
   SIGNAL_LABELS,
 } from "@/components/dashboard/ClientAttentionList";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface DashboardActionSectionProps {
   clientAttentionRows: ClientAttentionRow[];
@@ -47,23 +53,29 @@ export function DashboardActionSection({
             {CORE_ATTENTION_SIGNALS.map((signal) => {
               const isActive = activeSignal === signal;
               return (
-                <button
-                  key={signal}
-                  type="button"
-                  onClick={() => {
-                    onActiveSignalChange(isActive ? null : signal);
-                  }}
-                  className={`iris-focusable iris-press flex items-center gap-2 border px-3 py-2 text-[12px] ${
-                    isActive
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
-                  }`}
-                >
-                  <span>{SIGNAL_LABELS[signal]}</span>
-                  <span className="tnum text-[11px] opacity-80">
-                    {signalCounts[signal]}
-                  </span>
-                </button>
+                <Tooltip key={signal}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onActiveSignalChange(isActive ? null : signal);
+                      }}
+                      className={`iris-focusable iris-press flex items-center gap-2 border px-3 py-2 text-[12px] ${
+                        isActive
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                      }`}
+                    >
+                      <span>{SIGNAL_LABELS[signal]}</span>
+                      <span className="tnum text-[11px] opacity-80">
+                        {signalCounts[signal]}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {SIGNAL_DESCRIPTIONS[signal]} Klik filtrira listu.
+                  </TooltipContent>
+                </Tooltip>
               );
             })}
           </div>
@@ -84,8 +96,23 @@ export function DashboardActionSection({
               Interno
             </div>
             <div className="mt-1 text-[13px] text-[color:var(--iris-ink-soft)]">
-              Materijal {signalCounts.waitingForMaterials} · Nedodeljeno{" "}
-              {signalCounts.unassigned}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>Materijal {signalCounts.waitingForMaterials}</span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {SIGNAL_DESCRIPTIONS.waitingForMaterials}
+                </TooltipContent>
+              </Tooltip>{" "}
+              ·{" "}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>Nedodeljeno {signalCounts.unassigned}</span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {SIGNAL_DESCRIPTIONS.unassigned}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
           <ChevronDown className="h-4 w-4 text-[color:var(--iris-ink-mute)] transition-transform duration-200 group-open:rotate-180" />

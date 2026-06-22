@@ -30,6 +30,12 @@ function parseIso(dateStr: string): Date {
   return parse(dateStr, "yyyy-MM-dd", new Date());
 }
 
+// Default span for the year dropdown when no explicit bounds are given:
+// 10 years back through 5 years forward covers historical and scheduled
+// work orders.
+const DEFAULT_START_MONTH = new Date(new Date().getFullYear() - 10, 0, 1);
+const DEFAULT_END_MONTH = new Date(new Date().getFullYear() + 5, 11, 31);
+
 export function DatePicker({
   value,
   onChange,
@@ -68,14 +74,21 @@ export function DatePicker({
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
+          // Month + year dropdowns so users can jump across years/months
+          // without clicking through one month at a time.
+          captionLayout="dropdown"
+          defaultMonth={selected ?? fromDate ?? toDate}
           selected={selected}
           onSelect={(date) => {
             onChange(date ? format(date, "yyyy-MM-dd") : null);
             setOpen(false);
           }}
           locale={calendarLocale}
-          startMonth={fromDate}
-          endMonth={toDate}
+          // Bound the year dropdown: respect explicit from/to when given,
+          // otherwise span a wide window around today so every realistic
+          // work-order date is reachable.
+          startMonth={fromDate ?? DEFAULT_START_MONTH}
+          endMonth={toDate ?? DEFAULT_END_MONTH}
           disabled={[
             ...(fromDate ? [{ before: fromDate }] : []),
             ...(toDate ? [{ after: toDate }] : []),

@@ -87,8 +87,8 @@ func TestWorkOrderReadEndpoints(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &workOrders); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if len(workOrders.Items) != 28 || workOrders.Total != 28 {
-			t.Fatalf("workOrders = %#v, want 28 items and total", workOrders)
+		if len(workOrders.Items) != 43 || workOrders.Total != 43 {
+			t.Fatalf("workOrders = %#v, want 43 items and total", workOrders)
 		}
 	})
 
@@ -384,8 +384,8 @@ func TestCreateWorkOrderEndpoint(t *testing.T) {
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &workOrders); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
-	if len(workOrders.Items) != 29 || workOrders.Total != 29 {
-		t.Fatalf("workOrders = %#v, want 29 after create", workOrders)
+	if len(workOrders.Items) != 44 || workOrders.Total != 44 {
+		t.Fatalf("workOrders = %#v, want 44 after create", workOrders)
 	}
 }
 

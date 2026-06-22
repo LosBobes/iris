@@ -42,4 +42,9 @@ type Store interface {
 	UpdateWorkOrder(ctx context.Context, id string, changes domain.UpdateWorkOrderInput) (*domain.WorkOrder, error)
 	DeleteWorkOrder(ctx context.Context, id string) (domain.DeleteWorkOrderResponse, error)
 	Operators(ctx context.Context) ([]string, error)
+
+	EnumValues(ctx context.Context) ([]domain.EnumValue, error)
+	CreateEnumValue(ctx context.Context, input domain.EnumValueInput) (*domain.EnumValue, error)
+	UpdateEnumValue(ctx context.Context, id string, input domain.EnumValueInput) (*domain.EnumValue, error)
+	DeleteEnumValue(ctx context.Context, id string) error
 }

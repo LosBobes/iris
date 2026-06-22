@@ -1,8 +1,26 @@
-export type DeliveryMethod = 'pickup' | 'postExpress' | 'cityExpress' | 'fieldVisit'
+// The delivery, postage, billing, and priority fields accept admin-defined
+// custom values in addition to the built-in defaults. The `(string & {})` arm
+// keeps editor autocomplete for the built-ins while still allowing any custom
+// value the administrator adds via Settings.
+export type DeliveryMethod =
+  | 'pickup'
+  | 'postExpress'
+  | 'cityExpress'
+  | 'fieldVisit'
+  | (string & {})
 
-export type PostagePaymentType = 'cod' | 'ourAccount' | 'advance' | 'viaInvoice'
+export type PostagePaymentType =
+  | 'cod'
+  | 'ourAccount'
+  | 'advance'
+  | 'viaInvoice'
+  | (string & {})
 
-export type BillingDocumentType = 'invoice' | 'cashCollection' | 'proforma'
+export type BillingDocumentType =
+  | 'invoice'
+  | 'cashCollection'
+  | 'proforma'
+  | (string & {})
 
 export type WorkOrderStatus =
   | 'new'
@@ -14,11 +32,39 @@ export type WorkOrderStatus =
   | 'cancelled'
   | 'invoiced'
 
-export type WorkOrderPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type WorkOrderPriority = 'low' | 'normal' | 'high' | 'urgent' | (string & {})
+
+export type EnumField =
+  | 'deliveryMethod'
+  | 'postagePaymentType'
+  | 'billingDocumentType'
+  | 'priority'
+  | 'invoiceUnit'
+
+export interface EnumValue {
+  id: string
+  field: EnumField
+  value: string
+  label: string
+  sortOrder: number
+  isBuiltin: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface EnumValueInput {
+  field: EnumField
+  value: string
+  label: string
+  sortOrder: number
+}
 export type WorkOrderNoteVisibility = 'internal' | 'customer'
 export type InvoiceDraftStatus = 'none' | 'draft' | 'issued' | 'paid'
 export type InvoiceLineItemKind = 'service' | 'goods'
-export type InvoiceUnit = 'kom' | 'm2' | 'set'
+// Built-in units of measure. The field is admin-extensible via the
+// `invoiceUnit` managed enum, so stored values may be any non-empty string.
+export type BuiltinInvoiceUnit = 'kom' | 'm2' | 'set'
+export type InvoiceUnit = string
 
 export interface JobDetails {
   productCode: string | null

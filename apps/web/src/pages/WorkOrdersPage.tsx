@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Inbox, Loader2, Plus, SearchX } from "lucide-react";
+import { Download, Inbox, Loader2, Plus, SearchX } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { WorkOrdersFilters } from "@/components/WorkOrders/WorkOrdersFilters";
 import { WorkOrdersTable } from "@/components/WorkOrders/WorkOrdersTable";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useWorkOrders } from "@/hooks/useWorkOrders";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { downloadWorkOrdersCsv } from "@/lib/work-orders/csv-export";
 import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
@@ -20,6 +22,7 @@ function WorkOrdersPage(): React.JSX.Element {
   const navigate = useNavigate();
   const {
     orders,
+    filteredSortedOrders,
     totalFiltered,
     allOrdersCount,
     loading,
@@ -37,8 +40,18 @@ function WorkOrdersPage(): React.JSX.Element {
     setPageSize,
     refreshOrders,
   } = useWorkOrders();
+  const { visibleColumnSet } = useColumnVisibility();
 
   const [deleteTarget, setDeleteTarget] = useState<WorkOrder | null>(null);
+
+  const handleExportCsv = useCallback(() => {
+    if (filteredSortedOrders.length === 0) {
+      toast.info("Nema naloga za izvoz");
+      return;
+    }
+    downloadWorkOrdersCsv(filteredSortedOrders, visibleColumnSet);
+    toast.success(`Izvezeno ${filteredSortedOrders.length} naloga`);
+  }, [filteredSortedOrders, visibleColumnSet]);
 
   const handleToggleStatus = useCallback(
     async (order: WorkOrder) => {
@@ -143,14 +156,25 @@ function WorkOrdersPage(): React.JSX.Element {
                   : `Ukupno ${totalFiltered} od ${allOrdersCount}`}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => navigate("/work-orders/new")}
-              className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
-            >
-              <Plus className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:rotate-90" />
-              Novi radni nalog
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={totalFiltered === 0}
+                className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Izvezi CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/work-orders/new")}
+                className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+              >
+                <Plus className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:rotate-90" />
+                Novi radni nalog
+              </button>
+            </div>
           </div>
         </div>
 

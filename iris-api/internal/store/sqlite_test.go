@@ -22,8 +22,8 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WorkOrders() returned error: %v", err)
 	}
-	if result.Total != 28 || len(result.Items) != 10 {
-		t.Fatalf("result = %#v, want total 28 and limited page", result)
+	if result.Total != 43 || len(result.Items) != 10 {
+		t.Fatalf("result = %#v, want total 43 and limited page", result)
 	}
 	if err := sqliteStore.Close(); err != nil {
 		t.Fatalf("Close() returned error: %v", err)

@@ -99,6 +99,10 @@ func (s *Server) Routes() http.Handler {
 		protected.Post("/work-orders", s.handleCreateWorkOrder)
 		protected.Patch("/work-orders/{id}", s.handleUpdateWorkOrder)
 		protected.Delete("/work-orders/{id}", s.requireAdmin(s.handleDeleteWorkOrder))
+		protected.Get("/enum-values", s.handleEnumValues)
+		protected.Post("/enum-values", s.requireAdmin(s.handleCreateEnumValue))
+		protected.Put("/enum-values/{id}", s.requireAdmin(s.handleUpdateEnumValue))
+		protected.Delete("/enum-values/{id}", s.requireAdmin(s.handleDeleteEnumValue))
 	})
 
 	if s.config.WebDir != "" {

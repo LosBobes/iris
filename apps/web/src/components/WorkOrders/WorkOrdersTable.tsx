@@ -29,6 +29,13 @@ import {
   type SortField,
   type SortDirection,
 } from "@/hooks/useWorkOrders";
+import { useListPreferences } from "@/hooks/useListPreferences";
+import { getRowHeightClass } from "@/lib/list-preferences";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import {
+  WORK_ORDER_COLUMNS,
+  type WorkOrderColumnKey,
+} from "@/lib/work-order-columns";
 import {
   WORK_ORDER_BILLING_LABELS,
   canToggleWorkOrderCompletion,
@@ -39,26 +46,66 @@ import {
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 
-interface ColDef {
-  key: string;
-  label: string;
-  field?: SortField;
-  width?: string;
-  align?: "left" | "right";
+/** Content + cell classes for a single data column. The actions column is
+ *  rendered separately so it can be pinned to the right edge. */
+function renderColumnCell(
+  order: WorkOrder,
+  key: WorkOrderColumnKey,
+): { className: string; content: React.ReactNode; title?: string } {
+  switch (key) {
+    case "orderNumber":
+      return {
+        className: "tnum px-4 font-medium text-foreground",
+        content: order.orderNumber,
+      };
+    case "clientName":
+      return { className: "px-4 text-foreground", content: order.clientName };
+    case "jobDescription":
+      return {
+        className:
+          "max-w-[220px] truncate px-4 text-[color:var(--iris-ink-soft)]",
+        content: order.jobDescription,
+        title: order.jobDescription,
+      };
+    case "assigned":
+      return {
+        className: "px-4 text-[color:var(--iris-ink-soft)]",
+        content: order.assignment.assignedTo ?? "Nedodeljeno",
+      };
+    case "priority":
+      return {
+        className: "px-4 text-[color:var(--iris-ink-soft)]",
+        content: getWorkOrderPriorityLabel(order.assignment.priority),
+      };
+    case "billing":
+      return {
+        className: "px-4 text-[color:var(--iris-ink-soft)]",
+        content: order.billingDocumentType
+          ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+          : "-",
+      };
+    case "schedule":
+      return {
+        className: "px-4 text-[color:var(--iris-ink-soft)]",
+        content: order.assignment.scheduledDate
+          ? formatWorkOrderDate(order.assignment.scheduledDate)
+          : order.dueDate
+            ? formatWorkOrderDate(order.dueDate)
+            : "-",
+      };
+    case "price":
+      return {
+        className: `tnum px-4 text-right ${
+          order.price !== null
+            ? "font-medium text-foreground"
+            : "text-[color:var(--iris-ink-faint)]"
+        }`,
+        content: formatWorkOrderPrice(order.price),
+      };
+    case "status":
+      return { className: "px-4", content: <IrisBadge status={order.status} /> };
+  }
 }
-
-const COLUMNS: ColDef[] = [
-  { key: "orderNumber", label: "Br. naloga", field: "orderNumber", width: "110px" },
-  { key: "clientName", label: "Klijent", field: "clientName", width: "140px" },
-  { key: "jobDescription", label: "Opis posla", field: "jobDescription" },
-  { key: "assigned", label: "Operater", field: "assignment.assignedTo", width: "120px" },
-  { key: "priority", label: "Prioritet", field: "assignment.priority", width: "90px" },
-  { key: "billing", label: "Tip dokumenta", field: "billingDocumentType", width: "130px" },
-  { key: "schedule", label: "Plan", field: "assignment.scheduledDate", width: "110px" },
-  { key: "price", label: "Cena", field: "price", width: "110px", align: "right" },
-  { key: "status", label: "Status", field: "status", width: "130px" },
-  { key: "actions", label: "", width: "110px" },
-];
 
 interface WorkOrdersTableProps {
   orders: WorkOrder[];
@@ -139,6 +186,12 @@ export function WorkOrdersTable({
   }, []);
   const shouldStagger = isFirstPaintRef.current;
 
+  const { density } = useListPreferences();
+  const rowHeightClass = getRowHeightClass(density);
+
+  const { isVisible } = useColumnVisibility();
+  const dataColumns = WORK_ORDER_COLUMNS.filter((col) => isVisible(col.key));
+
   // When the user pages while scrolled to the pagination bar, bring the top
   // of the new page back into view instead of leaving them at the bottom.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -152,12 +205,11 @@ export function WorkOrdersTable({
 
   return (
     <div ref={containerRef} className="scroll-mt-4 overflow-x-auto border border-border bg-card">
-      <table className="min-w-[1200px] w-full border-collapse text-[12px]">
+      <table className="min-w-[1100px] w-full border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-border">
-            {COLUMNS.map((col) => {
-              const isSortable = !!col.field;
-              const isActive = col.field === sortField;
+            {dataColumns.map((col) => {
+              const isActive = col.sortField === sortField;
               return (
                 <th
                   key={col.key}
@@ -170,35 +222,35 @@ export function WorkOrdersTable({
                       ? sortDirection === "asc"
                         ? "ascending"
                         : "descending"
-                      : isSortable
-                        ? "none"
-                        : undefined
+                      : "none"
                   }
                 >
-                  {isSortable ? (
-                    <button
-                      type="button"
-                      onClick={() => onSort(col.field!)}
-                      className="iris-focusable iris-press inline-flex cursor-pointer items-center gap-1 bg-transparent p-0 text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
-                      aria-label={
-                        isActive
-                          ? `Sortirano po ${col.label}, ${sortDirection === "asc" ? "rastuće" : "opadajuće"}`
-                          : `Sortiraj po ${col.label}`
-                      }
-                    >
-                      {col.label}
-                      <SortIcon
-                        field={col.field!}
-                        currentField={sortField}
-                        direction={sortDirection}
-                      />
-                    </button>
-                  ) : (
-                    col.label
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onSort(col.sortField)}
+                    className="iris-focusable iris-press inline-flex cursor-pointer items-center gap-1 bg-transparent p-0 text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                    aria-label={
+                      isActive
+                        ? `Sortirano po ${col.label}, ${sortDirection === "asc" ? "rastuće" : "opadajuće"}`
+                        : `Sortiraj po ${col.label}`
+                    }
+                  >
+                    {col.label}
+                    <SortIcon
+                      field={col.sortField}
+                      currentField={sortField}
+                      direction={sortDirection}
+                    />
+                  </button>
                 </th>
               );
             })}
+            <th
+              style={{ width: "172px" }}
+              className="sticky right-0 z-20 bg-card px-4 py-[10px] text-right text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]"
+            >
+              Radnje
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -240,64 +292,35 @@ export function WorkOrdersTable({
                       }
                     : undefined
                 }
-                className={`h-10 border-b border-[color:var(--iris-border-soft)] transition-colors duration-150 last:border-b-0 ${
+                className={`${rowHeightClass} border-b border-[color:var(--iris-border-soft)] transition-colors duration-150 last:border-b-0 ${
                   onOpen
                     ? "cursor-pointer hover:bg-black/[0.025] focus-visible:bg-black/[0.025] focus-visible:outline-none focus-visible:shadow-[inset_2px_0_0_var(--iris-accent)]"
                     : ""
                 }`}
               >
-                <td className="tnum px-4 font-medium text-foreground">
-                  {order.orderNumber}
-                </td>
-                <td className="px-4 text-foreground">{order.clientName}</td>
+                {dataColumns.map((col) => {
+                  const cell = renderColumnCell(order, col.key);
+                  return (
+                    <td key={col.key} className={cell.className} title={cell.title}>
+                      {cell.content}
+                    </td>
+                  );
+                })}
                 <td
-                  className="max-w-[220px] truncate px-4 text-[color:var(--iris-ink-soft)]"
-                  title={order.jobDescription}
+                  className="sticky right-0 z-10 bg-card px-3"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {order.jobDescription}
-                </td>
-                <td className="px-4 text-[color:var(--iris-ink-soft)]">
-                  {order.assignment.assignedTo ?? "Nedodeljeno"}
-                </td>
-                <td className="px-4 text-[color:var(--iris-ink-soft)]">
-                  {getWorkOrderPriorityLabel(order.assignment.priority)}
-                </td>
-                <td className="px-4 text-[color:var(--iris-ink-soft)]">
-                  {order.billingDocumentType
-                    ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
-                    : "-"}
-                </td>
-                <td className="px-4 text-[color:var(--iris-ink-soft)]">
-                  {order.assignment.scheduledDate
-                    ? formatWorkOrderDate(order.assignment.scheduledDate)
-                    : order.dueDate
-                      ? formatWorkOrderDate(order.dueDate)
-                      : "-"}
-                </td>
-                <td
-                  className={`tnum px-4 text-right ${
-                    order.price !== null
-                      ? "font-medium text-foreground"
-                      : "text-[color:var(--iris-ink-faint)]"
-                  }`}
-                >
-                  {formatWorkOrderPrice(order.price)}
-                </td>
-                <td className="px-4">
-                  <IrisBadge status={order.status} />
-                </td>
-                <td className="px-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2.5 text-[color:var(--iris-ink-mute)]">
+                  <div className="flex items-center justify-end gap-1 text-[color:var(--iris-ink-soft)]">
                     <ActionTooltip label={statusActionLabel}>
                       <button
                         type="button"
                         disabled={!canToggleStatus}
                         aria-label={statusActionLabel}
                         onClick={() => onToggleStatus(order)}
-                        className="iris-focusable iris-press relative grid size-3.5 place-items-center bg-transparent p-0 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                        className="iris-focusable iris-press relative grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Check
-                          className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
+                          className={`absolute h-[18px] w-[18px] transition-all duration-200 ease-out ${
                             order.status === "completed"
                               || order.status === "invoiced"
                               ? "scale-100 opacity-100"
@@ -305,7 +328,7 @@ export function WorkOrdersTable({
                           }`}
                         />
                         <Circle
-                          className={`absolute h-3.5 w-3.5 transition-all duration-200 ease-out ${
+                          className={`absolute h-[18px] w-[18px] transition-all duration-200 ease-out ${
                             order.status === "completed"
                               || order.status === "invoiced"
                               ? "scale-50 opacity-0"
@@ -319,9 +342,9 @@ export function WorkOrdersTable({
                         type="button"
                         aria-label="Izmeni"
                         onClick={() => onEdit(order)}
-                        className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
+                        className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        <Pencil className="h-[18px] w-[18px]" />
                       </button>
                     </ActionTooltip>
                     <ActionTooltip label="Dupliraj">
@@ -329,9 +352,9 @@ export function WorkOrdersTable({
                         type="button"
                         aria-label="Dupliraj"
                         onClick={() => onDuplicate(order)}
-                        className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
+                        className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
                       >
-                        <Copy className="h-3.5 w-3.5" />
+                        <Copy className="h-[18px] w-[18px]" />
                       </button>
                     </ActionTooltip>
                     <ActionTooltip label="Obriši">
@@ -339,9 +362,9 @@ export function WorkOrdersTable({
                         type="button"
                         aria-label="Obriši"
                         onClick={() => onDelete(order)}
-                        className="iris-focusable iris-press bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
+                        className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-[18px] w-[18px]" />
                       </button>
                     </ActionTooltip>
                   </div>

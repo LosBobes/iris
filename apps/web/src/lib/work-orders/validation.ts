@@ -1,12 +1,19 @@
 import { z } from 'zod'
 
-const deliveryMethodEnum = z.enum(['pickup', 'postExpress', 'cityExpress', 'fieldVisit'])
-const postagePaymentTypeEnum = z.enum(['cod', 'ourAccount', 'advance', 'viaInvoice'])
-const billingDocumentTypeEnum = z.enum(['invoice', 'cashCollection', 'proforma'])
-const priorityEnum = z.enum(['low', 'normal', 'high', 'urgent'])
+// Delivery, postage, billing, and priority allow admin-defined custom values in
+// addition to the built-ins, so these accept any non-empty string. The set of
+// offered options is controlled by the form, and the backend validates the
+// value against the built-in defaults plus the active custom values.
+const deliveryMethodEnum = z.string().min(1)
+const postagePaymentTypeEnum = z.string().min(1)
+const billingDocumentTypeEnum = z.string().min(1)
+const priorityEnum = z.string().min(1)
 const invoiceDraftStatusEnum = z.enum(['none', 'draft', 'issued', 'paid'])
 const invoiceLineItemKindEnum = z.enum(['service', 'goods'])
-const invoiceUnitEnum = z.enum(['kom', 'm2', 'set'])
+// Unit of measure is admin-extensible (the `invoiceUnit` managed enum), so any
+// non-empty value is accepted here; the built-in `set` stays service-only via
+// the line-item refine below.
+const invoiceUnitEnum = z.string().min(1)
 
 const emptyToNullString = z
   .union([z.string(), z.null()])

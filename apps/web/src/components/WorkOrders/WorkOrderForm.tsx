@@ -22,8 +22,8 @@ import type {
   Customer,
   BillingDocumentType,
   DeliveryMethod,
+  BuiltinInvoiceUnit,
   InvoiceLineItemKind,
-  InvoiceUnit,
   Location,
   PostagePaymentType,
   WorkOrder,
@@ -34,18 +34,14 @@ import {
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
 import {
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
-  WORK_ORDER_POSTAGE_LABELS,
-  WORK_ORDER_PRIORITY_LABELS,
   WORK_ORDER_SELECT_NONE_VALUE,
-  getWorkOrderPriorityLabel,
   getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
   getLocalIsoDate,
 } from "@/shared/utils/work-orders";
+import { useEnumValues } from "@/hooks/useEnumValues";
 
 interface WorkOrderFormProps {
   initialData?: WorkOrder | null;
@@ -132,13 +128,13 @@ const INVOICE_LINE_ITEM_KIND_LABELS: Record<InvoiceLineItemKind, string> = {
   goods: "Roba",
 };
 
-const INVOICE_UNIT_LABELS: Record<InvoiceUnit, string> = {
+const INVOICE_UNIT_LABELS: Record<BuiltinInvoiceUnit, string> = {
   kom: "Kom",
   m2: "m2",
   set: "Set",
 };
 
-const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, InvoiceUnit[]> = {
+const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, BuiltinInvoiceUnit[]> = {
   service: ["kom", "m2", "set"],
   goods: ["kom", "m2"],
 };
@@ -146,7 +142,11 @@ const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, InvoiceUnit[]> = {
 type InvoiceLineItemFormValue =
   WorkOrderFormValues["invoiceDraft"]["lineItems"][number];
 
-export function getInvoiceUnitOptions(kind: InvoiceLineItemKind): InvoiceUnit[] {
+/** Built-in units selectable for a line kind. Custom (admin-added) units are
+ * appended at render time and are allowed for any kind. */
+export function getInvoiceUnitOptions(
+  kind: InvoiceLineItemKind,
+): BuiltinInvoiceUnit[] {
   return INVOICE_UNITS_BY_KIND[kind];
 }
 
@@ -154,15 +154,12 @@ function isInvoiceLineItemKind(value: unknown): value is InvoiceLineItemKind {
   return value === "service" || value === "goods";
 }
 
-function isInvoiceUnit(value: unknown): value is InvoiceUnit {
-  return value === "kom" || value === "m2" || value === "set";
-}
-
-function isInvoiceUnitAllowed(
-  kind: InvoiceLineItemKind,
-  unit: unknown,
-): unit is InvoiceUnit {
-  return isInvoiceUnit(unit) && getInvoiceUnitOptions(kind).includes(unit);
+// Only the built-in `set` carries a kind restriction (service-only); any other
+// non-empty unit — built-in or admin-added — is preserved as entered.
+function normalizeInvoiceUnit(kind: InvoiceLineItemKind, unit: unknown): string {
+  if (typeof unit !== "string" || unit.trim() === "") return "kom";
+  if (unit === "set" && kind !== "service") return "kom";
+  return unit;
 }
 
 function createInvoiceLineItem(
@@ -183,7 +180,7 @@ function normalizeInvoiceLineItem(
   index: number,
 ): InvoiceLineItemFormValue {
   const kind = isInvoiceLineItemKind(line.kind) ? line.kind : "service";
-  const unit = isInvoiceUnitAllowed(kind, line.unit) ? line.unit : "kom";
+  const unit = normalizeInvoiceUnit(kind, line.unit);
 
   return {
     id: line.id || `line-${index + 1}`,
@@ -435,6 +432,14 @@ export function WorkOrderForm({
     name: "invoiceDraft.lineItems",
   });
 
+  const { optionsFor } = useEnumValues();
+  // Admin-added units of measure, selectable on any line kind.
+  const customInvoiceUnitOptions = optionsFor("invoiceUnit")
+    .filter((option) => !option.isBuiltin)
+    .map((option) => ({ value: option.value, label: option.label }));
+  const customUnitLabelFor = (value: string): string =>
+    customInvoiceUnitOptions.find((option) => option.value === value)?.label ??
+    value;
   const deliveryMethod = watch("shipping.deliveryMethod");
   const selectedCustomerId = watch("customerId");
   const selectedLocationId = watch("locationId");
@@ -791,11 +796,9 @@ export function WorkOrderForm({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(Object.entries(WORK_ORDER_PRIORITY_LABELS) as Array<
-                        [keyof typeof WORK_ORDER_PRIORITY_LABELS, string]
-                      >).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
+                      {optionsFor("priority").map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -850,13 +853,11 @@ export function WorkOrderForm({
                       <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
                         Nije izabrano
                       </SelectItem>
-                      {Object.entries(WORK_ORDER_BILLING_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {optionsFor("billingDocumentType").map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -885,13 +886,11 @@ export function WorkOrderForm({
                       <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
                         Nije izabrano
                       </SelectItem>
-                      {Object.entries(WORK_ORDER_DELIVERY_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {optionsFor("deliveryMethod").map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -1017,13 +1016,11 @@ export function WorkOrderForm({
                         <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
                           Nije izabrano
                         </SelectItem>
-                        {Object.entries(WORK_ORDER_POSTAGE_LABELS).map(
-                          ([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ),
-                        )}
+                        {optionsFor("postagePaymentType").map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   )}
@@ -1188,7 +1185,28 @@ export function WorkOrderForm({
                       invoiceLineItems[index]?.kind === "goods"
                         ? "goods"
                         : "service";
-                    const unitOptions = getInvoiceUnitOptions(selectedKind);
+                    const builtinUnitOptions = getInvoiceUnitOptions(
+                      selectedKind,
+                    ).map((unit) => ({
+                      value: unit,
+                      label: INVOICE_UNIT_LABELS[unit],
+                    }));
+                    // Append admin-added units (any kind); keep the current
+                    // value selectable even if it is an unknown/custom unit.
+                    const currentUnit = invoiceLineItems[index]?.unit;
+                    const unitOptions = [
+                      ...builtinUnitOptions,
+                      ...customInvoiceUnitOptions,
+                    ];
+                    if (
+                      currentUnit &&
+                      !unitOptions.some((option) => option.value === currentUnit)
+                    ) {
+                      unitOptions.push({
+                        value: currentUnit,
+                        label: customUnitLabelFor(currentUnit),
+                      });
+                    }
                     const lineItemError = errors.invoiceDraft?.lineItems?.[index];
 
                     return (
@@ -1212,15 +1230,16 @@ export function WorkOrderForm({
                                     : "service";
                                   field.onChange(nextKind);
 
-                                  if (
-                                    !isInvoiceUnitAllowed(
-                                      nextKind,
-                                      invoiceLineItems[index]?.unit,
-                                    )
-                                  ) {
+                                  const currentUnit =
+                                    invoiceLineItems[index]?.unit;
+                                  const normalizedUnit = normalizeInvoiceUnit(
+                                    nextKind,
+                                    currentUnit,
+                                  );
+                                  if (normalizedUnit !== currentUnit) {
                                     setValue(
                                       `invoiceDraft.lineItems.${index}.unit`,
-                                      "kom",
+                                      normalizedUnit,
                                     );
                                   }
                                 }}
@@ -1297,9 +1316,12 @@ export function WorkOrderForm({
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {unitOptions.map((unit) => (
-                                    <SelectItem key={unit} value={unit}>
-                                      {INVOICE_UNIT_LABELS[unit]}
+                                  {unitOptions.map((option) => (
+                                    <SelectItem
+                                      key={option.value}
+                                      value={option.value}
+                                    >
+                                      {option.label}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -1459,6 +1481,7 @@ interface SummaryPanelProps {
 }
 
 function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
+  const { labelFor } = useEnumValues();
   const clientName = watch("clientName");
   const jobDescription = watch("jobDescription");
   const billingDocumentType = watch("billingDocumentType");
@@ -1476,11 +1499,16 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
     ["Opis", jobDescription || "-"],
     [
       "Tip dokumenta",
-      billingDocumentType ? WORK_ORDER_BILLING_LABELS[billingDocumentType] : "-",
+      billingDocumentType
+        ? labelFor("billingDocumentType", billingDocumentType)
+        : "-",
     ],
-    ["Dostava", deliveryMethod ? WORK_ORDER_DELIVERY_LABELS[deliveryMethod] : "-"],
+    [
+      "Dostava",
+      deliveryMethod ? labelFor("deliveryMethod", deliveryMethod) : "-",
+    ],
     ["Operater", assignedTo || "Nedodeljeno"],
-    ["Prioritet", getWorkOrderPriorityLabel(priority)],
+    ["Prioritet", labelFor("priority", priority)],
     ["Planirano", scheduledDate ? formatWorkOrderDate(scheduledDate) : "-"],
     ["Datum izdavanja", issueDate ? formatWorkOrderDate(issueDate) : "-"],
     ["Rok", dueDate ? formatWorkOrderDate(dueDate) : "-"],
