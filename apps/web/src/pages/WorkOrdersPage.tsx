@@ -8,6 +8,7 @@ import { WorkOrdersFilters } from "@/components/WorkOrders/WorkOrdersFilters";
 import { WorkOrdersTable } from "@/components/WorkOrders/WorkOrdersTable";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useWorkOrders } from "@/hooks/useWorkOrders";
+import { useAuth } from "@/hooks/useAuth";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { downloadWorkOrdersCsv } from "@/lib/work-orders/csv-export";
 import {
@@ -41,6 +42,9 @@ function WorkOrdersPage(): React.JSX.Element {
     refreshOrders,
   } = useWorkOrders();
   const { visibleColumnSet } = useColumnVisibility();
+  // Deleting a work order is admin-only on the API; gate the affordance to match.
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
 
   const [deleteTarget, setDeleteTarget] = useState<WorkOrder | null>(null);
 
@@ -260,6 +264,7 @@ function WorkOrdersPage(): React.JSX.Element {
               onEdit={handleEdit}
               onToggleStatus={handleToggleStatus}
               onOpen={handleOpen}
+              canDelete={isAdmin}
             />
           </div>
         )}

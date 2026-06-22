@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/hooks/useAuth";
 import type { Customer, Location } from "@/types/work-order";
 
 type DeleteTarget =
@@ -108,6 +109,9 @@ function CustomersPage(): React.JSX.Element {
   const [locationMissingFields, setLocationMissingFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  // Deleting customers/locations is admin-only on the API; gate the affordance.
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -333,6 +337,7 @@ function CustomersPage(): React.JSX.Element {
                         ).length,
                       })
                     }
+                    canDelete={isAdmin}
                   />
                 ))}
               </div>
@@ -369,6 +374,7 @@ function CustomersPage(): React.JSX.Element {
                         name: location.name,
                       })
                     }
+                    canDelete={isAdmin}
                   />
                 ))}
               </div>
@@ -656,11 +662,13 @@ function Row({
   detail,
   onEdit,
   onDelete,
+  canDelete,
 }: {
   title: string;
   detail: string;
   onEdit: () => void;
   onDelete: () => void;
+  canDelete: boolean;
 }): React.JSX.Element {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -679,14 +687,16 @@ function Row({
         >
           <Pencil className="h-4 w-4" />
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="iris-focusable iris-press text-[color:var(--iris-status-cancelled)] hover:opacity-80"
-          aria-label="Obriši"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="iris-focusable iris-press text-[color:var(--iris-status-cancelled)] hover:opacity-80"
+            aria-label="Obriši"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );

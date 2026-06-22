@@ -123,6 +123,8 @@ interface WorkOrdersTableProps {
   onEdit: (order: WorkOrder) => void;
   onToggleStatus: (order: WorkOrder) => void;
   onOpen?: (order: WorkOrder) => void;
+  /** Delete is admin-only on the API; hide the affordance for non-admins. */
+  canDelete: boolean;
 }
 
 function ActionTooltip({
@@ -177,6 +179,7 @@ export function WorkOrdersTable({
   onEdit,
   onToggleStatus,
   onOpen,
+  canDelete,
 }: WorkOrdersTableProps): React.JSX.Element {
   // Stagger the entrance animation only on the very first paint. Subsequent
   // sort / filter / page changes should swap rows in place - no shimmer.
@@ -357,16 +360,18 @@ export function WorkOrdersTable({
                         <Copy className="h-[18px] w-[18px]" />
                       </button>
                     </ActionTooltip>
-                    <ActionTooltip label="Obriši">
-                      <button
-                        type="button"
-                        aria-label="Obriši"
-                        onClick={() => onDelete(order)}
-                        className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
-                      >
-                        <Trash2 className="h-[18px] w-[18px]" />
-                      </button>
-                    </ActionTooltip>
+                    {canDelete && (
+                      <ActionTooltip label="Obriši">
+                        <button
+                          type="button"
+                          aria-label="Obriši"
+                          onClick={() => onDelete(order)}
+                          className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                        >
+                          <Trash2 className="h-[18px] w-[18px]" />
+                        </button>
+                      </ActionTooltip>
+                    )}
                   </div>
                 </td>
               </tr>

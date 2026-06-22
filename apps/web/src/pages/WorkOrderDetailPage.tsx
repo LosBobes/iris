@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
+import { useAuth } from "@/hooks/useAuth";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Location, WorkOrder } from "@/types/work-order";
@@ -77,6 +78,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Deleting is admin-only on the API; gate the button to match.
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
 
   const handleAdvanceStatus = async (): Promise<void> => {
     if (!order) return;
@@ -253,15 +257,17 @@ function WorkOrderDetailPage(): React.JSX.Element {
                 >
                   Izmeni
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteOpen(true)}
-                  aria-label="Obriši"
-                  className="iris-focusable iris-press flex items-center gap-1 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Obriši
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteOpen(true)}
+                    aria-label="Obriši"
+                    className="iris-focusable iris-press flex items-center gap-1 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Obriši
+                  </button>
+                )}
               </div>
             </div>
           )}
