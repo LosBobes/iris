@@ -129,38 +129,206 @@ Poslovi: vizitkarte, katalozi, plakati, flajeri — sve na srpskom.
 
 ```mermaid
 flowchart TD
-    START([Početak demo-a]) --> API[API :8080 healthz OK]
-    API --> BOOT[Povezivanje sa backend servisom…]
-    BOOT --> LOGIN[Login ekran<br/>admin / admin123]
-    LOGIN --> DASH[Kontrolna tabla /]
+    subgraph boot ["🔌 Pokretanje"]
+        START([Početak demo-a]) --> API["API :8080<br/>healthz OK"]
+        API --> BOOT["Povezivanje sa<br/>backend servisom…"]
+        BOOT --> LOGIN["Login ekran<br/>admin / admin123"]
+    end
 
-    DASH --> ATT[Zahteva pažnju<br/>Kasni · Danas · Ove nedelje · Čeka klijenta]
-    ATT --> INT[Interno · Čeka materijal · Nedodeljeni]
-    ATT --> LIST[Radni nalozi /work-orders<br/>pretraga / taster]
+    LOGIN --> DASH
 
-    LIST --> DET[Detalj /work-orders/:id]
-    DET --> SUM[Sažetak za klijenta<br/>Kopiraj obaveštenje]
-    DET --> FLOW[Tok posla · PDV · faktura]
-    DET --> ACT{Akacije}
-    ACT --> PRINT[Štampaj]
-    ACT --> PDF[PDF]
-    ACT --> LINK[Javni link]
-    ACT --> DUP[Dupliraj]
-    ACT --> EDIT[Izmeni]
+    subgraph dash ["📊 Kontrolna tabla"]
+        DASH["Kontrolna tabla /"]
+        DASH --> ATT["🔴 Zahteva pažnju<br/>Kasni · Danas · Ove nedelje · Čeka klijenta"]
+        DASH --> INT["🟡 Interno<br/>Čeka materijal · Nedodeljeni"]
+    end
 
-    LINK --> PUB[/public/work-orders/:token<br/>incognito]
+    subgraph wo ["📋 Radni nalozi"]
+        ATT --> LIST["Radni nalozi /work-orders<br/>pretraga · / taster · filteri"]
+        LIST --> DET["Detalj /work-orders/:id"]
 
-    DASH --> NEW[/work-orders/new]
-    NEW --> FORM[Klijent → Posao → Dodela → Dokument → Finansije]
+        DET --> SUM["💬 Sažetak za klijenta<br/>Kopiraj obaveštenje"]
+        DET --> FLOW["📜 Tok posla<br/>PDV · faktura"]
+        DET --> ACT{"Akcije"}
 
-    DASH --> CUST[/customers]
-    DASH --> FIN[Finansije i trendovi · admin]
-    DASH --> SET[/settings · veličina teksta]
+        ACT --> PRINT["🖨️ Štampaj"]
+        ACT --> PDF["📄 PDF"]
+        ACT --> LINK["🔗 Javni link"]
+        ACT --> DUP["📋 Dupliraj"]
+        ACT --> EDIT["✏️ Izmeni"]
+    end
 
-    FIN --> END([Odjava])
-    SET --> END
-    PUB --> END
+    subgraph pub ["🌐 Javno praćenje"]
+        LINK --> PUB["/public/work-orders/:token<br/>incognito · bez logina"]
+    end
+
+    subgraph create ["➕ Kreiranje naloga"]
+        DASH --> NEW["/work-orders/new"]
+        NEW --> FORM["Klijent → Posao → Dodela<br/>→ Dokument → Finansije"]
+    end
+
+    subgraph other ["⚙️ Ostalo"]
+        DASH --> CUST["👥 Klijenti<br/>/customers"]
+        DASH --> SET["⚙️ Podešavanja<br/>/settings · veličina teksta"]
+        DASH --> FIN["💰 Finansije i trendovi<br/>samo admin"]
+    end
+
+    FIN --> LOGOUT([Odjava])
+    SET --> LOGOUT
+    PUB --> LOGOUT
+    FORM --> DASH
+
+    style boot fill:#1a1a2e,stroke:#16213e,color:#e0e0e0
+    style dash fill:#0f3460,stroke:#16213e,color:#e0e0e0
+    style wo fill:#533483,stroke:#16213e,color:#e0e0e0
+    style pub fill:#2b6777,stroke:#16213e,color:#e0e0e0
+    style create fill:#1a5276,stroke:#16213e,color:#e0e0e0
+    style other fill:#1e3a5f,stroke:#16213e,color:#e0e0e0
 ```
+
+---
+
+## Sekvencijski dijagrami (Mermaid)
+
+### 1. Web — pokretanje, prijava i kontrolna tabla
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Op as "Operater (browser)"
+    participant UI as "Web UI (React)"
+    participant Bridge as "window.api"
+    participant API as iris-api
+    participant DB as SQLite
+
+    Note over Op,DB: Pokretanje aplikacije
+    Op->>UI: Otvori localhost 5173
+    UI->>Bridge: getBackendStatus()
+    Bridge->>API: GET /healthz
+    API-->>Bridge: status ok
+    Bridge-->>UI: ready true
+    UI->>Bridge: getCurrentSession()
+    Bridge->>API: "GET /auth/session (cookie)"
+    API->>DB: UserBySessionToken
+    DB-->>API: null
+    API-->>UI: success false
+    UI-->>Op: Login ekran
+
+    Note over Op,DB: Prijava
+    Op->>UI: admin / admin123
+    UI->>Bridge: login(credentials)
+    Bridge->>API: POST /auth/login
+    API->>DB: AuthenticateUser
+    API->>DB: CreateSession
+    DB-->>API: session token
+    API-->>Bridge: "Set-Cookie iris_session + user"
+    Bridge-->>UI: LoginResponse
+    UI-->>Op: Kontrolna tabla
+
+    Note over Op,DB: Dashboard - agregacija na klijentu
+    UI->>Bridge: getWorkOrders()
+    Bridge->>API: "GET /work-orders (cookie)"
+    API->>DB: ListWorkOrders
+    DB-->>API: nalogi
+    API-->>Bridge: JSON lista
+    Bridge-->>UI: WorkOrder lista
+    UI->>UI: aggregate dashboard signals
+    UI-->>Op: Zahteva pažnju
+
+    Note over Op,DB: PDF izveštaj
+    Op->>UI: Klik PDF na detalju
+    UI->>API: "GET /work-orders/id/report (cookie)"
+    API->>DB: LoadWorkOrder
+    DB-->>API: nalog
+    API-->>Op: PDF fajl (download)
+
+    Note over Op,DB: Odjava
+    Op->>UI: Odjava
+    UI->>Bridge: logout()
+    Bridge->>API: POST /auth/logout
+    API->>DB: DeleteSession
+    API-->>Bridge: Clear-Cookie
+    UI-->>Op: Login ekran
+```
+
+### 2. Desktop — isti API preko Electron IPC
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Op as "Operater (desktop)"
+    participant UI as "Renderer (React)"
+    participant Preload as "Preload window.api"
+    participant Main as "Main IrisApiClient"
+    participant API as iris-api
+    participant DB as SQLite
+
+    Note over Op,DB: Pokretanje - nema restore sesije u UI
+    Op->>UI: Otvori Electron app
+    UI->>Preload: getBackendStatus()
+    Preload->>Main: "IPC app:getBackendStatus"
+    Main->>API: GET /healthz
+    API-->>Main: status ok
+    Main-->>UI: ready true
+    UI-->>Op: Login ekran
+
+    Note over Op,DB: Prijava i rad sa nalozima
+    Op->>UI: credentials
+    UI->>Preload: login()
+    Preload->>Main: "IPC auth:login"
+    Main->>API: POST /auth/login
+    API->>DB: AuthenticateUser + CreateSession
+    API-->>Main: user + session
+    Main-->>UI: LoginResponse
+    UI-->>Op: Kontrolna tabla
+
+    Op->>UI: Otvori radne naloge
+    UI->>Preload: getWorkOrders()
+    Preload->>Main: "IPC workorders:getAll"
+    Main->>API: GET /work-orders
+    API->>DB: ListWorkOrders
+    DB-->>API: nalogi
+    API-->>UI: JSON lista
+    UI-->>Op: Tabela naloga
+
+    Op->>UI: Sačuvaj izmene
+    UI->>Preload: updateWorkOrder(id, changes)
+    Preload->>Main: "IPC workorders:update"
+    Main->>API: PATCH /work-orders/id
+    API->>DB: UpdateWorkOrder
+    DB-->>API: ažuriran nalog
+    API-->>UI: WorkOrder JSON
+```
+
+### 3. Javno praćenje — bez prijave
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Kl as "Klijent (incognito)"
+    participant UI as Web UI
+    participant Bridge as "window.api"
+    participant API as iris-api
+    participant DB as SQLite
+
+    Note over Kl,DB: Operater kopira link sa detalja naloga
+    Kl->>UI: "GET /public/work-orders/token"
+    UI->>Bridge: getPublicWorkOrderStatus(token)
+    Bridge->>API: "GET /public/work-orders/token"
+    Note right of API: Javni endpoint - bez sesije
+    API->>DB: FindByPublicToken
+    DB-->>API: nalog
+    API->>API: ukloni interna polja
+    API-->>Bridge: PublicWorkOrderStatus
+    Bridge-->>UI: status + opis + rok
+    UI-->>Kl: Javni prikaz statusa
+```
+
+**Napomene:**
+- Web i desktop dele **isti REST API** i **istu SQLite** bazu.
+- Web čuva sesiju u **HTTP-only cookie** (`iris_session`); desktop drži korisnika u **memoriji renderera** posle logina.
+- Dashboard metrike se **računaju u browseru** — server vraća sirove naloge.
+- Javni endpoint vraća samo polja bezbedna za klijenta (bez internih beleški).
 
 ---
 
