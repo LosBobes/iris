@@ -17,7 +17,6 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { IrisMark } from "@/components/brand/IrisMark";
-import { LanguageToggle } from "@/components/layout/LanguageToggle";
 import {
   Tooltip,
   TooltipContent,
@@ -351,9 +350,6 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 {t("shell.collapse")}
               </span>
             </button>
-          </SidebarTooltip>
-          <SidebarTooltip label={t("language.label")} enabled={isSidebarCollapsed}>
-            <LanguageToggle collapsed={isSidebarCollapsed} />
           </SidebarTooltip>
           <div className={cn(
             "flex items-center gap-2.5 px-2 lg:border-t lg:border-[color:var(--iris-border-soft)] lg:py-2 lg:w-full transition-all duration-300",
