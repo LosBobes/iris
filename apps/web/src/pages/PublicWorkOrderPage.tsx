@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import type { PublicWorkOrderStatus } from "@/types/work-order";
@@ -8,6 +9,7 @@ import {
 } from "@/shared/utils/work-orders";
 
 function PublicWorkOrderPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const [status, setStatus] = useState<PublicWorkOrderStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,7 +18,7 @@ function PublicWorkOrderPage(): React.JSX.Element {
   useEffect(() => {
     let cancelled = false;
     if (!token) {
-      setError("Javni link nije ispravan.");
+      setError(t("public.invalidLink"));
       setLoading(false);
       return;
     }
@@ -26,13 +28,13 @@ function PublicWorkOrderPage(): React.JSX.Element {
       .then((result) => {
         if (cancelled) return;
         if (!result) {
-          setError("Radni nalog nije pronađen.");
+          setError(t("public.notFound"));
           return;
         }
         setStatus(result);
       })
       .catch(() => {
-        if (!cancelled) setError("Greška pri učitavanju statusa naloga.");
+        if (!cancelled) setError(t("public.loadError"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -41,18 +43,18 @@ function PublicWorkOrderPage(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, t]);
 
   return (
     <main className="min-h-screen bg-background px-5 py-10 text-foreground">
       <section className="mx-auto max-w-2xl border border-border bg-card px-6 py-7">
         <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Iris · javni status
+          {t("public.eyebrow")}
         </div>
         {loading && (
           <div className="mt-8 flex items-center gap-2 text-sm text-[color:var(--iris-ink-soft)]">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Učitavanje statusa...
+            {t("public.loading")}
           </div>
         )}
         {!loading && error && (
@@ -69,23 +71,23 @@ function PublicWorkOrderPage(): React.JSX.Element {
               {status.clientName}
             </p>
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
-              <PublicField label="Opis posla" value={status.jobDescription} />
+              <PublicField label={t("public.jobDescription")} value={status.jobDescription} />
               <PublicField
-                label="Status"
+                label={t("public.status")}
                 value={getWorkOrderStatusLabel(status.status)}
               />
               <PublicField
-                label="Rok"
+                label={t("public.dueDate")}
                 value={status.dueDate ? formatWorkOrderDate(status.dueDate) : "-"}
               />
               <PublicField
-                label="Napomene za klijenta"
+                label={t("public.customerNotes")}
                 value={String(status.customerNoteCount)}
               />
             </div>
             {status.signedBy && (
               <p className="mt-6 text-sm text-[color:var(--iris-ink-soft)]">
-                Potpisao/la: <span className="text-foreground">{status.signedBy}</span>
+                {t("public.signedBy")} <span className="text-foreground">{status.signedBy}</span>
               </p>
             )}
           </div>

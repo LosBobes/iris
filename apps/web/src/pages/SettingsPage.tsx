@@ -38,6 +38,8 @@ export function SettingsPage(): React.JSX.Element {
         </div>
 
         <div className="space-y-8 px-5 pb-10 sm:px-8 lg:px-10">
+          {isAdmin && <OrganizationNameSettings />}
+
           <section className="max-w-2xl border border-border bg-card">
             <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
               <Languages size={16} className="text-[color:var(--iris-accent)]" />
@@ -223,8 +225,6 @@ export function SettingsPage(): React.JSX.Element {
           </section>
 
           <ListDensitySettings />
-
-          {isAdmin && <OrganizationNameSettings />}
 
           {isAdmin && <EnumValuesSettings />}
         </div>
