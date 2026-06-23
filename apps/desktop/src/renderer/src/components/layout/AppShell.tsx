@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import {
   LogOut,
@@ -18,18 +19,19 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { DEFAULT_FIRM_NAME } from "@/types/settings";
 import { IrisMark } from "@/components/brand/IrisMark";
+import { LanguageToggle } from "@/components/layout/LanguageToggle";
 
 interface NavItemDef {
-  label: string;
+  labelKey: string;
   to: string;
   end?: boolean;
   icon: React.ComponentType<{ className?: string; size?: number }>;
 }
 
 const NAV_ITEMS: NavItemDef[] = [
-  { label: "Kontrolna tabla", to: "/", end: true, icon: LayoutDashboard },
-  { label: "Radni nalozi", to: "/work-orders", icon: ClipboardList },
-  { label: "Katalog", to: "/catalog", icon: Package },
+  { labelKey: "nav.dashboard", to: "/", end: true, icon: LayoutDashboard },
+  { labelKey: "nav.workOrders", to: "/work-orders", icon: ClipboardList },
+  { labelKey: "nav.catalog", to: "/catalog", icon: Package },
 ];
 
 interface AppShellProps {
@@ -53,6 +55,7 @@ function getActiveNavItemIndex(currentPath: string): number {
 }
 
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
+  const { t } = useTranslation();
   const { currentUser, onLogout } = useAuth();
   const [firmName, setFirmName] = useState(DEFAULT_FIRM_NAME);
   const location = useLocation();
@@ -158,7 +161,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           <button
             type="button"
             onClick={toggleCollapse}
-            aria-label={isCollapsed ? "Proširi meni" : "Skupi meni"}
+            aria-label={isCollapsed ? t("shell.expand") : t("shell.collapse")}
             className={cn(
               "iris-focusable iris-press flex items-center font-medium text-foreground hover:opacity-90 transition-all duration-300",
               isCollapsed ? "gap-0 justify-center w-full" : "gap-2.5"
@@ -181,7 +184,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           <button
             onClick={toggleCollapse}
             className="flex h-6 w-6 items-center justify-center rounded-md border border-[color:var(--iris-border-soft)] bg-background text-[color:var(--iris-ink-soft)] hover:text-foreground hover:bg-black/[0.03] transition-colors iris-focusable iris-press shrink-0"
-            title={isCollapsed ? "Proširi" : "Skupi"}
+            title={isCollapsed ? t("shell.expandShort") : t("shell.collapseShort")}
           >
             {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
@@ -191,7 +194,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           "mb-3 pl-1 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] transition-all duration-300",
           isCollapsed ? "opacity-0 h-0 mb-0 overflow-hidden" : "opacity-100"
         )}>
-          Sekcija
+          {t("shell.section")}
         </div>
         <nav ref={navRef} className="relative flex flex-col gap-0.5">
           <span
@@ -229,14 +232,14 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                       : "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
                   )
                 }
-                title={isCollapsed ? item.label : undefined}
+                title={isCollapsed ? t(item.labelKey) : undefined}
               >
                 <Icon size={16} className="shrink-0" />
                 <span className={cn(
                   "whitespace-nowrap transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
                   isCollapsed ? "hidden" : "inline"
                 )}>
-                  {item.label}
+                  {t(item.labelKey)}
                 </span>
               </NavLink>
             );
@@ -265,7 +268,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 {currentUser?.username ?? ""}
               </div>
               <div className="text-[10px] text-[color:var(--iris-ink-faint)] whitespace-nowrap">
-                {currentUser?.role === "admin" ? "Administrator" : "Operater"}
+                {currentUser?.role === "admin" ? t("shell.administrator") : t("shell.operator")}
               </div>
             </div>
           </div>
@@ -275,16 +278,17 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               "iris-focusable iris-press flex w-full items-center bg-transparent py-1.5 text-[12px] text-[color:var(--iris-ink-soft)] hover:text-foreground transition-all duration-300",
               isCollapsed ? "justify-center gap-0 py-1" : "gap-2"
             )}
-            title={isCollapsed ? "Odjava" : undefined}
+            title={isCollapsed ? t("shell.logout") : undefined}
           >
             <LogOut size={14} className="shrink-0" />
             <span className={cn(
               "transition-all duration-300 ease-[var(--iris-ease-out-decisive)] whitespace-nowrap",
               isCollapsed ? "w-0 opacity-0 overflow-hidden pointer-events-none" : "w-auto opacity-100"
             )}>
-              Odjava
+              {t("shell.logout")}
             </span>
           </button>
+          {!isCollapsed && <LanguageToggle />}
         </div>
       </aside>
       <main className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
