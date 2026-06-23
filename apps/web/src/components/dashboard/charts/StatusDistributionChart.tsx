@@ -6,6 +6,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
+import { useTranslation } from "react-i18next";
 import type { DashboardSummary, WorkOrderStatus } from "@/types/work-order";
 import {
   getWorkOrderStatusLabel,
@@ -30,6 +31,7 @@ interface StatusDistributionChartProps {
 export function StatusDistributionChart({
   summary,
 }: StatusDistributionChartProps): React.JSX.Element {
+  const { t } = useTranslation();
   const data = WORK_ORDER_STATUS_ORDER.map((status) => ({
     name: getWorkOrderStatusLabel(status),
     value: summary.statusCounts[status],
@@ -41,7 +43,7 @@ export function StatusDistributionChart({
   return (
     <div className="rounded-lg border border-border bg-card p-6">
       <h2 className="mb-5 text-sm font-medium text-card-foreground">
-        Raspodela statusa
+        {t("dashboard.charts.statusDistribution")}
       </h2>
       {!hasData ? (
         <p className="mt-8 text-center text-sm text-muted-foreground">

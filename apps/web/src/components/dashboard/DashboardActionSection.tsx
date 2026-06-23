@@ -3,15 +3,12 @@ import type {
   AttentionSignalCounts,
   ClientAttentionRow,
 } from "@/lib/dashboard/aggregations";
+import { useTranslation } from "react-i18next";
 import {
   CORE_ATTENTION_SIGNALS,
   INTERNAL_ATTENTION_SIGNALS,
 } from "@/lib/dashboard/aggregations";
-import {
-  ClientAttentionList,
-  SIGNAL_DESCRIPTIONS,
-  SIGNAL_LABELS,
-} from "@/components/dashboard/ClientAttentionList";
+import { ClientAttentionList } from "@/components/dashboard/ClientAttentionList";
 import {
   Tooltip,
   TooltipContent,
@@ -33,34 +30,35 @@ export function DashboardActionSection({
   activeSignal,
   onActiveSignalChange,
 }: DashboardActionSectionProps): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <section className="space-y-6">
       <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-        Operativa
+        {t("dashboard.action.operativa")}
       </div>
 
       {/* Za obradu — internal queue (materials, unassigned), shown first. */}
       <div>
         <div className="flex flex-col gap-1">
           <h2 className="text-[22px] font-normal tracking-[-0.4px] text-foreground">
-            Za obradu
+            {t("dashboard.action.toProcess")}
           </h2>
           <div className="text-[12px] text-[color:var(--iris-ink-soft)]">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span>Materijal {signalCounts.waitingForMaterials}</span>
+                <span>{t("dashboard.action.material")} {signalCounts.waitingForMaterials}</span>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                {SIGNAL_DESCRIPTIONS.waitingForMaterials}
+                {t("dashboard.signals.descriptions.waitingForMaterials")}
               </TooltipContent>
             </Tooltip>{" "}
             ·{" "}
             <Tooltip>
               <TooltipTrigger asChild>
-                <span>Nedodeljeno {signalCounts.unassigned}</span>
+                <span>{t("dashboard.action.unassigned")} {signalCounts.unassigned}</span>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                {SIGNAL_DESCRIPTIONS.unassigned}
+                {t("dashboard.signals.descriptions.unassigned")}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -69,7 +67,7 @@ export function DashboardActionSection({
           <ClientAttentionList
             rows={internalAttentionRows}
             signals={INTERNAL_ATTENTION_SIGNALS}
-            emptyMessage="Nema naloga za internu obradu."
+            emptyMessage={t("dashboard.action.internalEmpty")}
           />
         </div>
       </div>
@@ -79,10 +77,10 @@ export function DashboardActionSection({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-[22px] font-normal tracking-[-0.4px] text-foreground">
-              Rokovi i klijenti
+              {t("dashboard.action.deadlinesClients")}
             </h2>
             <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-              Po klijentu, od najhitnijeg ka manje hitnom
+              {t("dashboard.action.deadlinesSubtitle")}
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -102,14 +100,14 @@ export function DashboardActionSection({
                           : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                       }`}
                     >
-                      <span>{SIGNAL_LABELS[signal]}</span>
+                      <span>{t(`dashboard.signals.labels.${signal}`)}</span>
                       <span className="tnum text-[11px] opacity-80">
                         {signalCounts[signal]}
                       </span>
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    {SIGNAL_DESCRIPTIONS[signal]} Klik filtrira listu.
+                    {t(`dashboard.signals.descriptions.${signal}`)} {t("dashboard.action.clickFilters")}
                   </TooltipContent>
                 </Tooltip>
               );
@@ -122,7 +120,7 @@ export function DashboardActionSection({
             rows={clientAttentionRows}
             signals={CORE_ATTENTION_SIGNALS}
             activeSignal={activeSignal}
-            emptyMessage="Nema klijenata sa aktivnim signalima za pažnju."
+            emptyMessage={t("dashboard.action.clientEmpty")}
           />
         </div>
       </div>

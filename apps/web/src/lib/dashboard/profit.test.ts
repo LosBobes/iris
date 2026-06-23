@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   monthlyProfit,
   profitByCompany,
+  profitByItem,
   profitByKind,
   topCompaniesByProfit,
   totalRevenue,
@@ -136,5 +137,39 @@ describe('profitByCompany / topCompaniesByProfit', () => {
       order({ id: 'b', customerId: null, clientName: 'gamma doo' }, [line({})]),
     ]
     expect(profitByCompany(orders)).toHaveLength(1)
+  })
+})
+
+describe('profitByItem', () => {
+  it('groups lines by catalog item, splits by kind, and ranks by profit', () => {
+    const orders = [
+      order({ id: 'a' }, [
+        line({ id: 'l1', kind: 'service', catalogItemId: 'svc-1', description: 'Štampa', unitPrice: 100, unitCost: 40, quantity: 2 }), // 120
+        line({ id: 'l2', kind: 'goods', catalogItemId: 'art-1', description: 'Papir', unitPrice: 200, unitCost: 150, quantity: 1 }), // 50
+      ]),
+      order({ id: 'b' }, [
+        line({ id: 'l3', kind: 'service', catalogItemId: 'svc-1', description: 'Štampa', unitPrice: 100, unitCost: 40, quantity: 1 }), // 60 -> svc-1 total 180
+        line({ id: 'l4', kind: 'goods', catalogItemId: 'art-2', description: 'Koverte', unitPrice: 500, unitCost: 100, quantity: 1 }), // 400
+      ]),
+    ]
+    const { services, articles } = profitByItem(orders)
+
+    expect(services).toHaveLength(1)
+    expect(services[0]).toMatchObject({ catalogItemId: 'svc-1', name: 'Štampa', profit: 180, quantity: 3 })
+
+    expect(articles.map((a) => a.catalogItemId)).toEqual(['art-2', 'art-1'])
+    expect(articles[0]).toMatchObject({ name: 'Koverte', profit: 400, revenue: 500 })
+  })
+
+  it('groups ad-hoc lines (no catalog id) by normalized description', () => {
+    const orders = [
+      order({ id: 'a' }, [
+        line({ id: 'l1', catalogItemId: null, description: 'Sečenje', unitPrice: 100, unitCost: 0 }),
+        line({ id: 'l2', catalogItemId: null, description: 'sečenje', unitPrice: 100, unitCost: 0 }),
+      ]),
+    ]
+    const { services } = profitByItem(orders)
+    expect(services).toHaveLength(1)
+    expect(services[0]).toMatchObject({ catalogItemId: null, profit: 200 })
   })
 })

@@ -1,4 +1,8 @@
-import type { InvoiceLineItem, WorkOrder } from '@/types/work-order'
+import type {
+  InvoiceLineItem,
+  InvoiceLineItemKind,
+  WorkOrder,
+} from '@/types/work-order'
 import { normalizeClientGroupName } from '@/lib/dashboard/aggregations'
 
 // ---------------------------------------------------------------------------
@@ -37,6 +41,15 @@ export interface CompanyProfit {
   articleProfit: number
   revenue: number
   orderCount: number
+}
+
+/**
+ * The company grouping key for an order: its `customerId`, falling back to a
+ * normalized client name for orders without a linked customer. Shared so the
+ * per-company profit list and any company-scoped filtering agree on identity.
+ */
+export function workOrderGroupKey(order: WorkOrder): string {
+  return order.customerId ?? normalizeClientGroupName(order.clientName)
 }
 
 /** Per-unit margin of a line: (unitPrice - unitCost) * quantity. */
@@ -111,7 +124,7 @@ export function monthlyProfit(orders: WorkOrder[]): MonthlyProfit[] {
 export function profitByCompany(orders: WorkOrder[]): CompanyProfit[] {
   const rows = new Map<string, CompanyProfit & { latestUpdatedAt: string }>()
   for (const order of orders) {
-    const groupKey = order.customerId ?? normalizeClientGroupName(order.clientName)
+    const groupKey = workOrderGroupKey(order)
     const row =
       rows.get(groupKey) ??
       {
@@ -166,4 +179,66 @@ export function topCompaniesByProfit(
   n = 10,
 ): CompanyProfit[] {
   return profitByCompany(orders).slice(0, n)
+}
+
+/** A single catalog item / ad-hoc line aggregated across the period. */
+export interface ItemProfit {
+  groupKey: string
+  /** Set when the lines share a catalog item; null for ad-hoc lines. */
+  catalogItemId: string | null
+  name: string
+  kind: InvoiceLineItemKind
+  profit: number
+  revenue: number
+  /** Total billed quantity across the grouped lines. */
+  quantity: number
+}
+
+export interface ItemProfitBreakdown {
+  /** Service lines grouped by item, sorted by profit descending. */
+  services: ItemProfit[]
+  /** Article/goods lines grouped by item, sorted by profit descending. */
+  articles: ItemProfit[]
+}
+
+/**
+ * Breaks the by-kind usluge/artikli totals down into their individual line
+ * items: lines are grouped by catalog item (falling back to a normalized
+ * description for ad-hoc lines), split into services vs articles, and each list
+ * is sorted by profit descending. This is the per-item drill-down behind the
+ * aggregate service/article components shown elsewhere.
+ */
+export function profitByItem(orders: WorkOrder[]): ItemProfitBreakdown {
+  const rows = new Map<string, ItemProfit>()
+  for (const order of orders) {
+    for (const line of order.invoiceDraft.lineItems) {
+      const name = line.description.trim() || '—'
+      const baseKey = line.catalogItemId ?? `desc:${name.toLowerCase()}`
+      const groupKey = `${line.kind}:${baseKey}`
+      const row =
+        rows.get(groupKey) ??
+        {
+          groupKey,
+          catalogItemId: line.catalogItemId ?? null,
+          name,
+          kind: line.kind,
+          profit: 0,
+          revenue: 0,
+          quantity: 0,
+        }
+      row.profit += lineMargin(line)
+      row.revenue += lineRevenue(line)
+      row.quantity += line.quantity
+      rows.set(groupKey, row)
+    }
+  }
+
+  const byProfit = (a: ItemProfit, b: ItemProfit): number =>
+    b.profit - a.profit || a.name.localeCompare(b.name, 'sr-Latn')
+
+  const all = Array.from(rows.values())
+  return {
+    services: all.filter((row) => row.kind !== 'goods').sort(byProfit),
+    articles: all.filter((row) => row.kind === 'goods').sort(byProfit),
+  }
 }

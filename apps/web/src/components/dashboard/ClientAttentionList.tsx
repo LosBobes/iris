@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import i18n from "@/i18n";
 import type {
   AttentionSignal,
   ClientAttentionRow,
@@ -11,33 +13,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const SIGNAL_LABELS: Record<AttentionSignal, string> = {
-  overdue: "Kasni",
-  dueToday: "Danas",
-  dueThisWeek: "Ove nedelje",
-  waitingForCustomer: "Čeka klijenta",
-  waitingForMaterials: "Čeka materijal",
-  unassigned: "Nedodeljeni",
-};
-
-const SIGNAL_DESCRIPTIONS: Record<AttentionSignal, string> = {
-  overdue: "Nalozi kojima je rok prošao, a još nisu završeni.",
-  dueToday: "Nalozi sa rokom isporuke za danas.",
-  dueThisWeek: "Nalozi sa rokom u narednih 7 dana.",
-  waitingForCustomer: "Nalozi koji čekaju odgovor ili odobrenje klijenta.",
-  waitingForMaterials: "Nalozi zaustavljeni dok se ne nabavi materijal.",
-  unassigned: "Nalozi koji još nisu dodeljeni operateru.",
-};
-
-const SIGNAL_COUNT_LABELS: Record<AttentionSignal, string> = {
-  overdue: "kasni",
-  dueToday: "danas",
-  dueThisWeek: "ove nedelje",
-  waitingForCustomer: "čeka klijenta",
-  waitingForMaterials: "čeka materijal",
-  unassigned: "nedodeljeno",
-};
 
 const BADGE_STYLES: Record<AttentionSignal, string> = {
   overdue:
@@ -95,7 +70,10 @@ function getCountParts(
 ): string[] {
   return signals
     .filter((signal) => row.counts[signal] > 0)
-    .map((signal) => `${row.counts[signal]} ${SIGNAL_COUNT_LABELS[signal]}`);
+    .map(
+      (signal) =>
+        `${row.counts[signal]} ${i18n.t(`dashboard.signals.countLabels.${signal}`)}`,
+    );
 }
 
 interface ClientAttentionListProps {
@@ -111,6 +89,7 @@ export function ClientAttentionList({
   activeSignal = null,
   emptyMessage,
 }: ClientAttentionListProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
   const visibleRows = useMemo(() => {
@@ -150,11 +129,11 @@ export function ClientAttentionList({
                       <span
                         className={`whitespace-nowrap border px-2 py-0.5 text-[10px] uppercase tracking-[1px] ${BADGE_STYLES[primarySignal]}`}
                       >
-                        {SIGNAL_LABELS[primarySignal]}
+                        {t(`dashboard.signals.labels.${primarySignal}`)}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      {SIGNAL_DESCRIPTIONS[primarySignal]}
+                      {t(`dashboard.signals.descriptions.${primarySignal}`)}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -174,7 +153,10 @@ export function ClientAttentionList({
                   });
                 }}
                 className="iris-focusable iris-press flex h-8 w-8 shrink-0 items-center justify-center border border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
-                aria-label={`${isExpanded ? "Sakrij" : "Prikaži"} naloge za ${row.displayName}`}
+                aria-label={t("dashboard.attention.toggleAria", {
+                  action: isExpanded ? t("dashboard.attention.hide") : t("dashboard.attention.show"),
+                  name: row.displayName,
+                })}
               >
                 {isExpanded ? (
                   <ChevronDown className="h-3.5 w-3.5" />
@@ -205,7 +187,7 @@ export function ClientAttentionList({
                 </div>
                 {row.orders.length > 5 && (
                   <div className="mt-2 px-2 text-[11px] text-[color:var(--iris-ink-mute)]">
-                    Još {row.orders.length - 5} naloga
+                    {t("dashboard.attention.moreOrders", { count: row.orders.length - 5 })}
                   </div>
                 )}
               </div>
@@ -216,5 +198,3 @@ export function ClientAttentionList({
     </div>
   );
 }
-
-export { SIGNAL_LABELS, SIGNAL_DESCRIPTIONS };

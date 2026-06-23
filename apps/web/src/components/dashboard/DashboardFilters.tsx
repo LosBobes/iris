@@ -1,4 +1,5 @@
 import { parse } from "date-fns";
+import { useTranslation } from "react-i18next";
 import type { DashboardFilters } from "@/types/work-order";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -14,6 +15,7 @@ export function DashboardFilters({
   setFilters,
   operators,
 }: DashboardFiltersProps): React.JSX.Element {
+  const { t } = useTranslation();
   const isActive =
     filters.dateFrom !== null ||
     filters.dateTo !== null ||
@@ -26,13 +28,13 @@ export function DashboardFilters({
           htmlFor="filter-date-from"
           className="text-xs text-muted-foreground"
         >
-          Od datuma
+          {t("dashboard.filters.dateFrom")}
         </label>
         <DatePicker
           id="filter-date-from"
           value={filters.dateFrom}
           onChange={(dateFrom) => setFilters((prev) => ({ ...prev, dateFrom }))}
-          placeholder="Od datuma"
+          placeholder={t("dashboard.filters.dateFrom")}
           toDate={filters.dateTo ? parse(filters.dateTo, "yyyy-MM-dd", new Date()) : undefined}
         />
       </div>
@@ -42,13 +44,13 @@ export function DashboardFilters({
           htmlFor="filter-date-to"
           className="text-xs text-muted-foreground"
         >
-          Do datuma
+          {t("dashboard.filters.dateTo")}
         </label>
         <DatePicker
           id="filter-date-to"
           value={filters.dateTo}
           onChange={(dateTo) => setFilters((prev) => ({ ...prev, dateTo }))}
-          placeholder="Do datuma"
+          placeholder={t("dashboard.filters.dateTo")}
           fromDate={filters.dateFrom ? parse(filters.dateFrom, "yyyy-MM-dd", new Date()) : undefined}
         />
       </div>
@@ -58,7 +60,7 @@ export function DashboardFilters({
           htmlFor="filter-operator"
           className="text-xs text-muted-foreground"
         >
-          Operater
+          {t("dashboard.filters.operator")}
         </label>
         <select
           id="filter-operator"
@@ -71,7 +73,7 @@ export function DashboardFilters({
           }
           className="iris-focusable h-8 border border-input bg-background px-2 text-xs text-foreground transition-colors duration-150 hover:border-foreground/40"
         >
-          <option value="">Svi operateri</option>
+          <option value="">{t("dashboard.filters.allOperators")}</option>
           {operators.map((op) => (
             <option key={op} value={op}>
               {op}
@@ -88,7 +90,7 @@ export function DashboardFilters({
         }
         disabled={!isActive}
       >
-        Resetuj
+        {t("dashboard.filters.reset")}
       </Button>
     </div>
   );

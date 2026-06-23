@@ -14,9 +14,11 @@ import {
 } from '@/lib/dashboard/aggregations'
 import {
   monthlyProfit,
+  profitByItem,
   profitByKind,
   profitByCompany,
   totalRevenue,
+  workOrderGroupKey,
 } from '@/lib/dashboard/profit'
 import { getLocalIsoDate } from '@/shared/utils/work-orders'
 import { useAuth } from '@/hooks/useAuth'
@@ -33,6 +35,8 @@ export function useDashboardData() {
   const [operators, setOperators] = useState<string[]>([])
   const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS)
   const [activeSignal, setActiveSignal] = useState<AttentionSignal | null>(null)
+  // Company whose orders scope the per-item breakdown; null = all companies.
+  const [selectedCompanyKey, setSelectedCompanyKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -80,6 +84,20 @@ export function useDashboardData() {
   const monthlyProfitList = useMemo(() => monthlyProfit(filtered), [filtered])
   const companyProfitList = useMemo(() => profitByCompany(filtered), [filtered])
 
+  // Per-item breakdown, optionally scoped to a single company's orders so the
+  // widget can drill from "all companies" into one selected company.
+  const itemBreakdownOrders = useMemo(
+    () =>
+      selectedCompanyKey
+        ? filtered.filter((order) => workOrderGroupKey(order) === selectedCompanyKey)
+        : filtered,
+    [filtered, selectedCompanyKey],
+  )
+  const itemProfit = useMemo(
+    () => profitByItem(itemBreakdownOrders),
+    [itemBreakdownOrders],
+  )
+
   const clientAttentionRows = useMemo(
     () => buildClientAttentionRows(allOrders, CORE_ATTENTION_SIGNALS),
     [allOrders]
@@ -116,6 +134,9 @@ export function useDashboardData() {
     profitRevenue,
     monthlyProfit: monthlyProfitList,
     companyProfit: companyProfitList,
+    itemProfit,
+    selectedCompanyKey,
+    setSelectedCompanyKey,
     queueSummary,
     operators,
     filters,

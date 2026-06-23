@@ -1,10 +1,12 @@
 import { Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardActionSection } from '@/components/dashboard/DashboardActionSection'
 import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const {
     summary,
     monthlyOrders,
@@ -15,6 +17,9 @@ function DashboardPage(): React.JSX.Element {
     profitRevenue,
     monthlyProfit,
     companyProfit,
+    itemProfit,
+    selectedCompanyKey,
+    setSelectedCompanyKey,
     operators,
     filters,
     setFilters,
@@ -57,7 +62,7 @@ function DashboardPage(): React.JSX.Element {
               style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
             >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Učitavanje podataka...</span>
+              <span className="text-sm">{t('dashboard.loading')}</span>
             </div>
           </div>
         )}
@@ -93,6 +98,9 @@ function DashboardPage(): React.JSX.Element {
                 profitRevenue={profitRevenue}
                 monthlyProfit={monthlyProfit}
                 companyProfit={companyProfit}
+                itemProfit={itemProfit}
+                selectedCompanyKey={selectedCompanyKey}
+                setSelectedCompanyKey={setSelectedCompanyKey}
                 operators={operators}
                 filters={filters}
                 setFilters={setFilters}

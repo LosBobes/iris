@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { DashboardSummary } from '@/types/work-order'
 
 const formatRsd = (amount: number): string =>
@@ -39,6 +40,7 @@ interface DashboardSummaryCardsProps {
 export function DashboardSummaryCards({
   summary,
 }: DashboardSummaryCardsProps): React.JSX.Element {
+  const { t } = useTranslation()
   const openOrders =
     summary.statusCounts.new +
     summary.statusCounts.assigned +
@@ -48,11 +50,11 @@ export function DashboardSummaryCards({
 
   return (
     <div className="flex border border-border bg-card">
-      <SummaryCell label="Ukupno naloga" value={summary.totalOrders} delayMs={120} />
-      <SummaryCell label="Završeni" value={summary.statusCounts.completed} delayMs={180} />
-      <SummaryCell label="Otvoreni" value={openOrders} delayMs={240} />
+      <SummaryCell label={t('dashboard.summary.totalOrders')} value={summary.totalOrders} delayMs={120} />
+      <SummaryCell label={t('dashboard.summary.completed')} value={summary.statusCounts.completed} delayMs={180} />
+      <SummaryCell label={t('dashboard.summary.open')} value={openOrders} delayMs={240} />
       <SummaryCell
-        label="Ukupan prihod"
+        label={t('dashboard.summary.totalRevenue')}
         value={formatRsd(summary.totalRevenue)}
         isLast
         delayMs={300}
