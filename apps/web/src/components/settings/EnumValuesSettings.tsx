@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, ListPlus, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,16 +9,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import i18n from "@/i18n";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import type { EnumField, EnumValue } from "@/types/work-order";
-
-const FIELD_LABELS: Record<EnumField, string> = {
-  deliveryMethod: "Način dostave",
-  postagePaymentType: "Plaćanje poštarine",
-  billingDocumentType: "Tip dokumenta za naplatu",
-  priority: "Prioritet",
-  invoiceUnit: "Jedinica mere",
-};
 
 const FIELD_ORDER: EnumField[] = [
   "deliveryMethod",
@@ -47,10 +41,11 @@ function slugifyValue(label: string): string {
 }
 
 function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : "Došlo je do greške.";
+  return err instanceof Error ? err.message : i18n.t("settings.enums.genericError");
 }
 
 export function EnumValuesSettings(): React.JSX.Element {
+  const { t } = useTranslation();
   const { values, loading, error, optionsFor, createValue, updateValue, deleteValue } =
     useEnumValues();
 
@@ -60,18 +55,17 @@ export function EnumValuesSettings(): React.JSX.Element {
         <ListPlus size={16} className="text-[color:var(--iris-accent)]" />
         <div>
           <div className="text-[13px] font-medium text-foreground">
-            Vrednosti šifarnika
+            {t("settings.enums.title")}
           </div>
           <div className="text-[11px] text-[color:var(--iris-ink-soft)]">
-            Dodajte sopstvene opcije za padajuće liste radnih naloga. Ugrađene
-            vrednosti su zaključane.
+            {t("settings.enums.hint")}
           </div>
         </div>
       </div>
 
       {loading && (
         <div className="px-5 py-6 text-[12px] text-[color:var(--iris-ink-soft)]">
-          Učitavanje...
+          {t("settings.enums.loading")}
         </div>
       )}
 
@@ -117,6 +111,7 @@ function EnumFieldGroup({
   onUpdate,
   onDelete,
 }: EnumFieldGroupProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [newLabel, setNewLabel] = useState("");
   const [newValue, setNewValue] = useState("");
   const [busy, setBusy] = useState(false);
@@ -126,11 +121,11 @@ function EnumFieldGroup({
     const label = newLabel.trim();
     const value = (newValue.trim() || slugifyValue(label)).trim();
     if (!label || !value) {
-      toast.error("Unesite naziv vrednosti.");
+      toast.error(t("settings.enums.enterName"));
       return;
     }
     if (existingValues.includes(value)) {
-      toast.error("Vrednost sa istom šifrom već postoji.");
+      toast.error(t("settings.enums.dupCode"));
       return;
     }
     setBusy(true);
@@ -138,7 +133,7 @@ function EnumFieldGroup({
       await onCreate({ field, value, label, sortOrder: rows.length });
       setNewLabel("");
       setNewValue("");
-      toast.success("Vrednost je dodata.");
+      toast.success(t("settings.enums.added"));
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -150,7 +145,7 @@ function EnumFieldGroup({
     setBusy(true);
     try {
       await onDelete(row.id);
-      toast.success("Vrednost je obrisana.");
+      toast.success(t("settings.enums.deleted"));
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -161,7 +156,7 @@ function EnumFieldGroup({
   return (
     <div className="px-5 py-4">
       <div className="text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-        {FIELD_LABELS[field]}
+        {t(`settings.enums.fields.${field}`)}
       </div>
 
       <ul className="mt-2 space-y-1.5">
@@ -180,7 +175,7 @@ function EnumFieldGroup({
                     sortOrder: row.sortOrder,
                   });
                   setEditingId(null);
-                  toast.success("Vrednost je sačuvana.");
+                  toast.success(t("settings.enums.updated"));
                 } catch (err) {
                   toast.error(errorMessage(err));
                 }
@@ -201,24 +196,24 @@ function EnumFieldGroup({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="flex items-center gap-1 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                      <Lock size={11} /> Ugrađeno
+                      <Lock size={11} /> {t("settings.enums.builtin")}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="left">
-                    Podrazumevana vrednost — ne može se menjati ni brisati.
+                    {t("settings.enums.builtinTooltip")}
                   </TooltipContent>
                 </Tooltip>
               ) : (
                 <div className="flex items-center gap-1">
                   <IconButton
-                    label="Izmeni"
+                    label={t("settings.enums.edit")}
                     onClick={() => setEditingId(row.id)}
                     disabled={busy}
                   >
                     <Pencil size={13} />
                   </IconButton>
                   <IconButton
-                    label="Obriši"
+                    label={t("settings.enums.delete")}
                     onClick={() => handleDelete(row)}
                     disabled={busy}
                   >
@@ -235,7 +230,7 @@ function EnumFieldGroup({
         <Input
           value={newLabel}
           onChange={(event) => setNewLabel(event.target.value)}
-          placeholder="Naziv (npr. Dostava dronom)"
+          placeholder={t(`settings.enums.placeholders.${field}`)}
           className="h-9 text-[13px]"
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -247,7 +242,7 @@ function EnumFieldGroup({
         <Input
           value={newValue}
           onChange={(event) => setNewValue(event.target.value)}
-          placeholder="Šifra (opciono)"
+          placeholder={t("settings.enums.codePlaceholder")}
           className="h-9 text-[13px] sm:max-w-[160px]"
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -264,7 +259,7 @@ function EnumFieldGroup({
           disabled={busy}
           className="shrink-0"
         >
-          <Plus size={14} /> Dodaj
+          <Plus size={14} /> {t("settings.enums.addButton")}
         </Button>
       </div>
     </div>
@@ -278,13 +273,14 @@ interface EnumEditRowProps {
 }
 
 function EnumEditRow({ row, onCancel, onSave }: EnumEditRowProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [label, setLabel] = useState(row.label);
   const [value, setValue] = useState(row.value);
   const [busy, setBusy] = useState(false);
 
   const save = async (): Promise<void> => {
     if (!label.trim() || !value.trim()) {
-      toast.error("Naziv i šifra su obavezni.");
+      toast.error(t("settings.enums.nameCodeRequired"));
       return;
     }
     setBusy(true);
@@ -301,19 +297,19 @@ function EnumEditRow({ row, onCancel, onSave }: EnumEditRowProps): React.JSX.Ele
         value={label}
         onChange={(event) => setLabel(event.target.value)}
         className="h-8 text-[13px]"
-        aria-label="Naziv"
+        aria-label={t("settings.enums.nameAria")}
       />
       <Input
         value={value}
         onChange={(event) => setValue(event.target.value)}
         className="h-8 text-[13px] sm:max-w-[160px]"
-        aria-label="Šifra"
+        aria-label={t("settings.enums.codeAria")}
       />
       <div className="flex items-center gap-1">
-        <IconButton label="Sačuvaj" onClick={() => void save()} disabled={busy}>
+        <IconButton label={t("settings.enums.save")} onClick={() => void save()} disabled={busy}>
           <Check size={14} />
         </IconButton>
-        <IconButton label="Otkaži" onClick={onCancel} disabled={busy}>
+        <IconButton label={t("settings.enums.cancel")} onClick={onCancel} disabled={busy}>
           <X size={14} />
         </IconButton>
       </div>

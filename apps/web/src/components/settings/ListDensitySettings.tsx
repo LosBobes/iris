@@ -1,4 +1,5 @@
 import { Check, Rows3 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useListPreferences } from "@/hooks/useListPreferences";
 import { DENSITY_OPTIONS } from "@/lib/list-preferences";
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/select";
 
 export function ListDensitySettings(): React.JSX.Element {
+  const { t } = useTranslation();
   const { density, setDensity, defaultPageSize, setDefaultPageSize } =
     useListPreferences();
 
@@ -21,17 +23,17 @@ export function ListDensitySettings(): React.JSX.Element {
         <Rows3 size={16} className="text-[color:var(--iris-accent)]" />
         <div>
           <div className="text-[13px] font-medium text-foreground">
-            Lista radnih naloga
+            {t("settings.density.title")}
           </div>
           <div className="text-[11px] text-[color:var(--iris-ink-soft)]">
-            Gustina prikaza i podrazumevani broj redova
+            {t("settings.density.hint")}
           </div>
         </div>
       </div>
 
       <div
         role="radiogroup"
-        aria-label="Gustina liste"
+        aria-label={t("settings.density.aria")}
         className="grid gap-2 p-5 sm:grid-cols-2"
       >
         {DENSITY_OPTIONS.map((option) => {
@@ -52,10 +54,10 @@ export function ListDensitySettings(): React.JSX.Element {
             >
               <span className="min-w-0">
                 <span className="block text-[13px] font-medium text-foreground">
-                  {option.label}
+                  {t(`settings.density.${option.value}`)}
                 </span>
                 <span className="block text-[11px] text-[color:var(--iris-ink-soft)]">
-                  {option.hint}
+                  {t(`settings.density.${option.value}Hint`)}
                 </span>
               </span>
               <span
@@ -77,10 +79,10 @@ export function ListDensitySettings(): React.JSX.Element {
       <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
         <div>
           <div className="text-[13px] font-medium text-foreground">
-            Redova po strani
+            {t("settings.density.rowsPerPage")}
           </div>
           <div className="text-[11px] text-[color:var(--iris-ink-soft)]">
-            Primenjuje se kad otvorite listu bez izabrane veličine
+            {t("settings.density.rowsPerPageHint")}
           </div>
         </div>
         <Select
