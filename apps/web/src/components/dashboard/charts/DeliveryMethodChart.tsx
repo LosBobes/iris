@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import type { DeliveryMethod } from "@/types/work-order";
 import type { DeliveryCount } from "@/lib/dashboard/aggregations";
-import { WORK_ORDER_DELIVERY_LABELS } from "@/shared/utils/work-orders";
+import { getWorkOrderDeliveryLabel } from "@/shared/utils/work-orders";
 
 interface DeliveryMethodChartProps {
   deliveryDistribution: DeliveryCount[];
@@ -19,7 +19,7 @@ export function DeliveryMethodChart({
   deliveryDistribution,
 }: DeliveryMethodChartProps): React.JSX.Element {
   const data = deliveryDistribution.map(({ method, count }) => ({
-    label: WORK_ORDER_DELIVERY_LABELS[method as DeliveryMethod],
+    label: getWorkOrderDeliveryLabel(method as DeliveryMethod),
     count,
   }));
 

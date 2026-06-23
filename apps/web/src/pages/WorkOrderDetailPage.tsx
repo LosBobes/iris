@@ -11,8 +11,8 @@ import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet
 import type { Location, WorkOrder } from "@/types/work-order";
 import {
   buildWorkOrderCustomerNotice,
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
+  getWorkOrderBillingDocumentLabel,
+  getWorkOrderDeliveryLabel,
   getWorkOrderStatusLabel,
   getPrimaryWorkOrderTransition,
   formatWorkOrderEventLabel,
@@ -389,7 +389,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     [
       "Tip dokumenta",
       order.billingDocumentType
-        ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+        ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
         : "-",
     ],
     ["Operater", order.assignment.assignedTo ?? "Nedodeljeno"],
@@ -398,7 +398,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     [
       "Dostava",
       order.shipping.deliveryMethod
-        ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
+        ? getWorkOrderDeliveryLabel(order.shipping.deliveryMethod)
         : "-",
     ],
     ["Rok", order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],

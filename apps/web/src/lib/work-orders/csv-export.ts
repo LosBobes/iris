@@ -8,8 +8,8 @@ import {
   type WorkOrderColumnKey,
 } from "@/lib/work-order-columns";
 import {
-  WORK_ORDER_BILLING_LABELS,
   formatWorkOrderDate,
+  getWorkOrderBillingDocumentLabel,
   getWorkOrderPriorityLabel,
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
@@ -29,7 +29,7 @@ function exportCellValue(order: WorkOrder, key: WorkOrderColumnKey): string {
       return getWorkOrderPriorityLabel(order.assignment.priority);
     case "billing":
       return order.billingDocumentType
-        ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+        ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
         : "";
     case "schedule": {
       const date = order.assignment.scheduledDate ?? order.dueDate;

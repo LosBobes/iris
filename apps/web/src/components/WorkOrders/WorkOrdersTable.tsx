@@ -37,11 +37,11 @@ import {
   type WorkOrderColumnKey,
 } from "@/lib/work-order-columns";
 import {
-  WORK_ORDER_BILLING_LABELS,
   canToggleWorkOrderCompletion,
   formatWorkOrderDate,
   formatWorkOrderPrice,
   getPrimaryWorkOrderTransition,
+  getWorkOrderBillingDocumentLabel,
   getWorkOrderPriorityLabel,
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
@@ -81,7 +81,7 @@ function renderColumnCell(
       return {
         className: "px-4 text-[color:var(--iris-ink-soft)]",
         content: order.billingDocumentType
-          ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+          ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
           : "-",
       };
     case "schedule":
