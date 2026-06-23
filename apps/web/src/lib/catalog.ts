@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 import type { CatalogItem, CatalogItemInput, CatalogItemKind } from "@/types/catalog";
 
 export const emptyCatalogItem: CatalogItem = {
@@ -19,7 +20,9 @@ export const emptyCatalogItem: CatalogItem = {
  * price (nabavna cena), services a cost of labor (cena rada).
  */
 export function costPriceLabel(kind: CatalogItemKind): string {
-  return kind === "service" ? "Cena rada (RSD)" : "Nabavna cena (RSD)";
+  return kind === "service"
+    ? i18n.t("catalog.costLabelService")
+    : i18n.t("catalog.costLabelArticle");
 }
 
 const priceFormatter = new Intl.NumberFormat("sr-RS", {
@@ -34,7 +37,9 @@ export function formatCatalogPrice(price: number | null): string {
 }
 
 export function kindLabel(kind: CatalogItemKind): string {
-  return kind === "service" ? "Usluga" : "Artikal";
+  return kind === "service"
+    ? i18n.t("catalog.kindService")
+    : i18n.t("catalog.kindArticle");
 }
 
 /** Maps an editable catalog item to the input payload the API expects. */

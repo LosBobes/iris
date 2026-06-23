@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import type { Customer } from "@/types/work-order";
 const PAGE_SIZE = 25;
 
 function CustomersPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -29,11 +31,11 @@ function CustomersPage(): React.JSX.Element {
       setCustomers(result.items);
       setTotal(result.total);
     } catch {
-      toast.error("Greška pri učitavanju klijenata.");
+      toast.error(t("customers.loadError"));
     } finally {
       setLoading(false);
     }
-  }, [queryKey]);
+  }, [queryKey, t]);
 
   useEffect(() => {
     void load();
@@ -47,13 +49,13 @@ function CustomersPage(): React.JSX.Element {
         <div className="animate-iris-enter flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div>
             <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-              Iris · klijenti
+              {t("customers.eyebrow")}
             </div>
             <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-              Klijenti
+              {t("customers.title")}
             </h1>
             <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-              Izaberite klijenta za detalje i lokacije
+              {t("customers.subtitle")}
             </div>
           </div>
           <button
@@ -62,7 +64,7 @@ function CustomersPage(): React.JSX.Element {
             className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
           >
             <Plus className="h-4 w-4" />
-            Novi klijent
+            {t("customers.newClient")}
           </button>
         </div>
 
@@ -75,28 +77,26 @@ function CustomersPage(): React.JSX.Element {
                 setSearch(event.target.value);
                 setPage(0);
               }}
-              placeholder="Pretraga po nazivu, PIB-u ili matičnom broju"
+              placeholder={t("customers.searchPlaceholder")}
               className="block w-full border border-border bg-background py-2 pl-8 pr-2 text-[13px] text-foreground"
             />
           </div>
 
           <section className="min-w-0 border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-3 text-[13px] font-medium">
-              <span>Klijenti</span>
+              <span>{t("customers.title")}</span>
               <span className="text-[11px] font-normal text-[color:var(--iris-ink-soft)]">
-                {loading ? "" : `${total} ukupno`}
+                {loading ? "" : t("customers.totalCount", { count: total })}
               </span>
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Učitavanje klijenata...
+                {t("customers.loading")}
               </div>
             ) : customers.length === 0 ? (
               <div className="px-4 py-10 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
-                {search
-                  ? "Nema klijenata za zadatu pretragu."
-                  : "Još nema klijenata. Dodajte prvog dugmetom „Novi klijent“."}
+                {search ? t("customers.emptySearch") : t("customers.empty")}
               </div>
             ) : (
               <ul className="divide-y divide-[color:var(--iris-border-soft)]">

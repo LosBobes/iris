@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Loader2, Plus, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -13,16 +14,17 @@ type KindFilter = "all" | CatalogItemKind;
 
 const CATALOG_PAGE_SIZE = 25;
 
-const KIND_TABS: TabItem<KindFilter>[] = [
-  { value: "service", label: "Usluge" },
-  { value: "article", label: "Artikli" },
-  { value: "all", label: "Sve" },
-];
-
 function CatalogPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
+
+  const kindTabs: TabItem<KindFilter>[] = [
+    { value: "service", label: t("catalog.tabService") },
+    { value: "article", label: t("catalog.tabArticle") },
+    { value: "all", label: t("catalog.tabAll") },
+  ];
 
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
@@ -55,15 +57,15 @@ function CatalogPage(): React.JSX.Element {
         <div className="animate-iris-enter flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div>
             <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-              Iris · katalog
+              {t("catalog.eyebrow")}
             </div>
             <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-              Usluge i artikli
+              {t("catalog.title")}
             </h1>
             <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
               {isAdmin
-                ? "Izaberite stavku za izmenu ili dodajte novu"
-                : "Pregled usluga i artikala za radne naloge"}
+                ? t("catalog.adminSubtitle")
+                : t("catalog.operatorSubtitle")}
             </div>
           </div>
           {isAdmin && (
@@ -73,7 +75,7 @@ function CatalogPage(): React.JSX.Element {
               className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
             >
               <Plus className="h-4 w-4" />
-              Nova stavka
+              {t("catalog.newItem")}
             </button>
           )}
         </div>
@@ -81,17 +83,17 @@ function CatalogPage(): React.JSX.Element {
         <div className="space-y-4 px-5 pb-8 sm:px-8">
           <div className="flex flex-wrap items-center gap-3">
             <Tabs
-              tabs={KIND_TABS}
+              tabs={kindTabs}
               value={kindFilter}
               onValueChange={changeKind}
-              aria-label="Filter kataloga"
+              aria-label={t("catalog.filterAria")}
             />
             <div className="relative ml-auto min-w-[220px] flex-1 sm:max-w-xs">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--iris-ink-mute)]" />
               <input
                 value={search}
                 onChange={(event) => changeSearch(event.target.value)}
-                placeholder="Pretraga po nazivu ili šifri"
+                placeholder={t("catalog.searchPlaceholder")}
                 className="block w-full border border-border bg-background py-2 pl-8 pr-2 text-[13px] text-foreground"
               />
             </div>
@@ -99,23 +101,23 @@ function CatalogPage(): React.JSX.Element {
 
           <section className="min-w-0 border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-3 text-[13px] font-medium">
-              <span>Stavke</span>
+              <span>{t("catalog.items")}</span>
               <span className="text-[11px] font-normal text-[color:var(--iris-ink-soft)]">
-                {loading ? "" : `${total} ukupno`}
+                {loading ? "" : t("catalog.totalCount", { count: total })}
               </span>
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Učitavanje kataloga...
+                {t("catalog.loading")}
               </div>
             ) : items.length === 0 ? (
               <div className="px-4 py-10 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
                 {search || kindFilter !== "all"
-                  ? "Nema stavki za izabrane filtere."
+                  ? t("catalog.emptyFilters")
                   : isAdmin
-                    ? "Još nema stavki. Dodajte prvu dugmetom „Nova stavka“."
-                    : "Još nema stavki u katalogu."}
+                    ? t("catalog.emptyAdmin")
+                    : t("catalog.empty")}
               </div>
             ) : (
               <ul className="divide-y divide-[color:var(--iris-border-soft)]">
@@ -136,7 +138,7 @@ function CatalogPage(): React.JSX.Element {
                           </span>
                           {!item.isActive && (
                             <span className="shrink-0 text-[10px] uppercase tracking-wide text-[color:var(--iris-status-cancelled)]">
-                              neaktivno
+                              {t("catalog.inactive")}
                             </span>
                           )}
                         </span>
