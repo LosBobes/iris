@@ -178,6 +178,8 @@ function createInvoiceLineItem(
     quantity: 1,
     unit: "kom",
     unitPrice: 0,
+    // Ad-hoc line: cost unknown until an admin enters it (flags cost review).
+    unitCost: null,
     catalogItemId: null,
   };
 }
@@ -195,6 +197,8 @@ function createInvoiceLineItemFromCatalog(
     quantity: 1,
     unit: normalizeInvoiceUnit(kind, item.unit),
     unitPrice: item.salePrice ?? 0,
+    // Catalog cost is captured server-side at save time from the item's history.
+    unitCost: null,
     catalogItemId: item.id,
   };
 }
@@ -213,6 +217,7 @@ function normalizeInvoiceLineItem(
     quantity: line.quantity ?? 1,
     unit,
     unitPrice: line.unitPrice ?? 0,
+    unitCost: line.unitCost ?? null,
     catalogItemId: line.catalogItemId ?? null,
   };
 }
@@ -1373,7 +1378,7 @@ export function WorkOrderForm({
                         key={lineItem.id}
                         className={`grid grid-cols-1 gap-4 border-b border-[color:var(--iris-border-soft)] pb-4 last:border-b-0 last:pb-0 ${
                           isAdmin
-                            ? "xl:grid-cols-[120px_minmax(0,1fr)_80px_100px_110px_36px]"
+                            ? "xl:grid-cols-[110px_minmax(0,1fr)_70px_90px_100px_100px_36px]"
                             : "xl:grid-cols-[120px_minmax(0,1fr)_80px_100px_36px]"
                         }`}
                       >
@@ -1514,6 +1519,45 @@ export function WorkOrderForm({
                             />
                           </FieldShell>
                         )}
+
+                        {isAdmin &&
+                          (invoiceLineItems[index]?.catalogItemId ? (
+                            // Catalog-line cost is captured server-side from the
+                            // item's price history; show it read-only.
+                            <FieldShell
+                              id={`invoiceDraft.lineItems.${index}.unitCost`}
+                              label="Trošak"
+                              hint="iz kataloga"
+                            >
+                              <div className="tnum py-1 text-[13px] text-[color:var(--iris-ink-mute)]">
+                                {invoiceLineItems[index]?.unitCost != null
+                                  ? invoiceLineItems[index]!.unitCost
+                                  : "—"}
+                              </div>
+                            </FieldShell>
+                          ) : (
+                            // Ad-hoc line: admin enters the cost; empty flags review.
+                            <FieldShell
+                              id={`invoiceDraft.lineItems.${index}.unitCost`}
+                              label="Trošak"
+                              error={lineItemError?.unitCost?.message}
+                            >
+                              <input
+                                id={`invoiceDraft.lineItems.${index}.unitCost`}
+                                type="number"
+                                step="0.01"
+                                placeholder="—"
+                                className={`${underlineInput} tnum`}
+                                {...register(
+                                  `invoiceDraft.lineItems.${index}.unitCost` as const,
+                                  {
+                                    setValueAs: (v: string) =>
+                                      v === "" ? null : Number(v),
+                                  },
+                                )}
+                              />
+                            </FieldShell>
+                          ))}
 
                         <div className="self-end">
                           <button

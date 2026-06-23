@@ -208,6 +208,47 @@ CREATE TABLE IF NOT EXISTS app_settings (
 INSERT OR IGNORE INTO app_settings(key, value) VALUES ('firm_name', 'Grafika Čobanović');
 `
 
+// catalogCostHistoryMigration adds an effective-dated cost-history table
+// (1-N to catalog_items). The store appends a new record whenever an admin
+// changes an item's price, so work orders can snapshot the cost in effect on
+// their issue/completion date rather than the latest one. The current price
+// columns on catalog_items remain the cached "now" value (= the open record).
+// Existing items are backfilled with one open record from their current prices,
+// effective from the item's creation date.
+const catalogCostHistoryMigration = `
+CREATE TABLE IF NOT EXISTS catalog_item_price_history (
+	id TEXT PRIMARY KEY,
+	catalog_item_id TEXT NOT NULL REFERENCES catalog_items(id) ON DELETE CASCADE,
+	purchase_price REAL,
+	sale_price REAL,
+	effective_from TEXT NOT NULL,
+	effective_to TEXT,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_price_history_item
+	ON catalog_item_price_history(catalog_item_id, effective_from);
+
+INSERT INTO catalog_item_price_history(id, catalog_item_id, purchase_price, sale_price, effective_from, effective_to, created_at)
+SELECT
+	'cph-' || id,
+	id,
+	purchase_price,
+	sale_price,
+	substr(COALESCE(created_at, CURRENT_TIMESTAMP), 1, 10),
+	NULL,
+	COALESCE(created_at, CURRENT_TIMESTAMP)
+FROM catalog_items;
+`
+
+// workOrderCostReviewMigration adds a queryable flag for the admin cost-review
+// queue. The authoritative value also lives in the JSON payload; this column is
+// kept in sync on write so the list endpoint can filter without scanning JSON.
+const workOrderCostReviewMigration = `
+ALTER TABLE work_orders ADD COLUMN needs_cost_review INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_work_orders_needs_cost_review ON work_orders(needs_cost_review);
+`
+
 // sqliteMigrations is the ordered list of schema versions. Each entry is applied
 // once, in order, and recorded in schema_migrations so existing databases pick
 // up later versions on the next startup.
@@ -221,6 +262,8 @@ var sqliteMigrations = []struct {
 	{version: 4, sql: customerIdentifiersMigration},
 	{version: 5, sql: catalogPricesMigration},
 	{version: 6, sql: appSettingsMigration},
+	{version: 7, sql: catalogCostHistoryMigration},
+	{version: 8, sql: workOrderCostReviewMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

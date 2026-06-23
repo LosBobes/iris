@@ -107,6 +107,7 @@ func (s *Server) Routes() http.Handler {
 		protected.Delete("/enum-values/{id}", s.requireAdmin(s.handleDeleteEnumValue))
 		protected.Get("/catalog-items", s.handleCatalogItems)
 		protected.Get("/catalog-items/{id}", s.handleCatalogItemByID)
+		protected.Get("/catalog-items/{id}/cost-history", s.requireAdmin(s.handleCatalogItemCostHistory))
 		protected.Post("/catalog-items", s.requireAdmin(s.handleUpsertCatalogItem))
 		protected.Put("/catalog-items/{id}", s.requireAdmin(s.handleUpsertCatalogItem))
 		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
@@ -421,11 +422,13 @@ func (s *Server) handleWorkOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 // stripWorkOrderCost removes the admin-only cost and margin figures (cached
-// profit and per-line UnitCost) so regular operators never receive cost data.
+// profit, per-line UnitCost, and the cost-review flag) so regular operators
+// never receive cost data.
 func stripWorkOrderCost(workOrder *domain.WorkOrder) {
 	workOrder.Profit = nil
+	workOrder.NeedsCostReview = false
 	for i := range workOrder.InvoiceDraft.LineItems {
-		workOrder.InvoiceDraft.LineItems[i].UnitCost = 0
+		workOrder.InvoiceDraft.LineItems[i].UnitCost = nil
 	}
 }
 
@@ -434,9 +437,10 @@ func stripWorkOrderCost(workOrder *domain.WorkOrder) {
 func stripWorkOrderRenderMoney(workOrder *domain.WorkOrder) {
 	workOrder.Price = nil
 	workOrder.Profit = nil
+	workOrder.NeedsCostReview = false
 	for i := range workOrder.InvoiceDraft.LineItems {
 		workOrder.InvoiceDraft.LineItems[i].UnitPrice = 0
-		workOrder.InvoiceDraft.LineItems[i].UnitCost = 0
+		workOrder.InvoiceDraft.LineItems[i].UnitCost = nil
 	}
 }
 
@@ -456,9 +460,12 @@ func parseWorkOrderListQuery(r *http.Request) store.WorkOrderListQuery {
 		AssignedTo: values.Get("assignedTo"),
 		DateFrom:   values.Get("dateFrom"),
 		DateTo:     values.Get("dateTo"),
-		Limit:      limit,
-		Offset:     offset,
-		Sort:       values.Get("sort"),
+		// The cost-review queue is admin-only; ignore the filter for operators so
+		// they can't enumerate which orders await cost entry.
+		NeedsCostReview: isAdmin(r) && values.Get("needsCostReview") == "true",
+		Limit:           limit,
+		Offset:          offset,
+		Sort:            values.Get("sort"),
 	}
 }
 

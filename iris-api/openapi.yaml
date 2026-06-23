@@ -293,6 +293,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /catalog-items/{id}/cost-history:
+    get:
+      tags: [Catalog]
+      summary: Return a catalog item's effective-dated cost history (admin only)
+      operationId: getCatalogItemCostHistory
+      description: >-
+        Lists the item's cost records newest period first. The store appends a
+        record whenever an admin changes the item's price, so work orders can
+        snapshot the cost in effect on their issue/completion date.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cost history records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CatalogItemCost'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /settings:
     get:
       tags: [Settings]
@@ -468,6 +501,13 @@ paths:
           schema:
             type: string
             format: date
+        - name: needsCostReview
+          in: query
+          description: >-
+            When `true`, returns only orders awaiting cost entry (the admin
+            review queue). Admin-only — ignored for non-admin sessions.
+          schema:
+            type: boolean
         - name: limit
           in: query
           schema:
@@ -923,12 +963,16 @@ components:
           type: number
           format: double
         unitCost:
-          type: number
+          type: [number, 'null']
           format: double
           description: >-
-            Per-unit cost captured from the linked catalog item's purchasePrice
-            at save time (margin = unitPrice - unitCost). Server-derived, never
-            sent by clients, and returned as 0 to non-admin users.
+            Per-unit cost frozen onto the line at save time: for catalog lines the
+            catalog cost in effect at the issue date (re-snapshot to the completion
+            date when the order completes); for ad-hoc lines a value an admin
+            enters by hand. Null means the cost is not yet captured (an ad-hoc line
+            awaiting admin review, or an item with no known cost) — distinct from a
+            genuine 0. Margin = unitPrice - unitCost. Admin-only: returned as null
+            to non-admin users.
         catalogItemId:
           type: [string, 'null']
           description: >-
@@ -975,6 +1019,32 @@ components:
           type: string
           format: date-time
         updatedAt:
+          type: string
+          format: date-time
+    CatalogItemCost:
+      type: object
+      required: [id, catalogItemId, effectiveFrom, createdAt]
+      description: >-
+        One effective-dated cost record in a catalog item's price history. A null
+        effectiveTo marks the currently-effective record.
+      properties:
+        id:
+          type: string
+        catalogItemId:
+          type: string
+        purchasePrice:
+          type: [number, 'null']
+          format: double
+        salePrice:
+          type: [number, 'null']
+          format: double
+        effectiveFrom:
+          type: string
+          format: date
+        effectiveTo:
+          type: [string, 'null']
+          format: date
+        createdAt:
           type: string
           format: date-time
     OrganizationSettings:
@@ -1098,9 +1168,19 @@ components:
           format: double
           description: >-
             Cached margin (sum of (unitPrice - unitCost) * quantity over line
-            items), recomputed on every save. Admin-only — omitted/null for
-            non-admin users.
+            items with a captured cost), recomputed on every save. Provisional
+            while needsCostReview is true. Admin-only — omitted/null for non-admin
+            users.
           example: 4200
+        needsCostReview:
+          type: boolean
+          description: >-
+            True when any line item has no captured cost (unitCost null) — usually
+            ad-hoc lines an operator added. Such orders are not blocked: they save,
+            raise a cost_review event, and appear in the admin review queue
+            (GET /work-orders?needsCostReview=true) until an admin enters the
+            missing costs. Admin-only — returned false to non-admin users.
+          example: false
         note:
           type: [string, 'null']
           example: Hitno

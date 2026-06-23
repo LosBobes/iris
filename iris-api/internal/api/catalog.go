@@ -75,6 +75,17 @@ func (s *Server) handleCatalogItemByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+// handleCatalogItemCostHistory returns an item's effective-dated cost records
+// (admin only) for the catalog detail view, newest period first.
+func (s *Server) handleCatalogItemCostHistory(w http.ResponseWriter, r *http.Request) {
+	history, err := s.store.CatalogItemCostHistory(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": history})
+}
+
 func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request) {
 	var input domain.CatalogItemInput
 	if !decodeJSONBody(w, r, &input) {

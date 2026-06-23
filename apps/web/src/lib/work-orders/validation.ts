@@ -89,6 +89,9 @@ const invoiceLineItemSchema = z
     quantity: z.number().int().positive(),
     unit: invoiceUnitEnum,
     unitPrice: z.number().min(0),
+    // Per-unit cost. Server-derived for catalog lines; for ad-hoc lines an admin
+    // may enter it. null/absent = not yet captured (flags the order for review).
+    unitCost: z.number().min(0).nullable().optional(),
     // Set when the line was added from the catalog; null for ad-hoc services.
     catalogItemId: z.string().nullable().optional(),
   })

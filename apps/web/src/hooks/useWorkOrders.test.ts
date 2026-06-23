@@ -158,6 +158,36 @@ describe("work order filter query params", () => {
     ).toEqual(["RN-old", "RN-new"]);
   });
 
+  it("filters to orders needing cost review when the flag is set", () => {
+    const orders = [
+      makeOrder({ id: "needs", orderNumber: "RN-needs", needsCostReview: true }),
+      makeOrder({ id: "ok", orderNumber: "RN-ok", needsCostReview: false }),
+    ];
+
+    const base = {
+      search: "",
+      customerId: "",
+      status: "all" as const,
+      billingDocumentType: "all" as const,
+      deliveryMethod: "all" as const,
+      queue: "all" as const,
+      dateFrom: "",
+      dateTo: "",
+    };
+
+    expect(
+      filterWorkOrdersForList(orders, { ...base, needsCostReview: true }).map(
+        (order) => order.orderNumber,
+      ),
+    ).toEqual(["RN-needs"]);
+
+    expect(
+      filterWorkOrdersForList(orders, { ...base, needsCostReview: false }).map(
+        (order) => order.orderNumber,
+      ),
+    ).toEqual(["RN-needs", "RN-ok"]);
+  });
+
   it("matches search across operator, priority, document type and price", () => {
     const orders = [
       makeOrder({

@@ -287,7 +287,9 @@ func TestCostDataHiddenFromNonAdmin(t *testing.T) {
 	if adminOrder.Profit == nil || *adminOrder.Profit != 360 {
 		t.Fatalf("admin order profit = %v, want 360", adminOrder.Profit)
 	}
-	if len(adminOrder.InvoiceDraft.LineItems) != 1 || adminOrder.InvoiceDraft.LineItems[0].UnitCost != 120 {
+	if len(adminOrder.InvoiceDraft.LineItems) != 1 ||
+		adminOrder.InvoiceDraft.LineItems[0].UnitCost == nil ||
+		*adminOrder.InvoiceDraft.LineItems[0].UnitCost != 120 {
 		t.Fatalf("admin line unitCost = %#v, want 120", adminOrder.InvoiceDraft.LineItems)
 	}
 
@@ -300,7 +302,7 @@ func TestCostDataHiddenFromNonAdmin(t *testing.T) {
 	if userOrder.Profit != nil {
 		t.Errorf("non-admin profit = %v, want nil", *userOrder.Profit)
 	}
-	if len(userOrder.InvoiceDraft.LineItems) != 1 || userOrder.InvoiceDraft.LineItems[0].UnitCost != 0 {
-		t.Errorf("non-admin line unitCost = %#v, want 0", userOrder.InvoiceDraft.LineItems)
+	if len(userOrder.InvoiceDraft.LineItems) != 1 || userOrder.InvoiceDraft.LineItems[0].UnitCost != nil {
+		t.Errorf("non-admin line unitCost = %#v, want nil", userOrder.InvoiceDraft.LineItems)
 	}
 }

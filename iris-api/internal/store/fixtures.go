@@ -441,8 +441,13 @@ func (s *FixtureStore) CreateWorkOrder(
 		Communication: normalizeCommunication(input.Communication, sequence, nil),
 	}
 
-	prices := s.catalogPurchasePricesLocked(catalogItemIDs(newOrder.InvoiceDraft.LineItems))
-	newOrder.InvoiceDraft.LineItems, newOrder.Profit = applyLineItemCosts(newOrder.InvoiceDraft.LineItems, prices)
+	costs := s.catalogPurchasePricesLocked(catalogItemIDs(newOrder.InvoiceDraft.LineItems))
+	newOrder.InvoiceDraft.LineItems, newOrder.Profit, newOrder.NeedsCostReview = applyLineItemCosts(
+		newOrder.InvoiceDraft.LineItems, costs, nil, costModeCreate,
+	)
+	if newOrder.NeedsCostReview {
+		newOrder.Events = applyCostReviewEvents(newOrder.Events, false, true, input.IssuedBy, now)
+	}
 
 	s.workOrders = append(s.workOrders, newOrder)
 	return cloneWorkOrder(newOrder), nil
@@ -472,8 +477,22 @@ func (s *FixtureStore) UpdateWorkOrder(
 		}
 
 		updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-		prices := s.catalogPurchasePricesLocked(catalogItemIDs(updated.InvoiceDraft.LineItems))
-		updated.InvoiceDraft.LineItems, updated.Profit = applyLineItemCosts(updated.InvoiceDraft.LineItems, prices)
+		// The fixture store has no cost history, so the current catalog price is
+		// the as-of cost; the create/completion/preserve modes still apply.
+		mode := costModePreserve
+		if !workOrder.IsCompleted && updated.IsCompleted {
+			mode = costModeCompletion
+		}
+		costs := s.catalogPurchasePricesLocked(catalogItemIDs(updated.InvoiceDraft.LineItems))
+		wasNeeded := workOrder.NeedsCostReview
+		updated.InvoiceDraft.LineItems, updated.Profit, updated.NeedsCostReview = applyLineItemCosts(
+			updated.InvoiceDraft.LineItems, costs, workOrder.InvoiceDraft.LineItems, mode,
+		)
+		actor := updated.IssuedBy
+		if updated.ExecutedBy != nil && *updated.ExecutedBy != "" {
+			actor = *updated.ExecutedBy
+		}
+		updated.Events = applyCostReviewEvents(updated.Events, wasNeeded, updated.NeedsCostReview, actor, updated.UpdatedAt)
 		s.workOrders[index] = updated
 		return cloneWorkOrder(updated), nil
 	}
@@ -681,6 +700,9 @@ func filterWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) [
 			continue
 		}
 		if query.DateTo != "" && workOrder.IssueDate > query.DateTo {
+			continue
+		}
+		if query.NeedsCostReview && !workOrder.NeedsCostReview {
 			continue
 		}
 		filtered = append(filtered, workOrder)

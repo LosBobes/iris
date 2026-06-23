@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Copy, FileText, Loader2, Trash2, X } from "lucide-react";
+import { ArrowLeft, Coins, Copy, FileText, Loader2, Trash2, X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
@@ -223,11 +223,17 @@ function WorkOrderDetailPage(): React.JSX.Element {
           {order && (
             <div className="flex flex-wrap items-start justify-between gap-y-3">
               <div>
-                <div className="flex items-baseline gap-3.5">
+                <div className="flex flex-wrap items-baseline gap-3.5">
                   <div className="tnum text-[28px] font-normal tracking-[-0.5px] text-foreground">
                     {order.orderNumber}
                   </div>
                   <IrisBadge status={order.status} />
+                  {isAdmin && order.needsCostReview && (
+                    <span className="inline-flex items-center gap-1 border border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-2 py-0.5 text-[11px] font-medium text-[color:var(--iris-accent)]">
+                      <Coins className="h-3 w-3" />
+                      Čeka unos troška
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 text-[14px] text-[color:var(--iris-ink-soft)]">
                   {order.jobDescription} ·{" "}

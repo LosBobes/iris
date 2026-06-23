@@ -408,7 +408,7 @@ func (s *SQLiteStore) CreateWorkOrder(
 	// SQLite pool is single-connection, so querying inside the open tx would
 	// deadlock waiting for the connection the tx already holds.
 	draft := normalizeInvoiceDraft(input.InvoiceDraft, input.JobDescription, input.Price)
-	prices, err := s.catalogPurchasePrices(ctx, catalogItemIDs(draft.LineItems))
+	costs, err := s.catalogCostsAsOf(ctx, catalogItemIDs(draft.LineItems), input.IssueDate)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,12 @@ func (s *SQLiteStore) CreateWorkOrder(
 		Communication: normalizeCommunication(input.Communication, sequence, nil),
 	}
 
-	workOrder.InvoiceDraft.LineItems, workOrder.Profit = applyLineItemCosts(workOrder.InvoiceDraft.LineItems, prices)
+	workOrder.InvoiceDraft.LineItems, workOrder.Profit, workOrder.NeedsCostReview = applyLineItemCosts(
+		workOrder.InvoiceDraft.LineItems, costs, nil, costModeCreate,
+	)
+	if workOrder.NeedsCostReview {
+		workOrder.Events = applyCostReviewEvents(workOrder.Events, false, true, input.IssuedBy, now)
+	}
 
 	if err := putWorkOrder(ctx, tx, workOrder); err != nil {
 		return nil, err
@@ -495,11 +500,34 @@ func (s *SQLiteStore) UpdateWorkOrder(
 		return nil, err
 	}
 	updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	prices, err := s.catalogPurchasePrices(ctx, catalogItemIDs(updated.InvoiceDraft.LineItems))
+
+	// Pick the cost-capture mode: freeze on completion (re-snapshot from the
+	// completion-date cost, the final authoritative value), otherwise preserve
+	// already-frozen costs and only cost genuinely new catalog lines.
+	mode := costModePreserve
+	costDate := updated.IssueDate
+	if !current.IsCompleted && updated.IsCompleted {
+		mode = costModeCompletion
+		if updated.CompletionDate != nil {
+			costDate = *updated.CompletionDate
+		} else {
+			costDate = time.Now().UTC().Format("2006-01-02")
+		}
+	}
+	costs, err := s.catalogCostsAsOf(ctx, catalogItemIDs(updated.InvoiceDraft.LineItems), costDate)
 	if err != nil {
 		return nil, err
 	}
-	updated.InvoiceDraft.LineItems, updated.Profit = applyLineItemCosts(updated.InvoiceDraft.LineItems, prices)
+	wasNeeded := current.NeedsCostReview
+	updated.InvoiceDraft.LineItems, updated.Profit, updated.NeedsCostReview = applyLineItemCosts(
+		updated.InvoiceDraft.LineItems, costs, current.InvoiceDraft.LineItems, mode,
+	)
+	actor := updated.IssuedBy
+	if updated.ExecutedBy != nil && *updated.ExecutedBy != "" {
+		actor = *updated.ExecutedBy
+	}
+	updated.Events = applyCostReviewEvents(updated.Events, wasNeeded, updated.NeedsCostReview, actor, updated.UpdatedAt)
+
 	if err := s.PutWorkOrder(ctx, updated); err != nil {
 		return nil, err
 	}
@@ -575,9 +603,9 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 		ctx,
 		`INSERT INTO work_orders(
 		   id, order_number, customer_id, location_id, client_name, job_description,
-		   issued_by, assigned_to, status, issue_date, due_date, price, payload,
-		   created_at, updated_at
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		   issued_by, assigned_to, status, issue_date, due_date, price, needs_cost_review,
+		   payload, created_at, updated_at
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   order_number = excluded.order_number,
 		   customer_id = excluded.customer_id,
@@ -590,6 +618,7 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 		   issue_date = excluded.issue_date,
 		   due_date = excluded.due_date,
 		   price = excluded.price,
+		   needs_cost_review = excluded.needs_cost_review,
 		   payload = excluded.payload,
 		   created_at = excluded.created_at,
 		   updated_at = excluded.updated_at`,
@@ -605,6 +634,7 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 		workOrder.IssueDate,
 		ptrStringValue(workOrder.DueDate),
 		ptrFloatValue(workOrder.Price),
+		boolInt(workOrder.NeedsCostReview),
 		string(payload),
 		workOrder.CreatedAt,
 		workOrder.UpdatedAt,
@@ -709,6 +739,9 @@ func buildWorkOrderWhere(query WorkOrderListQuery) (string, []any) {
 	if query.DateTo != "" {
 		clauses = append(clauses, `issue_date <= ?`)
 		args = append(args, query.DateTo)
+	}
+	if query.NeedsCostReview {
+		clauses = append(clauses, `needs_cost_review = 1`)
 	}
 	if len(clauses) == 0 {
 		return "", args

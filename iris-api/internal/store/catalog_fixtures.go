@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
@@ -64,6 +65,38 @@ func (s *FixtureStore) CatalogItemByID(_ context.Context, id string) (*domain.Ca
 		}
 	}
 	return nil, nil
+}
+
+// CatalogItemCostHistory returns the item's current price as a single open
+// record. The fixture store does not model historical price periods (that is a
+// SQLite-only concern), so it reports just the present value.
+func (s *FixtureStore) CatalogItemCostHistory(
+	_ context.Context,
+	catalogItemID string,
+) ([]domain.CatalogItemCost, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, item := range s.catalogItems {
+		if item.ID == catalogItemID {
+			from := item.CreatedAt
+			if from == "" {
+				from = time.Now().UTC().Format("2006-01-02")
+			} else if len(from) >= 10 {
+				from = from[:10]
+			}
+			return []domain.CatalogItemCost{{
+				ID:            "cph-" + item.ID,
+				CatalogItemID: item.ID,
+				PurchasePrice: item.PurchasePrice,
+				SalePrice:     item.SalePrice,
+				EffectiveFrom: from,
+				EffectiveTo:   nil,
+				CreatedAt:     item.CreatedAt,
+			}}, nil
+		}
+	}
+	return []domain.CatalogItemCost{}, nil
 }
 
 // UpsertCatalogItem creates or replaces an item in the in-memory catalog.

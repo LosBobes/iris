@@ -43,6 +43,8 @@ export interface WorkOrdersFiltersState {
   customerId: string;
   dateFrom: string;
   dateTo: string;
+  /** Admin-only: show only orders awaiting cost entry. */
+  needsCostReview: boolean;
 }
 
 export interface UseWorkOrdersResult {
@@ -76,6 +78,7 @@ const INITIAL_FILTERS: WorkOrdersFiltersState = {
   customerId: "",
   dateFrom: "",
   dateTo: "",
+  needsCostReview: false,
 };
 
 const QUEUE_VALUES = ["all", "unassigned", "overdue", "today", "thisWeek"] as const;
@@ -129,6 +132,7 @@ export function filtersFromSearchParams(
     customerId: searchParams.get("customerId") ?? "",
     dateFrom: searchParams.get("dateFrom") ?? "",
     dateTo: searchParams.get("dateTo") ?? "",
+    needsCostReview: searchParams.get("needsCostReview") === "true",
   };
 }
 
@@ -149,6 +153,7 @@ export function filtersToSearchParams(
   if (filters.customerId) searchParams.set("customerId", filters.customerId);
   if (filters.dateFrom) searchParams.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) searchParams.set("dateTo", filters.dateTo);
+  if (filters.needsCostReview) searchParams.set("needsCostReview", "true");
 
   return searchParams;
 }
@@ -165,7 +170,8 @@ function areFiltersEqual(
     left.queue === right.queue &&
     left.customerId === right.customerId &&
     left.dateFrom === right.dateFrom &&
-    left.dateTo === right.dateTo
+    left.dateTo === right.dateTo &&
+    left.needsCostReview === right.needsCostReview
   );
 }
 
@@ -241,6 +247,7 @@ export function filterWorkOrdersForList(
     }
     if (filters.dateFrom && order.issueDate < filters.dateFrom) return false;
     if (filters.dateTo && order.issueDate > filters.dateTo) return false;
+    if (filters.needsCostReview && !order.needsCostReview) return false;
     return true;
   });
 }

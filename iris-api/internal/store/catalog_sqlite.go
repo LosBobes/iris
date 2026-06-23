@@ -105,7 +105,15 @@ func (s *SQLiteStore) UpsertCatalogItem(
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = s.db.ExecContext(
+	today := time.Now().UTC().Format("2006-01-02")
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin upsert catalog item: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	_, err = tx.ExecContext(
 		ctx,
 		`INSERT INTO catalog_items(id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -142,47 +150,21 @@ func (s *SQLiteStore) UpsertCatalogItem(
 		return nil, fmt.Errorf("upsert catalog item: %w", err)
 	}
 
+	// Append an effective-dated cost record when the price changed (or seed the
+	// first record for a new item), so work orders can snapshot historical cost.
+	if err := recordCatalogCost(ctx, tx, normalized.ID, normalized.PurchasePrice, normalized.SalePrice, today); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit upsert catalog item: %w", err)
+	}
+
 	normalized.UpdatedAt = now
 	if normalized.CreatedAt == "" {
 		normalized.CreatedAt = now
 	}
 	return &normalized, nil
-}
-
-// catalogPurchasePrices returns purchase (cost) prices keyed by catalog item id
-// for the given ids, used to capture line-item cost when saving a work order.
-// Items with no stored purchase price are omitted (treated as zero cost).
-func (s *SQLiteStore) catalogPurchasePrices(ctx context.Context, ids []string) (map[string]float64, error) {
-	prices := make(map[string]float64, len(ids))
-	if len(ids) == 0 {
-		return prices, nil
-	}
-	placeholders := make([]string, len(ids))
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	rows, err := s.db.QueryContext(
-		ctx,
-		`SELECT id, purchase_price FROM catalog_items WHERE id IN (`+strings.Join(placeholders, ",")+`)`,
-		args...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("load catalog purchase prices: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id string
-		var price sql.NullFloat64
-		if err := rows.Scan(&id, &price); err != nil {
-			return nil, fmt.Errorf("scan catalog purchase price: %w", err)
-		}
-		if price.Valid {
-			prices[id] = price.Float64
-		}
-	}
-	return prices, rows.Err()
 }
 
 // serbianDiacritics maps Serbian Latin diacritics to their ASCII equivalents.

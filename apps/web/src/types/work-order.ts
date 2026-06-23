@@ -175,10 +175,12 @@ export interface InvoiceLineItem {
   quantity: number
   unit: InvoiceUnit
   unitPrice: number
-  // Per-unit cost captured from the catalog item's purchasePrice at save time
-  // (margin = unitPrice - unitCost). Server-derived and admin-only: the API
-  // returns 0 for non-admin users. Optional because clients never send it.
-  unitCost?: number
+  // Per-unit cost frozen onto the line at save time: catalog cost as of the
+  // issue date (re-snapshot to completion date on completion) for catalog lines,
+  // or an admin-entered value for ad-hoc lines. null = cost not yet captured
+  // (ad-hoc line awaiting admin review), distinct from a genuine 0. Admin-only:
+  // the API returns null for non-admin users. Margin = unitPrice - unitCost.
+  unitCost?: number | null
   // Set when the line was picked from the catalog; null for ad-hoc services.
   catalogItemId?: string | null
 }
@@ -225,11 +227,17 @@ export interface WorkOrder {
   /** Null means unbilled / price not yet set */
   price: number | null
   /**
-   * Cached margin: sum of (unitPrice - unitCost) * quantity over line items,
-   * recomputed server-side on every save. Admin-only — null/absent for
-   * non-admin users.
+   * Cached margin: sum of (unitPrice - unitCost) * quantity over line items
+   * with a captured cost, recomputed server-side on every save. Provisional
+   * while needsCostReview is true. Admin-only — null/absent for non-admin users.
    */
   profit?: number | null
+  /**
+   * True when any line item has no captured cost (usually ad-hoc lines). Such
+   * orders save normally but appear in the admin cost-review queue until an
+   * admin enters the missing costs. Admin-only — false for non-admin users.
+   */
+  needsCostReview?: boolean
   note: string | null
   /** ISO-8601 datetime string */
   createdAt: string
@@ -331,6 +339,8 @@ export interface WorkOrderListQuery {
   assignedTo?: string
   dateFrom?: string
   dateTo?: string
+  /** Admin-only: when true, returns only orders awaiting cost entry. */
+  needsCostReview?: boolean
   limit?: number
   offset?: number
   sort?: string

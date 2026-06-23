@@ -8,14 +8,15 @@ import (
 )
 
 type WorkOrderListQuery struct {
-	Search     string
-	Status     domain.WorkOrderStatus
-	AssignedTo string
-	DateFrom   string
-	DateTo     string
-	Limit      int
-	Offset     int
-	Sort       string
+	Search          string
+	Status          domain.WorkOrderStatus
+	AssignedTo      string
+	DateFrom        string
+	DateTo          string
+	NeedsCostReview bool
+	Limit           int
+	Offset          int
+	Sort            string
 }
 
 type WorkOrderListResult struct {
@@ -81,6 +82,7 @@ type Store interface {
 
 	CatalogItems(ctx context.Context, query CatalogItemQuery) (CatalogItemListResult, error)
 	CatalogItemByID(ctx context.Context, id string) (*domain.CatalogItem, error)
+	CatalogItemCostHistory(ctx context.Context, catalogItemID string) ([]domain.CatalogItemCost, error)
 	UpsertCatalogItem(ctx context.Context, item domain.CatalogItem) (*domain.CatalogItem, error)
 	DeleteCatalogItem(ctx context.Context, id string) error
 

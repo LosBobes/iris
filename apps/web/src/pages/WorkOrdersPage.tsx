@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Inbox, Loader2, Plus, SearchX } from "lucide-react";
+import { Coins, Download, Inbox, Loader2, Plus, SearchX } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -140,7 +140,8 @@ function WorkOrdersPage(): React.JSX.Element {
     filters.queue !== "all" ||
     filters.customerId !== "" ||
     filters.dateFrom !== "" ||
-    filters.dateTo !== "";
+    filters.dateTo !== "" ||
+    filters.needsCostReview;
 
   return (
     <AppShell>
@@ -161,6 +162,23 @@ function WorkOrdersPage(): React.JSX.Element {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateFilters({ needsCostReview: !filters.needsCostReview })
+                  }
+                  aria-pressed={filters.needsCostReview}
+                  className={`iris-focusable iris-press flex items-center gap-1.5 border px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] ${
+                    filters.needsCostReview
+                      ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
+                      : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
+                  }`}
+                >
+                  <Coins className="h-3.5 w-3.5" />
+                  Čeka unos troška
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleExportCsv}
