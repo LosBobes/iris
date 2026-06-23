@@ -66,7 +66,21 @@ export function DashboardCompanyProfit({
                   {selected.name}
                 </div>
                 <dl className="divide-y divide-[color:var(--iris-border-soft)] text-[12px]">
-                  <SelectedStat label="Zarada" value={formatRsd(selected.profit)} emphasize />
+                  <SelectedStat
+                    label="Zarada (ukupno)"
+                    value={formatRsd(selected.profit)}
+                    emphasize
+                  />
+                  <SelectedStat
+                    label="— Usluge"
+                    value={formatRsd(selected.serviceProfit)}
+                    muted
+                  />
+                  <SelectedStat
+                    label="— Artikli"
+                    value={formatRsd(selected.articleProfit)}
+                    muted
+                  />
                   <SelectedStat
                     label="Marža"
                     value={formatMarginPct(selected.profit, selected.revenue)}
@@ -131,20 +145,32 @@ function SelectedStat({
   label,
   value,
   emphasize,
+  muted,
 }: {
   label: string;
   value: string;
   emphasize?: boolean;
+  muted?: boolean;
 }): React.JSX.Element {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2">
-      <dt className="shrink-0 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+      <dt
+        className={[
+          "shrink-0 uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]",
+          muted ? "text-[9px]" : "text-[10px]",
+        ].join(" ")}
+      >
         {label}
       </dt>
       <dd
         className={[
-          "tnum min-w-0 truncate text-right text-[14px]",
-          emphasize ? "font-medium text-foreground" : "text-[color:var(--iris-ink-soft)]",
+          "tnum min-w-0 truncate text-right",
+          muted ? "text-[12px]" : "text-[14px]",
+          emphasize
+            ? "font-medium text-foreground"
+            : muted
+              ? "text-[color:var(--iris-ink-mute)]"
+              : "text-[color:var(--iris-ink-soft)]",
         ].join(" ")}
       >
         {value}

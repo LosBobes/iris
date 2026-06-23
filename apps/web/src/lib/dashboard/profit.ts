@@ -31,6 +31,10 @@ export interface CompanyProfit {
   customerId: string | null
   name: string
   profit: number
+  /** Profit contributed by service lines (invoice kind 'service'). */
+  serviceProfit: number
+  /** Profit contributed by article/goods lines (invoice kind 'goods'). */
+  articleProfit: number
   revenue: number
   orderCount: number
 }
@@ -115,6 +119,8 @@ export function profitByCompany(orders: WorkOrder[]): CompanyProfit[] {
         customerId: order.customerId,
         name: order.clientName,
         profit: 0,
+        serviceProfit: 0,
+        articleProfit: 0,
         revenue: 0,
         orderCount: 0,
         latestUpdatedAt: order.updatedAt,
@@ -125,7 +131,13 @@ export function profitByCompany(orders: WorkOrder[]): CompanyProfit[] {
       row.latestUpdatedAt = order.updatedAt
     }
     for (const line of order.invoiceDraft.lineItems) {
-      row.profit += lineMargin(line)
+      const margin = lineMargin(line)
+      row.profit += margin
+      if (line.kind === 'goods') {
+        row.articleProfit += margin
+      } else {
+        row.serviceProfit += margin
+      }
       row.revenue += lineRevenue(line)
     }
     row.orderCount++
@@ -138,6 +150,8 @@ export function profitByCompany(orders: WorkOrder[]): CompanyProfit[] {
       customerId: row.customerId,
       name: row.name,
       profit: row.profit,
+      serviceProfit: row.serviceProfit,
+      articleProfit: row.articleProfit,
       revenue: row.revenue,
       orderCount: row.orderCount,
     }))

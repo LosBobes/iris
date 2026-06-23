@@ -11,7 +11,6 @@ import {
   LogOut,
   LayoutDashboard,
   ClipboardList,
-  PlusCircle,
   Package,
   ChevronLeft,
   ChevronRight,
@@ -30,7 +29,6 @@ interface NavItemDef {
 const NAV_ITEMS: NavItemDef[] = [
   { label: "Kontrolna tabla", to: "/", end: true, icon: LayoutDashboard },
   { label: "Radni nalozi", to: "/work-orders", icon: ClipboardList },
-  { label: "Novi nalog", to: "/work-orders/new", icon: PlusCircle },
   { label: "Katalog", to: "/catalog", icon: Package },
 ];
 
