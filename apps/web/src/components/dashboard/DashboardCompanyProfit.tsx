@@ -156,7 +156,7 @@ function SelectedStat({
     <div className="flex items-baseline justify-between gap-3 py-2">
       <dt
         className={[
-          "shrink-0 uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]",
+          "min-w-0 truncate uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]",
           muted ? "text-[9px]" : "text-[10px]",
         ].join(" ")}
       >
@@ -164,7 +164,7 @@ function SelectedStat({
       </dt>
       <dd
         className={[
-          "tnum min-w-0 truncate text-right",
+          "tnum shrink-0 whitespace-nowrap text-right",
           muted ? "text-[12px]" : "text-[14px]",
           emphasize
             ? "font-medium text-foreground"

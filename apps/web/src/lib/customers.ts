@@ -1,4 +1,5 @@
-import { isValidMb, isValidPib, MB_ERROR, PIB_ERROR } from "@/lib/serbian-id";
+import i18n from "@/i18n";
+import { isValidMb, isValidPib } from "@/lib/serbian-id";
 import type { Customer, Location } from "@/types/work-order";
 
 export const emptyCustomer: Customer = {
@@ -26,16 +27,16 @@ export function validateCustomerIdentifiers(
 ): string | null {
   const pib = (customer.pib ?? "").trim();
   const mb = (customer.mb ?? "").trim();
-  if (isNew && pib === "") return "PIB je obavezan za nove firme.";
-  if (isNew && mb === "") return "Matični broj je obavezan za nove firme.";
-  if (pib !== "" && !isValidPib(pib)) return PIB_ERROR;
-  if (mb !== "" && !isValidMb(mb)) return MB_ERROR;
+  if (isNew && pib === "") return i18n.t("customerDetail.pibRequired");
+  if (isNew && mb === "") return i18n.t("customerDetail.mbRequired");
+  if (pib !== "" && !isValidPib(pib)) return i18n.t("customerDetail.pibError");
+  if (mb !== "" && !isValidMb(mb)) return i18n.t("customerDetail.mbError");
   return null;
 }
 
 export function getMissingLocationFields(location: Location): string[] {
   const missing: string[] = [];
-  if (!location.name.trim()) missing.push("Naziv");
+  if (!location.name.trim()) missing.push(i18n.t("customerDetail.fieldNameShort"));
   return missing;
 }
 

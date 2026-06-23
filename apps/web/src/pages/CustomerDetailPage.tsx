@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2, MapPin, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ type DeleteTarget =
   | { kind: "location"; id: string; name: string };
 
 function CustomerDetailPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id: string }>();
   const isNew = routeId === undefined || routeId === "new";
@@ -60,11 +62,11 @@ function CustomerDetailPage(): React.JSX.Element {
       setCustomer(found);
       setLocations(allLocations.filter((location) => location.customerId === routeId));
     } catch {
-      toast.error("Greška pri učitavanju klijenta.");
+      toast.error(t("customerDetail.loadError"));
     } finally {
       setLoading(false);
     }
-  }, [isNew, routeId]);
+  }, [isNew, routeId, t]);
 
   useEffect(() => {
     void load();
@@ -72,7 +74,7 @@ function CustomerDetailPage(): React.JSX.Element {
 
   const saveCustomer = useCallback(async () => {
     if (!customer.name.trim()) {
-      toast.error("Naziv klijenta je obavezan.");
+      toast.error(t("customerDetail.nameRequired"));
       return;
     }
     const identifierError = validateCustomerIdentifiers(customer, isNew);
@@ -92,24 +94,24 @@ function CustomerDetailPage(): React.JSX.Element {
         mb: blankToNull(customer.mb),
       };
       const saved = await window.api.upsertCustomer(payload);
-      toast.success("Klijent je sačuvan.");
+      toast.success(t("customerDetail.saved"));
       if (isNew) {
         navigate(`/customers/${encodeURIComponent(saved.id)}`, { replace: true });
       } else {
         setCustomer(saved);
       }
     } catch (error) {
-      toast.error(formatActionError("Greška pri čuvanju klijenta", error));
+      toast.error(formatActionError(t("customerDetail.saveError"), error));
     } finally {
       setSaving(false);
     }
-  }, [customer, isNew, navigate]);
+  }, [customer, isNew, navigate, t]);
 
   const saveLocation = useCallback(async () => {
     if (!locationDraft) return;
     const missing = getMissingLocationFields(locationDraft);
     if (missing.length > 0) {
-      toast.error(`Popunite obavezna polja lokacije: ${missing.join(", ")}.`);
+      toast.error(t("customerDetail.locMissing", { fields: missing.join(", ") }));
       return;
     }
     try {
@@ -127,39 +129,41 @@ function CustomerDetailPage(): React.JSX.Element {
           : [...current, saved];
       });
       setLocationDraft(null);
-      toast.success("Lokacija je sačuvana.");
+      toast.success(t("customerDetail.locSaved"));
     } catch (error) {
-      toast.error(formatActionError("Greška pri čuvanju lokacije", error));
+      toast.error(formatActionError(t("customerDetail.locSaveError"), error));
     }
-  }, [locationDraft, customer.id]);
+  }, [locationDraft, customer.id, t]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
     try {
       if (deleteTarget.kind === "customer") {
         await window.api.deleteCustomer(customer.id);
-        toast.success("Klijent je obrisan.");
+        toast.success(t("customerDetail.clientDeleted"));
         navigate("/customers");
         return;
       }
       await window.api.deleteLocation(deleteTarget.id);
       setLocations((current) => removeLocation(current, deleteTarget.id));
-      toast.success("Lokacija je obrisana.");
+      toast.success(t("customerDetail.locDeleted"));
     } catch {
-      toast.error("Greška pri brisanju.");
+      toast.error(t("customerDetail.deleteError"));
     } finally {
       setDeleteTarget(null);
     }
-  }, [deleteTarget, customer.id, navigate]);
+  }, [deleteTarget, customer.id, navigate, t]);
 
-  const title = isNew ? "Novi klijent" : customer.name || "Klijent";
+  const title = isNew
+    ? t("customers.newClient")
+    : customer.name || t("customerDetail.clientFallback");
 
   if (loading) {
     return (
       <AppShell>
         <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Učitavanje klijenta...
+          {t("customerDetail.loading")}
         </div>
       </AppShell>
     );
@@ -169,14 +173,14 @@ function CustomerDetailPage(): React.JSX.Element {
     return (
       <AppShell>
         <div className="px-8 py-20 text-center text-sm text-muted-foreground">
-          <p>Klijent nije pronađen.</p>
+          <p>{t("customerDetail.notFound")}</p>
           <button
             type="button"
             onClick={() => navigate("/customers")}
             className="iris-focusable iris-press mt-4 inline-flex items-center gap-2 border border-border px-3 py-2 text-[12px]"
           >
             <ArrowLeft className="h-4 w-4" />
-            Nazad na klijente
+            {t("customerDetail.backToClients")}
           </button>
         </div>
       </AppShell>
@@ -193,10 +197,10 @@ function CustomerDetailPage(): React.JSX.Element {
             className="iris-focusable iris-press mb-2 inline-flex items-center gap-1 bg-transparent text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Klijenti
+            {t("customers.title")}
           </button>
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Iris · klijent
+            {t("customerDetail.eyebrow")}
           </div>
           <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
             {title}
@@ -209,7 +213,7 @@ function CustomerDetailPage(): React.JSX.Element {
 
             {isNew ? (
               <p className="border border-dashed border-border bg-background px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
-                Lokacije možete dodati nakon što sačuvate klijenta.
+                {t("customerDetail.locationsAfterSave")}
               </p>
             ) : (
               <LocationsSection
@@ -230,15 +234,15 @@ function CustomerDetailPage(): React.JSX.Element {
 
           <aside className="border-t border-border bg-card p-6 lg:sticky lg:top-0 lg:self-start lg:border-l lg:border-t-0 lg:p-8">
             <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-              Pregled
+              {t("customerDetail.overview")}
             </div>
             <dl className="mt-4 space-y-3 text-[12px]">
-              <SummaryRow label="PIB" value={customer.pib} />
-              <SummaryRow label="Matični broj" value={customer.mb} />
-              <SummaryRow label="Kontakt" value={customer.contactName} />
+              <SummaryRow label={t("customerDetail.pib")} value={customer.pib} />
+              <SummaryRow label={t("customerDetail.mb")} value={customer.mb} />
+              <SummaryRow label={t("customerDetail.contact")} value={customer.contactName} />
               {!isNew && (
                 <div className="flex items-center justify-between">
-                  <dt className="text-[color:var(--iris-ink-soft)]">Lokacije</dt>
+                  <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.locations")}</dt>
                   <dd className="tnum text-foreground">{locations.length}</dd>
                 </div>
               )}
@@ -253,14 +257,14 @@ function CustomerDetailPage(): React.JSX.Element {
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <Save className="h-3.5 w-3.5" />
-                {isNew ? "Sačuvaj klijenta" : "Sačuvaj izmene"}
+                {isNew ? t("customerDetail.saveClient") : t("customerDetail.saveChanges")}
               </button>
               <button
                 type="button"
                 onClick={() => navigate("/customers")}
                 className="iris-focusable iris-press bg-transparent py-2 text-[11px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
               >
-                Odustani
+                {t("workOrders.form.cancel")}
               </button>
               {!isNew && isAdmin && (
                 <button
@@ -269,7 +273,7 @@ function CustomerDetailPage(): React.JSX.Element {
                   className="iris-focusable iris-press mt-2 flex items-center justify-center gap-2 border border-[color:var(--iris-status-cancelled)] py-2 text-[11px] text-[color:var(--iris-status-cancelled)] hover:opacity-80"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Obriši klijenta
+                  {t("customerDetail.deleteClient")}
                 </button>
               )}
             </div>
@@ -286,20 +290,22 @@ function CustomerDetailPage(): React.JSX.Element {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {deleteTarget?.kind === "customer" ? "Brisanje klijenta" : "Brisanje lokacije"}
+              {deleteTarget?.kind === "customer"
+                ? t("customerDetail.deleteClientTitle")
+                : t("customerDetail.deleteLocationTitle")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget?.kind === "customer"
-                ? `Da li ste sigurni da želite da obrišete klijenta ${customer.name}? Biće obrisane i sve njegove lokacije.`
+                ? t("customerDetail.deleteClientConfirm", { name: customer.name })
                 : deleteTarget?.kind === "location"
-                  ? `Da li ste sigurni da želite da obrišete lokaciju ${deleteTarget.name}?`
+                  ? t("customerDetail.deleteLocationConfirm", { name: deleteTarget.name })
                   : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Otkaži</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={() => void handleDeleteConfirm()}>
-              Obriši
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -330,36 +336,37 @@ function DetailsForm({
   value: Customer;
   onChange: (value: Customer) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <section>
-      <div className="mb-3 border-b border-border pb-2 text-[13px] font-medium">Podaci o firmi</div>
+      <div className="mb-3 border-b border-border pb-2 text-[13px] font-medium">{t("customerDetail.companyData")}</div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Naziv *" value={value.name} onChange={(name) => onChange({ ...value, name })} />
+        <Field label={t("customerDetail.nameField")} value={value.name} onChange={(name) => onChange({ ...value, name })} />
         <Field
-          label="Kontakt osoba"
+          label={t("workOrders.form.contactPerson")}
           value={value.contactName ?? ""}
           onChange={(contactName) => onChange({ ...value, contactName })}
         />
         <Field
-          label="Email"
+          label={t("customerDetail.email")}
           value={value.email ?? ""}
           onChange={(email) => onChange({ ...value, email })}
         />
         <Field
-          label="Telefon"
+          label={t("customerDetail.phone")}
           value={value.phone ?? ""}
           onChange={(phone) => onChange({ ...value, phone })}
         />
         <Field
-          label="PIB (9 cifara)"
+          label={t("customerDetail.pibField")}
           value={value.pib ?? ""}
-          placeholder="npr. 100197914"
+          placeholder={t("customerDetail.pibPlaceholder")}
           onChange={(pib) => onChange({ ...value, pib })}
         />
         <Field
-          label="Matični broj (8 cifara)"
+          label={t("customerDetail.mbField")}
           value={value.mb ?? ""}
-          placeholder="npr. 53671888"
+          placeholder={t("customerDetail.mbPlaceholder")}
           onChange={(mb) => onChange({ ...value, mb })}
         />
       </div>
@@ -388,10 +395,11 @@ function LocationsSection({
   onSave: () => void;
   onDelete: (location: Location) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <section>
       <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
-        <span className="text-[13px] font-medium">Lokacije</span>
+        <span className="text-[13px] font-medium">{t("customerDetail.locations")}</span>
         {draft === null && (
           <button
             type="button"
@@ -399,7 +407,7 @@ function LocationsSection({
             className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
-            Nova lokacija
+            {t("customerDetail.newLocation")}
           </button>
         )}
       </div>
@@ -415,7 +423,7 @@ function LocationsSection({
         >
           <div className="flex items-center justify-between sm:col-span-2">
             <span className="text-[12px] text-[color:var(--iris-ink-soft)]">
-              {draft.id ? "Izmena lokacije" : "Nova lokacija"}
+              {draft.id ? t("customerDetail.editLocationHeader") : t("customerDetail.newLocation")}
             </span>
             <button
               type="button"
@@ -423,16 +431,16 @@ function LocationsSection({
               className="iris-focusable iris-press inline-flex items-center gap-1 bg-transparent text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
             >
               <X className="h-3 w-3" />
-              Otkaži
+              {t("common.cancel")}
             </button>
           </div>
           <Field
-            label="Naziv *"
+            label={t("customerDetail.locName")}
             value={draft.name}
             onChange={(name) => onChangeDraft({ ...draft, name })}
           />
           <Field
-            label="Adresa"
+            label={t("customerDetail.locAddress")}
             value={draft.address ?? ""}
             onChange={(address) => onChangeDraft({ ...draft, address })}
           />
@@ -442,7 +450,7 @@ function LocationsSection({
               className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-3 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
             >
               <Save className="h-3.5 w-3.5" />
-              Sačuvaj lokaciju
+              {t("customerDetail.saveLocation")}
             </button>
           </div>
         </form>
@@ -450,7 +458,7 @@ function LocationsSection({
 
       {locations.length === 0 ? (
         <div className="border border-dashed border-border bg-background px-4 py-6 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
-          Još nema lokacija za ovog klijenta.
+          {t("customerDetail.noLocations")}
         </div>
       ) : (
         <ul className="divide-y divide-[color:var(--iris-border-soft)] border border-border bg-card">
@@ -470,7 +478,7 @@ function LocationsSection({
                   type="button"
                   onClick={() => onEdit(location)}
                   className="iris-focusable iris-press text-[color:var(--iris-ink-soft)] hover:text-foreground"
-                  aria-label="Izmeni lokaciju"
+                  aria-label={t("customerDetail.editLocationAria")}
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
@@ -479,7 +487,7 @@ function LocationsSection({
                     type="button"
                     onClick={() => onDelete(location)}
                     className="iris-focusable iris-press text-[color:var(--iris-status-cancelled)] hover:opacity-80"
-                    aria-label="Obriši lokaciju"
+                    aria-label={t("customerDetail.deleteLocationAria")}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
