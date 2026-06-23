@@ -12,7 +12,6 @@ import {
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type {
-  Customer,
   Location,
   WorkOrder,
   WorkOrderNote,
@@ -27,7 +26,6 @@ function WorkOrderEditPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,12 +68,7 @@ function WorkOrderEditPage(): React.JSX.Element {
   }, [id]);
 
   useEffect(() => {
-    void Promise.all([window.api.getCustomers(), window.api.getLocations()]).then(
-      ([nextCustomers, nextLocations]) => {
-        setCustomers(nextCustomers);
-        setLocations(nextLocations);
-      },
-    );
+    void window.api.getLocations().then(setLocations);
   }, []);
 
   const handleSubmit = useCallback(
@@ -208,7 +201,6 @@ function WorkOrderEditPage(): React.JSX.Element {
           <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
             <WorkOrderForm
               initialData={order}
-              customers={customers}
               locations={locations}
               onSubmit={handleSubmit}
               onCancel={handleCancel}

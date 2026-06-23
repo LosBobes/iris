@@ -1,16 +1,24 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LogOut,
-  Home,
   LayoutDashboard,
   ClipboardList,
   PlusCircle,
+  Package,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { DEFAULT_FIRM_NAME } from "@/types/settings";
+import { IrisMark } from "@/components/brand/IrisMark";
 
 interface NavItemDef {
   label: string;
@@ -23,6 +31,7 @@ const NAV_ITEMS: NavItemDef[] = [
   { label: "Kontrolna tabla", to: "/", end: true, icon: LayoutDashboard },
   { label: "Radni nalozi", to: "/work-orders", icon: ClipboardList },
   { label: "Novi nalog", to: "/work-orders/new", icon: PlusCircle },
+  { label: "Katalog", to: "/catalog", icon: Package },
 ];
 
 interface AppShellProps {
@@ -47,7 +56,25 @@ function getActiveNavItemIndex(currentPath: string): number {
 
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const { currentUser, onLogout } = useAuth();
+  const [firmName, setFirmName] = useState(DEFAULT_FIRM_NAME);
   const location = useLocation();
+
+  // The firm name is shop branding configured by an admin in the web app; load
+  // it once. Optional-chained so partial api stubs (tests) and failures just keep
+  // the default name.
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve(window.api?.getSettings?.())
+      .then((settings) => {
+        if (active && settings?.firmName) setFirmName(settings.firmName);
+      })
+      .catch(() => {
+        // Keep the default firm name.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const activeNavIndex = getActiveNavItemIndex(location.pathname);
   const navRef = useRef<HTMLElement | null>(null);
   const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
@@ -139,16 +166,16 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               isCollapsed ? "gap-0 justify-center w-full" : "gap-2.5"
             )}
           >
-            <Home className="h-5 w-5 shrink-0 text-[color:var(--iris-accent)]" />
+            <IrisMark className="h-8 w-8 shrink-0 text-foreground" />
             <div className={cn(
-              "flex flex-col transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
+              "flex flex-col items-start text-left transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
               isCollapsed ? "w-0 opacity-0 overflow-hidden pointer-events-none" : "w-auto opacity-100"
             )}>
               <span className="text-[18px] font-semibold leading-none tracking-[-0.5px] whitespace-nowrap">
                 Iris
               </span>
               <span className="text-[9px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)] mt-0.5 whitespace-nowrap">
-                Grafika Čobanović
+                {firmName}
               </span>
             </div>
           </button>
@@ -240,7 +267,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 {currentUser?.username ?? ""}
               </div>
               <div className="text-[10px] text-[color:var(--iris-ink-faint)] whitespace-nowrap">
-                Operater
+                {currentUser?.role === "admin" ? "Administrator" : "Operater"}
               </div>
             </div>
           </div>

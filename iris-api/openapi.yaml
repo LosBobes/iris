@@ -81,17 +81,56 @@ paths:
   /customers:
     get:
       tags: [Customers]
-      summary: Return normalized customers for work-order entry
+      summary: Return a paginated, optionally searched page of customers
       operationId: listCustomers
+      parameters:
+        - name: q
+          in: query
+          description: Case-insensitive search over name, PIB and MB.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Page size. Omit or <= 0 to return all matches.
+          schema:
+            type: integer
+            minimum: 0
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
       responses:
         '200':
-          description: Customer records
+          description: A page of customers plus the total match count
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Customer'
+                $ref: '#/components/schemas/CustomerListResponse'
+  /customers/{id}:
+    get:
+      tags: [Customers]
+      summary: Return a single customer by id
+      operationId: getCustomer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /locations:
     get:
       tags: [Customers]
@@ -106,6 +145,300 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Location'
+  /catalog-items:
+    get:
+      tags: [Catalog]
+      summary: List admin-managed catalog articles and services
+      operationId: listCatalogItems
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [service, article]
+        - name: q
+          in: query
+          description: Case-insensitive search over name and code.
+          schema:
+            type: string
+        - name: active
+          in: query
+          description: When 'true', only active items are returned.
+          schema:
+            type: string
+            enum: ['true']
+        - name: limit
+          in: query
+          description: Page size. Omit or <= 0 to return all matches.
+          schema:
+            type: integer
+            minimum: 0
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: A page of catalog items plus the total match count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogItemListResponse'
+    post:
+      tags: [Catalog]
+      summary: Create a catalog item (admin only)
+      operationId: createCatalogItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogItemInput'
+      responses:
+        '201':
+          description: Created catalog item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogItem'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid catalog item input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /catalog-items/{id}:
+    get:
+      tags: [Catalog]
+      summary: Return a single catalog item by id
+      operationId: getCatalogItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The catalog item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogItem'
+        '404':
+          description: Catalog item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Catalog]
+      summary: Update a catalog item (admin only)
+      operationId: updateCatalogItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogItemInput'
+      responses:
+        '200':
+          description: Updated catalog item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogItem'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Catalog]
+      summary: Delete a catalog item (admin only)
+      operationId: deleteCatalogItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Return shop-wide organization settings (firm name)
+      operationId: getSettings
+      responses:
+        '200':
+          description: The organization settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSettings'
+    put:
+      tags: [Settings]
+      summary: Update organization settings (admin only)
+      operationId: updateSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationSettings'
+      responses:
+        '200':
+          description: Updated organization settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationSettings'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid settings input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users:
+    get:
+      tags: [Users]
+      summary: List user accounts (admin only)
+      operationId: listUsers
+      responses:
+        '200':
+          description: All accounts (id, username, role); never the password
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Users]
+      summary: Create a user account (admin only)
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserInput'
+      responses:
+        '201':
+          description: The created account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '422':
+          description: Invalid input or duplicate username
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{id}:
+    put:
+      tags: [Users]
+      summary: Update a user's role and optionally reset their password (admin only)
+      operationId: updateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserInput'
+      responses:
+        '200':
+          description: The updated account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid input or last-admin guard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Users]
+      summary: Delete a user account (admin only)
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '422':
+          description: Cannot delete yourself or the last administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /work-orders:
     get:
       tags: [Work Orders]
@@ -295,6 +628,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /work-orders/preview:
+    post:
+      tags: [Work Orders]
+      summary: Render the print HTML for a draft work order (live editor preview)
+      description: >-
+        Returns the same HTML used to generate the PDF report, for an unsaved
+        work order supplied in the body. Nothing is persisted. Used by the editor
+        to show a live preview that updates as fields change.
+      operationId: previewWorkOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrder'
+      responses:
+        '200':
+          description: The rendered print HTML
+          content:
+            text/html:
+              schema:
+                type: string
   /public/work-orders/{token}:
     parameters:
       - name: token
@@ -367,6 +722,28 @@ components:
         role:
           type: string
           enum: [admin, user]
+    CreateUserInput:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          minLength: 6
+        role:
+          type: string
+          enum: [admin, user]
+    UpdateUserInput:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [admin, user]
+        password:
+          type: string
+          description: When non-empty, resets the password (min 6 chars). Empty leaves it unchanged.
     JobDetails:
       type: object
       required: [productCode, paperWeightGsm, dimensions, quantity, finishingNote]
@@ -410,7 +787,7 @@ components:
           example: Bulevar 1
     Customer:
       type: object
-      required: [id, name, contactName, email, phone]
+      required: [id, name, contactName, email, phone, pib, mb]
       properties:
         id:
           type: string
@@ -422,6 +799,19 @@ components:
           type: [string, 'null']
         phone:
           type: [string, 'null']
+        pib:
+          type: [string, 'null']
+          description: >-
+            Serbian tax identification number (poreski identifikacioni broj):
+            9 digits with an ISO 7064 MOD 11,10 control digit. Optional on
+            imported records; validated by the server whenever non-empty.
+          example: '100197914'
+        mb:
+          type: [string, 'null']
+          description: >-
+            Serbian company registration number (matični broj): exactly 8 digits.
+            Optional on imported records; validated as format only.
+          example: '53671888'
     Location:
       type: object
       required: [id, customerId, name, address]
@@ -532,6 +922,99 @@ components:
         unitPrice:
           type: number
           format: double
+        unitCost:
+          type: number
+          format: double
+          description: >-
+            Per-unit cost captured from the linked catalog item's purchasePrice
+            at save time (margin = unitPrice - unitCost). Server-derived, never
+            sent by clients, and returned as 0 to non-admin users.
+        catalogItemId:
+          type: [string, 'null']
+          description: >-
+            Links the line back to the CatalogItem the user selected. Null for
+            ad-hoc ("special") services typed inline that are not in the catalog.
+    CatalogItem:
+      type: object
+      required: [id, code, name, kind, unit, salePrice, barcode, taxGroup, description, isActive]
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+          description: Stable item code (legacy SIFRA on imported rows).
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [service, article]
+        unit:
+          type: string
+          description: Unit of measure, lowercased (e.g. kom, set, m2, tab, ris).
+          example: kom
+        purchasePrice:
+          type: [number, 'null']
+          format: double
+          description: >-
+            Cost figure: purchase price (nabavna cena) for articles, cost of
+            labor (cena rada) for services. Admin-only — the API returns null
+            for non-admin users so operators never see cost or margin data.
+        salePrice:
+          type: [number, 'null']
+          format: double
+          description: Sale price charged to the customer (prodajna cena).
+        barcode:
+          type: [string, 'null']
+        taxGroup:
+          type: [string, 'null']
+        description:
+          type: [string, 'null']
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OrganizationSettings:
+      type: object
+      required: [firmName]
+      properties:
+        firmName:
+          type: string
+          description: The shop's display name shown in the app branding.
+          example: Grafika Čobanović
+    CatalogItemInput:
+      type: object
+      required: [name, kind, unit]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [service, article]
+        unit:
+          type: string
+          example: kom
+        purchasePrice:
+          type: [number, 'null']
+          format: double
+          description: Cost (nabavna cena / cena rada). Admin-only.
+        salePrice:
+          type: [number, 'null']
+          format: double
+          description: Sale price (prodajna cena).
+        barcode:
+          type: [string, 'null']
+        taxGroup:
+          type: [string, 'null']
+        description:
+          type: [string, 'null']
+        isActive:
+          type: boolean
     CustomerCommunication:
       type: object
       required: [publicToken, notificationEmail, emailNotificationsEnabled, signedBy, signedAt]
@@ -610,6 +1093,14 @@ components:
           type: [number, 'null']
           format: double
           example: 12000.5
+        profit:
+          type: [number, 'null']
+          format: double
+          description: >-
+            Cached margin (sum of (unitPrice - unitCost) * quantity over line
+            items), recomputed on every save. Admin-only — omitted/null for
+            non-admin users.
+          example: 4200
         note:
           type: [string, 'null']
           example: Hitno
@@ -664,6 +1155,30 @@ components:
         total:
           type: integer
           minimum: 0
+    CustomerListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        total:
+          type: integer
+          minimum: 0
+          description: Total customers matching the query, ignoring limit/offset.
+    CatalogItemListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogItem'
+        total:
+          type: integer
+          minimum: 0
+          description: Total catalog items matching the query, ignoring limit/offset.
     CreateWorkOrderInput:
       type: object
       required:

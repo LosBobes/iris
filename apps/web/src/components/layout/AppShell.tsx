@@ -3,17 +3,20 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LogOut,
-  Home,
   LayoutDashboard,
   ClipboardList,
   PlusCircle,
   Users,
+  Package,
   PanelLeft,
   Settings,
+  UserCog,
   Menu,
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
+import { IrisMark } from "@/components/brand/IrisMark";
 import {
   Tooltip,
   TooltipContent,
@@ -69,6 +72,7 @@ const NAV_ITEMS: NavItemDef[] = [
   { label: "Radni nalozi", to: "/work-orders", icon: ClipboardList },
   { label: "Novi nalog", to: "/work-orders/new", icon: PlusCircle },
   { label: "Klijenti", to: "/customers", icon: Users },
+  { label: "Katalog", to: "/catalog", icon: Package },
 ];
 
 interface AppShellProps {
@@ -93,6 +97,7 @@ function getActiveNavItemIndex(currentPath: string): number {
 
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const { currentUser, onLogout } = useAuth();
+  const { firmName } = useOrganization();
   const location = useLocation();
   const activeNavIndex = getActiveNavItemIndex(location.pathname);
   const isLg = useIsLg();
@@ -162,13 +167,13 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
 
       <header className="relative z-50 flex shrink-0 items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3 lg:hidden">
         <div className="flex min-w-0 items-center gap-2.5 font-medium text-foreground">
-          <Home className="h-5 w-5 shrink-0 text-[color:var(--iris-accent)]" />
-          <div className="flex flex-col">
+          <IrisMark className="h-8 w-8 shrink-0 text-foreground" />
+          <div className="flex flex-col items-start text-left">
             <span className="text-[18px] font-semibold leading-none tracking-[-0.5px] whitespace-nowrap">
               Iris
             </span>
             <span className="text-[9px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)] mt-0.5 whitespace-nowrap">
-              Grafika Čobanović
+              {firmName}
             </span>
           </div>
         </div>
@@ -209,16 +214,16 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 isSidebarCollapsed ? "lg:w-full lg:justify-center lg:gap-0" : "gap-2.5"
               )}
             >
-              <Home className="h-5 w-5 shrink-0 text-[color:var(--iris-accent)]" />
+              <IrisMark className="h-8 w-8 shrink-0 text-foreground" />
               <div className={cn(
-                "flex flex-col transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
+                "flex flex-col items-start text-left transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
                 isSidebarCollapsed ? "lg:w-0 lg:opacity-0 lg:overflow-hidden lg:pointer-events-none" : "lg:w-auto lg:opacity-100"
               )}>
                 <span className="text-[18px] font-semibold leading-none tracking-[-0.5px] whitespace-nowrap">
                   Iris
                 </span>
                 <span className="text-[9px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)] mt-0.5 whitespace-nowrap">
-                  Grafika Čobanović
+                  {firmName}
                 </span>
               </div>
             </button>
@@ -269,6 +274,37 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           "mt-auto flex flex-col gap-0.5 border-t border-[color:var(--iris-border-soft)] pt-3 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)]",
           "lg:border-t-0 lg:pt-0",
         )}>
+          {currentUser.role === "admin" && (
+            <SidebarTooltip label="Korisnici" enabled={isSidebarCollapsed}>
+              <NavLink
+                to="/users"
+                onClick={closeMobileMenu}
+                className={({ isActive }) =>
+                  cn(
+                    "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
+                    isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
+                    isActive
+                      ? cn(
+                          "bg-black/5 font-medium text-foreground",
+                          !isSidebarCollapsed &&
+                            "lg:before:pointer-events-none lg:before:absolute lg:before:top-2 lg:before:bottom-2 lg:before:left-[-20px] lg:before:w-0.5 lg:before:bg-[color:var(--iris-accent)] lg:before:content-['']",
+                        )
+                      : "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
+                  )
+                }
+              >
+                <UserCog size={16} className="shrink-0" />
+                <span
+                  className={cn(
+                    "whitespace-nowrap transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
+                    isSidebarCollapsed ? "lg:hidden" : "lg:inline",
+                  )}
+                >
+                  Korisnici
+                </span>
+              </NavLink>
+            </SidebarTooltip>
+          )}
           <SidebarTooltip label="Podešavanja" enabled={isSidebarCollapsed}>
             <NavLink
               to="/settings"
@@ -334,7 +370,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 {currentUser?.username ?? ""}
               </div>
               <div className="text-[10px] text-[color:var(--iris-ink-faint)] whitespace-nowrap">
-                Operater
+                {currentUser?.role === "admin" ? "Administrator" : "Operater"}
               </div>
             </div>
           </div>

@@ -89,6 +89,8 @@ const invoiceLineItemSchema = z
     quantity: z.number().int().positive(),
     unit: invoiceUnitEnum,
     unitPrice: z.number().min(0),
+    // Set when the line was added from the catalog; null for ad-hoc services.
+    catalogItemId: z.string().nullable().optional(),
   })
   .superRefine((line, ctx) => {
     if (line.kind === 'goods' && line.unit === 'set') {

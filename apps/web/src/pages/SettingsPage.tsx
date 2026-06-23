@@ -8,11 +8,14 @@ import { THEME_OPTIONS } from "@/lib/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
+import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
+import { useOrganization } from "@/hooks/useOrganization";
 
 export function SettingsPage(): React.JSX.Element {
   const { scale, setScale } = useFontScale();
   const { theme, setTheme } = useTheme();
   const { currentUser } = useAuth();
+  const { firmName } = useOrganization();
   const isAdmin = currentUser.role === "admin";
 
   return (
@@ -153,7 +156,7 @@ export function SettingsPage(): React.JSX.Element {
                 Pregled
               </div>
               <p className="mt-2 text-[14px] leading-6 text-foreground">
-                  Klijent: Grafika Čobanović
+                  Klijent: {firmName}
               </p>
               <p className="text-[12px] text-[color:var(--iris-ink-soft)]">
                 Promena se primenjuje odmah i pamti se na ovom uređaju.
@@ -162,6 +165,8 @@ export function SettingsPage(): React.JSX.Element {
           </section>
 
           <ListDensitySettings />
+
+          {isAdmin && <OrganizationNameSettings />}
 
           {isAdmin && <EnumValuesSettings />}
         </div>

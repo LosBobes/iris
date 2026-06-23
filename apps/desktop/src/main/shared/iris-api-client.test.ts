@@ -118,6 +118,33 @@ describe('iris-api-client', () => {
     )
   })
 
+  it('builds the catalog query string from kind, search, active and pagination', async () => {
+    const fetchFn = vi.fn().mockResolvedValueOnce(jsonResponse({ items: [], total: 0 }))
+    const client = createIrisApiClient({ baseUrl: 'http://localhost:8080', fetchFn })
+
+    await expect(
+      client.getCatalogItems({ kind: 'service', q: 'štampa', active: true, limit: 20, offset: 40 }),
+    ).resolves.toEqual({ items: [], total: 0 })
+
+    const requestedUrl = String(fetchFn.mock.calls[0][0])
+    expect(requestedUrl).toContain('/catalog-items?')
+    expect(requestedUrl).toContain('kind=service')
+    expect(requestedUrl).toContain('active=true')
+    expect(requestedUrl).toContain('limit=20')
+    expect(requestedUrl).toContain('offset=40')
+    expect(requestedUrl).toContain(`q=${encodeURIComponent('štampa')}`)
+  })
+
+  it('returns the organization settings from /settings', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ firmName: 'Grafika Čobanović' }))
+    const client = createIrisApiClient({ baseUrl: 'http://localhost:8080', fetchFn })
+
+    await expect(client.getSettings()).resolves.toEqual({ firmName: 'Grafika Čobanović' })
+    expect(String(fetchFn.mock.calls[0][0])).toContain('/settings')
+  })
+
   it('returns delete business failures without throwing when the backend responds with success false', async () => {
     const fetchFn = vi.fn().mockResolvedValueOnce(
       jsonResponse({ success: false, message: 'Radni nalog nije pronađen.' }),

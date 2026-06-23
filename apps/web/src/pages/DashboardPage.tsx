@@ -11,6 +11,10 @@ function DashboardPage(): React.JSX.Element {
     monthlyRevenue,
     deliveryDistribution,
     topClients,
+    profitTotals,
+    profitRevenue,
+    monthlyProfit,
+    companyProfit,
     operators,
     filters,
     setFilters,
@@ -78,14 +82,6 @@ function DashboardPage(): React.JSX.Element {
 
         {showDashboard && (
           <div className="space-y-8 px-5 pb-8 sm:px-8">
-            <DashboardActionSection
-              clientAttentionRows={clientAttentionRows}
-              internalAttentionRows={internalAttentionRows}
-              signalCounts={signalCounts}
-              activeSignal={activeSignal}
-              onActiveSignalChange={setActiveSignal}
-            />
-
             {showFinance && (
               <DashboardFinanceSection
                 summary={summary}
@@ -93,12 +89,24 @@ function DashboardPage(): React.JSX.Element {
                 monthlyRevenue={monthlyRevenue}
                 deliveryDistribution={deliveryDistribution}
                 topClients={topClients}
+                profitTotals={profitTotals}
+                profitRevenue={profitRevenue}
+                monthlyProfit={monthlyProfit}
+                companyProfit={companyProfit}
                 operators={operators}
                 filters={filters}
                 setFilters={setFilters}
                 isFilteredEmpty={isFilteredEmpty}
               />
             )}
+
+            <DashboardActionSection
+              clientAttentionRows={clientAttentionRows}
+              internalAttentionRows={internalAttentionRows}
+              signalCounts={signalCounts}
+              activeSignal={activeSignal}
+              onActiveSignalChange={setActiveSignal}
+            />
           </div>
         )}
       </div>

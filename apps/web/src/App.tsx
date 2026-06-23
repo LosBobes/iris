@@ -6,15 +6,21 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AuthContext } from "@/contexts/AuthContext";
+import { OrganizationContext } from "@/contexts/OrganizationContext";
+import { DEFAULT_FIRM_NAME } from "@/types/settings";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
+const CustomerDetailPage = lazy(() => import("@/pages/CustomerDetailPage"));
+const CatalogPage = lazy(() => import("@/pages/CatalogPage"));
+const CatalogDetailPage = lazy(() => import("@/pages/CatalogDetailPage"));
 const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
 const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
 const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
 const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const UsersPage = lazy(() => import("@/pages/UsersPage"));
 
 type AppBootstrapState =
   | { kind: "loading" }
@@ -84,6 +90,7 @@ function App(): React.JSX.Element {
   const [bootstrapState, setBootstrapState] = useState<AppBootstrapState>({
     kind: "loading",
   });
+  const [firmName, setFirmName] = useState(DEFAULT_FIRM_NAME);
 
   const checkBackendStatus = useCallback(async () => {
     startTransition(() => {
@@ -105,9 +112,21 @@ function App(): React.JSX.Element {
       }
 
       const session = await window.api.getCurrentSession();
+      const authed = session.success && session.user ? session.user : null;
+
+      // The firm name is shop branding shown across the app; load it once the
+      // session is known. A failure just keeps the default name.
+      if (authed) {
+        try {
+          const settings = await window.api.getSettings();
+          if (settings?.firmName) setFirmName(settings.firmName);
+        } catch {
+          // Keep the default firm name.
+        }
+      }
 
       startTransition(() => {
-        setCurrentUser(session.success && session.user ? session.user : null);
+        setCurrentUser(authed);
         setBootstrapState({ kind: "ready" });
       });
     } catch {
@@ -161,19 +180,29 @@ function App(): React.JSX.Element {
                 <Login onLoginSuccess={handleLoginSuccess} />
               ) : (
                 <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
+                  <OrganizationContext.Provider value={{ firmName, setFirmName }}>
                   <TooltipProvider>
                     <Routes>
                       <Route path="/" element={<DashboardPage />} />
                       <Route path="/customers" element={<CustomersPage />} />
+                      <Route path="/customers/new" element={<CustomerDetailPage />} />
+                      <Route path="/customers/:id" element={<CustomerDetailPage />} />
+                      <Route path="/catalog" element={<CatalogPage />} />
+                      <Route path="/catalog/new" element={<CatalogDetailPage />} />
+                      <Route path="/catalog/:id" element={<CatalogDetailPage />} />
                       <Route path="/work-orders" element={<WorkOrdersPage />} />
                       <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
                       <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
                       <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
+                      {currentUser.role === "admin" && (
+                        <Route path="/users" element={<UsersPage />} />
+                      )}
                     </Routes>
                     <CommandPalette />
                     <Toaster />
                   </TooltipProvider>
+                  </OrganizationContext.Provider>
                 </AuthContext.Provider>
               )
             }

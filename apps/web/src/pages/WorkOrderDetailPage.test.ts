@@ -1,31 +1,56 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { openWorkOrderPdf, printWorkOrder } from "./WorkOrderDetailPage";
+import type { WorkOrder } from "@/types/work-order";
+
+const sampleOrder = { id: "wo-42", orderNumber: "RN-2026-0042" } as unknown as WorkOrder;
 
 describe("work-order document actions", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("uses the browser print flow for the print action", () => {
-    const print = vi.fn();
-    const addEventListener = vi.fn();
+  it("renders the canonical print HTML in a hidden iframe", async () => {
+    const getWorkOrderPreviewHtml = vi.fn().mockResolvedValue("<html>nalog</html>");
+    const appendChild = vi.fn();
+    const iframe = {
+      style: {} as Record<string, string>,
+      setAttribute: vi.fn(),
+      srcdoc: "",
+      onload: null as null | (() => void),
+    };
 
-    vi.stubGlobal("document", {
-      title: "Iris",
-    });
     vi.stubGlobal("window", {
-      print,
-      addEventListener,
+      api: { getWorkOrderPreviewHtml },
+      setTimeout: vi.fn(),
+    });
+    vi.stubGlobal("document", {
+      createElement: vi.fn(() => iframe),
+      body: { appendChild },
     });
 
-    printWorkOrder("RN-2026-0042");
+    await printWorkOrder(sampleOrder);
 
-    expect(document.title).toBe("RN-2026-0042");
-    expect(print).toHaveBeenCalledTimes(1);
-    expect(addEventListener).toHaveBeenCalledWith(
-      "afterprint",
-      expect.any(Function),
-      { once: true },
+    expect(getWorkOrderPreviewHtml).toHaveBeenCalledWith(sampleOrder);
+    expect(iframe.srcdoc).toBe("<html>nalog</html>");
+    expect(appendChild).toHaveBeenCalledWith(iframe);
+  });
+
+  it("falls back to opening the PDF report when rendering fails", async () => {
+    const getWorkOrderPreviewHtml = vi.fn().mockRejectedValue(new Error("boom"));
+    const getWorkOrderReportUrl = vi.fn((id: string) => `/work-orders/${id}/report`);
+    const open = vi.fn();
+
+    vi.stubGlobal("window", {
+      api: { getWorkOrderPreviewHtml, getWorkOrderReportUrl },
+      open,
+    });
+
+    await printWorkOrder(sampleOrder);
+
+    expect(open).toHaveBeenCalledWith(
+      "/work-orders/wo-42/report",
+      "_blank",
+      "noopener,noreferrer",
     );
   });
 

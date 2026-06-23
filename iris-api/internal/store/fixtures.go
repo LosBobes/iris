@@ -44,10 +44,14 @@ type FixtureStore struct {
 	locations        []domain.Location
 	workOrders       []domain.WorkOrder
 	enumValues       []domain.EnumValue
+	catalogItems     []domain.CatalogItem
 	nextEnumSequence int
 	nextSequence     int
 	loaded           bool
 	referencesLoaded bool
+	usersLoaded      bool
+	fixtureUsers     []domain.FixtureUser
+	firmName         string
 	sessions         map[string]fixtureSession
 }
 
@@ -133,24 +137,98 @@ func (s *FixtureStore) DeleteSession(_ context.Context, token string) error {
 	return nil
 }
 
-// Users reads login fixture data.
+// Users returns the in-memory login fixtures, seeded once from users.json and
+// mutated by the account-management methods.
 func (s *FixtureStore) Users(_ context.Context) ([]domain.FixtureUser, error) {
-	var users []domain.FixtureUser
-	if err := s.readJSON("users.json", &users); err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureUsersLoadedLocked(); err != nil {
 		return nil, err
 	}
-	return users, nil
+	return append([]domain.FixtureUser(nil), s.fixtureUsers...), nil
 }
 
-// Customers reads normalized customer fixture data.
-func (s *FixtureStore) Customers(_ context.Context) ([]domain.Customer, error) {
+// ensureUsersLoadedLocked seeds the in-memory user slice from users.json once.
+// The caller must hold s.mu.
+func (s *FixtureStore) ensureUsersLoadedLocked() error {
+	if s.usersLoaded {
+		return nil
+	}
+	var users []domain.FixtureUser
+	if err := s.readJSON("users.json", &users); err != nil {
+		return err
+	}
+	s.fixtureUsers = users
+	s.usersLoaded = true
+	return nil
+}
+
+// Customers reads normalized customer fixture data, filtered and paginated to
+// match the SQLite store.
+func (s *FixtureStore) Customers(_ context.Context, query CustomerQuery) (CustomerListResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
+		return CustomerListResult{}, err
+	}
+
+	search := strings.ToLower(strings.TrimSpace(query.Search))
+	matched := make([]domain.Customer, 0, len(s.customers))
+	for _, customer := range s.customers {
+		if search != "" {
+			hay := strings.ToLower(customer.Name + " " + ptrString(customer.Pib) + " " + ptrString(customer.Mb))
+			if !strings.Contains(hay, search) {
+				continue
+			}
+		}
+		matched = append(matched, customer)
+	}
+
+	total := len(matched)
+	matched = paginateCustomers(matched, query.Limit, query.Offset)
+	return CustomerListResult{Items: cloneCustomers(matched), Total: total}, nil
+}
+
+func paginateCustomers(items []domain.Customer, limit int, offset int) []domain.Customer {
+	if limit <= 0 {
+		return items
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(items) {
+		return []domain.Customer{}
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[offset:end]
+}
+
+func ptrString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+// CustomerByID returns a single customer fixture or nil when not found.
+func (s *FixtureStore) CustomerByID(_ context.Context, id string) (*domain.Customer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if err := s.ensureReferenceDataLoaded(); err != nil {
 		return nil, err
 	}
-	return cloneCustomers(s.customers), nil
+	for _, customer := range s.customers {
+		if customer.ID == id {
+			cloned := cloneCustomer(customer)
+			return &cloned, nil
+		}
+	}
+	return nil, nil
 }
 
 // Locations reads normalized customer location fixture data.
@@ -170,6 +248,9 @@ func (s *FixtureStore) UpsertCustomer(
 ) (*domain.Customer, error) {
 	if strings.TrimSpace(customer.ID) == "" || strings.TrimSpace(customer.Name) == "" {
 		return nil, newValidationError(invalidWorkOrderMessage)
+	}
+	if msg := domain.ValidateCustomerIdentifiers(customer.Pib, customer.Mb); msg != "" {
+		return nil, newValidationError(msg)
 	}
 
 	s.mu.Lock()
@@ -360,6 +441,9 @@ func (s *FixtureStore) CreateWorkOrder(
 		Communication: normalizeCommunication(input.Communication, sequence, nil),
 	}
 
+	prices := s.catalogPurchasePricesLocked(catalogItemIDs(newOrder.InvoiceDraft.LineItems))
+	newOrder.InvoiceDraft.LineItems, newOrder.Profit = applyLineItemCosts(newOrder.InvoiceDraft.LineItems, prices)
+
 	s.workOrders = append(s.workOrders, newOrder)
 	return cloneWorkOrder(newOrder), nil
 }
@@ -388,6 +472,8 @@ func (s *FixtureStore) UpdateWorkOrder(
 		}
 
 		updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		prices := s.catalogPurchasePricesLocked(catalogItemIDs(updated.InvoiceDraft.LineItems))
+		updated.InvoiceDraft.LineItems, updated.Profit = applyLineItemCosts(updated.InvoiceDraft.LineItems, prices)
 		s.workOrders[index] = updated
 		return cloneWorkOrder(updated), nil
 	}
@@ -1702,6 +1788,8 @@ func cloneCustomer(customer domain.Customer) domain.Customer {
 	cloned.ContactName = clonePtrString(customer.ContactName)
 	cloned.Email = clonePtrString(customer.Email)
 	cloned.Phone = clonePtrString(customer.Phone)
+	cloned.Pib = clonePtrString(customer.Pib)
+	cloned.Mb = clonePtrString(customer.Mb)
 	return cloned
 }
 

@@ -12,6 +12,12 @@ import {
   topClients,
   type AttentionSignal,
 } from '@/lib/dashboard/aggregations'
+import {
+  monthlyProfit,
+  profitByKind,
+  profitByCompany,
+  totalRevenue,
+} from '@/lib/dashboard/profit'
 import { getLocalIsoDate } from '@/shared/utils/work-orders'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -66,6 +72,14 @@ export function useDashboardData() {
 
   const topClientsList = useMemo(() => topClients(filtered), [filtered])
 
+  // Profit (admin-only): margin between sale and captured cost, broken down by
+  // kind, by month, and by company. Cost is 0 in non-admin sessions, so these
+  // only carry real numbers behind the admin-gated finance section.
+  const profitTotals = useMemo(() => profitByKind(filtered), [filtered])
+  const profitRevenue = useMemo(() => totalRevenue(filtered), [filtered])
+  const monthlyProfitList = useMemo(() => monthlyProfit(filtered), [filtered])
+  const companyProfitList = useMemo(() => profitByCompany(filtered), [filtered])
+
   const clientAttentionRows = useMemo(
     () => buildClientAttentionRows(allOrders, CORE_ATTENTION_SIGNALS),
     [allOrders]
@@ -98,6 +112,10 @@ export function useDashboardData() {
     monthlyRevenue,
     deliveryDistribution: deliveryDist,
     topClients: topClientsList,
+    profitTotals,
+    profitRevenue,
+    monthlyProfit: monthlyProfitList,
+    companyProfit: companyProfitList,
     queueSummary,
     operators,
     filters,

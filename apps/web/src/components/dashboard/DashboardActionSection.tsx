@@ -1,4 +1,3 @@
-import { ChevronDown } from "lucide-react";
 import type {
   AttentionSignal,
   AttentionSignalCounts,
@@ -35,18 +34,55 @@ export function DashboardActionSection({
   onActiveSignalChange,
 }: DashboardActionSectionProps): React.JSX.Element {
   return (
-    <section className="space-y-5">
+    <section className="space-y-6">
+      <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+        Operativa
+      </div>
+
+      {/* Za obradu — internal queue (materials, unassigned), shown first. */}
       <div>
-        <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Operacije
+        <div className="flex flex-col gap-1">
+          <h2 className="text-[22px] font-normal tracking-[-0.4px] text-foreground">
+            Za obradu
+          </h2>
+          <div className="text-[12px] text-[color:var(--iris-ink-soft)]">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>Materijal {signalCounts.waitingForMaterials}</span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {SIGNAL_DESCRIPTIONS.waitingForMaterials}
+              </TooltipContent>
+            </Tooltip>{" "}
+            ·{" "}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>Nedodeljeno {signalCounts.unassigned}</span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {SIGNAL_DESCRIPTIONS.unassigned}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
-        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mt-4">
+          <ClientAttentionList
+            rows={internalAttentionRows}
+            signals={INTERNAL_ATTENTION_SIGNALS}
+            emptyMessage="Nema naloga za internu obradu."
+          />
+        </div>
+      </div>
+
+      {/* Rokovi i klijenti — work grouped by client, most urgent first. */}
+      <div className="border-t border-[color:var(--iris-border-soft)] pt-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-[22px] font-normal tracking-[-0.4px] text-foreground">
-              Zahteva pažnju
+              Rokovi i klijenti
             </h2>
             <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-              Po klijentima, od najhitnijeg ka manje hitnom
+              Po klijentu, od najhitnijeg ka manje hitnom
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -80,51 +116,16 @@ export function DashboardActionSection({
             })}
           </div>
         </div>
-      </div>
 
-      <ClientAttentionList
-        rows={clientAttentionRows}
-        signals={CORE_ATTENTION_SIGNALS}
-        activeSignal={activeSignal}
-        emptyMessage="Nema klijenata sa aktivnim signalima za pažnju."
-      />
-
-      <details className="group border-t border-[color:var(--iris-border-soft)] pt-4">
-        <summary className="iris-focusable flex cursor-pointer list-none items-center justify-between gap-4 py-1">
-          <div>
-            <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-              Interno
-            </div>
-            <div className="mt-1 text-[13px] text-[color:var(--iris-ink-soft)]">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>Materijal {signalCounts.waitingForMaterials}</span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {SIGNAL_DESCRIPTIONS.waitingForMaterials}
-                </TooltipContent>
-              </Tooltip>{" "}
-              ·{" "}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>Nedodeljeno {signalCounts.unassigned}</span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {SIGNAL_DESCRIPTIONS.unassigned}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-          <ChevronDown className="h-4 w-4 text-[color:var(--iris-ink-mute)] transition-transform duration-200 group-open:rotate-180" />
-        </summary>
-        <div className="pt-3">
+        <div className="mt-5">
           <ClientAttentionList
-            rows={internalAttentionRows}
-            signals={INTERNAL_ATTENTION_SIGNALS}
-            emptyMessage="Nema internih signala za proveru."
+            rows={clientAttentionRows}
+            signals={CORE_ATTENTION_SIGNALS}
+            activeSignal={activeSignal}
+            emptyMessage="Nema klijenata sa aktivnim signalima za pažnju."
           />
         </div>
-      </details>
+      </div>
     </section>
   );
 }

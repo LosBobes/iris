@@ -7,6 +7,7 @@ import WorkOrderCreatePage from "@/pages/WorkOrderCreatePage";
 import WorkOrderDetailPage from "@/pages/WorkOrderDetailPage";
 import WorkOrderEditPage from "@/pages/WorkOrderEditPage";
 import WorkOrdersPage from "@/pages/WorkOrdersPage";
+import CatalogPage from "@/pages/CatalogPage";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthContext } from "@/contexts/AuthContext";
 
@@ -152,6 +153,7 @@ function App(): React.JSX.Element {
           <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
           <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
           <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
+          <Route path="/catalog" element={<CatalogPage />} />
         </Routes>
       </MemoryRouter>
       <Toaster />

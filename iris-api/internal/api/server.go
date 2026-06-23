@@ -85,6 +85,7 @@ func (s *Server) Routes() http.Handler {
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
 		protected.Get("/customers", s.handleCustomers)
+		protected.Get("/customers/{id}", s.handleCustomerByID)
 		protected.Post("/customers", s.handleUpsertCustomer)
 		protected.Put("/customers/{id}", s.handleUpsertCustomer)
 		protected.Delete("/customers/{id}", s.requireAdmin(s.handleDeleteCustomer))
@@ -96,6 +97,7 @@ func (s *Server) Routes() http.Handler {
 		protected.Get("/work-orders/operators", s.handleOperators)
 		protected.Get("/work-orders/{id}", s.handleWorkOrderByID)
 		protected.Get("/work-orders/{id}/report", s.handleWorkOrderReport)
+		protected.Post("/work-orders/preview", s.handleWorkOrderPreview)
 		protected.Post("/work-orders", s.handleCreateWorkOrder)
 		protected.Patch("/work-orders/{id}", s.handleUpdateWorkOrder)
 		protected.Delete("/work-orders/{id}", s.requireAdmin(s.handleDeleteWorkOrder))
@@ -103,6 +105,17 @@ func (s *Server) Routes() http.Handler {
 		protected.Post("/enum-values", s.requireAdmin(s.handleCreateEnumValue))
 		protected.Put("/enum-values/{id}", s.requireAdmin(s.handleUpdateEnumValue))
 		protected.Delete("/enum-values/{id}", s.requireAdmin(s.handleDeleteEnumValue))
+		protected.Get("/catalog-items", s.handleCatalogItems)
+		protected.Get("/catalog-items/{id}", s.handleCatalogItemByID)
+		protected.Post("/catalog-items", s.requireAdmin(s.handleUpsertCatalogItem))
+		protected.Put("/catalog-items/{id}", s.requireAdmin(s.handleUpsertCatalogItem))
+		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
+		protected.Get("/settings", s.handleSettings)
+		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
+		protected.Get("/users", s.requireAdmin(s.handleListUsers))
+		protected.Post("/users", s.requireAdmin(s.handleCreateUser))
+		protected.Put("/users/{id}", s.requireAdmin(s.handleUpdateUser))
+		protected.Delete("/users/{id}", s.requireAdmin(s.handleDeleteUser))
 	})
 
 	if s.config.WebDir != "" {
@@ -300,12 +313,19 @@ func (s *Server) handleCustomers(w http.ResponseWriter, r *http.Request) {
 	if s.serveWebIfHTML(w, r) {
 		return
 	}
-	customers, err := s.store.Customers(r.Context())
+	values := r.URL.Query()
+	limit, _ := strconv.Atoi(values.Get("limit"))
+	offset, _ := strconv.Atoi(values.Get("offset"))
+	result, err := s.store.Customers(r.Context(), store.CustomerQuery{
+		Search: values.Get("q"),
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		writeServerError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, customers)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleLocations(w http.ResponseWriter, r *http.Request) {
@@ -315,6 +335,22 @@ func (s *Server) handleLocations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, locations)
+}
+
+func (s *Server) handleCustomerByID(w http.ResponseWriter, r *http.Request) {
+	if s.serveWebIfHTML(w, r) {
+		return
+	}
+	customer, err := s.store.CustomerByID(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+	if customer == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Klijent nije pronađen."})
+		return
+	}
+	writeJSON(w, http.StatusOK, customer)
 }
 
 func (s *Server) handleUpsertCustomer(w http.ResponseWriter, r *http.Request) {
@@ -375,7 +411,33 @@ func (s *Server) handleWorkOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !isAdmin(r) {
+		for i := range result.Items {
+			stripWorkOrderCost(&result.Items[i])
+		}
+	}
+
 	writeJSON(w, http.StatusOK, result)
+}
+
+// stripWorkOrderCost removes the admin-only cost and margin figures (cached
+// profit and per-line UnitCost) so regular operators never receive cost data.
+func stripWorkOrderCost(workOrder *domain.WorkOrder) {
+	workOrder.Profit = nil
+	for i := range workOrder.InvoiceDraft.LineItems {
+		workOrder.InvoiceDraft.LineItems[i].UnitCost = 0
+	}
+}
+
+// stripWorkOrderRenderMoney removes all price figures from a work order before it
+// is rendered to HTML/PDF, so a non-admin operator's printout shows no money.
+func stripWorkOrderRenderMoney(workOrder *domain.WorkOrder) {
+	workOrder.Price = nil
+	workOrder.Profit = nil
+	for i := range workOrder.InvoiceDraft.LineItems {
+		workOrder.InvoiceDraft.LineItems[i].UnitPrice = 0
+		workOrder.InvoiceDraft.LineItems[i].UnitCost = 0
+	}
 }
 
 func parseWorkOrderListQuery(r *http.Request) store.WorkOrderListQuery {
@@ -427,6 +489,10 @@ func (s *Server) handleWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !isAdmin(r) {
+		stripWorkOrderCost(workOrder)
+	}
+
 	writeJSON(w, http.StatusOK, workOrder)
 }
 
@@ -441,6 +507,10 @@ func (s *Server) handleCreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+
+	if !isAdmin(r) {
+		stripWorkOrderCost(workOrder)
 	}
 
 	writeJSON(w, http.StatusCreated, workOrder)
@@ -462,6 +532,10 @@ func (s *Server) handleUpdateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	if workOrder == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
 		return
+	}
+
+	if !isAdmin(r) {
+		stripWorkOrderCost(workOrder)
 	}
 
 	writeJSON(w, http.StatusOK, workOrder)
@@ -504,6 +578,11 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Non-admin operators get a price-less work order on the printout.
+	if !isAdmin(r) {
+		stripWorkOrderRenderMoney(workOrder)
+	}
+
 	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, locationAddress)
 	if err != nil {
 		writeServerError(w, err)
@@ -515,6 +594,47 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filename))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(pdfBytes)
+}
+
+// handleWorkOrderPreview renders the print HTML for a draft (possibly unsaved)
+// work order so the editor can show a live preview. It uses the same template as
+// the PDF report but skips the headless-Chrome PDF step, so it is cheap enough
+// to call on every edit. It never persists anything.
+func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) {
+	var order domain.WorkOrder
+	if !decodeJSONBody(w, r, &order) {
+		return
+	}
+
+	var locationAddress *string
+	if order.LocationID != nil {
+		locations, err := s.store.Locations(r.Context())
+		if err != nil {
+			writeServerError(w, err)
+			return
+		}
+		for _, location := range locations {
+			if location.ID == *order.LocationID {
+				locationAddress = location.Address
+				break
+			}
+		}
+	}
+
+	// Non-admin operators get a price-less work order in the preview.
+	if !isAdmin(r) {
+		stripWorkOrderRenderMoney(&order)
+	}
+
+	html, err := reports.RenderWorkOrderHTML(order, locationAddress)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(html))
 }
 
 func (s *Server) handlePublicWorkOrderStatus(w http.ResponseWriter, r *http.Request) {
@@ -548,8 +668,6 @@ func (s *Server) handlePublicWorkOrderStatus(w http.ResponseWriter, r *http.Requ
 
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
 }
-
-
 
 func (s *Server) serveWebIfHTML(w http.ResponseWriter, r *http.Request) bool {
 	if s.config.WebDir == "" || !wantsHTML(r) {
@@ -626,4 +744,10 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	}
 
 	writeServerError(w, err)
+}
+
+// writeValidationError reports a business-rule rejection (422) with a Serbian
+// message, for guards enforced in the handler rather than the store.
+func writeValidationError(w http.ResponseWriter, message string) {
+	writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": message})
 }

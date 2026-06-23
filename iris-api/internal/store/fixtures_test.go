@@ -89,12 +89,12 @@ func TestFixtureStoreOperatorsSortedUnique(t *testing.T) {
 func TestFixtureStoreCustomersAndLocations(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
-	customers, err := store.Customers(context.Background())
+	customers, err := store.Customers(context.Background(), CustomerQuery{})
 	if err != nil {
 		t.Fatalf("Customers() returned error: %v", err)
 	}
-	if len(customers) == 0 {
-		t.Fatal("Customers() length = 0, want fixture-backed customers")
+	if len(customers.Items) == 0 {
+		t.Fatal("Customers().Items length = 0, want fixture-backed customers")
 	}
 
 	locations, err := store.Locations(context.Background())

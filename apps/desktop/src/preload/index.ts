@@ -4,6 +4,7 @@ import type {
   CreateWorkOrderInput,
   UpdateWorkOrderInput,
 } from "../../model/work-order";
+import type { CatalogItemInput, CatalogItemQuery } from "../../model/catalog";
 
 // Typed API surface exposed to the renderer process.
 // Add a new method here for each IPC channel a feature needs to call.
@@ -38,6 +39,25 @@ const api = {
   // Delete a work order.
   deleteWorkOrder: (id: string) =>
     ipcRenderer.invoke("workorders:delete", { id }),
+
+  // List catalog items (admin-managed articles and services), optionally filtered.
+  getCatalogItems: (query?: CatalogItemQuery) =>
+    ipcRenderer.invoke("catalog:list", query),
+
+  // Create a catalog item (admin only).
+  createCatalogItem: (input: CatalogItemInput) =>
+    ipcRenderer.invoke("catalog:create", input),
+
+  // Update a catalog item (admin only).
+  updateCatalogItem: (id: string, input: CatalogItemInput) =>
+    ipcRenderer.invoke("catalog:update", { ...input, id }),
+
+  // Delete a catalog item (admin only).
+  deleteCatalogItem: (id: string) =>
+    ipcRenderer.invoke("catalog:delete", { id }),
+
+  // Read shop-wide organization settings (firm name).
+  getSettings: () => ipcRenderer.invoke("settings:get"),
 };
 
 if (process.contextIsolated) {

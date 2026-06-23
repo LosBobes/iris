@@ -156,6 +156,58 @@ CREATE TABLE IF NOT EXISTS enum_values (
 );
 `
 
+// catalogItemsMigration adds the admin-managed catalog of articles and services
+// that regular users select when building work orders. Imported from the legacy
+// MdArt table (code/kind/unit/price/barcode/tax-group/description).
+const catalogItemsMigration = `
+CREATE TABLE IF NOT EXISTS catalog_items (
+	id TEXT PRIMARY KEY,
+	code TEXT NOT NULL UNIQUE,
+	name TEXT NOT NULL,
+	kind TEXT NOT NULL CHECK (kind IN ('service', 'article')),
+	unit TEXT NOT NULL DEFAULT 'kom',
+	default_price REAL,
+	barcode TEXT,
+	tax_group TEXT,
+	description TEXT,
+	is_active INTEGER NOT NULL DEFAULT 1,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_items_kind ON catalog_items(kind);
+CREATE INDEX IF NOT EXISTS idx_catalog_items_name ON catalog_items(name COLLATE NOCASE);
+`
+
+// customerIdentifiersMigration adds the Serbian firm identifiers PIB and MB to
+// customers. Existing rows keep NULLs; values are validated at the API layer.
+const customerIdentifiersMigration = `
+ALTER TABLE customers ADD COLUMN pib TEXT;
+ALTER TABLE customers ADD COLUMN mb TEXT;
+`
+
+// catalogPricesMigration splits the single default_price into a sale price
+// (prodajna cena, visible to everyone) and a purchase/cost price (nabavna cena
+// for articles, cena rada for services — admin-only). Existing default_price
+// values are treated as the sale price. default_price is left in place for
+// backward compatibility but no longer read.
+const catalogPricesMigration = `
+ALTER TABLE catalog_items ADD COLUMN purchase_price REAL;
+ALTER TABLE catalog_items ADD COLUMN sale_price REAL;
+UPDATE catalog_items SET sale_price = default_price;
+`
+
+// appSettingsMigration adds a small key-value table for shop-wide settings
+// (currently just the firm/branding name) and seeds the default firm name.
+const appSettingsMigration = `
+CREATE TABLE IF NOT EXISTS app_settings (
+	key TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO app_settings(key, value) VALUES ('firm_name', 'Grafika Čobanović');
+`
+
 // sqliteMigrations is the ordered list of schema versions. Each entry is applied
 // once, in order, and recorded in schema_migrations so existing databases pick
 // up later versions on the next startup.
@@ -165,6 +217,10 @@ var sqliteMigrations = []struct {
 }{
 	{version: 1, sql: initialSQLiteMigration},
 	{version: 2, sql: enumValuesMigration},
+	{version: 3, sql: catalogItemsMigration},
+	{version: 4, sql: customerIdentifiersMigration},
+	{version: 5, sql: catalogPricesMigration},
+	{version: 6, sql: appSettingsMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

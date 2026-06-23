@@ -57,6 +57,25 @@ declare global {
       ) => Promise<import("../renderer/src/types/work-order").WorkOrder | null>;
 
       deleteWorkOrder: (id: string) => Promise<DeleteWorkOrderResponse>;
+
+      getCatalogItems: (
+        query?: import("../renderer/src/types/catalog").CatalogItemQuery,
+      ) => Promise<import("../renderer/src/types/catalog").CatalogItemListResult>;
+
+      createCatalogItem: (
+        input: import("../renderer/src/types/catalog").CatalogItemInput,
+      ) => Promise<import("../renderer/src/types/catalog").CatalogItem>;
+
+      updateCatalogItem: (
+        id: string,
+        input: import("../renderer/src/types/catalog").CatalogItemInput,
+      ) => Promise<import("../renderer/src/types/catalog").CatalogItem>;
+
+      deleteCatalogItem: (id: string) => Promise<{ success: boolean }>;
+
+      getSettings: () => Promise<
+        import("../renderer/src/types/settings").OrganizationSettings
+      >;
     };
   }
 }

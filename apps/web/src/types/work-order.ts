@@ -93,6 +93,10 @@ export interface Customer {
   contactName: string | null
   email: string | null
   phone: string | null
+  // Serbian firm identifiers. Optional on imported records; validated when set.
+  // PIB: 9 digits + ISO 7064 MOD 11,10 control digit. MB: exactly 8 digits.
+  pib: string | null
+  mb: string | null
 }
 
 export interface Location {
@@ -100,6 +104,17 @@ export interface Location {
   customerId: string
   name: string
   address: string | null
+}
+
+export interface CustomerListQuery {
+  q?: string
+  limit?: number
+  offset?: number
+}
+
+export interface CustomerListResult {
+  items: Customer[]
+  total: number
 }
 
 export interface Assignment {
@@ -160,6 +175,12 @@ export interface InvoiceLineItem {
   quantity: number
   unit: InvoiceUnit
   unitPrice: number
+  // Per-unit cost captured from the catalog item's purchasePrice at save time
+  // (margin = unitPrice - unitCost). Server-derived and admin-only: the API
+  // returns 0 for non-admin users. Optional because clients never send it.
+  unitCost?: number
+  // Set when the line was picked from the catalog; null for ad-hoc services.
+  catalogItemId?: string | null
 }
 
 export interface InvoiceDraft {
@@ -203,6 +224,12 @@ export interface WorkOrder {
   status: WorkOrderStatus
   /** Null means unbilled / price not yet set */
   price: number | null
+  /**
+   * Cached margin: sum of (unitPrice - unitCost) * quantity over line items,
+   * recomputed server-side on every save. Admin-only — null/absent for
+   * non-admin users.
+   */
+  profit?: number | null
   note: string | null
   /** ISO-8601 datetime string */
   createdAt: string

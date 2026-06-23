@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useAuth } from "@/hooks/useAuth";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
-import type { Customer, Location, WorkOrder, WorkOrderNote } from "@/types/work-order";
+import type { Location, WorkOrder, WorkOrderNote } from "@/types/work-order";
 
 function getDuplicateInitialValues(
   source: WorkOrder | null,
@@ -61,16 +61,10 @@ function WorkOrderCreatePage(): React.JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
 
   useEffect(() => {
-    void Promise.all([window.api.getCustomers(), window.api.getLocations()]).then(
-      ([nextCustomers, nextLocations]) => {
-        setCustomers(nextCustomers);
-        setLocations(nextLocations);
-      },
-    );
+    void window.api.getLocations().then(setLocations);
   }, []);
 
   // Duplicate pre-fill: data passed via router state
@@ -144,7 +138,6 @@ function WorkOrderCreatePage(): React.JSX.Element {
         <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
           <WorkOrderForm
             initialValues={duplicateInitialValues}
-            customers={customers}
             locations={locations}
             onSubmit={handleSubmit}
             onCancel={handleCancel}

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Copy, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, FileText, Loader2, Trash2, X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
+import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Location, WorkOrder } from "@/types/work-order";
 import {
@@ -51,19 +52,50 @@ function renderTimelineLabel(label: string, kind: string): React.ReactNode {
   );
 }
 
-export function printWorkOrder(orderNumber: string): void {
-  const previousTitle = document.title;
-  document.title = orderNumber;
+/**
+ * Prints the canonical print layout — the same HTML the PDF is generated from,
+ * fetched from the API and printed inside a hidden same-origin iframe. This
+ * avoids the browser printing the whole app page (app chrome, drifted print CSS,
+ * clipped columns). Falls back to opening the PDF report if rendering fails.
+ */
+export async function printWorkOrder(order: WorkOrder): Promise<void> {
+  let html: string;
+  try {
+    html = await window.api.getWorkOrderPreviewHtml(order);
+  } catch {
+    window.open(
+      window.api.getWorkOrderReportUrl(order.id),
+      "_blank",
+      "noopener,noreferrer",
+    );
+    return;
+  }
 
-  window.addEventListener(
-    "afterprint",
-    () => {
-      document.title = previousTitle;
-    },
-    { once: true },
-  );
-
-  window.print();
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  Object.assign(iframe.style, {
+    position: "fixed",
+    right: "0",
+    bottom: "0",
+    width: "0",
+    height: "0",
+    border: "0",
+  });
+  // srcdoc keeps the iframe same-origin, so contentWindow.print() is allowed.
+  iframe.srcdoc = html;
+  iframe.onload = () => {
+    const win = iframe.contentWindow;
+    if (!win) {
+      iframe.remove();
+      return;
+    }
+    const cleanup = (): void => iframe.remove();
+    win.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(cleanup, 60000);
+    win.focus();
+    win.print();
+  };
+  document.body.appendChild(iframe);
 }
 
 export function openWorkOrderPdf(orderId: string): void {
@@ -78,6 +110,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   // Deleting is admin-only on the API; gate the button to match.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
@@ -169,7 +202,8 @@ function WorkOrderDetailPage(): React.JSX.Element {
     <>
       <div className="work-order-screen-root">
         <AppShell>
-          <div>
+          <div className="flex items-stretch">
+          <div className="min-w-0 flex-1">
         <div className="animate-iris-enter border-b border-border px-10 pt-5 pb-6">
           <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-mute)]">
             <button
@@ -215,7 +249,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
                 )}
                 <button
                   type="button"
-                  onClick={() => printWorkOrder(order.orderNumber)}
+                  onClick={() => void printWorkOrder(order)}
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   Štampaj
@@ -226,6 +260,19 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen((open) => !open)}
+                  aria-pressed={previewOpen}
+                  className={`iris-focusable iris-press flex items-center gap-1 border px-3 py-[7px] text-[12px] ${
+                    previewOpen
+                      ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
+                      : "border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                  }`}
+                >
+                  <FileText className="h-3 w-3" />
+                  Pregled
                 </button>
                 <button
                   type="button"
@@ -297,6 +344,25 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
         )}
           </div>
+          {previewOpen && order && (
+            <aside className="animate-iris-enter sticky top-0 hidden h-screen w-[380px] shrink-0 self-start overflow-auto border-l border-border bg-card p-6 lg:block">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                  PDF pregled
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(false)}
+                  aria-label="Zatvori pregled"
+                  className="iris-focusable iris-press flex items-center justify-center bg-transparent p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <WorkOrderPreviewPane order={order} />
+            </aside>
+          )}
+          </div>
         </AppShell>
       </div>
       {order && <WorkOrderPrintSheet order={order} locations={locations} />}
@@ -311,6 +377,8 @@ function WorkOrderDetailPage(): React.JSX.Element {
 }
 
 function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
   const metaCells: Array<[string, string]> = [
     [
       "Tip dokumenta",
@@ -492,9 +560,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   Količina
                 </th>
-                <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                  Iznos
-                </th>
+                {isAdmin && (
+                  <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                    Iznos
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -521,9 +591,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
                     {line.quantity} {line.unit}
                   </td>
-                  <td className="tnum py-3 text-right font-medium text-foreground">
-                    {formatWorkOrderPrice(line.quantity * line.unitPrice)}
-                  </td>
+                  {isAdmin && (
+                    <td className="tnum py-3 text-right font-medium text-foreground">
+                      {formatWorkOrderPrice(line.quantity * line.unitPrice)}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -554,18 +626,20 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 attachment.url ? "otvori" : attachment.fileType,
               ])}
             />
-            <InfoList
-              title="Faktura"
-              empty="Nema nacrta fakture."
-              rows={[
-                ["Status", order.invoiceDraft.status],
-                ["Broj", order.invoiceDraft.invoiceNumber ?? "-"],
-                ["Plaćeno", order.invoiceDraft.paidAt ? formatWorkOrderDate(order.invoiceDraft.paidAt) : "-"],
-              ]}
-            />
+            {isAdmin && (
+              <InfoList
+                title="Faktura"
+                empty="Nema nacrta fakture."
+                rows={[
+                  ["Status", order.invoiceDraft.status],
+                  ["Broj", order.invoiceDraft.invoiceNumber ?? "-"],
+                  ["Plaćeno", order.invoiceDraft.paidAt ? formatWorkOrderDate(order.invoiceDraft.paidAt) : "-"],
+                ]}
+              />
+            )}
           </div>
 
-          {order.price !== null && (
+          {isAdmin && order.price !== null && (
             <div className="mt-4 flex justify-end">
               <div className="w-64 text-[12px]">
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">

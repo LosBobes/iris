@@ -26,6 +26,8 @@ import type {
   WorkOrderStatus,
   WorkOrderStatusHistory,
 } from '@/types/work-order'
+import type { CatalogItem } from '@/types/catalog'
+import { DEFAULT_FIRM_NAME, type OrganizationSettings } from '@/types/settings'
 
 interface FixtureUser extends AuthenticatedUser {
   password: string
@@ -74,12 +76,20 @@ const APP_VERSION = '0.1.0-dev'
 const INVALID_CREDENTIALS = 'Neispravno korisničko ime ili lozinka.'
 const INVALID_WORK_ORDER = 'Prosleđeni podaci nisu ispravni.'
 
-const users = rawUsers as FixtureUser[]
+let users = [...(rawUsers as FixtureUser[])]
+let nextUserSequence = users.length + 1
 const customers = rawCustomers as Customer[]
 const locations = rawLocations as Location[]
 
 function cloneValue<T>(value: T): T {
   return structuredClone(value)
+}
+
+// Mirrors the server's limit/offset paging; limit <= 0 (or undefined) returns all.
+function paginate<T>(items: T[], limit?: number, offset?: number): T[] {
+  if (!limit || limit <= 0) return items
+  const start = Math.max(offset ?? 0, 0)
+  return items.slice(start, start + limit)
 }
 
 function normalizeNullableString(value: string | null | undefined): string | null {
@@ -309,6 +319,51 @@ const ENUM_FIELD_ORDER: EnumField[] = [
 let customEnumValues: EnumValue[] = []
 let nextEnumSequence = 1
 
+let catalogItems: CatalogItem[] = [
+  {
+    id: 'cat-1',
+    code: 'SVC-1',
+    name: 'Štampa vizit karata',
+    kind: 'service',
+    unit: 'set',
+    purchasePrice: 700,
+    salePrice: 1200,
+    barcode: null,
+    taxGroup: null,
+    description: null,
+    isActive: true,
+  },
+  {
+    id: 'cat-2',
+    code: 'SVC-2',
+    name: 'Štampa flajera A5',
+    kind: 'service',
+    unit: 'kom',
+    purchasePrice: 8,
+    salePrice: 15,
+    barcode: null,
+    taxGroup: null,
+    description: null,
+    isActive: true,
+  },
+  {
+    id: 'cat-3',
+    code: 'ART-1',
+    name: 'USB memorija 32GB',
+    kind: 'article',
+    unit: 'kom',
+    purchasePrice: 400,
+    salePrice: 620,
+    barcode: null,
+    taxGroup: null,
+    description: null,
+    isActive: true,
+  },
+]
+let nextCatalogSequence = 4
+
+let firmName = DEFAULT_FIRM_NAME
+
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
   return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
 }
@@ -429,8 +484,77 @@ export function createFixtureApi(): Window['api'] {
       return undefined
     },
 
-    async getCustomers() {
-      return cloneValue(customers)
+    async listUsers() {
+      return users.map((user) => ({ id: user.id, username: user.username, role: user.role }))
+    },
+
+    async createUser(input) {
+      const username = input.username.trim()
+      if (!username) throw new Error('Korisničko ime je obavezno.')
+      if ((input.password ?? '').trim().length < 6)
+        throw new Error('Lozinka mora imati najmanje 6 karaktera.')
+      if (users.some((user) => user.username.toLowerCase() === username.toLowerCase()))
+        throw new Error('Korisničko ime već postoji.')
+      const created: FixtureUser = {
+        id: `user-${nextUserSequence++}`,
+        username,
+        role: input.role,
+        password: input.password,
+      }
+      users.push(created)
+      return { id: created.id, username: created.username, role: created.role }
+    },
+
+    async updateUser(id, input) {
+      const index = users.findIndex((user) => user.id === id)
+      if (index === -1) throw new Error('Korisnik nije pronađen.')
+      const target = users[index]
+      if (
+        target.role === 'admin' &&
+        input.role !== 'admin' &&
+        users.filter((user) => user.role === 'admin').length <= 1
+      ) {
+        throw new Error('Mora postojati bar jedan administrator.')
+      }
+      if (input.password && input.password.trim() !== '' && input.password.trim().length < 6)
+        throw new Error('Lozinka mora imati najmanje 6 karaktera.')
+      users[index] = {
+        ...target,
+        role: input.role,
+        password:
+          input.password && input.password.trim() !== '' ? input.password : target.password,
+      }
+      return { id: target.id, username: target.username, role: input.role }
+    },
+
+    async deleteUser(id) {
+      const target = users.find((user) => user.id === id)
+      if (
+        target?.role === 'admin' &&
+        users.filter((user) => user.role === 'admin').length <= 1
+      ) {
+        throw new Error('Mora postojati bar jedan administrator.')
+      }
+      users = users.filter((user) => user.id !== id)
+      return { success: true }
+    },
+
+    async getCustomers(query = {}) {
+      let matched = customers
+      if (query.q) {
+        const term = query.q.toLowerCase()
+        matched = matched.filter((c) =>
+          `${c.name} ${c.pib ?? ''} ${c.mb ?? ''}`.toLowerCase().includes(term),
+        )
+      }
+      const total = matched.length
+      const items = paginate(matched, query.limit, query.offset)
+      return { items: cloneValue(items), total }
+    },
+
+    async getCustomerById(id) {
+      const found = customers.find((candidate) => candidate.id === id)
+      return found ? cloneValue(found) : null
     },
 
     async upsertCustomer(customer) {
@@ -529,6 +653,83 @@ export function createFixtureApi(): Window['api'] {
       return { success: true }
     },
 
+    async getCatalogItems(query = {}) {
+      let items = cloneValue(catalogItems)
+      if (query.kind) items = items.filter((item) => item.kind === query.kind)
+      if (query.active) items = items.filter((item) => item.isActive)
+      if (query.q) {
+        const term = query.q.toLowerCase()
+        items = items.filter(
+          (item) =>
+            item.name.toLowerCase().includes(term) || item.code.toLowerCase().includes(term),
+        )
+      }
+      items.sort((a, b) => a.name.localeCompare(b.name, 'sr'))
+      const total = items.length
+      return { items: paginate(items, query.limit, query.offset), total }
+    },
+
+    async getCatalogItemById(id) {
+      const found = catalogItems.find((item) => item.id === id)
+      return found ? cloneValue(found) : null
+    },
+
+    async createCatalogItem(input) {
+      const name = input.name.trim()
+      if (!name) throw new Error('Naziv artikla je obavezan.')
+      const code = input.code.trim()
+      if (code && catalogItems.some((item) => item.code === code)) {
+        throw new Error('Artikal sa istom šifrom već postoji.')
+      }
+      const id = `cat-${nextCatalogSequence++}`
+      const created: CatalogItem = {
+        ...input,
+        id,
+        code: code || id,
+        name,
+        unit: (input.unit || 'kom').toLowerCase(),
+      }
+      catalogItems.push(created)
+      return cloneValue(created)
+    },
+
+    async updateCatalogItem(id, input) {
+      const index = catalogItems.findIndex((item) => item.id === id)
+      if (index === -1) throw new Error('Artikal nije pronađen.')
+      const name = input.name.trim()
+      if (!name) throw new Error('Naziv artikla je obavezan.')
+      const code = input.code.trim() || catalogItems[index].code
+      if (catalogItems.some((item, itemIndex) => itemIndex !== index && item.code === code)) {
+        throw new Error('Artikal sa istom šifrom već postoji.')
+      }
+      const updated: CatalogItem = {
+        ...catalogItems[index],
+        ...input,
+        id,
+        code,
+        name,
+        unit: (input.unit || 'kom').toLowerCase(),
+      }
+      catalogItems[index] = updated
+      return cloneValue(updated)
+    },
+
+    async deleteCatalogItem(id) {
+      catalogItems = catalogItems.filter((item) => item.id !== id)
+      return { success: true }
+    },
+
+    async getSettings(): Promise<OrganizationSettings> {
+      return { firmName }
+    },
+
+    async updateSettings(settings: OrganizationSettings): Promise<OrganizationSettings> {
+      const next = settings.firmName.trim()
+      if (!next) throw new Error('Naziv firme je obavezan.')
+      firmName = next
+      return { firmName }
+    },
+
     async getWorkOrders(query) {
       return listFixtureWorkOrders(query)
     },
@@ -623,6 +824,30 @@ export function createFixtureApi(): Window['api'] {
       return initialLength === workOrders.length
         ? { success: false, message: 'Radni nalog nije pronađen.' }
         : { success: true }
+    },
+
+    async getWorkOrderPreviewHtml(order) {
+      // The real print template lives in the Go service; in fixtures mode we
+      // return a lightweight stand-in so the preview pane still renders.
+      const esc = (value: string): string =>
+        value.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] ?? c)
+      const lines = order.invoiceDraft.lineItems
+        .map((li) => `<li>${esc(li.description)} — ${li.quantity} ${esc(li.unit)}</li>`)
+        .join('')
+      return `<!doctype html><html lang="sr-Latn"><head><meta charset="utf-8"><style>
+        body{font-family:Geist,system-ui,sans-serif;margin:0;padding:24px;color:#24201d;background:#fff}
+        h1{font-size:18px;letter-spacing:1px;margin:0 0 16px}
+        .k{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8a8178}
+        .v{font-size:14px;margin:0 0 12px}
+        ul{padding-left:18px}
+      </style></head><body>
+        <h1>RADNI NALOG ${esc(order.orderNumber || '')}</h1>
+        <div class="k">Klijent</div><div class="v">${esc(order.clientName || '-')}</div>
+        <div class="k">Opis</div><div class="v">${esc(order.jobDescription || '-')}</div>
+        <div class="k">Rok</div><div class="v">${esc(order.dueDate || '-')}</div>
+        <div class="k">Stavke</div><ul>${lines || '<li>—</li>'}</ul>
+        <p style="color:#8a8178;font-size:11px">Pregled (demo režim) — stvarni izgled generiše servis.</p>
+      </body></html>`
     },
 
     async getPublicWorkOrderStatus(token) {

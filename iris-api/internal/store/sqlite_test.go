@@ -81,12 +81,12 @@ func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
 
-	customers, err := sqliteStore.Customers(ctx)
+	customers, err := sqliteStore.Customers(ctx, CustomerQuery{})
 	if err != nil {
 		t.Fatalf("Customers() returned error: %v", err)
 	}
-	if customers == nil {
-		t.Fatal("Customers() = nil, want empty slice")
+	if customers.Items == nil {
+		t.Fatal("Customers().Items = nil, want empty slice")
 	}
 
 	locations, err := sqliteStore.Locations(ctx)
