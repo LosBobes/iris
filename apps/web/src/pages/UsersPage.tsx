@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Plus, Save, Shield, Trash2, User as UserIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
@@ -15,11 +16,6 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import type { ManagedUser, UserRole } from "@/types/user";
 
-const ROLE_LABELS: Record<UserRole, string> = {
-  admin: "Administrator",
-  user: "Operater",
-};
-
 function formatActionError(prefix: string, error: unknown): string {
   if (error instanceof Error && error.message.trim() !== "") {
     return `${prefix}: ${error.message}`;
@@ -28,6 +24,7 @@ function formatActionError(prefix: string, error: unknown): string {
 }
 
 function UsersPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,11 +36,11 @@ function UsersPage(): React.JSX.Element {
     try {
       setUsers(await window.api.listUsers());
     } catch {
-      toast.error("Greška pri učitavanju korisnika.");
+      toast.error(t("users.loadError"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -53,27 +50,27 @@ function UsersPage(): React.JSX.Element {
     if (!deleteTarget) return;
     try {
       await window.api.deleteUser(deleteTarget.id);
-      toast.success("Korisnik je obrisan.");
+      toast.success(t("users.deleted"));
       setDeleteTarget(null);
       await load();
     } catch (error) {
       setDeleteTarget(null);
-      toast.error(formatActionError("Greška pri brisanju korisnika", error));
+      toast.error(formatActionError(t("users.deleteError"), error));
     }
-  }, [deleteTarget, load]);
+  }, [deleteTarget, load, t]);
 
   return (
     <AppShell>
       <div className="space-y-8">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Iris · korisnici
+            {t("users.eyebrow")}
           </div>
           <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-            Korisnici
+            {t("users.title")}
           </h1>
           <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-            Dodajte naloge i upravljajte ulogama i lozinkama
+            {t("users.subtitle")}
           </div>
         </div>
 
@@ -82,15 +79,15 @@ function UsersPage(): React.JSX.Element {
 
           <section className="border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-3 text-[13px] font-medium">
-              <span>Nalozi</span>
+              <span>{t("users.accounts")}</span>
               <span className="text-[11px] font-normal text-[color:var(--iris-ink-soft)]">
-                {loading ? "" : `${users.length} ukupno`}
+                {loading ? "" : t("users.totalCount", { count: users.length })}
               </span>
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Učitavanje korisnika...
+                {t("users.loading")}
               </div>
             ) : (
               <ul className="divide-y divide-[color:var(--iris-border-soft)]">
@@ -122,12 +119,12 @@ function UsersPage(): React.JSX.Element {
                             {user.username}
                             {user.id === currentUser.id && (
                               <span className="ml-1.5 text-[11px] text-[color:var(--iris-ink-mute)]">
-                                (vi)
+                                {t("users.you")}
                               </span>
                             )}
                           </span>
                           <span className="block truncate text-[11px] text-[color:var(--iris-ink-soft)]">
-                            {ROLE_LABELS[user.role]}
+                            {t(user.role === "admin" ? "shell.administrator" : "shell.operator")}
                           </span>
                         </span>
                       </span>
@@ -136,7 +133,7 @@ function UsersPage(): React.JSX.Element {
                           type="button"
                           onClick={() => setEditing(user)}
                           className="iris-focusable iris-press text-[color:var(--iris-ink-soft)] hover:text-foreground"
-                          aria-label={`Izmeni ${user.username}`}
+                          aria-label={t("users.editAria", { name: user.username })}
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -145,7 +142,7 @@ function UsersPage(): React.JSX.Element {
                             type="button"
                             onClick={() => setDeleteTarget(user)}
                             className="iris-focusable iris-press text-[color:var(--iris-status-cancelled)] hover:opacity-80"
-                            aria-label={`Obriši ${user.username}`}
+                            aria-label={t("users.deleteAria", { name: user.username })}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -168,15 +165,15 @@ function UsersPage(): React.JSX.Element {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Brisanje korisnika</AlertDialogTitle>
+            <AlertDialogTitle>{t("users.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Da li ste sigurni da želite da obrišete nalog {deleteTarget?.username}?
+              {t("users.deleteConfirm", { name: deleteTarget?.username ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Otkaži</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={() => void confirmDelete()}>
-              Obriši
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -186,6 +183,7 @@ function UsersPage(): React.JSX.Element {
 }
 
 function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }): React.JSX.Element {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("user");
@@ -193,23 +191,23 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }): Reac
 
   const submit = async (): Promise<void> => {
     if (!username.trim()) {
-      toast.error("Korisničko ime je obavezno.");
+      toast.error(t("users.usernameRequired"));
       return;
     }
     if (password.trim().length < 6) {
-      toast.error("Lozinka mora imati najmanje 6 karaktera.");
+      toast.error(t("users.passwordMin"));
       return;
     }
     setSaving(true);
     try {
       await window.api.createUser({ username: username.trim(), password, role });
-      toast.success("Korisnik je dodat.");
+      toast.success(t("users.created"));
       setUsername("");
       setPassword("");
       setRole("user");
       await onCreated();
     } catch (error) {
-      toast.error(formatActionError("Greška pri dodavanju korisnika", error));
+      toast.error(formatActionError(t("users.createError"), error));
     } finally {
       setSaving(false);
     }
@@ -226,12 +224,12 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }): Reac
     >
       <div className="mb-3 flex items-center gap-2 text-[13px] font-medium">
         <Plus className="h-4 w-4 text-[color:var(--iris-accent)]" />
-        Novi korisnik
+        {t("users.newUser")}
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Korisničko ime" value={username} onChange={setUsername} autoComplete="off" />
+        <Field label={t("users.usernameLabel")} value={username} onChange={setUsername} autoComplete="off" />
         <Field
-          label="Lozinka (min 6)"
+          label={t("users.passwordLabel")}
           value={password}
           onChange={setPassword}
           type="password"
@@ -246,7 +244,7 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }): Reac
           className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-          Dodaj korisnika
+          {t("users.addUser")}
         </button>
       </div>
     </form>
@@ -262,13 +260,14 @@ function EditUserRow({
   onCancel: () => void;
   onSaved: () => Promise<void>;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const [role, setRole] = useState<UserRole>(user.role);
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
 
   const submit = async (): Promise<void> => {
     if (password.trim() !== "" && password.trim().length < 6) {
-      toast.error("Lozinka mora imati najmanje 6 karaktera.");
+      toast.error(t("users.passwordMin"));
       return;
     }
     setSaving(true);
@@ -277,10 +276,10 @@ function EditUserRow({
         role,
         password: password.trim() === "" ? undefined : password,
       });
-      toast.success("Korisnik je sačuvan.");
+      toast.success(t("users.saved"));
       await onSaved();
     } catch (error) {
-      toast.error(formatActionError("Greška pri čuvanju korisnika", error));
+      toast.error(formatActionError(t("users.saveError"), error));
     } finally {
       setSaving(false);
     }
@@ -296,12 +295,12 @@ function EditUserRow({
       className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
     >
       <div>
-        <div className="text-[11px] text-[color:var(--iris-ink-soft)]">Korisnik</div>
+        <div className="text-[11px] text-[color:var(--iris-ink-soft)]">{t("users.userLabel")}</div>
         <div className="mt-1 py-2 text-[13px] font-medium text-foreground">{user.username}</div>
       </div>
       <RoleSelect value={role} onChange={setRole} />
       <Field
-        label="Nova lozinka (opciono)"
+        label={t("users.newPasswordLabel")}
         value={password}
         onChange={setPassword}
         type="password"
@@ -314,7 +313,7 @@ function EditUserRow({
           className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-3 py-2 text-[12px] font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Sačuvaj
+          {t("common.save")}
         </button>
         <button
           type="button"
@@ -322,7 +321,7 @@ function EditUserRow({
           className="iris-focusable iris-press inline-flex items-center gap-1 bg-transparent text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
         >
           <X className="h-3 w-3" />
-          Otkaži
+          {t("common.cancel")}
         </button>
       </div>
     </form>
@@ -336,16 +335,17 @@ function RoleSelect({
   value: UserRole;
   onChange: (value: UserRole) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
-      Uloga
+      {t("users.roleLabel")}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value as UserRole)}
         className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
       >
-        <option value="user">Operater</option>
-        <option value="admin">Administrator</option>
+        <option value="user">{t("shell.operator")}</option>
+        <option value="admin">{t("shell.administrator")}</option>
       </select>
     </label>
   );
