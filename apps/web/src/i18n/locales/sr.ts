@@ -21,6 +21,25 @@ export const sr = {
     sr: 'Srpski',
     en: 'English',
   },
+  app: {
+    tagline:
+      'Sistem za vođenje radnih naloga u štampariji. Svaki posao je evidentiran.',
+    version: 'Verzija',
+  },
+  auth: {
+    eyebrow: 'Prijava',
+    welcome: 'Dobrodošli',
+    username: 'Korisničko ime',
+    password: 'Lozinka',
+    forgot: 'zaboravljena?',
+    showPassword: 'Prikaži lozinku',
+    hidePassword: 'Sakrij lozinku',
+    submit: 'Prijavite se',
+    rememberDevice: 'Zapamti uređaj',
+    resetNotice: 'Za reset lozinke obratite se administratoru sistema.',
+    loginError: 'Greška pri prijavljivanju.',
+    backendError: 'Greška u komunikaciji sa backend servisom.{{details}}',
+  },
   nav: {
     dashboard: 'Kontrolna tabla',
     workOrders: 'Radni nalozi',

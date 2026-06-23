@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Eye, EyeOff } from "lucide-react";
 
 interface LoginProps {
@@ -35,6 +36,7 @@ function storeRememberedLogin(username: string, rememberDevice: boolean): void {
 }
 
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -83,15 +85,13 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         storeRememberedLogin(username, rememberDevice);
         onLoginSuccess(result.user);
       } else {
-        setError(result.error ?? "Greška pri prijavljivanju.");
+        setError(result.error ?? t("auth.loginError"));
         setErrorKey((k) => k + 1);
       }
     } catch (err) {
       const details =
         err instanceof Error && err.message ? ` (${err.message})` : "";
-      setError(
-        `Greška u komunikaciji sa backend servisom.${details}`,
-      );
+      setError(t("auth.backendError", { details }));
       setErrorKey((k) => k + 1);
     } finally {
       setIsLoading(false);
@@ -100,9 +100,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
 
   function handleForgottenPassword(): void {
     setError(null);
-    setNotice(
-      "Za reset lozinke obratite se administratoru sistema.",
-    );
+    setNotice(t("auth.resetNotice"));
   }
 
   return (
@@ -136,11 +134,10 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
             }}
           />
           <p className="mx-auto max-w-[300px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)] lg:mx-0 lg:max-w-[260px]">
-            Sistem za vođenje radnih naloga u štampariji. Svaki posao je
-            evidentiran.
+            {t("app.tagline")}
           </p>
           <div className="mt-6 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)] sm:mt-10">
-            {appVersion ? `Verzija ${appVersion}` : "Verzija"}
+            {appVersion ? `${t("app.version")} ${appVersion}` : t("app.version")}
           </div>
         </div>
 
@@ -154,10 +151,10 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         >
           {/* Use ref so the shake animation can be re-triggered on subsequent errors. */}
           <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Prijava
+            {t("auth.eyebrow")}
           </div>
           <h1 className="mb-6 text-[22px] font-medium tracking-[-0.3px] text-foreground">
-            Dobrodošli
+            {t("auth.welcome")}
           </h1>
 
           <form onSubmit={handleSubmit} className="flex flex-col" noValidate>
@@ -166,7 +163,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                 htmlFor="username"
                 className="mb-1.5 block text-[11px] text-[color:var(--iris-ink-soft)]"
               >
-                Korisničko ime
+                {t("auth.username")}
               </label>
               <input
                 id="username"
@@ -182,13 +179,13 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
 
             <div className="mb-7">
               <div className="mb-1.5 flex justify-between text-[11px] text-[color:var(--iris-ink-soft)]">
-                <label htmlFor="password">Lozinka</label>
+                <label htmlFor="password">{t("auth.password")}</label>
                 <button
                   type="button"
                   onClick={handleForgottenPassword}
                   className="iris-focusable iris-press -mr-1 px-1 text-[11px] text-[color:var(--iris-accent)] underline-offset-4 hover:underline"
                 >
-                  zaboravljena?
+                  {t("auth.forgot")}
                 </button>
               </div>
               <div className="relative flex items-center">
@@ -206,7 +203,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
                   aria-label={
-                    showPassword ? "Sakrij lozinku" : "Prikaži lozinku"
+                    showPassword ? t("auth.hidePassword") : t("auth.showPassword")
                   }
                   className="iris-focusable iris-press absolute right-0 flex items-center justify-center p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
                 >
@@ -247,11 +244,11 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                     aria-hidden
                     className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-background/40 border-t-background"
                   />
-                  Učitavanje...
+                  {t("common.loading")}
                 </span>
               ) : (
                 <>
-                  Prijavite se
+                  {t("auth.submit")}
                   <span
                     aria-hidden
                     className="ml-1.5 inline-block transition-transform duration-200 ease-out group-hover:translate-x-[3px]"
@@ -284,7 +281,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                   className="pointer-events-none absolute text-background opacity-0 transition-opacity peer-checked:opacity-100"
                 />
               </span>
-              <span className="group-hover:text-foreground">Zapamti uređaj</span>
+              <span className="group-hover:text-foreground">{t("auth.rememberDevice")}</span>
             </label>
             <span>{appVersion ? `v${appVersion}` : null}</span>
           </div>

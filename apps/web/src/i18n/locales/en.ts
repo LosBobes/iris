@@ -22,6 +22,25 @@ export const en: typeof sr = {
     sr: 'Srpski',
     en: 'English',
   },
+  app: {
+    tagline:
+      'Print-shop work-order management. Every job on the record.',
+    version: 'Version',
+  },
+  auth: {
+    eyebrow: 'Sign in',
+    welcome: 'Welcome',
+    username: 'Username',
+    password: 'Password',
+    forgot: 'forgot?',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+    submit: 'Sign in',
+    rememberDevice: 'Remember this device',
+    resetNotice: 'To reset your password, contact the system administrator.',
+    loginError: 'Sign-in failed.',
+    backendError: 'Error communicating with the backend service.{{details}}',
+  },
   nav: {
     dashboard: 'Dashboard',
     workOrders: 'Work orders',
