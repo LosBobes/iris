@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Eye, EyeOff } from "lucide-react";
 
 interface LoginProps {
@@ -6,6 +7,7 @@ interface LoginProps {
 }
 
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -46,15 +48,13 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
       if (result.success && result.user) {
         onLoginSuccess(result.user);
       } else {
-        setError(result.error ?? "Greška pri prijavljivanju.");
+        setError(result.error ?? t("auth.error"));
         setErrorKey((k) => k + 1);
       }
     } catch (err) {
       const details =
         err instanceof Error && err.message ? ` (${err.message})` : "";
-      setError(
-        `Greška u komunikaciji sa glavnim procesom aplikacije.${details}`,
-      );
+      setError(t("auth.ipcError", { details }));
       setErrorKey((k) => k + 1);
     } finally {
       setIsLoading(false);
@@ -92,11 +92,12 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
             }}
           />
           <p className="max-w-[260px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
-            Sistem za vođenje radnih naloga u štampariji. Svaki posao je
-            evidentiran.
+            {t("auth.tagline")}
           </p>
           <div className="mt-10 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)]">
-            {appVersion ? `Verzija ${appVersion}` : "Verzija"}
+            {appVersion
+              ? t("auth.version", { version: appVersion })
+              : t("auth.versionLabel")}
           </div>
         </div>
 
@@ -110,10 +111,10 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
         >
           {/* Use ref so the shake animation can be re-triggered on subsequent errors. */}
           <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Prijava
+            {t("auth.eyebrow")}
           </div>
           <h1 className="mb-6 text-[22px] font-medium tracking-[-0.3px] text-foreground">
-            Dobrodošli
+            {t("auth.welcome")}
           </h1>
 
           <form onSubmit={handleSubmit} className="flex flex-col" noValidate>
@@ -122,7 +123,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                 htmlFor="username"
                 className="mb-1.5 block text-[11px] text-[color:var(--iris-ink-soft)]"
               >
-                Korisničko ime
+                {t("auth.username")}
               </label>
               <input
                 id="username"
@@ -138,9 +139,9 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
 
             <div className="mb-7">
               <div className="mb-1.5 flex justify-between text-[11px] text-[color:var(--iris-ink-soft)]">
-                <label htmlFor="password">Lozinka</label>
+                <label htmlFor="password">{t("auth.password")}</label>
                 <span className="text-[11px] text-[color:var(--iris-accent)]">
-                  zaboravljena?
+                  {t("auth.forgot")}
                 </span>
               </div>
               <div className="relative flex items-center">
@@ -158,7 +159,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
                   aria-label={
-                    showPassword ? "Sakrij lozinku" : "Prikaži lozinku"
+                    showPassword ? t("auth.hidePassword") : t("auth.showPassword")
                   }
                   className="iris-focusable iris-press absolute right-0 flex items-center justify-center p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
                 >
@@ -189,11 +190,11 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
                     aria-hidden
                     className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-background/40 border-t-background"
                   />
-                  Učitavanje...
+                  {t("auth.loading")}
                 </span>
               ) : (
                 <>
-                  Prijavite se
+                  {t("auth.submit")}
                   <span
                     aria-hidden
                     className="ml-1.5 inline-block transition-transform duration-200 ease-out group-hover:translate-x-[3px]"
@@ -206,7 +207,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
           </form>
 
           <div className="mt-5 flex justify-between border-t border-[color:var(--iris-border-soft)] pt-4 text-[11px] text-[color:var(--iris-ink-mute)]">
-            <span>Zapamti uređaj</span>
+            <span>{t("auth.rememberDevice")}</span>
             <span>{appVersion ? `v${appVersion}` : null}</span>
           </div>
         </div>

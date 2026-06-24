@@ -8,6 +8,8 @@ import { registerAppVersionHandlers } from './AppVersion/AppVersion.async'
 import { registerBackendStatusHandlers } from './BackendStatus/BackendStatus.async'
 import { registerLoginHandlers } from './Login/Login.async'
 import { registerWorkOrderHandlers } from './WorkOrder/WorkOrder.async'
+import { registerCatalogHandlers } from './Catalog/Catalog.async'
+import { registerSettingsHandlers } from './Settings/Settings.async'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -57,6 +59,8 @@ app.whenReady().then(() => {
   registerBackendStatusHandlers()
   registerLoginHandlers()
   registerWorkOrderHandlers()
+  registerCatalogHandlers()
+  registerSettingsHandlers()
 
   createWindow()
 

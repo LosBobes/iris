@@ -18,11 +18,11 @@ func SeedDemoFromFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixture
 		}
 	}
 
-	customers, err := fixtures.Customers(ctx)
+	customers, err := fixtures.Customers(ctx, CustomerQuery{})
 	if err != nil {
 		return err
 	}
-	for _, customer := range customers {
+	for _, customer := range customers.Items {
 		if _, err := sqliteStore.UpsertCustomer(ctx, customer); err != nil {
 			return fmt.Errorf("seed customer %s: %w", customer.ID, err)
 		}

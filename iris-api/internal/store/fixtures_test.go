@@ -10,6 +10,45 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/testutil"
 )
 
+func TestUpdateWorkOrderAllowsBlankIssuedBy(t *testing.T) {
+	ctx := context.Background()
+	st, err := OpenSQLite(ctx, t.TempDir()+"/iris.db")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer st.Close()
+
+	created, err := st.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Klijent",
+		JobDescription: "Posao",
+		Shipping:       domain.Shipping{},
+		Assignment:     domain.Assignment{Priority: domain.WorkOrderPriorityNormal},
+		IssuedBy:       "admin",
+		IssueDate:      "2026-06-21",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Simulate a seeded/legacy order that has no issuer recorded.
+	legacy := *created
+	legacy.IssuedBy = ""
+	if err := st.PutWorkOrder(ctx, legacy); err != nil {
+		t.Fatalf("put legacy: %v", err)
+	}
+
+	updated, err := st.UpdateWorkOrder(ctx, created.ID, domain.UpdateWorkOrderInput{
+		"status":      json.RawMessage(`"assigned"`),
+		"isCompleted": json.RawMessage(`false`),
+	})
+	if err != nil {
+		t.Fatalf("update on blank-issuedBy order must succeed, got: %v", err)
+	}
+	if updated.Status != domain.WorkOrderStatusAssigned {
+		t.Fatalf("status = %q, want assigned", updated.Status)
+	}
+}
+
 func TestFixtureStoreUsers(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
@@ -50,12 +89,12 @@ func TestFixtureStoreOperatorsSortedUnique(t *testing.T) {
 func TestFixtureStoreCustomersAndLocations(t *testing.T) {
 	store := NewFixtureStore(testutil.FixtureDir(t))
 
-	customers, err := store.Customers(context.Background())
+	customers, err := store.Customers(context.Background(), CustomerQuery{})
 	if err != nil {
 		t.Fatalf("Customers() returned error: %v", err)
 	}
-	if len(customers) == 0 {
-		t.Fatal("Customers() length = 0, want fixture-backed customers")
+	if len(customers.Items) == 0 {
+		t.Fatal("Customers().Items length = 0, want fixture-backed customers")
 	}
 
 	locations, err := store.Locations(context.Background())
@@ -208,6 +247,61 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 	}
 	if missingDelete.Message != "Radni nalog nije pronađen." {
 		t.Fatalf("DeleteWorkOrder(missing).Message = %q, want not-found message", missingDelete.Message)
+	}
+}
+
+func TestFixtureStoreLogsFieldChangeEvents(t *testing.T) {
+	store := NewFixtureStore(testutil.FixtureDir(t))
+
+	created, err := store.CreateWorkOrder(context.Background(), domain.CreateWorkOrderInput{
+		ClientName:     "Stari naziv",
+		JobDescription: "Štampa brošure",
+		Shipping:       domain.Shipping{},
+		IssuedBy:       "admin",
+		IssueDate:      "2026-04-25",
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() returned error: %v", err)
+	}
+
+	before := len(created.Events)
+
+	updated, err := store.UpdateWorkOrder(context.Background(), created.ID, domain.UpdateWorkOrderInput{
+		"clientName": json.RawMessage(`"Novi naziv"`),
+		"price":      json.RawMessage(`67000`),
+	})
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder() returned error: %v", err)
+	}
+
+	newEvents := updated.Events[before:]
+	if len(newEvents) != 2 {
+		t.Fatalf("new events = %d, want 2 change events; got %#v", len(newEvents), newEvents)
+	}
+
+	labels := map[string]bool{}
+	for _, e := range newEvents {
+		if e.Kind != "change" {
+			t.Fatalf("event kind = %q, want change", e.Kind)
+		}
+		labels[e.Label] = true
+	}
+	if !labels["Naziv klijenta: Stari naziv → Novi naziv"] {
+		t.Fatalf("missing client-name diff; got labels %v", labels)
+	}
+	if !labels["Cena: — → 67.000 RSD"] {
+		t.Fatalf("missing price diff; got labels %v", labels)
+	}
+
+	// Re-saving identical values must not generate further change events.
+	again, err := store.UpdateWorkOrder(context.Background(), created.ID, domain.UpdateWorkOrderInput{
+		"clientName": json.RawMessage(`"Novi naziv"`),
+	})
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder() returned error: %v", err)
+	}
+	if len(again.Events) != len(updated.Events) {
+		t.Fatalf("events grew on no-op update: %d -> %d", len(updated.Events), len(again.Events))
 	}
 }
 

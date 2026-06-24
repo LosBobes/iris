@@ -43,9 +43,15 @@ type FixtureStore struct {
 	customers        []domain.Customer
 	locations        []domain.Location
 	workOrders       []domain.WorkOrder
+	enumValues       []domain.EnumValue
+	catalogItems     []domain.CatalogItem
+	nextEnumSequence int
 	nextSequence     int
 	loaded           bool
 	referencesLoaded bool
+	usersLoaded      bool
+	fixtureUsers     []domain.FixtureUser
+	firmName         string
 	sessions         map[string]fixtureSession
 }
 
@@ -131,24 +137,98 @@ func (s *FixtureStore) DeleteSession(_ context.Context, token string) error {
 	return nil
 }
 
-// Users reads login fixture data.
+// Users returns the in-memory login fixtures, seeded once from users.json and
+// mutated by the account-management methods.
 func (s *FixtureStore) Users(_ context.Context) ([]domain.FixtureUser, error) {
-	var users []domain.FixtureUser
-	if err := s.readJSON("users.json", &users); err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureUsersLoadedLocked(); err != nil {
 		return nil, err
 	}
-	return users, nil
+	return append([]domain.FixtureUser(nil), s.fixtureUsers...), nil
 }
 
-// Customers reads normalized customer fixture data.
-func (s *FixtureStore) Customers(_ context.Context) ([]domain.Customer, error) {
+// ensureUsersLoadedLocked seeds the in-memory user slice from users.json once.
+// The caller must hold s.mu.
+func (s *FixtureStore) ensureUsersLoadedLocked() error {
+	if s.usersLoaded {
+		return nil
+	}
+	var users []domain.FixtureUser
+	if err := s.readJSON("users.json", &users); err != nil {
+		return err
+	}
+	s.fixtureUsers = users
+	s.usersLoaded = true
+	return nil
+}
+
+// Customers reads normalized customer fixture data, filtered and paginated to
+// match the SQLite store.
+func (s *FixtureStore) Customers(_ context.Context, query CustomerQuery) (CustomerListResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureReferenceDataLoaded(); err != nil {
+		return CustomerListResult{}, err
+	}
+
+	search := strings.ToLower(strings.TrimSpace(query.Search))
+	matched := make([]domain.Customer, 0, len(s.customers))
+	for _, customer := range s.customers {
+		if search != "" {
+			hay := strings.ToLower(customer.Name + " " + ptrString(customer.Pib) + " " + ptrString(customer.Mb))
+			if !strings.Contains(hay, search) {
+				continue
+			}
+		}
+		matched = append(matched, customer)
+	}
+
+	total := len(matched)
+	matched = paginateCustomers(matched, query.Limit, query.Offset)
+	return CustomerListResult{Items: cloneCustomers(matched), Total: total}, nil
+}
+
+func paginateCustomers(items []domain.Customer, limit int, offset int) []domain.Customer {
+	if limit <= 0 {
+		return items
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(items) {
+		return []domain.Customer{}
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[offset:end]
+}
+
+func ptrString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+// CustomerByID returns a single customer fixture or nil when not found.
+func (s *FixtureStore) CustomerByID(_ context.Context, id string) (*domain.Customer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if err := s.ensureReferenceDataLoaded(); err != nil {
 		return nil, err
 	}
-	return cloneCustomers(s.customers), nil
+	for _, customer := range s.customers {
+		if customer.ID == id {
+			cloned := cloneCustomer(customer)
+			return &cloned, nil
+		}
+	}
+	return nil, nil
 }
 
 // Locations reads normalized customer location fixture data.
@@ -168,6 +248,9 @@ func (s *FixtureStore) UpsertCustomer(
 ) (*domain.Customer, error) {
 	if strings.TrimSpace(customer.ID) == "" || strings.TrimSpace(customer.Name) == "" {
 		return nil, newValidationError(invalidWorkOrderMessage)
+	}
+	if msg := domain.ValidateCustomerIdentifiers(customer.Pib, customer.Mb); msg != "" {
+		return nil, newValidationError(msg)
 	}
 
 	s.mu.Lock()
@@ -312,7 +395,7 @@ func (s *FixtureStore) CreateWorkOrder(
 		return nil, err
 	}
 
-	if err := validateCreateWorkOrderInput(input); err != nil {
+	if err := validateCreateWorkOrderInput(input, s.customEnumSetLocked()); err != nil {
 		return nil, err
 	}
 
@@ -358,6 +441,14 @@ func (s *FixtureStore) CreateWorkOrder(
 		Communication: normalizeCommunication(input.Communication, sequence, nil),
 	}
 
+	costs := s.catalogPurchasePricesLocked(catalogItemIDs(newOrder.InvoiceDraft.LineItems))
+	newOrder.InvoiceDraft.LineItems, newOrder.Profit, newOrder.NeedsCostReview = applyLineItemCosts(
+		newOrder.InvoiceDraft.LineItems, costs, nil, costModeCreate,
+	)
+	if newOrder.NeedsCostReview {
+		newOrder.Events = applyCostReviewEvents(newOrder.Events, false, true, input.IssuedBy, now)
+	}
+
 	s.workOrders = append(s.workOrders, newOrder)
 	return cloneWorkOrder(newOrder), nil
 }
@@ -380,12 +471,28 @@ func (s *FixtureStore) UpdateWorkOrder(
 			continue
 		}
 
-		updated, err := applyWorkOrderChanges(workOrder, changes)
+		updated, err := applyWorkOrderChanges(workOrder, changes, s.customEnumSetLocked())
 		if err != nil {
 			return nil, err
 		}
 
 		updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		// The fixture store has no cost history, so the current catalog price is
+		// the as-of cost; the create/completion/preserve modes still apply.
+		mode := costModePreserve
+		if !workOrder.IsCompleted && updated.IsCompleted {
+			mode = costModeCompletion
+		}
+		costs := s.catalogPurchasePricesLocked(catalogItemIDs(updated.InvoiceDraft.LineItems))
+		wasNeeded := workOrder.NeedsCostReview
+		updated.InvoiceDraft.LineItems, updated.Profit, updated.NeedsCostReview = applyLineItemCosts(
+			updated.InvoiceDraft.LineItems, costs, workOrder.InvoiceDraft.LineItems, mode,
+		)
+		actor := updated.IssuedBy
+		if updated.ExecutedBy != nil && *updated.ExecutedBy != "" {
+			actor = *updated.ExecutedBy
+		}
+		updated.Events = applyCostReviewEvents(updated.Events, wasNeeded, updated.NeedsCostReview, actor, updated.UpdatedAt)
 		s.workOrders[index] = updated
 		return cloneWorkOrder(updated), nil
 	}
@@ -452,6 +559,117 @@ func (s *FixtureStore) Operators(_ context.Context) ([]string, error) {
 	return operators, nil
 }
 
+// customEnumSetLocked builds the custom-value lookup. Callers must already hold
+// s.mu.
+func (s *FixtureStore) customEnumSetLocked() customEnumSet {
+	return customEnumSetFromValues(s.enumValues)
+}
+
+// EnumValues returns the built-in defaults merged with admin-created values.
+func (s *FixtureStore) EnumValues(_ context.Context) ([]domain.EnumValue, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return mergeEnumValues(cloneEnumValues(s.enumValues)), nil
+}
+
+// CreateEnumValue stores a new custom value for a managed field.
+func (s *FixtureStore) CreateEnumValue(
+	_ context.Context,
+	input domain.EnumValueInput,
+) (*domain.EnumValue, error) {
+	input = normalizeEnumValueInput(input)
+	if err := validateEnumValueInput(input); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, existing := range s.enumValues {
+		if existing.Field == input.Field && existing.Value == input.Value {
+			return nil, newValidationError("Vrednost sa istom šifrom već postoji.")
+		}
+	}
+
+	s.nextEnumSequence++
+	now := time.Now().UTC().Format(time.RFC3339)
+	value := domain.EnumValue{
+		ID:        fmt.Sprintf("enum-%d", s.nextEnumSequence),
+		Field:     input.Field,
+		Value:     input.Value,
+		Label:     input.Label,
+		SortOrder: input.SortOrder,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	s.enumValues = append(s.enumValues, value)
+	clone := value
+	return &clone, nil
+}
+
+// UpdateEnumValue edits an existing custom value. Built-in values cannot be
+// edited because they are never stored here.
+func (s *FixtureStore) UpdateEnumValue(
+	_ context.Context,
+	id string,
+	input domain.EnumValueInput,
+) (*domain.EnumValue, error) {
+	input = normalizeEnumValueInput(input)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for index, existing := range s.enumValues {
+		if existing.ID != id {
+			continue
+		}
+		candidate := domain.EnumValueInput{
+			Field:     existing.Field,
+			Value:     input.Value,
+			Label:     input.Label,
+			SortOrder: input.SortOrder,
+		}
+		if err := validateEnumValueInput(candidate); err != nil {
+			return nil, err
+		}
+		for otherIndex, other := range s.enumValues {
+			if otherIndex != index && other.Field == existing.Field && other.Value == candidate.Value {
+				return nil, newValidationError("Vrednost sa istom šifrom već postoji.")
+			}
+		}
+		existing.Value = candidate.Value
+		existing.Label = candidate.Label
+		existing.SortOrder = candidate.SortOrder
+		existing.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		s.enumValues[index] = existing
+		clone := existing
+		return &clone, nil
+	}
+
+	return nil, nil
+}
+
+// DeleteEnumValue removes a custom value by id.
+func (s *FixtureStore) DeleteEnumValue(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	remaining := make([]domain.EnumValue, 0, len(s.enumValues))
+	for _, existing := range s.enumValues {
+		if existing.ID != id {
+			remaining = append(remaining, existing)
+		}
+	}
+	s.enumValues = remaining
+	return nil
+}
+
+func cloneEnumValues(values []domain.EnumValue) []domain.EnumValue {
+	cloned := make([]domain.EnumValue, len(values))
+	copy(cloned, values)
+	return cloned
+}
+
 func filterWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) []domain.WorkOrder {
 	filtered := make([]domain.WorkOrder, 0, len(workOrders))
 	search := strings.ToLower(strings.TrimSpace(query.Search))
@@ -482,6 +700,9 @@ func filterWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) [
 			continue
 		}
 		if query.DateTo != "" && workOrder.IssueDate > query.DateTo {
+			continue
+		}
+		if query.NeedsCostReview && !workOrder.NeedsCostReview {
 			continue
 		}
 		filtered = append(filtered, workOrder)
@@ -907,7 +1128,7 @@ func normalizeCommunication(
 	return normalized
 }
 
-func validateCreateWorkOrderInput(input domain.CreateWorkOrderInput) error {
+func validateCreateWorkOrderInput(input domain.CreateWorkOrderInput, custom customEnumSet) error {
 	if strings.TrimSpace(input.ClientName) == "" ||
 		strings.TrimSpace(input.JobDescription) == "" ||
 		strings.TrimSpace(input.IssuedBy) == "" ||
@@ -915,16 +1136,16 @@ func validateCreateWorkOrderInput(input domain.CreateWorkOrderInput) error {
 		return newValidationError(invalidWorkOrderMessage)
 	}
 
-	if err := validateShipping(input.Shipping); err != nil {
+	if err := validateShipping(input.Shipping, custom); err != nil {
 		return err
 	}
-	if err := validateBillingDocumentType(input.BillingDocumentType); err != nil {
+	if err := validateBillingDocumentType(input.BillingDocumentType, custom); err != nil {
 		return err
 	}
-	if err := validateAssignment(input.Assignment); err != nil {
+	if err := validateAssignment(input.Assignment, custom); err != nil {
 		return err
 	}
-	if err := validateInvoiceDraft(input.InvoiceDraft); err != nil {
+	if err := validateInvoiceDraft(input.InvoiceDraft, custom); err != nil {
 		return err
 	}
 
@@ -934,6 +1155,7 @@ func validateCreateWorkOrderInput(input domain.CreateWorkOrderInput) error {
 func applyWorkOrderChanges(
 	current domain.WorkOrder,
 	changes domain.UpdateWorkOrderInput,
+	custom customEnumSet,
 ) (domain.WorkOrder, error) {
 	if len(changes) == 0 {
 		return domain.WorkOrder{}, newValidationError(invalidWorkOrderMessage)
@@ -983,7 +1205,7 @@ func applyWorkOrderChanges(
 			if err := decodeField(raw, &value); err != nil {
 				return domain.WorkOrder{}, err
 			}
-			if err := validateBillingDocumentType(value); err != nil {
+			if err := validateBillingDocumentType(value, custom); err != nil {
 				return domain.WorkOrder{}, err
 			}
 			updated.BillingDocumentType = value
@@ -998,7 +1220,7 @@ func applyWorkOrderChanges(
 			if err := decodeField(raw, &value); err != nil {
 				return domain.WorkOrder{}, err
 			}
-			if err := validateShipping(value); err != nil {
+			if err := validateShipping(value, custom); err != nil {
 				return domain.WorkOrder{}, err
 			}
 			updated.Shipping = value
@@ -1019,7 +1241,7 @@ func applyWorkOrderChanges(
 			if err := decodeField(raw, &value); err != nil {
 				return domain.WorkOrder{}, err
 			}
-			if err := validateAssignment(value); err != nil {
+			if err := validateAssignment(value, custom); err != nil {
 				return domain.WorkOrder{}, err
 			}
 			updated.Assignment = normalizeAssignment(value)
@@ -1119,7 +1341,7 @@ func applyWorkOrderChanges(
 			if err := decodeField(raw, &value); err != nil {
 				return domain.WorkOrder{}, err
 			}
-			if err := validateInvoiceDraft(value); err != nil {
+			if err := validateInvoiceDraft(value, custom); err != nil {
 				return domain.WorkOrder{}, err
 			}
 			updated.InvoiceDraft = normalizeInvoiceDraft(value, updated.JobDescription, updated.Price)
@@ -1134,6 +1356,17 @@ func applyWorkOrderChanges(
 		}
 	}
 
+	appendWorkOrderChangeEvents(&current, &updated)
+
+	// issuedBy is required when *creating* an order, but seeded/imported/legacy
+	// orders may have it blank. Don't block edits (status changes, etc.) to an
+	// existing order just because it lacks an issuer — validate with a sentinel
+	// so the create-time non-empty check passes; the stored value is untouched.
+	validationIssuedBy := updated.IssuedBy
+	if strings.TrimSpace(validationIssuedBy) == "" {
+		validationIssuedBy = "—"
+	}
+
 	if err := validateCreateWorkOrderInput(domain.CreateWorkOrderInput{
 		CustomerID:            updated.CustomerID,
 		LocationID:            updated.LocationID,
@@ -1145,7 +1378,7 @@ func applyWorkOrderChanges(
 		BillingDocumentNumber: updated.BillingDocumentNumber,
 		Shipping:              updated.Shipping,
 		Assignment:            updated.Assignment,
-		IssuedBy:              updated.IssuedBy,
+		IssuedBy:              validationIssuedBy,
 		IssueDate:             updated.IssueDate,
 		DueDate:               updated.DueDate,
 		Price:                 updated.Price,
@@ -1157,7 +1390,7 @@ func applyWorkOrderChanges(
 		TimeEntries:           updated.TimeEntries,
 		InvoiceDraft:          updated.InvoiceDraft,
 		Communication:         updated.Communication,
-	}); err != nil {
+	}, custom); err != nil {
 		return domain.WorkOrder{}, err
 	}
 
@@ -1172,18 +1405,18 @@ func decodeField(raw json.RawMessage, target any) error {
 	return nil
 }
 
-func validateShipping(shipping domain.Shipping) error {
-	if shipping.DeliveryMethod != nil && !isValidDeliveryMethod(*shipping.DeliveryMethod) {
+func validateShipping(shipping domain.Shipping, custom customEnumSet) error {
+	if shipping.DeliveryMethod != nil && !isValidDeliveryMethod(*shipping.DeliveryMethod, custom) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
-	if shipping.PostagePaymentType != nil && !isValidPostagePaymentType(*shipping.PostagePaymentType) {
+	if shipping.PostagePaymentType != nil && !isValidPostagePaymentType(*shipping.PostagePaymentType, custom) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
 
 	return nil
 }
 
-func isValidPostagePaymentType(value domain.PostagePaymentType) bool {
+func isValidPostagePaymentType(value domain.PostagePaymentType, custom customEnumSet) bool {
 	switch value {
 	case domain.PostagePaymentTypeCOD,
 		domain.PostagePaymentTypeOurAccount,
@@ -1191,26 +1424,26 @@ func isValidPostagePaymentType(value domain.PostagePaymentType) bool {
 		domain.PostagePaymentTypeViaInvoice:
 		return true
 	default:
-		return false
+		return custom.has(domain.EnumFieldPostagePaymentType, string(value))
 	}
 }
 
-func validateBillingDocumentType(value *domain.BillingDocumentType) error {
-	if value != nil && !isValidBillingDocumentType(*value) {
+func validateBillingDocumentType(value *domain.BillingDocumentType, custom customEnumSet) error {
+	if value != nil && !isValidBillingDocumentType(*value, custom) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
 
 	return nil
 }
 
-func validateAssignment(value domain.Assignment) error {
-	if value.Priority != "" && !isValidPriority(value.Priority) {
+func validateAssignment(value domain.Assignment, custom customEnumSet) error {
+	if value.Priority != "" && !isValidPriority(value.Priority, custom) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
 	return nil
 }
 
-func validateInvoiceDraft(value domain.InvoiceDraft) error {
+func validateInvoiceDraft(value domain.InvoiceDraft, custom customEnumSet) error {
 	if value.Status != "" && !isValidInvoiceDraftStatus(value.Status) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
@@ -1218,7 +1451,7 @@ func validateInvoiceDraft(value domain.InvoiceDraft) error {
 		if line.Kind != "" && !isValidInvoiceLineItemKind(line.Kind) {
 			return newValidationError(invalidWorkOrderMessage)
 		}
-		if line.Unit != "" && !isValidInvoiceUnit(line.Unit) {
+		if line.Unit != "" && !isValidInvoiceUnit(line.Unit, custom) {
 			return newValidationError(invalidWorkOrderMessage)
 		}
 		if line.Kind != "" && line.Unit != "" && !isInvoiceUnitAllowed(line.Kind, line.Unit) {
@@ -1228,7 +1461,7 @@ func validateInvoiceDraft(value domain.InvoiceDraft) error {
 	return nil
 }
 
-func isValidDeliveryMethod(value domain.DeliveryMethod) bool {
+func isValidDeliveryMethod(value domain.DeliveryMethod, custom customEnumSet) bool {
 	switch value {
 	case domain.DeliveryMethodPickup,
 		domain.DeliveryMethodPostExpress,
@@ -1236,18 +1469,18 @@ func isValidDeliveryMethod(value domain.DeliveryMethod) bool {
 		domain.DeliveryMethodFieldVisit:
 		return true
 	default:
-		return false
+		return custom.has(domain.EnumFieldDeliveryMethod, string(value))
 	}
 }
 
-func isValidBillingDocumentType(value domain.BillingDocumentType) bool {
+func isValidBillingDocumentType(value domain.BillingDocumentType, custom customEnumSet) bool {
 	switch value {
 	case domain.BillingDocumentTypeInvoice,
 		domain.BillingDocumentTypeCashCollection,
 		domain.BillingDocumentTypeProforma:
 		return true
 	default:
-		return false
+		return custom.has(domain.EnumFieldBillingDocumentType, string(value))
 	}
 }
 
@@ -1267,7 +1500,7 @@ func isValidStatus(value domain.WorkOrderStatus) bool {
 	}
 }
 
-func isValidPriority(value domain.WorkOrderPriority) bool {
+func isValidPriority(value domain.WorkOrderPriority, custom customEnumSet) bool {
 	switch value {
 	case domain.WorkOrderPriorityLow,
 		domain.WorkOrderPriorityNormal,
@@ -1275,7 +1508,7 @@ func isValidPriority(value domain.WorkOrderPriority) bool {
 		domain.WorkOrderPriorityUrgent:
 		return true
 	default:
-		return false
+		return custom.has(domain.EnumFieldPriority, string(value))
 	}
 }
 
@@ -1301,14 +1534,14 @@ func isValidInvoiceLineItemKind(value domain.InvoiceLineItemKind) bool {
 	}
 }
 
-func isValidInvoiceUnit(value domain.InvoiceUnit) bool {
+func isValidInvoiceUnit(value domain.InvoiceUnit, custom customEnumSet) bool {
 	switch value {
 	case domain.InvoiceUnitKom,
 		domain.InvoiceUnitM2,
 		domain.InvoiceUnitSet:
 		return true
 	default:
-		return false
+		return custom.has(domain.EnumFieldInvoiceUnit, string(value))
 	}
 }
 
@@ -1354,6 +1587,148 @@ func canTransition(from domain.WorkOrderStatus, to domain.WorkOrderStatus) bool 
 		}
 	}
 	return false
+}
+
+// emptyDiffValue renders a missing/blank value in change-event diffs.
+const emptyDiffValue = "—"
+
+func workOrderPriorityLabel(priority domain.WorkOrderPriority) string {
+	switch priority {
+	case domain.WorkOrderPriorityLow:
+		return "Nizak"
+	case domain.WorkOrderPriorityNormal:
+		return "Normalan"
+	case domain.WorkOrderPriorityHigh:
+		return "Visok"
+	case domain.WorkOrderPriorityUrgent:
+		return "Hitno"
+	default:
+		return string(priority)
+	}
+}
+
+func billingDocumentTypeLabel(docType *domain.BillingDocumentType) string {
+	if docType == nil {
+		return emptyDiffValue
+	}
+	switch *docType {
+	case domain.BillingDocumentTypeInvoice:
+		return "Faktura"
+	case domain.BillingDocumentTypeCashCollection:
+		return "Gotovinski račun"
+	case domain.BillingDocumentTypeProforma:
+		return "Profaktura"
+	default:
+		return string(*docType)
+	}
+}
+
+func deliveryMethodLabel(method *domain.DeliveryMethod) string {
+	if method == nil {
+		return emptyDiffValue
+	}
+	switch *method {
+	case domain.DeliveryMethodPickup:
+		return "Lično preuzimanje"
+	case domain.DeliveryMethodPostExpress:
+		return "Post Express"
+	case domain.DeliveryMethodCityExpress:
+		return "City Express"
+	case domain.DeliveryMethodFieldVisit:
+		return "Terenski obilazak"
+	default:
+		return string(*method)
+	}
+}
+
+func diffOptionalString(value *string) string {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return emptyDiffValue
+	}
+	return *value
+}
+
+// diffDate renders a YYYY-MM-DD value as DD.MM.YYYY, matching the UI.
+func diffDate(value *string) string {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return emptyDiffValue
+	}
+	parsed, err := time.Parse("2006-01-02", *value)
+	if err != nil {
+		return *value
+	}
+	return parsed.Format("02.01.2006")
+}
+
+// diffPrice renders a RSD amount with sr-Latn grouping ("67.000 RSD").
+func diffPrice(price *float64) string {
+	if price == nil {
+		return emptyDiffValue
+	}
+	value := *price
+	negative := value < 0
+	if negative {
+		value = -value
+	}
+	whole := int64(value)
+	grouped := strconv.FormatInt(whole, 10)
+	var b strings.Builder
+	n := len(grouped)
+	for i, digit := range grouped {
+		if i > 0 && (n-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(digit)
+	}
+	out := b.String()
+	if frac := value - float64(whole); frac > 0 {
+		decimals := strings.TrimRight(strconv.FormatFloat(frac, 'f', 2, 64)[2:], "0")
+		if decimals != "" {
+			out += "," + decimals
+		}
+	}
+	if negative {
+		out = "-" + out
+	}
+	return out + " RSD"
+}
+
+// appendWorkOrderChangeEvents records a "change" timeline event for each
+// user-facing field that differs between the pre-edit and post-edit work order.
+// Status changes are intentionally excluded — applyStatus already logs those.
+func appendWorkOrderChangeEvents(current, updated *domain.WorkOrder) {
+	type fieldDiff struct{ label, before, after string }
+	diffs := make([]fieldDiff, 0)
+	add := func(label, before, after string) {
+		if before != after {
+			diffs = append(diffs, fieldDiff{label, before, after})
+		}
+	}
+
+	add("Naziv klijenta", current.ClientName, updated.ClientName)
+	add("Kontakt osoba", diffOptionalString(current.ContactPerson), diffOptionalString(updated.ContactPerson))
+	add("Opis posla", current.JobDescription, updated.JobDescription)
+	add("Tip dokumenta", billingDocumentTypeLabel(current.BillingDocumentType), billingDocumentTypeLabel(updated.BillingDocumentType))
+	add("Broj dokumenta", diffOptionalString(current.BillingDocumentNumber), diffOptionalString(updated.BillingDocumentNumber))
+	add("Operater", diffOptionalString(current.Assignment.AssignedTo), diffOptionalString(updated.Assignment.AssignedTo))
+	add("Prioritet", workOrderPriorityLabel(current.Assignment.Priority), workOrderPriorityLabel(updated.Assignment.Priority))
+	add("Planirani datum", diffDate(current.Assignment.ScheduledDate), diffDate(updated.Assignment.ScheduledDate))
+	add("Način dostave", deliveryMethodLabel(current.Shipping.DeliveryMethod), deliveryMethodLabel(updated.Shipping.DeliveryMethod))
+	add("Datum izdavanja", diffDate(&current.IssueDate), diffDate(&updated.IssueDate))
+	add("Rok", diffDate(current.DueDate), diffDate(updated.DueDate))
+	add("Cena", diffPrice(current.Price), diffPrice(updated.Price))
+	add("Napomena", diffOptionalString(current.Note), diffOptionalString(updated.Note))
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, d := range diffs {
+		updated.Events = append(updated.Events, domain.WorkOrderEvent{
+			ID:        fmt.Sprintf("event-%d", len(updated.Events)+1),
+			Kind:      "change",
+			Label:     fmt.Sprintf("%s: %s → %s", d.label, d.before, d.after),
+			Actor:     updated.IssuedBy,
+			CreatedAt: now,
+		})
+	}
 }
 
 func workOrderStatusLabel(status domain.WorkOrderStatus) string {
@@ -1435,6 +1810,8 @@ func cloneCustomer(customer domain.Customer) domain.Customer {
 	cloned.ContactName = clonePtrString(customer.ContactName)
 	cloned.Email = clonePtrString(customer.Email)
 	cloned.Phone = clonePtrString(customer.Phone)
+	cloned.Pib = clonePtrString(customer.Pib)
+	cloned.Mb = clonePtrString(customer.Mb)
 	return cloned
 }
 

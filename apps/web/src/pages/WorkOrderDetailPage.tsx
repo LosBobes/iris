@@ -1,16 +1,21 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Copy, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { ArrowLeft, Coins, Copy, FileText, Loader2, Trash2, X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
+import { useAuth } from "@/hooks/useAuth";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
+import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Location, WorkOrder } from "@/types/work-order";
 import {
   buildWorkOrderCustomerNotice,
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
+  getWorkOrderBillingDocumentLabel,
+  getWorkOrderDeliveryLabel,
   getWorkOrderStatusLabel,
+  getPrimaryWorkOrderTransition,
   formatWorkOrderEventLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
@@ -19,24 +24,75 @@ import {
   getWorkOrderCustomerNextStep,
 } from "@/shared/utils/work-orders";
 
-const INVOICE_LINE_ITEM_KIND_LABELS = {
-  service: "Usluga",
-  goods: "Roba",
-} as const;
 
-export function printWorkOrder(orderNumber: string): void {
-  const previousTitle = document.title;
-  document.title = orderNumber;
+// Renders a timeline label. Field-change events arrive as
+// "<polje>: <pre> → <posle>"; we style the before/after so the diff reads at a
+// glance. Anything else (status, created, completed) renders as plain text.
+function renderTimelineLabel(label: string, kind: string): React.ReactNode {
+  if (kind !== "change") return label;
 
-  window.addEventListener(
-    "afterprint",
-    () => {
-      document.title = previousTitle;
-    },
-    { once: true },
+  const separator = label.indexOf(": ");
+  const arrow = label.indexOf(" → ");
+  if (separator === -1 || arrow === -1 || arrow < separator) return label;
+
+  const field = label.slice(0, separator);
+  const before = label.slice(separator + 2, arrow);
+  const after = label.slice(arrow + 3);
+
+  return (
+    <>
+      <span className="text-[color:var(--iris-ink-soft)]">{field}: </span>
+      <span className="text-[color:var(--iris-ink-mute)] line-through">{before}</span>
+      <span className="text-[color:var(--iris-ink-faint)]"> → </span>
+      <span className="text-foreground">{after}</span>
+    </>
   );
+}
 
-  window.print();
+/**
+ * Prints the canonical print layout — the same HTML the PDF is generated from,
+ * fetched from the API and printed inside a hidden same-origin iframe. This
+ * avoids the browser printing the whole app page (app chrome, drifted print CSS,
+ * clipped columns). Falls back to opening the PDF report if rendering fails.
+ */
+export async function printWorkOrder(order: WorkOrder): Promise<void> {
+  let html: string;
+  try {
+    html = await window.api.getWorkOrderPreviewHtml(order);
+  } catch {
+    window.open(
+      window.api.getWorkOrderReportUrl(order.id),
+      "_blank",
+      "noopener,noreferrer",
+    );
+    return;
+  }
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  Object.assign(iframe.style, {
+    position: "fixed",
+    right: "0",
+    bottom: "0",
+    width: "0",
+    height: "0",
+    border: "0",
+  });
+  // srcdoc keeps the iframe same-origin, so contentWindow.print() is allowed.
+  iframe.srcdoc = html;
+  iframe.onload = () => {
+    const win = iframe.contentWindow;
+    if (!win) {
+      iframe.remove();
+      return;
+    }
+    const cleanup = (): void => iframe.remove();
+    win.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(cleanup, 60000);
+    win.focus();
+    win.print();
+  };
+  document.body.appendChild(iframe);
 }
 
 export function openWorkOrderPdf(orderId: string): void {
@@ -44,17 +100,69 @@ export function openWorkOrderPdf(orderId: string): void {
 }
 
 function WorkOrderDetailPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // Deleting is admin-only on the API; gate the button to match.
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
+
+  const handleAdvanceStatus = async (): Promise<void> => {
+    if (!order) return;
+    const newStatus = getPrimaryWorkOrderTransition(order.status);
+    if (!newStatus) return;
+    const isCompleting = newStatus === "completed" || newStatus === "invoiced";
+    const now = getLocalIsoDate();
+    try {
+      const updated = await window.api.updateWorkOrder(order.id, {
+        status: newStatus,
+        isCompleted: isCompleting,
+        completionDate: isCompleting ? now : null,
+      });
+      if (!updated) {
+        toast.error(t("workOrders.toast.notFound"));
+        return;
+      }
+      setOrder(updated);
+      toast.success(
+        t("workOrders.toast.statusChanged", {
+          order: updated.orderNumber,
+          status: getWorkOrderStatusLabel(newStatus),
+        }),
+      );
+    } catch {
+      toast.error(t("workOrders.toast.statusError"));
+    }
+  };
+
+  const handleDeleteConfirm = async (): Promise<void> => {
+    if (!order) return;
+    try {
+      const result = await window.api.deleteWorkOrder(order.id);
+      if (!result.success) {
+        toast.error(result.message ?? t("workOrders.toast.deleteError"));
+        return;
+      }
+      setDeleteOpen(false);
+      toast.success(
+        t("workOrders.toast.deleted", { order: order.orderNumber }),
+      );
+      navigate("/work-orders");
+    } catch {
+      toast.error(t("workOrders.toast.deleteUnexpected"));
+    }
+  };
 
   useEffect(() => {
     if (!id) {
       setOrder(null);
-      setError("Radni nalog nije pronađen");
+      setError(t("workOrders.detail.notFound"));
       setLoading(false);
       return;
     }
@@ -71,14 +179,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
         if (cancelled) return;
         if (!data) {
           setOrder(null);
-          setError("Radni nalog nije pronađen");
+          setError(t("workOrders.detail.notFound"));
           return;
         }
         setOrder(data);
       } catch {
         if (!cancelled) {
           setOrder(null);
-          setError("Greška pri učitavanju radnog naloga");
+          setError(t("workOrders.detail.loadError"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -89,7 +197,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     void window.api.getLocations().then(setLocations);
@@ -99,7 +207,8 @@ function WorkOrderDetailPage(): React.JSX.Element {
     <>
       <div className="work-order-screen-root">
         <AppShell>
-          <div>
+          <div className="flex items-stretch">
+          <div className="min-w-0 flex-1">
         <div className="animate-iris-enter border-b border-border px-10 pt-5 pb-6">
           <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-mute)]">
             <button
@@ -108,7 +217,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
               className="iris-focusable iris-press group flex items-center gap-1 bg-transparent p-0 text-[color:var(--iris-ink-mute)] hover:text-foreground"
             >
               <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
-              Radni nalozi
+              {t("workOrders.list.title")}
             </button>
             <span className="text-[color:var(--iris-ink-faint)]">/</span>
             <span className="tnum text-foreground">
@@ -117,33 +226,64 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
 
           {order && (
-            <div className="flex items-start justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-y-3">
               <div>
-                <div className="flex items-baseline gap-3.5">
+                <div className="flex flex-wrap items-baseline gap-3.5">
                   <div className="tnum text-[28px] font-normal tracking-[-0.5px] text-foreground">
                     {order.orderNumber}
                   </div>
                   <IrisBadge status={order.status} />
+                  {isAdmin && order.needsCostReview && (
+                    <span className="inline-flex items-center gap-1 border border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-2 py-0.5 text-[11px] font-medium text-[color:var(--iris-accent)]">
+                      <Coins className="h-3 w-3" />
+                      {t("workOrders.list.needsCostReview")}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-1 text-[14px] text-[color:var(--iris-ink-soft)]">
                   {order.jobDescription} ·{" "}
                   <span className="text-foreground">{order.clientName}</span>
                 </div>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {getPrimaryWorkOrderTransition(order.status) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAdvanceStatus()}
+                    className="iris-focusable iris-press border border-[color:var(--iris-accent)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/10"
+                  >
+                    {t("workOrders.detail.moveTo")}{" "}
+                    {getWorkOrderStatusLabel(
+                      getPrimaryWorkOrderTransition(order.status)!,
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => printWorkOrder(order.orderNumber)}
+                  onClick={() => void printWorkOrder(order)}
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
-                  Štampaj
+                  {t("workOrders.detail.print")}
                 </button>
                 <button
                   type="button"
                   onClick={() => openWorkOrderPdf(order.id)}
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
-                  PDF
+                  {t("workOrders.detail.pdf")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen((open) => !open)}
+                  aria-pressed={previewOpen}
+                  className={`iris-focusable iris-press flex items-center gap-1 border px-3 py-[7px] text-[12px] ${
+                    previewOpen
+                      ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
+                      : "border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                  }`}
+                >
+                  <FileText className="h-3 w-3" />
+                  {t("workOrders.detail.preview")}
                 </button>
                 <button
                   type="button"
@@ -155,7 +295,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   className="iris-focusable iris-press flex items-center gap-1 border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
                   <Copy className="h-3 w-3" />
-                  Javni link
+                  {t("workOrders.detail.publicLink")}
                 </button>
                 <button
                   type="button"
@@ -166,15 +306,26 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   }
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
-                  Dupliraj
+                  {t("workOrders.detail.duplicate")}
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate(`/work-orders/${order.id}/edit`)}
                   className="iris-focusable iris-press bg-foreground px-3.5 py-[7px] text-[12px] font-medium text-background hover:bg-foreground/90"
                 >
-                  Izmeni
+                  {t("common.edit")}
                 </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteOpen(true)}
+                    aria-label={t("common.delete")}
+                    className="iris-focusable iris-press flex items-center gap-1 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t("common.delete")}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -186,7 +337,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
             style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
           >
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            <span className="text-sm">Učitavanje naloga...</span>
+            <span className="text-sm">{t("workOrders.list.loading")}</span>
           </div>
         )}
 
@@ -204,33 +355,61 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
         )}
           </div>
+          {previewOpen && order && (
+            <aside className="animate-iris-enter sticky top-0 hidden h-screen w-[380px] shrink-0 self-start overflow-auto border-l border-border bg-card p-6 lg:block">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.pdfPreview")}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(false)}
+                  aria-label={t("workOrders.detail.closePreview")}
+                  className="iris-focusable iris-press flex items-center justify-center bg-transparent p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <WorkOrderPreviewPane order={order} />
+            </aside>
+          )}
+          </div>
         </AppShell>
       </div>
       {order && <WorkOrderPrintSheet order={order} locations={locations} />}
+      <DeleteWorkOrderDialog
+        orderNumber={order?.orderNumber ?? ""}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleDeleteConfirm}
+      />
     </>
   );
 }
 
 function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
+  const { t } = useTranslation();
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
   const metaCells: Array<[string, string]> = [
     [
-      "Tip dokumenta",
+      t("workOrders.detail.documentType"),
       order.billingDocumentType
-        ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+        ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
         : "-",
     ],
-    ["Operater", order.assignment.assignedTo ?? "Nedodeljeno"],
-    ["Planirano", order.assignment.scheduledDate ? formatWorkOrderDate(order.assignment.scheduledDate) : "-"],
-    ["Datum izdavanja", formatWorkOrderDate(order.issueDate)],
+    [t("workOrders.detail.operator"), order.assignment.assignedTo ?? t("workOrders.detail.unassigned")],
+    [t("workOrders.detail.planned"), order.assignment.scheduledDate ? formatWorkOrderDate(order.assignment.scheduledDate) : "-"],
+    [t("workOrders.detail.issueDate"), formatWorkOrderDate(order.issueDate)],
     [
-      "Dostava",
+      t("workOrders.detail.delivery"),
       order.shipping.deliveryMethod
-        ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
+        ? getWorkOrderDeliveryLabel(order.shipping.deliveryMethod)
         : "-",
     ],
-    ["Rok", order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],
+    [t("workOrders.notice.dueDate"), order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],
     [
-      "Broj dokumenta",
+      t("workOrders.detail.documentNumber"),
       order.billingDocumentNumber ? order.billingDocumentNumber : "-",
     ],
   ];
@@ -239,18 +418,26 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
   const base = total / 1.2;
   const pdv = total - base;
 
-  const timeline: Array<{ time: string; label: string; who: string; state: "done" | "current" | "pending" }> =
+  const timeline: Array<{
+    time: string;
+    label: string;
+    kind: string;
+    who: string;
+    state: "done" | "current" | "pending";
+  }> =
     order.events.length > 0
       ? order.events.map((event, index) => ({
           time: formatWorkOrderDateTime(event.createdAt),
           label: formatWorkOrderEventLabel(event.label, event.kind),
+          kind: event.kind,
           who: event.actor,
           state: index === order.events.length - 1 ? "current" : "done",
         }))
       : [
           {
             time: formatWorkOrderDateTime(order.createdAt),
-            label: "Nalog kreiran",
+            label: t("workOrders.detail.orderCreated"),
+            kind: "created",
             who: order.issuedBy,
             state: "done",
           },
@@ -277,7 +464,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       <div className="grid grid-cols-[1fr_1.6fr]">
         <div className="border-r border-border p-8">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Tok posla
+            {t("workOrders.detail.workflow")}
           </div>
           {timeline.map((e, i) => {
             const isLast = i === timeline.length - 1;
@@ -318,7 +505,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   <div
                     className={`text-[12px] text-foreground ${e.state === "current" ? "font-medium" : ""}`}
                   >
-                    {e.label}
+                    {renderTimelineLabel(e.label, e.kind)}
                   </div>
                   <div className="tnum mt-0.5 text-[11px] text-[color:var(--iris-ink-mute)]">
                     {e.time} · {e.who}
@@ -331,7 +518,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {order.note && (
             <div className="mt-6 border-t border-[color:var(--iris-border-soft)] pt-5">
               <div className="mb-3 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Nasleđena napomena
+                {t("workOrders.detail.inheritedNote")}
               </div>
               <div
                 className="px-3.5 py-2.5 text-[12px] leading-[1.6] text-[color:var(--iris-ink-soft)]"
@@ -348,13 +535,13 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {(order.internalNotes.length > 0 || order.customerNotes.length > 0) && (
             <div className="mt-6 border-t border-[color:var(--iris-border-soft)] pt-5">
               <div className="mb-3 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Beleške
+                {t("workOrders.detail.notes")}
               </div>
               <div className="space-y-3">
                 {order.internalNotes.map((note) => (
                   <div key={note.id} className="border-l-2 border-foreground bg-background px-3.5 py-2.5 text-[12px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
                     <div className="mb-1 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                      Interno
+                      {t("workOrders.detail.internal")}
                     </div>
                     {note.body}
                   </div>
@@ -362,7 +549,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 {order.customerNotes.map((note) => (
                   <div key={note.id} className="border-l-2 border-[color:var(--iris-accent)] bg-background px-3.5 py-2.5 text-[12px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
                     <div className="mb-1 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                      Za klijenta
+                      {t("workOrders.detail.forCustomer")}
                     </div>
                     {note.body}
                   </div>
@@ -374,20 +561,22 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
 
         <div className="p-8">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Stavke
+            {t("workOrders.detail.items")}
           </div>
           <table className="w-full border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="py-2 text-left text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                  Opis
+                  {t("workOrders.detail.description")}
                 </th>
                 <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                  Količina
+                  {t("workOrders.detail.quantity")}
                 </th>
-                <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                  Iznos
-                </th>
+                {isAdmin && (
+                  <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                    {t("workOrders.detail.amount")}
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -408,15 +597,17 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   <td className="py-3 text-foreground">
                     <div>{line.description}</div>
                     <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
-                      {INVOICE_LINE_ITEM_KIND_LABELS[line.kind]}
+                      {t(`workOrders.lineKind.${line.kind}`)}
                     </div>
                   </td>
                   <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
                     {line.quantity} {line.unit}
                   </td>
-                  <td className="tnum py-3 text-right font-medium text-foreground">
-                    {formatWorkOrderPrice(line.quantity * line.unitPrice)}
-                  </td>
+                  {isAdmin && (
+                    <td className="tnum py-3 text-right font-medium text-foreground">
+                      {formatWorkOrderPrice(line.quantity * line.unitPrice)}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -424,45 +615,47 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
 
           <div className="mt-8 grid grid-cols-2 gap-6">
             <InfoList
-              title="Materijal"
-              empty="Nema evidentiranog materijala."
+              title={t("workOrders.detail.material")}
+              empty={t("workOrders.detail.materialEmpty")}
               rows={order.materialUsage.map((item) => [
                 item.name,
                 `${item.quantity} ${item.unit}`,
               ])}
             />
             <InfoList
-              title="Vreme"
-              empty="Nema evidentiranog vremena."
+              title={t("workOrders.detail.time")}
+              empty={t("workOrders.detail.timeEmpty")}
               rows={order.timeEntries.map((entry) => [
                 entry.operator,
                 `${entry.minutes} min`,
               ])}
             />
             <InfoList
-              title="Prilozi"
-              empty="Nema priloga."
+              title={t("workOrders.detail.attachments")}
+              empty={t("workOrders.detail.attachmentsEmpty")}
               rows={order.attachments.map((attachment) => [
                 attachment.fileName,
                 attachment.url ? "otvori" : attachment.fileType,
               ])}
             />
-            <InfoList
-              title="Faktura"
-              empty="Nema nacrta fakture."
-              rows={[
-                ["Status", order.invoiceDraft.status],
-                ["Broj", order.invoiceDraft.invoiceNumber ?? "-"],
-                ["Plaćeno", order.invoiceDraft.paidAt ? formatWorkOrderDate(order.invoiceDraft.paidAt) : "-"],
-              ]}
-            />
+            {isAdmin && (
+              <InfoList
+                title={t("workOrders.detail.invoice")}
+                empty={t("workOrders.detail.invoiceEmpty")}
+                rows={[
+                  [t("workOrders.notice.status"), order.invoiceDraft.status],
+                  [t("workOrders.detail.invoiceNumber"), order.invoiceDraft.invoiceNumber ?? "-"],
+                  [t("workOrders.detail.paid"), order.invoiceDraft.paidAt ? formatWorkOrderDate(order.invoiceDraft.paidAt) : "-"],
+                ]}
+              />
+            )}
           </div>
 
-          {order.price !== null && (
+          {isAdmin && order.price !== null && (
             <div className="mt-4 flex justify-end">
               <div className="w-64 text-[12px]">
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
-                  <span>Osnovica</span>
+                  <span>{t("workOrders.detail.base")}</span>
                   <span className="tnum">
                     {new Intl.NumberFormat("sr-Latn-RS", {
                       minimumFractionDigits: 0,
@@ -471,7 +664,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
-                  <span>PDV (20%)</span>
+                  <span>{t("workOrders.detail.vat")}</span>
                   <span className="tnum">
                     {new Intl.NumberFormat("sr-Latn-RS", {
                       minimumFractionDigits: 0,
@@ -480,7 +673,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   </span>
                 </div>
                 <div className="mt-1.5 flex justify-between border-t border-foreground py-2.5 text-foreground">
-                  <span className="font-medium">Za uplatu</span>
+                  <span className="font-medium">{t("workOrders.detail.toPay")}</span>
                   <span className="tnum text-[14px] font-medium">
                     {formatWorkOrderPrice(total)}
                   </span>
@@ -495,6 +688,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
 }
 
 function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Element {
+  const { t } = useTranslation();
   const customerDueDate = order.dueDate ?? order.assignment.scheduledDate;
   const isOverdue = Boolean(
     customerDueDate && customerDueDate < getLocalIsoDate() && !order.isCompleted,
@@ -506,7 +700,7 @@ function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Elemen
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Sažetak za klijenta
+            {t("workOrders.detail.customerSummary")}
           </div>
           <div className="mt-1 text-[13px] leading-6 text-[color:var(--iris-ink-soft)]">
             {getWorkOrderCustomerNextStep(order.status)}
@@ -516,25 +710,25 @@ function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Elemen
           type="button"
           onClick={() => {
             if (!navigator.clipboard) {
-              toast.error("Kopiranje nije dostupno u ovom okruženju.");
+              toast.error(t("workOrders.detail.copyUnavailable"));
               return;
             }
             void navigator.clipboard
               .writeText(customerNotice)
-              .then(() => toast.success("Obaveštenje je kopirano."))
-              .catch(() => toast.error("Kopiranje nije uspelo."));
+              .then(() => toast.success(t("workOrders.detail.copySuccess")))
+              .catch(() => toast.error(t("workOrders.detail.copyFailed")));
           }}
           className="iris-focusable iris-press flex shrink-0 items-center gap-1.5 border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
         >
           <Copy className="h-3 w-3" />
-          Kopiraj obaveštenje
+          {t("workOrders.detail.copyNotice")}
         </button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="border border-[color:var(--iris-border-soft)] px-3.5 py-3">
           <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
-            Status
+            {t("workOrders.notice.status")}
           </div>
           <div className="mt-1.5 text-[13px] text-foreground">
             {getWorkOrderStatusLabel(order.status)}
@@ -548,7 +742,7 @@ function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Elemen
           }`}
         >
           <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
-            Rok
+            {t("workOrders.notice.dueDate")}
           </div>
           <div
             className={`tnum mt-1.5 text-[13px] ${
@@ -562,7 +756,7 @@ function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Elemen
         </div>
         <div className="border border-[color:var(--iris-border-soft)] px-3.5 py-3">
           <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
-            Broj naloga
+            {t("workOrders.detail.orderNumber")}
           </div>
           <div className="tnum mt-1.5 text-[13px] text-foreground">
             {order.orderNumber}

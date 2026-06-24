@@ -82,6 +82,10 @@ Run commands from `iris-api/`.
 ```bash
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
+# Real Grafika Čobanović data set (≈2657 clients, ≈3575 catalog items). The data
+# is large and NOT committed — generate it first from the legacy export (see
+# internal/seed/cobanovic/), then load it:
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-cobanovic
 DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
 ```
 

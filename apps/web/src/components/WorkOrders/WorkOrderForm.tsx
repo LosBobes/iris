@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useForm,
   Controller,
@@ -22,8 +23,8 @@ import type {
   Customer,
   BillingDocumentType,
   DeliveryMethod,
+  BuiltinInvoiceUnit,
   InvoiceLineItemKind,
-  InvoiceUnit,
   Location,
   PostagePaymentType,
   WorkOrder,
@@ -33,24 +34,26 @@ import {
   workOrderFormSchema,
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
+import type { CatalogItem } from "@/types/catalog";
+import { AsyncCombobox } from "@/components/WorkOrders/AsyncCombobox";
+import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
 import {
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
-  WORK_ORDER_POSTAGE_LABELS,
-  WORK_ORDER_PRIORITY_LABELS,
   WORK_ORDER_SELECT_NONE_VALUE,
-  getWorkOrderPriorityLabel,
   getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
   getLocalIsoDate,
 } from "@/shared/utils/work-orders";
+import { useEnumValues } from "@/hooks/useEnumValues";
+import { useAuth } from "@/hooks/useAuth";
+import { WorkOrderPdfPreview } from "@/components/WorkOrders/WorkOrderPdfPreview";
 
 interface WorkOrderFormProps {
   initialData?: WorkOrder | null;
   initialValues?: WorkOrderFormValues;
-  customers?: Customer[];
+  // Clients are searched server-side via the picker, so the full list is no
+  // longer passed in. Locations stay a prop (small, per-customer set).
   locations?: Location[];
   onSubmit: (values: WorkOrderFormValues) => Promise<void>;
   onCancel: () => void;
@@ -63,11 +66,11 @@ interface FormSectionProps {
 
 function FormSection({ title, children }: FormSectionProps): React.JSX.Element {
   return (
-    <section className="mb-8">
-      <div className="mb-4 flex items-baseline gap-3 border-b border-border pb-2.5">
+    <section className="mb-6 border border-[color:var(--iris-border-soft)] bg-card">
+      <div className="flex items-baseline gap-3 border-b border-[color:var(--iris-border-soft)] px-6 py-3.5">
         <span className="text-[13px] font-medium text-foreground">{title}</span>
       </div>
-      {children}
+      <div className="px-6 py-6">{children}</div>
     </section>
   );
 }
@@ -127,18 +130,7 @@ const underlineInput =
 const underlineTrigger =
   "w-full justify-between border-0 border-b border-border bg-transparent py-2 !h-auto text-[13px] text-foreground rounded-none shadow-none focus-visible:border-foreground focus-visible:ring-0";
 
-const INVOICE_LINE_ITEM_KIND_LABELS: Record<InvoiceLineItemKind, string> = {
-  service: "Usluga",
-  goods: "Roba",
-};
-
-const INVOICE_UNIT_LABELS: Record<InvoiceUnit, string> = {
-  kom: "Kom",
-  m2: "m2",
-  set: "Set",
-};
-
-const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, InvoiceUnit[]> = {
+const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, BuiltinInvoiceUnit[]> = {
   service: ["kom", "m2", "set"],
   goods: ["kom", "m2"],
 };
@@ -146,7 +138,11 @@ const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, InvoiceUnit[]> = {
 type InvoiceLineItemFormValue =
   WorkOrderFormValues["invoiceDraft"]["lineItems"][number];
 
-export function getInvoiceUnitOptions(kind: InvoiceLineItemKind): InvoiceUnit[] {
+/** Built-in units selectable for a line kind. Custom (admin-added) units are
+ * appended at render time and are allowed for any kind. */
+export function getInvoiceUnitOptions(
+  kind: InvoiceLineItemKind,
+): BuiltinInvoiceUnit[] {
   return INVOICE_UNITS_BY_KIND[kind];
 }
 
@@ -154,15 +150,12 @@ function isInvoiceLineItemKind(value: unknown): value is InvoiceLineItemKind {
   return value === "service" || value === "goods";
 }
 
-function isInvoiceUnit(value: unknown): value is InvoiceUnit {
-  return value === "kom" || value === "m2" || value === "set";
-}
-
-function isInvoiceUnitAllowed(
-  kind: InvoiceLineItemKind,
-  unit: unknown,
-): unit is InvoiceUnit {
-  return isInvoiceUnit(unit) && getInvoiceUnitOptions(kind).includes(unit);
+// Only the built-in `set` carries a kind restriction (service-only); any other
+// non-empty unit — built-in or admin-added — is preserved as entered.
+function normalizeInvoiceUnit(kind: InvoiceLineItemKind, unit: unknown): string {
+  if (typeof unit !== "string" || unit.trim() === "") return "kom";
+  if (unit === "set" && kind !== "service") return "kom";
+  return unit;
 }
 
 function createInvoiceLineItem(
@@ -175,6 +168,28 @@ function createInvoiceLineItem(
     quantity: 1,
     unit: "kom",
     unitPrice: 0,
+    // Ad-hoc line: cost unknown until an admin enters it (flags cost review).
+    unitCost: null,
+    catalogItemId: null,
+  };
+}
+
+/** Builds a work-order line item from a catalog selection, prefilling the
+ * description, unit and price and remembering the catalog link. */
+function createInvoiceLineItemFromCatalog(
+  item: CatalogItem,
+): InvoiceLineItemFormValue {
+  const kind: InvoiceLineItemKind = item.kind === "article" ? "goods" : "service";
+  return {
+    id: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    kind,
+    description: item.name,
+    quantity: 1,
+    unit: normalizeInvoiceUnit(kind, item.unit),
+    unitPrice: item.salePrice ?? 0,
+    // Catalog cost is captured server-side at save time from the item's history.
+    unitCost: null,
+    catalogItemId: item.id,
   };
 }
 
@@ -183,7 +198,7 @@ function normalizeInvoiceLineItem(
   index: number,
 ): InvoiceLineItemFormValue {
   const kind = isInvoiceLineItemKind(line.kind) ? line.kind : "service";
-  const unit = isInvoiceUnitAllowed(kind, line.unit) ? line.unit : "kom";
+  const unit = normalizeInvoiceUnit(kind, line.unit);
 
   return {
     id: line.id || `line-${index + 1}`,
@@ -192,6 +207,8 @@ function normalizeInvoiceLineItem(
     quantity: line.quantity ?? 1,
     unit,
     unitPrice: line.unitPrice ?? 0,
+    unitCost: line.unitCost ?? null,
+    catalogItemId: line.catalogItemId ?? null,
   };
 }
 
@@ -333,13 +350,19 @@ export function normalizeWorkOrderFormDefaultValues(
 export function WorkOrderForm({
   initialData,
   initialValues,
-  customers = [],
   locations = [],
   onSubmit,
   onCancel,
 }: WorkOrderFormProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const isEdit = !!initialData;
+  // Regular operators get a severely reduced form: no money/pricing fields and
+  // none of the back-office billing/shipping/assignment detail. Admins keep the
+  // full form. Hidden fields keep their default/initial values (react-hook-form
+  // does not unregister them), so an operator's edit never wipes admin data.
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
 
   const rawDefaultValues: WorkOrderFormValues =
     initialValues ??
@@ -435,6 +458,14 @@ export function WorkOrderForm({
     name: "invoiceDraft.lineItems",
   });
 
+  const { optionsFor } = useEnumValues();
+  // Admin-added units of measure, selectable on any line kind.
+  const customInvoiceUnitOptions = optionsFor("invoiceUnit")
+    .filter((option) => !option.isBuiltin)
+    .map((option) => ({ value: option.value, label: option.label }));
+  const customUnitLabelFor = (value: string): string =>
+    customInvoiceUnitOptions.find((option) => option.value === value)?.label ??
+    value;
   const deliveryMethod = watch("shipping.deliveryMethod");
   const selectedCustomerId = watch("customerId");
   const selectedLocationId = watch("locationId");
@@ -447,6 +478,74 @@ export function WorkOrderForm({
         : locations,
     [locations, selectedCustomerId],
   );
+
+  // The client and catalog lists are large, so both pickers search the server
+  // (paginated) rather than loading every row. The picked customer is held in
+  // state so its PIB/MB can be shown even though it is not in any page.
+  const selectedClientName = watch("clientName");
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    initialData?.customerId
+      ? {
+          id: initialData.customerId,
+          name: initialData.clientName,
+          contactName: initialData.contactPerson ?? null,
+          email: null,
+          phone: null,
+          pib: null,
+          mb: null,
+        }
+      : null,
+  );
+
+  const searchCustomers = useCallback(async (term: string): Promise<ComboboxItem[]> => {
+    const { items } = await window.api.getCustomers({ q: term, limit: 20 });
+    return items.map((customer) => ({
+      id: customer.id,
+      label: customer.name,
+      sublabel: [customer.pib ? `PIB ${customer.pib}` : null, customer.contactName]
+        .filter(Boolean)
+        .join(" · "),
+      data: customer,
+    }));
+  }, []);
+
+  const searchCatalog = useCallback(async (term: string): Promise<ComboboxItem[]> => {
+    const { items } = await window.api.getCatalogItems({ q: term, active: true, limit: 20 });
+    return items.map((item) => ({
+      id: item.id,
+      label: item.name,
+      sublabel: [
+        item.kind === "article" ? "Artikal" : "Usluga",
+        item.code,
+        isAdmin && item.salePrice !== null ? `${item.salePrice} RSD` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      data: item,
+    }));
+  }, [isAdmin]);
+
+  const applyCustomerSelection = (item: ComboboxItem | null): void => {
+    if (!item) {
+      // "Novi klijent" — detach from the registry, keep any typed client name.
+      setSelectedCustomer(null);
+      setValue("customerId", null);
+      return;
+    }
+    const customer = item.data as Customer;
+    setSelectedCustomer(customer);
+    setValue("customerId", customer.id);
+    setValue("clientName", customer.name);
+    setValue("contactPerson", customer.contactName);
+    setValue("communication.notificationEmail", customer.email);
+    const firstLocation = locations.find((location) => location.customerId === customer.id);
+    setValue("locationId", firstLocation?.id ?? null);
+  };
+
+  const handleAddCatalogLineItem = (item: ComboboxItem | null): void => {
+    if (!item) return;
+    appendInvoiceLineItem(createInvoiceLineItemFromCatalog(item.data as CatalogItem));
+  };
   const showShippingAddress =
     deliveryMethod !== null && deliveryMethod !== "pickup";
   const showPostageOptions =
@@ -495,7 +594,7 @@ export function WorkOrderForm({
   const handleInvalidSubmit = (
     submitErrors: FieldErrors<WorkOrderFormValues>,
   ): void => {
-    toast.error("Popunite obavezna polja pre čuvanja naloga");
+    toast.error(t("workOrders.form.validationError"));
 
     const targetId = getFirstWorkOrderFormErrorTarget(submitErrors);
     if (!targetId) return;
@@ -526,7 +625,9 @@ export function WorkOrderForm({
   return (
     <form
       onSubmit={handleSubmit(handleFormSubmit, handleInvalidSubmit)}
-      className="grid grid-cols-[minmax(0,1fr)_320px] gap-0"
+      className={`grid gap-0 ${
+        isAdmin ? "grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-[minmax(0,1fr)_320px]"
+      }`}
     >
       <div className="pr-10">
         {isEdit && initialData && (
@@ -564,53 +665,35 @@ export function WorkOrderForm({
           </div>
         )}
 
-        <FormSection title="Klijent">
+        <FormSection title={t("workOrders.form.sectionClient")}>
           <div className="grid grid-cols-2 gap-6">
-            <FieldShell id="customerId" label="Klijent iz evidencije">
-              <Controller
-                name="customerId"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
-                    onValueChange={(v) => {
-                      const nextValue = v === WORK_ORDER_SELECT_NONE_VALUE ? null : v;
-                      field.onChange(nextValue);
-                      const customer = customers.find((candidate) => candidate.id === nextValue);
-                      if (customer) {
-                        setValue("clientName", customer.name);
-                        setValue("contactPerson", customer.contactName);
-                        setValue("communication.notificationEmail", customer.email);
-                        const firstLocation = locations.find(
-                          (location) => location.customerId === customer.id,
-                        );
-                        setValue("locationId", firstLocation?.id ?? null);
-                      }
-                    }}
-                  >
-                    <SelectTrigger
-                      id="customerId"
-                      aria-labelledby="customerId-label"
-                      className={underlineTrigger}
-                    >
-                      <SelectValue placeholder="Izaberite klijenta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
-                        Novi klijent
-                      </SelectItem>
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+            <FieldShell
+              id="customerId"
+              label={t("workOrders.form.clientRegistry")}
+              hint={
+                selectedCustomer?.pib || selectedCustomer?.mb
+                  ? [
+                      selectedCustomer?.pib ? `PIB ${selectedCustomer.pib}` : null,
+                      selectedCustomer?.mb ? `MB ${selectedCustomer.mb}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : t("workOrders.form.clientSearchHint")
+              }
+            >
+              <AsyncCombobox
+                triggerId="customerId"
+                selectedLabel={selectedCustomer ? selectedCustomer.name : (selectedClientName || null)}
+                onSearch={searchCustomers}
+                onSelect={applyCustomerSelection}
+                placeholder={t("workOrders.form.selectClient")}
+                searchPlaceholder={t("workOrders.form.searchClients")}
+                emptyText={t("workOrders.form.noClients")}
+                clearLabel={t("workOrders.form.newClient")}
               />
             </FieldShell>
 
-            <FieldShell id="locationId" label="Lokacija">
+            <FieldShell id="locationId" label={t("workOrders.form.location")}>
               <Controller
                 name="locationId"
                 control={control}
@@ -627,7 +710,7 @@ export function WorkOrderForm({
                       aria-labelledby="locationId-label"
                       className={underlineTrigger}
                     >
-                      <SelectValue placeholder="Izaberite lokaciju" />
+                      <SelectValue placeholder={t("workOrders.form.selectLocation")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
@@ -644,35 +727,57 @@ export function WorkOrderForm({
               />
             </FieldShell>
 
-            <FieldShell
-              id="clientName"
-              label="Naziv klijenta *"
-              hint="Izaberite iz liste ili dodajte novog"
-              error={errors.clientName?.message}
-            >
-              <input
-                id="clientName"
-                className={underlineInput}
-                {...register("clientName")}
-              />
-            </FieldShell>
-            <FieldShell id="contactPerson" label="Kontakt osoba">
-              <input
-                id="contactPerson"
-                className={underlineInput}
-                {...register("contactPerson", {
-                  setValueAs: (v: string) => (v === "" ? null : v),
-                })}
-              />
-            </FieldShell>
+            {/* A registry client supplies its own name/contact, so the
+                free-text fields would just duplicate it. Show them read-only
+                when bound; only expose editable inputs for an off-registry
+                ("Novi klijent") entry. The values stay in form state either
+                way, so submission is unaffected. */}
+            {selectedCustomer ? (
+              <>
+                <FieldShell id="clientName-display" label={t("workOrders.form.clientName")}>
+                  <div className="py-1 text-[14px] text-foreground">
+                    {selectedCustomer.name}
+                  </div>
+                </FieldShell>
+                <FieldShell id="contactPerson-display" label={t("workOrders.form.contactPerson")}>
+                  <div className="py-1 text-[14px] text-foreground">
+                    {selectedCustomer.contactName?.trim() || "—"}
+                  </div>
+                </FieldShell>
+              </>
+            ) : (
+              <>
+                <FieldShell
+                  id="clientName"
+                  label={t("workOrders.form.clientNameRequired")}
+                  hint={t("workOrders.form.clientNameHint")}
+                  error={errors.clientName?.message}
+                >
+                  <input
+                    id="clientName"
+                    className={underlineInput}
+                    {...register("clientName")}
+                  />
+                </FieldShell>
+                <FieldShell id="contactPerson" label={t("workOrders.form.contactPerson")}>
+                  <input
+                    id="contactPerson"
+                    className={underlineInput}
+                    {...register("contactPerson", {
+                      setValueAs: (v: string) => (v === "" ? null : v),
+                    })}
+                  />
+                </FieldShell>
+              </>
+            )}
           </div>
         </FormSection>
 
-        <FormSection title="Posao">
+        <FormSection title={t("workOrders.form.sectionJob")}>
           <div className="space-y-6">
             <FieldShell
               id="jobDescription"
-              label="Opis *"
+              label={t("workOrders.form.jobDescription")}
               error={errors.jobDescription?.message}
               full
             >
@@ -684,18 +789,20 @@ export function WorkOrderForm({
               />
             </FieldShell>
 
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowJobDetails(!showJobDetails)}
-                aria-expanded={showJobDetails}
-                className="iris-focusable iris-press bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
-              >
-                {showJobDetails ? "Sakrij detalje posla" : "Prikaži detalje posla"}
-              </button>
-            </div>
+            {isAdmin && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowJobDetails(!showJobDetails)}
+                  aria-expanded={showJobDetails}
+                  className="iris-focusable iris-press bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
+                >
+                  {showJobDetails ? t("workOrders.form.jobDetailsHide") : t("workOrders.form.jobDetailsShow")}
+                </button>
+              </div>
+            )}
 
-            {showJobDetails && (
+            {isAdmin && showJobDetails && (
               <div
                 className="grid grid-cols-2 gap-6"
                 style={{
@@ -703,7 +810,7 @@ export function WorkOrderForm({
                     "iris-fade-up 320ms var(--iris-ease-out) both",
                 }}
               >
-                <FieldShell id="jobDetails.productCode" label="Šifra proizvoda">
+                <FieldShell id="jobDetails.productCode" label={t("workOrders.form.productCode")}>
                   <input
                     id="jobDetails.productCode"
                     className={underlineInput}
@@ -714,7 +821,7 @@ export function WorkOrderForm({
                 </FieldShell>
                 <FieldShell
                   id="jobDetails.paperWeightGsm"
-                  label="Gramatura papira (gsm)"
+                  label={t("workOrders.form.paperWeight")}
                   error={paperWeightError}
                 >
                   <input
@@ -726,7 +833,7 @@ export function WorkOrderForm({
                     })}
                   />
                 </FieldShell>
-                <FieldShell id="jobDetails.dimensions" label="Dimenzije">
+                <FieldShell id="jobDetails.dimensions" label={t("workOrders.form.dimensions")}>
                   <input
                     id="jobDetails.dimensions"
                     className={underlineInput}
@@ -737,7 +844,7 @@ export function WorkOrderForm({
                 </FieldShell>
                 <FieldShell
                   id="jobDetails.quantity"
-                  label="Količina"
+                  label={t("workOrders.form.quantity")}
                   error={quantityError}
                 >
                   <input
@@ -751,7 +858,7 @@ export function WorkOrderForm({
                 </FieldShell>
                 <FieldShell
                   id="jobDetails.finishingNote"
-                  label="Napomena o doradi"
+                  label={t("workOrders.form.finishingNote")}
                   full
                 >
                   <input
@@ -767,9 +874,10 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection title="Dodela i raspored">
+        {isAdmin && (
+        <FormSection title={t("workOrders.form.sectionAssignment")}>
           <div className="grid grid-cols-3 gap-6">
-            <FieldShell id="assignment.assignedTo" label="Operater">
+            <FieldShell id="assignment.assignedTo" label={t("workOrders.form.operator")}>
               <input
                 id="assignment.assignedTo"
                 className={underlineInput}
@@ -777,7 +885,7 @@ export function WorkOrderForm({
               />
             </FieldShell>
 
-            <FieldShell id="assignment.priority" label="Prioritet">
+            <FieldShell id="assignment.priority" label={t("workOrders.form.priority")}>
               <Controller
                 name="assignment.priority"
                 control={control}
@@ -791,11 +899,9 @@ export function WorkOrderForm({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(Object.entries(WORK_ORDER_PRIORITY_LABELS) as Array<
-                        [keyof typeof WORK_ORDER_PRIORITY_LABELS, string]
-                      >).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
+                      {optionsFor("priority").map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -804,7 +910,7 @@ export function WorkOrderForm({
               />
             </FieldShell>
 
-            <FieldShell id="assignment.scheduledDate" label="Planirano">
+            <FieldShell id="assignment.scheduledDate" label={t("workOrders.form.scheduled")}>
               <Controller
                 name="assignment.scheduledDate"
                 control={control}
@@ -813,7 +919,7 @@ export function WorkOrderForm({
                     id="assignment.scheduledDate"
                     value={field.value}
                     onChange={(v) => field.onChange(v)}
-                    placeholder="Planirano"
+                    placeholder={t("workOrders.form.scheduled")}
                     disabled={submitting}
                   />
                 )}
@@ -821,10 +927,32 @@ export function WorkOrderForm({
             </FieldShell>
           </div>
         </FormSection>
+        )}
 
-        <FormSection title="Dokument i isporuka">
+        {!isAdmin && (
+          <FormSection title={t("workOrders.form.sectionDeadline")}>
+            <FieldShell id="dueDate" label={t("workOrders.form.dueDate")}>
+              <Controller
+                name="dueDate"
+                control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    id="dueDate"
+                    value={field.value}
+                    onChange={(v) => field.onChange(v)}
+                    placeholder={t("workOrders.form.dueDate")}
+                    disabled={submitting}
+                  />
+                )}
+              />
+            </FieldShell>
+          </FormSection>
+        )}
+
+        {isAdmin && (
+        <FormSection title={t("workOrders.form.sectionDocument")}>
           <div className="grid grid-cols-2 gap-6">
-            <FieldShell id="billingDocumentType" label="Tip dokumenta">
+            <FieldShell id="billingDocumentType" label={t("workOrders.form.documentType")}>
               <Controller
                 name="billingDocumentType"
                 control={control}
@@ -844,26 +972,24 @@ export function WorkOrderForm({
                       aria-labelledby="billingDocumentType-label"
                       className={underlineTrigger}
                     >
-                      <SelectValue placeholder="Izaberite tip" />
+                      <SelectValue placeholder={t("workOrders.form.selectType")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
                         Nije izabrano
                       </SelectItem>
-                      {Object.entries(WORK_ORDER_BILLING_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {optionsFor("billingDocumentType").map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
               />
             </FieldShell>
 
-            <FieldShell id="shipping.deliveryMethod" label="Način dostave">
+            <FieldShell id="shipping.deliveryMethod" label={t("workOrders.form.deliveryMethod")}>
               <Controller
                 name="shipping.deliveryMethod"
                 control={control}
@@ -879,19 +1005,17 @@ export function WorkOrderForm({
                       aria-labelledby="shipping.deliveryMethod-label"
                       className={underlineTrigger}
                     >
-                      <SelectValue placeholder="Izaberite način" />
+                      <SelectValue placeholder={t("workOrders.form.selectMethod")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
                         Nije izabrano
                       </SelectItem>
-                      {Object.entries(WORK_ORDER_DELIVERY_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {optionsFor("deliveryMethod").map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -900,7 +1024,7 @@ export function WorkOrderForm({
 
             <FieldShell
               id="billingDocumentNumber"
-              label="Broj dokumenta"
+              label={t("workOrders.form.documentNumber")}
             >
               <input
                 id="billingDocumentNumber"
@@ -913,7 +1037,7 @@ export function WorkOrderForm({
 
             <FieldShell
               id="issueDate"
-              label="Datum izdavanja *"
+              label={t("workOrders.form.issueDate")}
               error={errors.issueDate?.message}
             >
               <Controller
@@ -924,14 +1048,14 @@ export function WorkOrderForm({
                     id="issueDate"
                     value={field.value}
                     onChange={(v) => field.onChange(v ?? "")}
-                    placeholder="Datum izdavanja"
+                    placeholder={t("workOrders.detail.issueDate")}
                     disabled={submitting}
                   />
                 )}
               />
             </FieldShell>
 
-            <FieldShell id="dueDate" label="Rok završetka">
+            <FieldShell id="dueDate" label={t("workOrders.form.dueDate")}>
               <Controller
                 name="dueDate"
                 control={control}
@@ -940,7 +1064,7 @@ export function WorkOrderForm({
                     id="dueDate"
                     value={field.value}
                     onChange={(v) => field.onChange(v)}
-                    placeholder="Rok završetka"
+                    placeholder={t("workOrders.form.dueDate")}
                     disabled={submitting}
                   />
                 )}
@@ -950,7 +1074,7 @@ export function WorkOrderForm({
             {showShippingAddress && (
               <FieldShell
                 id="shippingAddress"
-                label="Adresa za dostavu *"
+                label={t("workOrders.form.shippingAddress")}
                 error={errors.shipping?.shippingAddress?.message}
                 full
               >
@@ -968,7 +1092,7 @@ export function WorkOrderForm({
               </FieldShell>
             )}
 
-            <FieldShell id="shipping.drivesOut" label="Prevoz">
+            <FieldShell id="shipping.drivesOut" label={t("workOrders.form.drivesOut")}>
               <Controller
                 name="shipping.drivesOut"
                 control={control}
@@ -991,7 +1115,7 @@ export function WorkOrderForm({
             </FieldShell>
 
             {showPostageOptions && (
-              <FieldShell id="shipping.postagePaymentType" label="Poštarina">
+              <FieldShell id="shipping.postagePaymentType" label={t("workOrders.form.postage")}>
                 <Controller
                   name="shipping.postagePaymentType"
                   control={control}
@@ -1011,19 +1135,17 @@ export function WorkOrderForm({
                         aria-labelledby="shipping.postagePaymentType-label"
                         className={underlineTrigger}
                       >
-                        <SelectValue placeholder="Način plaćanja poštarine" />
+                        <SelectValue placeholder={t("workOrders.form.postagePayment")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
                           Nije izabrano
                         </SelectItem>
-                        {Object.entries(WORK_ORDER_POSTAGE_LABELS).map(
-                          ([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ),
-                        )}
+                        {optionsFor("postagePaymentType").map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   )}
@@ -1031,7 +1153,7 @@ export function WorkOrderForm({
               </FieldShell>
             )}
 
-            <FieldShell id="shipping.waitForPayment" label="Uplata">
+            <FieldShell id="shipping.waitForPayment" label={t("workOrders.form.payment")}>
               <Controller
                 name="shipping.waitForPayment"
                 control={control}
@@ -1046,7 +1168,7 @@ export function WorkOrderForm({
                       htmlFor="shipping.waitForPayment"
                       className="text-[12px] text-[color:var(--iris-ink-soft)]"
                     >
-                      Čeka se uplata
+                      {t("workOrders.form.waitForPayment")}
                     </label>
                   </div>
                 )}
@@ -1056,15 +1178,15 @@ export function WorkOrderForm({
 
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
             {[
-              { name: "shipping.hasPackaging" as const, label: "Pakovanje", id: "hasPackaging" },
-              { name: "shipping.hasLabeling" as const, label: "Označavanje", id: "hasLabeling" },
-              { name: "shipping.isFragile" as const, label: "Lomljivo", id: "isFragile" },
+              { name: "shipping.hasPackaging" as const, label: t("workOrders.form.packaging"), id: "hasPackaging" },
+              { name: "shipping.hasLabeling" as const, label: t("workOrders.form.labeling"), id: "hasLabeling" },
+              { name: "shipping.isFragile" as const, label: t("workOrders.form.fragile"), id: "isFragile" },
               {
                 name: "shipping.requiresSignature" as const,
-                label: "Potpis",
+                label: t("workOrders.form.requiresSignature"),
                 id: "requiresSignature",
               },
-              { name: "shipping.hasInsurance" as const, label: "Osiguranje", id: "hasInsurance" },
+              { name: "shipping.hasInsurance" as const, label: t("workOrders.form.insurance"), id: "hasInsurance" },
             ].map((opt) => (
               <Controller
                 key={opt.id}
@@ -1089,27 +1211,30 @@ export function WorkOrderForm({
             ))}
           </div>
         </FormSection>
+        )}
 
-        <FormSection title="Finansije i napomena">
+        <FormSection title={isAdmin ? t("workOrders.form.sectionFinanceNotes") : t("workOrders.form.sectionItemsNotes")}>
           <div className="grid grid-cols-2 gap-6">
-            <FieldShell
-              id="price"
-              label="Cena (RSD)"
-              error={errors.price?.message}
-            >
-              <input
+            {isAdmin && (
+              <FieldShell
                 id="price"
-                type="number"
-                step="0.01"
-                className={`${underlineInput} tnum`}
-                {...register("price", {
-                  setValueAs: (v: string) => (v === "" ? null : Number(v)),
-                })}
-              />
-            </FieldShell>
+                label={t("workOrders.form.price")}
+                error={errors.price?.message}
+              >
+                <input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  className={`${underlineInput} tnum`}
+                  {...register("price", {
+                    setValueAs: (v: string) => (v === "" ? null : Number(v)),
+                  })}
+                />
+              </FieldShell>
+            )}
 
-            {isEdit && (
-              <FieldShell id="executedBy" label="Izvršilac">
+            {isAdmin && isEdit && (
+              <FieldShell id="executedBy" label={t("workOrders.form.executedBy")}>
                 <input
                   id="executedBy"
                   className={underlineInput}
@@ -1120,42 +1245,50 @@ export function WorkOrderForm({
               </FieldShell>
             )}
 
-            <FieldShell id="invoiceDraft.status" label="Status fakture">
-              <Controller
-                name="invoiceDraft.status"
-                control={control}
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger
-                      id="invoiceDraft.status"
-                      aria-labelledby="invoiceDraft.status-label"
-                      className={underlineTrigger}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nije spremno</SelectItem>
-                      <SelectItem value="draft">Nacrt</SelectItem>
-                      <SelectItem value="issued">Fakturisano</SelectItem>
-                      <SelectItem value="paid">Plaćeno</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </FieldShell>
+            {isAdmin && (
+              <FieldShell id="invoiceDraft.status" label={t("workOrders.form.invoiceStatus")}>
+                <Controller
+                  name="invoiceDraft.status"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger
+                        id="invoiceDraft.status"
+                        aria-labelledby="invoiceDraft.status-label"
+                        className={underlineTrigger}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t("workOrders.form.invoiceStatusNone")}</SelectItem>
+                        <SelectItem value="draft">{t("workOrders.form.invoiceStatusDraft")}</SelectItem>
+                        <SelectItem value="issued">{t("workOrders.form.invoiceStatusIssued")}</SelectItem>
+                        <SelectItem value="paid">{t("workOrders.form.invoiceStatusPaid")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </FieldShell>
+            )}
 
-            <FieldShell id="invoiceDraft.invoiceNumber" label="Broj fakture">
-              <input
-                id="invoiceDraft.invoiceNumber"
-                className={`${underlineInput} tnum`}
-                {...register("invoiceDraft.invoiceNumber")}
-              />
-            </FieldShell>
+            {isAdmin && (
+              <FieldShell id="invoiceDraft.invoiceNumber" label={t("workOrders.form.invoiceNumber")}>
+                <input
+                  id="invoiceDraft.invoiceNumber"
+                  className={`${underlineInput} tnum`}
+                  {...register("invoiceDraft.invoiceNumber")}
+                />
+              </FieldShell>
+            )}
 
-            <div className="col-span-full border-t border-border pt-5">
+            <div
+              className={`col-span-full ${
+                isAdmin ? "border-t border-[color:var(--iris-border-soft)] pt-5" : ""
+              }`}
+            >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                  Stavke
+                  {t("workOrders.form.items")}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -1164,7 +1297,7 @@ export function WorkOrderForm({
                     className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Usluga
+                    {t("workOrders.form.specialService")}
                   </button>
                   <button
                     type="button"
@@ -1172,14 +1305,33 @@ export function WorkOrderForm({
                     className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Roba
+                    {t("workOrders.form.specialGoods")}
                   </button>
                 </div>
               </div>
 
+              {/* Pick a service/article from the catalog to add it as a line. */}
+              <div className="mb-4">
+                <div className="mb-1 text-[11px] text-[color:var(--iris-ink-soft)]">
+                  {t("workOrders.form.addFromCatalog")}
+                </div>
+                <AsyncCombobox
+                  selectedLabel={null}
+                  resetAfterSelect
+                  onSearch={searchCatalog}
+                  onSelect={handleAddCatalogLineItem}
+                  placeholder={t("workOrders.form.searchCatalogPlaceholder")}
+                  searchPlaceholder={t("workOrders.form.searchCatalog")}
+                  emptyText={t("workOrders.form.noCatalog")}
+                />
+                <p className="mt-1 text-[11px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.form.catalogHint")}
+                </p>
+              </div>
+
               {invoiceLineItemFields.length === 0 ? (
                 <div className="border border-dashed border-border bg-background px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
-                  Nema stavki
+                  {t("workOrders.form.noItems")}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1188,17 +1340,42 @@ export function WorkOrderForm({
                       invoiceLineItems[index]?.kind === "goods"
                         ? "goods"
                         : "service";
-                    const unitOptions = getInvoiceUnitOptions(selectedKind);
+                    const builtinUnitOptions = getInvoiceUnitOptions(
+                      selectedKind,
+                    ).map((unit) => ({
+                      value: unit,
+                      label: t(`workOrders.unit.${unit}`),
+                    }));
+                    // Append admin-added units (any kind); keep the current
+                    // value selectable even if it is an unknown/custom unit.
+                    const currentUnit = invoiceLineItems[index]?.unit;
+                    const unitOptions = [
+                      ...builtinUnitOptions,
+                      ...customInvoiceUnitOptions,
+                    ];
+                    if (
+                      currentUnit &&
+                      !unitOptions.some((option) => option.value === currentUnit)
+                    ) {
+                      unitOptions.push({
+                        value: currentUnit,
+                        label: customUnitLabelFor(currentUnit),
+                      });
+                    }
                     const lineItemError = errors.invoiceDraft?.lineItems?.[index];
 
                     return (
                       <div
                         key={lineItem.id}
-                        className="grid grid-cols-1 gap-4 border-b border-[color:var(--iris-border-soft)] pb-4 last:border-b-0 last:pb-0 xl:grid-cols-[120px_minmax(0,1fr)_80px_100px_110px_36px]"
+                        className={`grid grid-cols-1 gap-4 border-b border-[color:var(--iris-border-soft)] pb-4 last:border-b-0 last:pb-0 ${
+                          isAdmin
+                            ? "xl:grid-cols-[110px_minmax(0,1fr)_70px_90px_100px_100px_36px]"
+                            : "xl:grid-cols-[120px_minmax(0,1fr)_80px_100px_36px]"
+                        }`}
                       >
                         <FieldShell
                           id={`invoiceDraft.lineItems.${index}.kind`}
-                          label="Tip"
+                          label={t("workOrders.form.colType")}
                         >
                           <Controller
                             name={`invoiceDraft.lineItems.${index}.kind` as const}
@@ -1212,15 +1389,16 @@ export function WorkOrderForm({
                                     : "service";
                                   field.onChange(nextKind);
 
-                                  if (
-                                    !isInvoiceUnitAllowed(
-                                      nextKind,
-                                      invoiceLineItems[index]?.unit,
-                                    )
-                                  ) {
+                                  const currentUnit =
+                                    invoiceLineItems[index]?.unit;
+                                  const normalizedUnit = normalizeInvoiceUnit(
+                                    nextKind,
+                                    currentUnit,
+                                  );
+                                  if (normalizedUnit !== currentUnit) {
                                     setValue(
                                       `invoiceDraft.lineItems.${index}.unit`,
-                                      "kom",
+                                      normalizedUnit,
                                     );
                                   }
                                 }}
@@ -1233,13 +1411,11 @@ export function WorkOrderForm({
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {Object.entries(INVOICE_LINE_ITEM_KIND_LABELS).map(
-                                    ([value, label]) => (
-                                      <SelectItem key={value} value={value}>
-                                        {label}
-                                      </SelectItem>
-                                    ),
-                                  )}
+                                  {(["service", "goods"] as const).map((value) => (
+                                    <SelectItem key={value} value={value}>
+                                      {t(`workOrders.lineKind.${value}`)}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             )}
@@ -1248,7 +1424,7 @@ export function WorkOrderForm({
 
                         <FieldShell
                           id={`invoiceDraft.lineItems.${index}.description`}
-                          label="Opis"
+                          label={t("workOrders.form.colDescription")}
                           error={lineItemError?.description?.message}
                         >
                           <input
@@ -1262,7 +1438,7 @@ export function WorkOrderForm({
 
                         <FieldShell
                           id={`invoiceDraft.lineItems.${index}.quantity`}
-                          label="Kol."
+                          label={t("workOrders.form.colQuantity")}
                           error={lineItemError?.quantity?.message}
                         >
                           <input
@@ -1281,7 +1457,7 @@ export function WorkOrderForm({
 
                         <FieldShell
                           id={`invoiceDraft.lineItems.${index}.unit`}
-                          label="Jedinica"
+                          label={t("workOrders.form.colUnit")}
                           error={lineItemError?.unit?.message}
                         >
                           <Controller
@@ -1297,9 +1473,12 @@ export function WorkOrderForm({
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {unitOptions.map((unit) => (
-                                    <SelectItem key={unit} value={unit}>
-                                      {INVOICE_UNIT_LABELS[unit]}
+                                  {unitOptions.map((option) => (
+                                    <SelectItem
+                                      key={option.value}
+                                      value={option.value}
+                                    >
+                                      {option.label}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -1308,30 +1487,71 @@ export function WorkOrderForm({
                           />
                         </FieldShell>
 
-                        <FieldShell
-                          id={`invoiceDraft.lineItems.${index}.unitPrice`}
-                          label="Cena"
-                          error={lineItemError?.unitPrice?.message}
-                        >
-                          <input
+                        {isAdmin && (
+                          <FieldShell
                             id={`invoiceDraft.lineItems.${index}.unitPrice`}
-                            type="number"
-                            step="0.01"
-                            className={`${underlineInput} tnum`}
-                            {...register(
-                              `invoiceDraft.lineItems.${index}.unitPrice` as const,
-                              {
-                                setValueAs: (v: string) =>
-                                  v === "" ? 0 : Number(v),
-                              },
-                            )}
-                          />
-                        </FieldShell>
+                            label={t("workOrders.form.colPrice")}
+                            error={lineItemError?.unitPrice?.message}
+                          >
+                            <input
+                              id={`invoiceDraft.lineItems.${index}.unitPrice`}
+                              type="number"
+                              step="0.01"
+                              className={`${underlineInput} tnum`}
+                              {...register(
+                                `invoiceDraft.lineItems.${index}.unitPrice` as const,
+                                {
+                                  setValueAs: (v: string) =>
+                                    v === "" ? 0 : Number(v),
+                                },
+                              )}
+                            />
+                          </FieldShell>
+                        )}
+
+                        {isAdmin &&
+                          (invoiceLineItems[index]?.catalogItemId ? (
+                            // Catalog-line cost is captured server-side from the
+                            // item's price history; show it read-only.
+                            <FieldShell
+                              id={`invoiceDraft.lineItems.${index}.unitCost`}
+                              label={t("workOrders.form.colCost")}
+                              hint={t("workOrders.form.costFromCatalog")}
+                            >
+                              <div className="tnum py-1 text-[13px] text-[color:var(--iris-ink-mute)]">
+                                {invoiceLineItems[index]?.unitCost != null
+                                  ? invoiceLineItems[index]!.unitCost
+                                  : "—"}
+                              </div>
+                            </FieldShell>
+                          ) : (
+                            // Ad-hoc line: admin enters the cost; empty flags review.
+                            <FieldShell
+                              id={`invoiceDraft.lineItems.${index}.unitCost`}
+                              label={t("workOrders.form.colCost")}
+                              error={lineItemError?.unitCost?.message}
+                            >
+                              <input
+                                id={`invoiceDraft.lineItems.${index}.unitCost`}
+                                type="number"
+                                step="0.01"
+                                placeholder="—"
+                                className={`${underlineInput} tnum`}
+                                {...register(
+                                  `invoiceDraft.lineItems.${index}.unitCost` as const,
+                                  {
+                                    setValueAs: (v: string) =>
+                                      v === "" ? null : Number(v),
+                                  },
+                                )}
+                              />
+                            </FieldShell>
+                          ))}
 
                         <div className="self-end">
                           <button
                             type="button"
-                            aria-label={`Ukloni stavku ${index + 1}`}
+                            aria-label={t("workOrders.form.removeItem", { n: index + 1 })}
                             onClick={() => removeInvoiceLineItem(index)}
                             className="iris-focusable iris-press flex h-9 w-9 items-center justify-center border border-border bg-background text-[color:var(--iris-ink-soft)] hover:border-destructive hover:text-destructive"
                           >
@@ -1345,90 +1565,102 @@ export function WorkOrderForm({
               )}
             </div>
 
-            <FieldShell id="communication.notificationEmail" label="Email za obaveštenja">
-              <input
-                id="communication.notificationEmail"
-                type="email"
-                className={underlineInput}
-                {...register("communication.notificationEmail")}
-              />
-            </FieldShell>
-
-            <Controller
-              name="communication.emailNotificationsEnabled"
-              control={control}
-              render={({ field }) => (
-                <div className="flex items-center gap-2 self-end pb-2">
-                  <Checkbox
-                    id="communication.emailNotificationsEnabled"
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
+            {isAdmin && (
+              <>
+                <FieldShell id="communication.notificationEmail" label={t("workOrders.form.email")}>
+                  <input
+                    id="communication.notificationEmail"
+                    type="email"
+                    className={underlineInput}
+                    {...register("communication.notificationEmail")}
                   />
-                  <label
-                    htmlFor="communication.emailNotificationsEnabled"
-                    className="text-[12px] text-[color:var(--iris-ink-soft)]"
-                  >
-                    Email obaveštenja
-                  </label>
-                </div>
-              )}
-            />
+                </FieldShell>
 
-            <FieldShell id="communication.signedBy" label="Digitalni potpis">
-              <input
-                id="communication.signedBy"
-                className={underlineInput}
-                {...register("communication.signedBy")}
-              />
-            </FieldShell>
+                <Controller
+                  name="communication.emailNotificationsEnabled"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex items-center gap-2 self-end pb-2">
+                      <Checkbox
+                        id="communication.emailNotificationsEnabled"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                      <label
+                        htmlFor="communication.emailNotificationsEnabled"
+                        className="text-[12px] text-[color:var(--iris-ink-soft)]"
+                      >
+                        {t("workOrders.form.emailNotifications")}
+                      </label>
+                    </div>
+                  )}
+                />
 
-            <FieldShell id="note" label="Napomena" full>
+                <FieldShell id="communication.signedBy" label={t("workOrders.form.signature")}>
+                  <input
+                    id="communication.signedBy"
+                    className={underlineInput}
+                    {...register("communication.signedBy")}
+                  />
+                </FieldShell>
+              </>
+            )}
+
+            <FieldShell id="note" label={t("workOrders.form.note")} full>
               <textarea
                 id="note"
                 rows={3}
                 className={`w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground`}
-                placeholder="Dodatne napomene za operatera…"
+                placeholder={t("workOrders.form.notePlaceholder")}
                 {...register("note", {
                   setValueAs: (v: string) => (v === "" ? null : v),
                 })}
               />
             </FieldShell>
 
-            <FieldShell
-              id="internalNotes.0.body"
-              label="Interna beleška"
-              error={internalNoteError}
-              full
-            >
-              <textarea
-                id="internalNotes.0.body"
-                rows={3}
-                className="w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground"
-                placeholder="Vidljivo samo timu..."
-                {...register("internalNotes.0.body")}
-              />
-            </FieldShell>
+            {isAdmin && (
+              <>
+                <FieldShell
+                  id="internalNotes.0.body"
+                  label={t("workOrders.form.internalNote")}
+                  error={internalNoteError}
+                  full
+                >
+                  <textarea
+                    id="internalNotes.0.body"
+                    rows={3}
+                    className="w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground"
+                    placeholder={t("workOrders.form.internalPlaceholder")}
+                    {...register("internalNotes.0.body")}
+                  />
+                </FieldShell>
 
-            <FieldShell
-              id="customerNotes.0.body"
-              label="Beleška za klijenta"
-              error={customerNoteError}
-              full
-            >
-              <textarea
-                id="customerNotes.0.body"
-                rows={3}
-                className="w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground"
-                placeholder="Bez internih informacija..."
-                {...register("customerNotes.0.body")}
-              />
-            </FieldShell>
+                <FieldShell
+                  id="customerNotes.0.body"
+                  label={t("workOrders.form.customerNote")}
+                  error={customerNoteError}
+                  full
+                >
+                  <textarea
+                    id="customerNotes.0.body"
+                    rows={3}
+                    className="w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground"
+                    placeholder={t("workOrders.form.customerPlaceholder")}
+                    {...register("customerNotes.0.body")}
+                  />
+                </FieldShell>
+              </>
+            )}
           </div>
         </FormSection>
       </div>
 
-      <aside className="border-l border-border bg-card p-8">
-        <SummaryPanel watch={watch} isEdit={isEdit} />
+      <aside className="border-l border-border bg-card p-8 lg:sticky lg:top-0 lg:self-start">
+        {isAdmin ? (
+          <WorkOrderPdfPreview watch={watch} initialData={initialData} />
+        ) : (
+          <SummaryPanel watch={watch} isEdit={isEdit} isAdmin={isAdmin} />
+        )}
 
         <div className="mt-6 flex flex-col gap-2">
           <button
@@ -1437,7 +1669,7 @@ export function WorkOrderForm({
             className="iris-focusable iris-press flex items-center justify-center gap-2 bg-foreground px-4 py-[11px] text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90 disabled:opacity-60"
           >
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Sačuvaj nalog
+            {t("workOrders.form.submit")}
           </button>
           <button
             type="button"
@@ -1445,7 +1677,7 @@ export function WorkOrderForm({
             disabled={submitting}
             className="iris-focusable iris-press bg-transparent py-2 text-[11px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
           >
-            Odustani
+            {t("workOrders.form.cancel")}
           </button>
         </div>
       </aside>
@@ -1456,9 +1688,12 @@ export function WorkOrderForm({
 interface SummaryPanelProps {
   watch: UseFormWatch<WorkOrderFormValues>;
   isEdit: boolean;
+  isAdmin: boolean;
 }
 
-function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
+function SummaryPanel({ watch, isEdit, isAdmin }: SummaryPanelProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const { labelFor } = useEnumValues();
   const clientName = watch("clientName");
   const jobDescription = watch("jobDescription");
   const billingDocumentType = watch("billingDocumentType");
@@ -1471,26 +1706,38 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
   const dueDate = watch("dueDate");
   const invoiceStatus = watch("invoiceDraft.status");
 
-  const rows: Array<[string, string]> = [
-    ["Klijent", clientName || "-"],
-    ["Opis", jobDescription || "-"],
-    [
-      "Tip dokumenta",
-      billingDocumentType ? WORK_ORDER_BILLING_LABELS[billingDocumentType] : "-",
-    ],
-    ["Dostava", deliveryMethod ? WORK_ORDER_DELIVERY_LABELS[deliveryMethod] : "-"],
-    ["Operater", assignedTo || "Nedodeljeno"],
-    ["Prioritet", getWorkOrderPriorityLabel(priority)],
-    ["Planirano", scheduledDate ? formatWorkOrderDate(scheduledDate) : "-"],
-    ["Datum izdavanja", issueDate ? formatWorkOrderDate(issueDate) : "-"],
-    ["Rok", dueDate ? formatWorkOrderDate(dueDate) : "-"],
-    ["Faktura", invoiceStatus],
-  ];
+  // Operators see only the essentials; admins get the full back-office summary.
+  const rows: Array<[string, string]> = isAdmin
+    ? [
+        [t("workOrders.summary.client"), clientName || "-"],
+        [t("workOrders.summary.description"), jobDescription || "-"],
+        [
+          t("workOrders.detail.documentType"),
+          billingDocumentType
+            ? labelFor("billingDocumentType", billingDocumentType)
+            : "-",
+        ],
+        [
+          t("workOrders.detail.delivery"),
+          deliveryMethod ? labelFor("deliveryMethod", deliveryMethod) : "-",
+        ],
+        [t("workOrders.detail.operator"), assignedTo || t("workOrders.detail.unassigned")],
+        [t("workOrders.form.priority"), labelFor("priority", priority)],
+        [t("workOrders.detail.planned"), scheduledDate ? formatWorkOrderDate(scheduledDate) : "-"],
+        [t("workOrders.detail.issueDate"), issueDate ? formatWorkOrderDate(issueDate) : "-"],
+        [t("workOrders.notice.dueDate"), dueDate ? formatWorkOrderDate(dueDate) : "-"],
+        [t("workOrders.detail.invoice"), invoiceStatus],
+      ]
+    : [
+        [t("workOrders.summary.client"), clientName || "-"],
+        [t("workOrders.summary.description"), jobDescription || "-"],
+        [t("workOrders.notice.dueDate"), dueDate ? formatWorkOrderDate(dueDate) : "-"],
+      ];
 
   return (
     <>
       <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-        Pregled naloga
+        {t("workOrders.summary.title")}
       </div>
       <div className="flex flex-col gap-3 text-[12px]">
         {rows.map(([k, v]) => (
@@ -1503,19 +1750,21 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
         ))}
       </div>
 
-      <div className="mt-6 border-t border-border pt-5">
-        <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Procena
+      {isAdmin && (
+        <div className="mt-6 border-t border-border pt-5">
+          <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+            {t("workOrders.summary.estimate")}
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-[12px] text-[color:var(--iris-ink-soft)]">
+              {isEdit ? t("workOrders.summary.price") : t("workOrders.summary.total")}
+            </span>
+            <span className="tnum text-[22px] font-normal tracking-[-0.3px] text-foreground">
+              {formatWorkOrderPrice(price ?? null)}
+            </span>
+          </div>
         </div>
-        <div className="flex items-baseline justify-between">
-          <span className="text-[12px] text-[color:var(--iris-ink-soft)]">
-            {isEdit ? "Cena" : "Ukupno"}
-          </span>
-          <span className="tnum text-[22px] font-normal tracking-[-0.3px] text-foreground">
-            {formatWorkOrderPrice(price ?? null)}
-          </span>
-        </div>
-      </div>
+      )}
     </>
   );
 }

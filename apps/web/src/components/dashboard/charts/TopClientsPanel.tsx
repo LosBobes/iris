@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { useTranslation } from 'react-i18next'
 import type { ClientCount } from '@/lib/dashboard/aggregations'
 
 interface TopClientsPanelProps {
@@ -14,10 +15,11 @@ interface TopClientsPanelProps {
 }
 
 export function TopClientsPanel({ topClients }: TopClientsPanelProps): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border border-border bg-card p-6">
       <h2 className="mb-5 text-sm font-medium text-card-foreground">
-        Top klijenti (po broju naloga)
+        {t('dashboard.charts.topClients')}
       </h2>
       {topClients.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">

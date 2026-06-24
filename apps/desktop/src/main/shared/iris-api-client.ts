@@ -3,7 +3,14 @@ import type {
   UpdateWorkOrderInput,
   WorkOrder,
 } from '../../../model/work-order'
+import type {
+  CatalogItem,
+  CatalogItemInput,
+  CatalogItemListResult,
+  CatalogItemQuery,
+} from '../../../model/catalog'
 import type { User } from '../../../model/user'
+import type { OrganizationSettings } from '../../../model/settings'
 import { getDesktopConfig } from './runtime-config'
 
 export interface BackendStatus {
@@ -43,6 +50,11 @@ export interface IrisApiClient {
     changes: UpdateWorkOrderInput,
   ) => Promise<WorkOrder | null>
   deleteWorkOrder: (id: string) => Promise<DeleteWorkOrderResponse>
+  getCatalogItems: (query?: CatalogItemQuery) => Promise<CatalogItemListResult>
+  createCatalogItem: (input: CatalogItemInput) => Promise<CatalogItem>
+  updateCatalogItem: (id: string, input: CatalogItemInput) => Promise<CatalogItem>
+  deleteCatalogItem: (id: string) => Promise<{ success: boolean }>
+  getSettings: () => Promise<OrganizationSettings>
 }
 
 const BACKEND_ERROR_MESSAGES = {
@@ -274,6 +286,41 @@ export function createIrisApiClient({
       return requestJson<DeleteWorkOrderResponse>(`/work-orders/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       })
+    },
+
+    async getCatalogItems(query: CatalogItemQuery = {}): Promise<CatalogItemListResult> {
+      const params = new URLSearchParams()
+      if (query.kind) params.set('kind', query.kind)
+      if (query.q) params.set('q', query.q)
+      if (query.active) params.set('active', 'true')
+      if (query.limit !== undefined) params.set('limit', String(query.limit))
+      if (query.offset !== undefined) params.set('offset', String(query.offset))
+      const search = params.toString()
+      return requestJson<CatalogItemListResult>(`/catalog-items${search ? `?${search}` : ''}`)
+    },
+
+    async createCatalogItem(input: CatalogItemInput): Promise<CatalogItem> {
+      return requestJson<CatalogItem>('/catalog-items', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+    },
+
+    async updateCatalogItem(id: string, input: CatalogItemInput): Promise<CatalogItem> {
+      return requestJson<CatalogItem>(`/catalog-items/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      })
+    },
+
+    async deleteCatalogItem(id: string): Promise<{ success: boolean }> {
+      return requestJson<{ success: boolean }>(`/catalog-items/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      })
+    },
+
+    async getSettings(): Promise<OrganizationSettings> {
+      return requestJson<OrganizationSettings>('/settings')
     },
   }
 }

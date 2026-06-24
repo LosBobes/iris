@@ -1,0 +1,344 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Check, ListPlus, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import i18n from "@/i18n";
+import { useEnumValues } from "@/hooks/useEnumValues";
+import type { EnumField, EnumValue } from "@/types/work-order";
+
+const FIELD_ORDER: EnumField[] = [
+  "deliveryMethod",
+  "postagePaymentType",
+  "billingDocumentType",
+  "priority",
+  "invoiceUnit",
+];
+
+/** Derives a machine code from a human label when the admin leaves it blank. */
+function slugifyValue(label: string): string {
+  const cleaned = label
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "dj")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  return parts
+    .map((part, index) =>
+      index === 0
+        ? part.toLowerCase()
+        : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+    )
+    .join("");
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : i18n.t("settings.enums.genericError");
+}
+
+export function EnumValuesSettings(): React.JSX.Element {
+  const { t } = useTranslation();
+  const { values, loading, error, optionsFor, createValue, updateValue, deleteValue } =
+    useEnumValues();
+
+  return (
+    <section className="max-w-2xl border border-border bg-card">
+      <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
+        <ListPlus size={16} className="text-[color:var(--iris-accent)]" />
+        <div>
+          <div className="text-[13px] font-medium text-foreground">
+            {t("settings.enums.title")}
+          </div>
+          <div className="text-[11px] text-[color:var(--iris-ink-soft)]">
+            {t("settings.enums.hint")}
+          </div>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="px-5 py-6 text-[12px] text-[color:var(--iris-ink-soft)]">
+          {t("settings.enums.loading")}
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="px-5 py-6 text-[12px] text-[color:var(--iris-status-cancelled)]">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="divide-y divide-border">
+          {FIELD_ORDER.map((field) => (
+            <EnumFieldGroup
+              key={field}
+              field={field}
+              rows={values.filter((entry) => entry.field === field)}
+              existingValues={optionsFor(field).map((option) => option.value)}
+              onCreate={createValue}
+              onUpdate={updateValue}
+              onDelete={deleteValue}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+interface EnumFieldGroupProps {
+  field: EnumField;
+  rows: EnumValue[];
+  existingValues: string[];
+  onCreate: ReturnType<typeof useEnumValues>["createValue"];
+  onUpdate: ReturnType<typeof useEnumValues>["updateValue"];
+  onDelete: ReturnType<typeof useEnumValues>["deleteValue"];
+}
+
+function EnumFieldGroup({
+  field,
+  rows,
+  existingValues,
+  onCreate,
+  onUpdate,
+  onDelete,
+}: EnumFieldGroupProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const [newLabel, setNewLabel] = useState("");
+  const [newValue, setNewValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const handleAdd = async (): Promise<void> => {
+    const label = newLabel.trim();
+    const value = (newValue.trim() || slugifyValue(label)).trim();
+    if (!label || !value) {
+      toast.error(t("settings.enums.enterName"));
+      return;
+    }
+    if (existingValues.includes(value)) {
+      toast.error(t("settings.enums.dupCode"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await onCreate({ field, value, label, sortOrder: rows.length });
+      setNewLabel("");
+      setNewValue("");
+      toast.success(t("settings.enums.added"));
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (row: EnumValue): Promise<void> => {
+    setBusy(true);
+    try {
+      await onDelete(row.id);
+      toast.success(t("settings.enums.deleted"));
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="px-5 py-4">
+      <div className="text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+        {t(`settings.enums.fields.${field}`)}
+      </div>
+
+      <ul className="mt-2 space-y-1.5">
+        {rows.map((row) =>
+          editingId === row.id ? (
+            <EnumEditRow
+              key={row.id}
+              row={row}
+              onCancel={() => setEditingId(null)}
+              onSave={async (label, value) => {
+                try {
+                  await onUpdate(row.id, {
+                    field,
+                    value,
+                    label,
+                    sortOrder: row.sortOrder,
+                  });
+                  setEditingId(null);
+                  toast.success(t("settings.enums.updated"));
+                } catch (err) {
+                  toast.error(errorMessage(err));
+                }
+              }}
+            />
+          ) : (
+            <li
+              key={row.id}
+              className="flex items-center justify-between gap-3 border border-border bg-background px-3 py-2"
+            >
+              <div className="min-w-0">
+                <span className="text-[13px] text-foreground">{row.label}</span>
+                <span className="tnum ml-2 text-[11px] text-[color:var(--iris-ink-mute)]">
+                  {row.value}
+                </span>
+              </div>
+              {row.isBuiltin ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                      <Lock size={11} /> {t("settings.enums.builtin")}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    {t("settings.enums.builtinTooltip")}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <IconButton
+                    label={t("settings.enums.edit")}
+                    onClick={() => setEditingId(row.id)}
+                    disabled={busy}
+                  >
+                    <Pencil size={13} />
+                  </IconButton>
+                  <IconButton
+                    label={t("settings.enums.delete")}
+                    onClick={() => handleDelete(row)}
+                    disabled={busy}
+                  >
+                    <Trash2 size={13} />
+                  </IconButton>
+                </div>
+              )}
+            </li>
+          ),
+        )}
+      </ul>
+
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Input
+          value={newLabel}
+          onChange={(event) => setNewLabel(event.target.value)}
+          placeholder={t(`settings.enums.placeholders.${field}`)}
+          className="h-9 text-[13px]"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void handleAdd();
+            }
+          }}
+        />
+        <Input
+          value={newValue}
+          onChange={(event) => setNewValue(event.target.value)}
+          placeholder={t("settings.enums.codePlaceholder")}
+          className="h-9 text-[13px] sm:max-w-[160px]"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void handleAdd();
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void handleAdd()}
+          disabled={busy}
+          className="shrink-0"
+        >
+          <Plus size={14} /> {t("settings.enums.addButton")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface EnumEditRowProps {
+  row: EnumValue;
+  onCancel: () => void;
+  onSave: (label: string, value: string) => Promise<void>;
+}
+
+function EnumEditRow({ row, onCancel, onSave }: EnumEditRowProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const [label, setLabel] = useState(row.label);
+  const [value, setValue] = useState(row.value);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (): Promise<void> => {
+    if (!label.trim() || !value.trim()) {
+      toast.error(t("settings.enums.nameCodeRequired"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await onSave(label.trim(), value.trim());
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="flex flex-col gap-2 border border-[color:var(--iris-accent)] bg-background px-3 py-2 sm:flex-row sm:items-center">
+      <Input
+        value={label}
+        onChange={(event) => setLabel(event.target.value)}
+        className="h-8 text-[13px]"
+        aria-label={t("settings.enums.nameAria")}
+      />
+      <Input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        className="h-8 text-[13px] sm:max-w-[160px]"
+        aria-label={t("settings.enums.codeAria")}
+      />
+      <div className="flex items-center gap-1">
+        <IconButton label={t("settings.enums.save")} onClick={() => void save()} disabled={busy}>
+          <Check size={14} />
+        </IconButton>
+        <IconButton label={t("settings.enums.cancel")} onClick={onCancel} disabled={busy}>
+          <X size={14} />
+        </IconButton>
+      </div>
+    </li>
+  );
+}
+
+interface IconButtonProps {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}
+
+function IconButton({ label, onClick, disabled, children }: IconButtonProps): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          aria-label={label}
+          className="iris-focusable iris-press flex h-8 w-8 items-center justify-center border border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:opacity-50"
+        >
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  );
+}

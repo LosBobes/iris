@@ -96,10 +96,100 @@ const (
 	InvoiceUnitSet InvoiceUnit = "set"
 )
 
+// CatalogItemKind separates services the shop performs from physical goods it
+// sells. It mirrors InvoiceLineItemKind (service/goods) so a catalog item maps
+// cleanly onto a work-order line item.
+type CatalogItemKind string
+
+const (
+	CatalogItemKindService CatalogItemKind = "service"
+	CatalogItemKindArticle CatalogItemKind = "article"
+)
+
+// CatalogItem is an admin-managed article or service that regular users select
+// when building work orders. The legacy print-shop catalog (MdArt) is imported
+// into this shape: Code=SIFRA, Kind from USLUGA, Unit from JMERE, SalePrice
+// from PRODCEN, Barcode/TaxGroup/Description from BARCODE/TARGR/OPIS.
+//
+// PurchasePrice is the cost figure: for articles it is the purchase price
+// (nabavna cena), for services the cost of labor (cena rada). It is
+// admin-only — the API strips it from responses to non-admin users so regular
+// operators never see cost/margin data. SalePrice (prodajna cena) is what the
+// firm charges and is visible to everyone.
+type CatalogItem struct {
+	ID            string          `json:"id"`
+	Code          string          `json:"code"`
+	Name          string          `json:"name"`
+	Kind          CatalogItemKind `json:"kind"`
+	Unit          string          `json:"unit"`
+	PurchasePrice *float64        `json:"purchasePrice"`
+	SalePrice     *float64        `json:"salePrice"`
+	Barcode       *string         `json:"barcode"`
+	TaxGroup      *string         `json:"taxGroup"`
+	Description   *string         `json:"description"`
+	IsActive      bool            `json:"isActive"`
+	CreatedAt     string          `json:"createdAt,omitempty"`
+	UpdatedAt     string          `json:"updatedAt,omitempty"`
+}
+
+// CatalogItemCost is one effective-dated cost record in a catalog item's price
+// history (1-N to CatalogItem). The store appends a new record whenever an admin
+// changes an item's price, stamping EffectiveFrom = today and closing the prior
+// record (EffectiveTo). A nil EffectiveTo marks the currently-effective record.
+// Work orders snapshot the cost in effect on their issue/completion date.
+type CatalogItemCost struct {
+	ID            string   `json:"id"`
+	CatalogItemID string   `json:"catalogItemId"`
+	PurchasePrice *float64 `json:"purchasePrice"`
+	SalePrice     *float64 `json:"salePrice"`
+	EffectiveFrom string   `json:"effectiveFrom"`
+	EffectiveTo   *string  `json:"effectiveTo"`
+	CreatedAt     string   `json:"createdAt"`
+}
+
+// CatalogItemInput is the payload an admin submits when creating or editing a
+// catalog item.
+type CatalogItemInput struct {
+	Code          string          `json:"code"`
+	Name          string          `json:"name"`
+	Kind          CatalogItemKind `json:"kind"`
+	Unit          string          `json:"unit"`
+	PurchasePrice *float64        `json:"purchasePrice"`
+	SalePrice     *float64        `json:"salePrice"`
+	Barcode       *string         `json:"barcode"`
+	TaxGroup      *string         `json:"taxGroup"`
+	Description   *string         `json:"description"`
+	IsActive      bool            `json:"isActive"`
+}
+
+// DefaultFirmName is the shop's display name shown in the app branding until an
+// administrator changes it via the organization settings.
+const DefaultFirmName = "Grafika Čobanović"
+
+// OrganizationSettings holds shop-wide branding/config an admin can edit. For
+// now this is just the firm name shown in the app header and settings.
+type OrganizationSettings struct {
+	FirmName string `json:"firmName"`
+}
+
 type User struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`
 	Role     UserRole `json:"role"`
+}
+
+// CreateUserInput is the payload an admin submits to add a user account.
+type CreateUserInput struct {
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	Role     UserRole `json:"role"`
+}
+
+// UpdateUserInput edits an existing account. Role changes the privilege level;
+// a non-empty Password resets the password (empty leaves it unchanged).
+type UpdateUserInput struct {
+	Role     UserRole `json:"role"`
+	Password string   `json:"password"`
 }
 
 type FixtureUser struct {
@@ -136,6 +226,11 @@ type Customer struct {
 	ContactName *string `json:"contactName"`
 	Email       *string `json:"email"`
 	Phone       *string `json:"phone"`
+	// Pib (poreski identifikacioni broj) and Mb (matični broj) identify a
+	// Serbian firm. They are optional on imported/legacy records but validated
+	// whenever present; see internal/domain/validation.go.
+	Pib *string `json:"pib"`
+	Mb  *string `json:"mb"`
 }
 
 type Location struct {
@@ -203,6 +298,17 @@ type InvoiceLineItem struct {
 	Quantity    int                 `json:"quantity"`
 	Unit        InvoiceUnit         `json:"unit"`
 	UnitPrice   float64             `json:"unitPrice"`
+	// UnitCost is the per-unit cost frozen onto the line when the order is saved:
+	// for catalog lines the catalog cost in effect at the issue date (re-snapshot
+	// to the completion date when the order completes), for ad-hoc lines a value
+	// an admin enters by hand. nil means "cost not yet captured" (an ad-hoc line
+	// awaiting admin review, or a catalog item with no known cost) — distinct from
+	// a genuine zero. Admin-only: stripped from non-admin responses. Margin per
+	// unit = UnitPrice-UnitCost.
+	UnitCost *float64 `json:"unitCost"`
+	// CatalogItemID links the line back to a CatalogItem when the user picked one
+	// from the catalog. It is nil for ad-hoc ("special") services typed inline.
+	CatalogItemID *string `json:"catalogItemId,omitempty"`
 }
 
 type InvoiceDraft struct {
@@ -221,38 +327,48 @@ type CustomerCommunication struct {
 }
 
 type WorkOrder struct {
-	ID                    string                   `json:"id"`
-	OrderNumber           string                   `json:"orderNumber"`
-	CustomerID            *string                  `json:"customerId"`
-	LocationID            *string                  `json:"locationId"`
-	ClientName            string                   `json:"clientName"`
-	ContactPerson         *string                  `json:"contactPerson"`
-	JobDescription        string                   `json:"jobDescription"`
-	JobDetails            *JobDetails              `json:"jobDetails"`
-	BillingDocumentType   *BillingDocumentType     `json:"billingDocumentType"`
-	BillingDocumentNumber *string                  `json:"billingDocumentNumber"`
-	Shipping              Shipping                 `json:"shipping"`
-	IssuedBy              string                   `json:"issuedBy"`
-	ExecutedBy            *string                  `json:"executedBy"`
-	Assignment            Assignment               `json:"assignment"`
-	IssueDate             string                   `json:"issueDate"`
-	DueDate               *string                  `json:"dueDate"`
-	IsCompleted           bool                     `json:"isCompleted"`
-	Status                WorkOrderStatus          `json:"status"`
-	Price                 *float64                 `json:"price"`
-	Note                  *string                  `json:"note"`
-	CreatedAt             string                   `json:"createdAt"`
-	UpdatedAt             string                   `json:"updatedAt"`
-	CompletionDate        *string                  `json:"completionDate"`
-	StatusHistory         []WorkOrderStatusHistory `json:"statusHistory"`
-	InternalNotes         []WorkOrderNote          `json:"internalNotes"`
-	CustomerNotes         []WorkOrderNote          `json:"customerNotes"`
-	Events                []WorkOrderEvent         `json:"events"`
-	Attachments           []Attachment             `json:"attachments"`
-	MaterialUsage         []MaterialUsage          `json:"materialUsage"`
-	TimeEntries           []TimeEntry              `json:"timeEntries"`
-	InvoiceDraft          InvoiceDraft             `json:"invoiceDraft"`
-	Communication         CustomerCommunication    `json:"communication"`
+	ID                    string               `json:"id"`
+	OrderNumber           string               `json:"orderNumber"`
+	CustomerID            *string              `json:"customerId"`
+	LocationID            *string              `json:"locationId"`
+	ClientName            string               `json:"clientName"`
+	ContactPerson         *string              `json:"contactPerson"`
+	JobDescription        string               `json:"jobDescription"`
+	JobDetails            *JobDetails          `json:"jobDetails"`
+	BillingDocumentType   *BillingDocumentType `json:"billingDocumentType"`
+	BillingDocumentNumber *string              `json:"billingDocumentNumber"`
+	Shipping              Shipping             `json:"shipping"`
+	IssuedBy              string               `json:"issuedBy"`
+	ExecutedBy            *string              `json:"executedBy"`
+	Assignment            Assignment           `json:"assignment"`
+	IssueDate             string               `json:"issueDate"`
+	DueDate               *string              `json:"dueDate"`
+	IsCompleted           bool                 `json:"isCompleted"`
+	Status                WorkOrderStatus      `json:"status"`
+	Price                 *float64             `json:"price"`
+	// Profit is the cached margin (sum of (unitPrice-unitCost)*qty over line
+	// items with a captured cost), recomputed server-side on every save.
+	// Admin-only: stripped from responses to non-admin users alongside per-line
+	// UnitCost. Provisional while NeedsCostReview is true.
+	Profit *float64 `json:"profit,omitempty"`
+	// NeedsCostReview is true when any line item has no captured cost
+	// (UnitCost == nil) — typically ad-hoc lines an operator added. Such orders
+	// are not blocked: they save, raise a cost_review event, and surface in the
+	// admin review queue until an admin enters the missing costs. Admin-only.
+	NeedsCostReview bool                     `json:"needsCostReview"`
+	Note            *string                  `json:"note"`
+	CreatedAt       string                   `json:"createdAt"`
+	UpdatedAt       string                   `json:"updatedAt"`
+	CompletionDate  *string                  `json:"completionDate"`
+	StatusHistory   []WorkOrderStatusHistory `json:"statusHistory"`
+	InternalNotes   []WorkOrderNote          `json:"internalNotes"`
+	CustomerNotes   []WorkOrderNote          `json:"customerNotes"`
+	Events          []WorkOrderEvent         `json:"events"`
+	Attachments     []Attachment             `json:"attachments"`
+	MaterialUsage   []MaterialUsage          `json:"materialUsage"`
+	TimeEntries     []TimeEntry              `json:"timeEntries"`
+	InvoiceDraft    InvoiceDraft             `json:"invoiceDraft"`
+	Communication   CustomerCommunication    `json:"communication"`
 }
 
 type CreateWorkOrderInput struct {

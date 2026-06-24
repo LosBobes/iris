@@ -3,28 +3,38 @@ import type {
   DeliveryMethod,
   WorkOrderStatus,
 } from "@/types/work-order";
+import i18n from "@/i18n";
 
 export const WORK_ORDER_SELECT_NONE_VALUE = "__none__";
 
-export const WORK_ORDER_DELIVERY_LABELS: Record<DeliveryMethod, string> = {
-  pickup: "Lično preuzimanje",
-  postExpress: "Post Express",
-  cityExpress: "City Express",
-  fieldVisit: "Terenski obilazak",
-};
+// Enum value lists for building selects/charts; labels are resolved through i18n
+// (sr default / en alternate) so the UI follows the active language.
+export const DELIVERY_METHODS: DeliveryMethod[] = [
+  "pickup",
+  "postExpress",
+  "cityExpress",
+  "fieldVisit",
+];
 
-export const WORK_ORDER_BILLING_LABELS: Record<BillingDocumentType, string> = {
-  invoice: "Faktura",
-  cashCollection: "Gotovinski račun",
-  proforma: "Profaktura",
-};
+export const BILLING_DOCUMENT_TYPES: BillingDocumentType[] = [
+  "invoice",
+  "cashCollection",
+  "proforma",
+];
 
-export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
-  draft: "Nacrt",
-  active: "Aktivan",
-  completed: "Završen",
-  cancelled: "Otkazan",
-};
+export function getWorkOrderDeliveryLabel(method: DeliveryMethod): string {
+  return i18n.t(`workOrders.delivery.${method}`);
+}
+
+export function getWorkOrderBillingDocumentLabel(
+  type: BillingDocumentType,
+): string {
+  return i18n.t(`workOrders.billing.${type}`);
+}
+
+export function getWorkOrderStatusLabel(status: WorkOrderStatus): string {
+  return i18n.t(`workOrders.status.${status}`);
+}
 
 export const WORK_ORDER_STATUS_VARIANTS: Record<
   WorkOrderStatus,

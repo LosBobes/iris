@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Inbox, Loader2, Plus, SearchX } from "lucide-react";
+import { Coins, Download, Inbox, Loader2, Plus, SearchX } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,9 @@ import { WorkOrdersFilters } from "@/components/WorkOrders/WorkOrdersFilters";
 import { WorkOrdersTable } from "@/components/WorkOrders/WorkOrdersTable";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useWorkOrders } from "@/hooks/useWorkOrders";
+import { useAuth } from "@/hooks/useAuth";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { downloadWorkOrdersCsv } from "@/lib/work-orders/csv-export";
 import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
@@ -17,9 +21,11 @@ import {
 import type { WorkOrder } from "@/types/work-order";
 
 function WorkOrdersPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const {
     orders,
+    filteredSortedOrders,
     totalFiltered,
     allOrdersCount,
     loading,
@@ -37,13 +43,30 @@ function WorkOrdersPage(): React.JSX.Element {
     setPageSize,
     refreshOrders,
   } = useWorkOrders();
+  const { visibleColumnSet } = useColumnVisibility();
+  // Deleting a work order is admin-only on the API; gate the affordance to match.
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
 
   const [deleteTarget, setDeleteTarget] = useState<WorkOrder | null>(null);
+
+  const handleExportCsv = useCallback(() => {
+    if (filteredSortedOrders.length === 0) {
+      toast.info(t("workOrders.toast.nothingToExport"));
+      return;
+    }
+    downloadWorkOrdersCsv(filteredSortedOrders, visibleColumnSet);
+    toast.success(
+      t("workOrders.toast.exported", { count: filteredSortedOrders.length }),
+    );
+  }, [filteredSortedOrders, visibleColumnSet, t]);
 
   const handleToggleStatus = useCallback(
     async (order: WorkOrder) => {
       if (!canToggleWorkOrderCompletion(order.status)) {
-        toast.info(`Status naloga ${order.orderNumber} se ne menja iz liste`);
+        toast.info(
+          t("workOrders.toast.statusNotFromList", { order: order.orderNumber }),
+        );
         return;
       }
 
@@ -59,16 +82,21 @@ function WorkOrdersPage(): React.JSX.Element {
           completionDate: isCompleting ? now : null,
         });
         if (!updated) {
-          toast.error("Radni nalog nije pronađen.");
+          toast.error(t("workOrders.toast.notFound"));
           return;
         }
         await refreshOrders();
-        toast.success(`Nalog ${order.orderNumber}: ${getWorkOrderStatusLabel(newStatus)}`);
+        toast.success(
+          t("workOrders.toast.statusChanged", {
+            order: order.orderNumber,
+            status: getWorkOrderStatusLabel(newStatus),
+          }),
+        );
       } catch {
-        toast.error("Greška pri promeni statusa");
+        toast.error(t("workOrders.toast.statusError"));
       }
     },
-    [refreshOrders],
+    [refreshOrders, t],
   );
 
   const handleDeleteClick = useCallback((order: WorkOrder) => {
@@ -80,17 +108,19 @@ function WorkOrdersPage(): React.JSX.Element {
     try {
       const result = await window.api.deleteWorkOrder(deleteTarget.id);
       if (!result.success) {
-        toast.error(result.message ?? "Greška pri brisanju naloga");
+        toast.error(result.message ?? t("workOrders.toast.deleteError"));
         return;
       }
 
       setDeleteTarget(null);
       await refreshOrders();
-      toast.success(`Radni nalog ${deleteTarget.orderNumber} je obrisan`);
+      toast.success(
+        t("workOrders.toast.deleted", { order: deleteTarget.orderNumber }),
+      );
     } catch {
-      toast.error("Neočekivana greška pri brisanju naloga");
+      toast.error(t("workOrders.toast.deleteUnexpected"));
     }
-  }, [deleteTarget, refreshOrders]);
+  }, [deleteTarget, refreshOrders, t]);
 
   const handleDuplicate = useCallback(
     (order: WorkOrder) => {
@@ -123,7 +153,8 @@ function WorkOrdersPage(): React.JSX.Element {
     filters.queue !== "all" ||
     filters.customerId !== "" ||
     filters.dateFrom !== "" ||
-    filters.dateTo !== "";
+    filters.dateTo !== "" ||
+    filters.needsCostReview;
 
   return (
     <AppShell>
@@ -132,25 +163,56 @@ function WorkOrdersPage(): React.JSX.Element {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Iris · nalozi
+                {t("workOrders.list.eyebrow")}
               </div>
               <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-                Radni nalozi
+                {t("workOrders.list.title")}
               </h1>
               <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
                 {allOrdersCount === 0
-                  ? "Još nema naloga"
-                  : `Ukupno ${totalFiltered} od ${allOrdersCount}`}
+                  ? t("workOrders.list.empty")
+                  : t("workOrders.list.total", {
+                      shown: totalFiltered,
+                      all: allOrdersCount,
+                    })}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => navigate("/work-orders/new")}
-              className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
-            >
-              <Plus className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:rotate-90" />
-              Novi radni nalog
-            </button>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateFilters({ needsCostReview: !filters.needsCostReview })
+                  }
+                  aria-pressed={filters.needsCostReview}
+                  className={`iris-focusable iris-press flex items-center gap-1.5 border px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] ${
+                    filters.needsCostReview
+                      ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
+                      : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
+                  }`}
+                >
+                  <Coins className="h-3.5 w-3.5" />
+                  {t("workOrders.list.needsCostReview")}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={totalFiltered === 0}
+                className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("workOrders.list.exportCsv")}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/work-orders/new")}
+                className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+              >
+                <Plus className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:rotate-90" />
+                {t("workOrders.list.newOrder")}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -169,7 +231,7 @@ function WorkOrdersPage(): React.JSX.Element {
               style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
             >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Učitavanje naloga...</span>
+              <span className="text-sm">{t("workOrders.list.loading")}</span>
             </div>
           </div>
         )}
@@ -177,7 +239,7 @@ function WorkOrdersPage(): React.JSX.Element {
         {!loading && error && (
           <div className="px-5 sm:px-8">
             <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
-              Greška pri učitavanju naloga: {error}
+              {t("workOrders.list.loadError", { error })}
             </div>
           </div>
         )}
@@ -187,11 +249,11 @@ function WorkOrdersPage(): React.JSX.Element {
             <div className="animate-iris-fade py-20 text-center">
               <Inbox className="mx-auto mb-3 h-8 w-8 text-[color:var(--iris-ink-faint)]" strokeWidth={1.25} />
               <p className="mb-4 text-sm text-muted-foreground">
-                Nema radnih naloga. Kreirajte prvi radni nalog.
+                {t("workOrders.list.emptyHint")}
               </p>
               <Button size="sm" onClick={() => navigate("/work-orders/new")}>
                 <Plus className="mr-1 h-3.5 w-3.5" />
-                Novi radni nalog
+                {t("workOrders.list.newOrder")}
               </Button>
             </div>
           </div>
@@ -206,10 +268,10 @@ function WorkOrdersPage(): React.JSX.Element {
               <div className="animate-iris-fade py-20 text-center">
                 <SearchX className="mx-auto mb-3 h-8 w-8 text-[color:var(--iris-ink-faint)]" strokeWidth={1.25} />
                 <p className="mb-4 text-sm text-muted-foreground">
-                  Nema radnih naloga koji odgovaraju izabranim filterima.
+                  {t("workOrders.list.noResults")}
                 </p>
                 <Button variant="outline" size="sm" onClick={resetFilters}>
-                  Poništi filtere
+                  {t("workOrders.list.resetFilters")}
                 </Button>
               </div>
             </div>
@@ -236,6 +298,7 @@ function WorkOrdersPage(): React.JSX.Element {
               onEdit={handleEdit}
               onToggleStatus={handleToggleStatus}
               onOpen={handleOpen}
+              canDelete={isAdmin}
             />
           </div>
         )}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -6,7 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useAuth } from "@/hooks/useAuth";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
-import type { Customer, Location, WorkOrder, WorkOrderNote } from "@/types/work-order";
+import type { Location, WorkOrder, WorkOrderNote } from "@/types/work-order";
 
 function getDuplicateInitialValues(
   source: WorkOrder | null,
@@ -58,19 +59,14 @@ function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
 }
 
 function WorkOrderCreatePage(): React.JSX.Element {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
 
   useEffect(() => {
-    void Promise.all([window.api.getCustomers(), window.api.getLocations()]).then(
-      ([nextCustomers, nextLocations]) => {
-        setCustomers(nextCustomers);
-        setLocations(nextLocations);
-      },
-    );
+    void window.api.getLocations().then(setLocations);
   }, []);
 
   // Duplicate pre-fill: data passed via router state
@@ -105,13 +101,13 @@ function WorkOrderCreatePage(): React.JSX.Element {
           invoiceDraft: values.invoiceDraft,
           communication: values.communication,
         });
-        toast.success(`Radni nalog ${result.orderNumber} je kreiran`);
+        toast.success(t("workOrders.toast.created", { order: result.orderNumber }));
         navigate(`/work-orders/${result.id}`);
       } catch {
-        toast.error("Greška pri kreiranju radnog naloga");
+        toast.error(t("workOrders.toast.createError"));
       }
     },
-    [currentUser.username, navigate],
+    [currentUser.username, navigate, t],
   );
 
   const handleCancel = useCallback(() => {
@@ -128,23 +124,22 @@ function WorkOrderCreatePage(): React.JSX.Element {
             className="iris-focusable iris-press group mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
             <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
-            Nazad na naloge
+            {t("workOrders.create.back")}
           </button>
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Iris · nalog
+            {t("workOrders.create.eyebrow")}
           </div>
           <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-            Novi radni nalog
+            {t("workOrders.create.title")}
           </h1>
           <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-            Popunite podatke za novi nalog
+            {t("workOrders.create.subtitle")}
           </div>
         </div>
 
         <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
           <WorkOrderForm
             initialValues={duplicateInitialValues}
-            customers={customers}
             locations={locations}
             onSubmit={handleSubmit}
             onCancel={handleCancel}

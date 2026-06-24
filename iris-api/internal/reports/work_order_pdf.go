@@ -386,7 +386,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
 
     .work-order-print-job-lines {
       font-size: 24px;
-      font-weight: 800;
+      font-weight: 400;
       line-height: 1.22;
       overflow-wrap: anywhere;
     }

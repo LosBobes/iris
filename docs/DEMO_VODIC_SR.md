@@ -18,7 +18,7 @@
 | **Pretraga tasterom `/`** | Na listi naloga — brz demo trik |
 | **Filteri kao „pill“ dugmad** | Status, tip dokumenta, red (Kasne/Danas…), datumi |
 | **Toast obaveštenja** | Potvrda nakon čuvanja, promene statusa, kopiranja |
-| **Podešavanja — 4 veličine teksta** | Mala → Veoma velika, sa pregledom |
+| **Podešavanja — tema, veličina teksta, gustina, šifarnici** | Svetla/tamna tema, 4 veličine teksta, gustina liste, i admin šifarnici (uklj. *jedinicu mere*) |
 | Dugme **Izmeni** (ne „Uredi“) | Vodi na `/work-orders/:id/edit` |
 | **Interno** sekcija na dashboardu | Sklopljena — materijal i nedodeljeni nalozi |
 
@@ -432,11 +432,11 @@ sequenceDiagram
 | Zaglavlje | Broj naloga, status bedž, dugmad desno |
 | **Sažetak za klijenta** | Sledeći korak + **Kopiraj obaveštenje** (Viber/email) |
 | Meta traka | Tip dokumenta, operater, plan, dostava, rok, broj dokumenta |
-| **Tok posla** | Timeline događaja (levo) |
+| **Tok posla** | Timeline događaja (levo) — uklj. izmene polja sa prikazom *stara → nova vrednost* |
 | Posao / materijal | Opis, gramatura, dimenzije, utrošak, evidencija rada |
 | Napomene | **Interne** vs **za klijenta** — privatnost |
-| Faktura | Nacrt, osnovica, **PDV 20%**, *Za uplatu* |
-| Dugmad | **Štampaj**, **PDF**, **Javni link**, **Dupliraj**, **Izmeni** |
+| Faktura | Nacrt, stavke sa **jedinicom mere** (kom / m² / set + sopstvene), osnovica, **PDV 20%**, *Za uplatu* |
+| Dugmad | **Pomeri u …** (sledeći status), **Štampaj**, **PDF**, **Javni link**, **Dupliraj**, **Izmeni**, **Obriši** |
 
 **Šta reći:**
 
@@ -500,13 +500,18 @@ sequenceDiagram
 
 ---
 
-### 8. Podešavanja `/settings` (30 sek — opciono)
+### 8. Podešavanja `/settings` (45 sek — opciono)
 
-**Šta pokazati:** **Veličina teksta** — Mala / Podrazumevana / Velika / Veoma velika; sekcija *Pregled* ispod
+**Šta pokazati:**
+
+- **Tema** — Svetla / Tamna
+- **Veličina teksta** — Mala / Podrazumevana / Velika / Veoma velika; sekcija *Pregled* ispod (popovi i padajuće liste ostaju ispravno pozicionirani i na najvećem uvećanju)
+- **Gustina liste** — zbijeno ↔ udobno
+- **Šifarnici** (samo admin) — sopstvene vrednosti za padajuće liste: način dostave, plaćanje poštarine, tip dokumenta, prioritet i **jedinica mere**. Ugrađene vrednosti su zaključane; dodate vrednosti odmah postaju izbor u obrascu naloga.
 
 **Šta reći:**
 
-> „Operater u štampariji može uvećati ceo prikaz — pamti se na uređaju. Korisno za ekrane na shop floor-u.“
+> „Operater u štampariji može uvećati ceo prikaz i prebaciti na tamnu temu — pamti se na uređaju. Admin kroz **šifarnike** dodaje sopstvene vrednosti, npr. novu **jedinicu mere** (tabak, paleta…) ili način dostave — bez izmene koda.“
 
 ---
 

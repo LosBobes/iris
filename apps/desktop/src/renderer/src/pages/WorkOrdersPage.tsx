@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
@@ -16,6 +17,7 @@ import type { WorkOrder } from "@/types/work-order";
 
 function WorkOrdersPage(): React.JSX.Element {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const {
     orders,
     totalFiltered,
@@ -41,7 +43,9 @@ function WorkOrdersPage(): React.JSX.Element {
   const handleToggleStatus = useCallback(
     async (order: WorkOrder) => {
       if (!canToggleWorkOrderCompletion(order.status)) {
-        toast.info(`Status naloga ${order.orderNumber} se ne menja iz liste`);
+        toast.info(
+          t("workOrders.list.statusNotFromList", { order: order.orderNumber }),
+        );
         return;
       }
 
@@ -56,20 +60,20 @@ function WorkOrdersPage(): React.JSX.Element {
           completionDate: isCompleting ? now : null,
         });
         if (!updated) {
-          toast.error("Radni nalog nije pronađen.");
+          toast.error(t("workOrders.list.notFoundToast"));
           return;
         }
         await refreshOrders();
         toast.success(
           isCompleting
-            ? `Nalog ${order.orderNumber} označen kao završen`
-            : `Nalog ${order.orderNumber} označen kao aktivan`,
+            ? t("workOrders.list.markedCompleted", { order: order.orderNumber })
+            : t("workOrders.list.markedActive", { order: order.orderNumber }),
         );
       } catch {
-        toast.error("Greška pri promeni statusa");
+        toast.error(t("workOrders.list.statusChangeError"));
       }
     },
-    [refreshOrders],
+    [refreshOrders, t],
   );
 
   const handleDeleteClick = useCallback((order: WorkOrder) => {
@@ -81,17 +85,19 @@ function WorkOrdersPage(): React.JSX.Element {
     try {
       const result = await window.api.deleteWorkOrder(deleteTarget.id);
       if (!result.success) {
-        toast.error(result.message ?? "Greška pri brisanju naloga");
+        toast.error(result.message ?? t("workOrders.list.deleteError"));
         return;
       }
 
       setDeleteTarget(null);
       await refreshOrders();
-      toast.success(`Radni nalog ${deleteTarget.orderNumber} je obrisan`);
+      toast.success(
+        t("workOrders.list.deleted", { order: deleteTarget.orderNumber }),
+      );
     } catch {
-      toast.error("Neočekivana greška pri brisanju naloga");
+      toast.error(t("workOrders.list.deleteUnexpected"));
     }
-  }, [deleteTarget, refreshOrders]);
+  }, [deleteTarget, refreshOrders, t]);
 
   const handleDuplicate = useCallback(
     (order: WorkOrder) => {
@@ -131,15 +137,18 @@ function WorkOrdersPage(): React.JSX.Element {
           <div className="flex items-end justify-between">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Iris · nalozi
+                {t("workOrders.list.eyebrow")}
               </div>
               <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-                Radni nalozi
+                {t("workOrders.list.title")}
               </h1>
               <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
                 {allOrdersCount === 0
-                  ? "Još nema naloga"
-                  : `Ukupno ${totalFiltered} od ${allOrdersCount}`}
+                  ? t("workOrders.list.noOrders")
+                  : t("workOrders.list.countSummary", {
+                      shown: totalFiltered,
+                      total: allOrdersCount,
+                    })}
               </div>
             </div>
             <button
@@ -148,7 +157,7 @@ function WorkOrdersPage(): React.JSX.Element {
               className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
             >
               <Plus className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:rotate-90" />
-              Novi radni nalog
+              {t("workOrders.list.newOrder")}
             </button>
           </div>
         </div>
@@ -168,7 +177,7 @@ function WorkOrdersPage(): React.JSX.Element {
               style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
             >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Učitavanje naloga...</span>
+              <span className="text-sm">{t("workOrders.list.loading")}</span>
             </div>
           </div>
         )}
@@ -176,7 +185,7 @@ function WorkOrdersPage(): React.JSX.Element {
         {!loading && error && (
           <div className="px-8">
             <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
-              Greška pri učitavanju naloga: {error}
+              {t("workOrders.list.loadError", { error })}
             </div>
           </div>
         )}
@@ -185,11 +194,11 @@ function WorkOrdersPage(): React.JSX.Element {
           <div className="px-8">
             <div className="animate-iris-fade py-20 text-center">
               <p className="mb-4 text-sm text-muted-foreground">
-                Nema radnih naloga. Kreirajte prvi radni nalog.
+                {t("workOrders.list.emptyTitle")}
               </p>
               <Button size="sm" onClick={() => navigate("/work-orders/new")}>
                 <Plus className="mr-1 h-3.5 w-3.5" />
-                Novi radni nalog
+                {t("workOrders.list.newOrder")}
               </Button>
             </div>
           </div>
@@ -203,10 +212,10 @@ function WorkOrdersPage(): React.JSX.Element {
             <div className="px-8">
               <div className="animate-iris-fade py-20 text-center">
                 <p className="mb-4 text-sm text-muted-foreground">
-                  Nema radnih naloga koji odgovaraju izabranim filterima.
+                  {t("workOrders.list.noMatches")}
                 </p>
                 <Button variant="outline" size="sm" onClick={resetFilters}>
-                  Poništi filtere
+                  {t("workOrders.list.resetFilters")}
                 </Button>
               </div>
             </div>

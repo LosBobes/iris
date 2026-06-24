@@ -1,6 +1,10 @@
 import type {
   Customer,
   CreateWorkOrderInput,
+  CustomerListQuery,
+  CustomerListResult,
+  EnumValue,
+  EnumValueInput,
   Location,
   PublicWorkOrderStatus,
   UpdateWorkOrderInput,
@@ -8,6 +12,19 @@ import type {
   WorkOrderListQuery,
   WorkOrderListResult,
 } from '@/types/work-order'
+import type {
+  CatalogItem,
+  CatalogItemInput,
+  CatalogItemListResult,
+  CatalogItemQuery,
+} from '@/types/catalog'
+import type { OrganizationSettings } from '@/types/settings'
+import type {
+  CreateUserInput,
+  ManagedUser,
+  UpdateUserInput,
+} from '@/types/user'
+import i18n from '@/i18n'
 
 type FetchLike = typeof fetch
 
@@ -86,7 +103,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     async getBackendStatus() {
       const unavailable = {
         ready: false as const,
-        message: 'Backend servis nije dostupan. Pokrenite iris-api i pokušajte ponovo.',
+        message: i18n.t('common.backendUnavailable'),
       }
       try {
         const response = await fetchImpl(url('/healthz'), credentialedRequest())
@@ -118,9 +135,27 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
       await readJSON<{ success: boolean }>(response)
     },
 
-    async getCustomers() {
-      const response = await fetchImpl(url('/customers'), credentialedRequest())
-      return readArray(await readJSON<Customer[] | null>(response))
+    async getCustomers(query: CustomerListQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.q) params.set('q', query.q)
+      if (query.limit !== undefined) params.set('limit', String(query.limit))
+      if (query.offset !== undefined) params.set('offset', String(query.offset))
+      const search = params.toString()
+      const response = await fetchImpl(
+        url(`/customers${search ? `?${search}` : ''}`),
+        credentialedRequest(),
+      )
+      const result = await readJSON<CustomerListResult>(response)
+      return { items: readArray(result?.items), total: result?.total ?? 0 }
+    },
+
+    async getCustomerById(id: string) {
+      const response = await fetchImpl(
+        url(`/customers/${encodeURIComponent(id)}`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return readJSON<Customer>(response)
     },
 
     async upsertCustomer(customer) {
@@ -155,6 +190,114 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     async deleteLocation(id) {
       const response = await fetchImpl(
         url(`/locations/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      return readJSON<{ success: boolean }>(response)
+    },
+
+    async getEnumValues() {
+      const response = await fetchImpl(url('/enum-values'), credentialedRequest())
+      return readArray(await readJSON<EnumValue[] | null>(response))
+    },
+
+    async createEnumValue(input: EnumValueInput) {
+      const response = await fetchImpl(url('/enum-values'), jsonRequest('POST', input))
+      return readJSON<EnumValue>(response)
+    },
+
+    async updateEnumValue(id: string, input: EnumValueInput) {
+      const response = await fetchImpl(
+        url(`/enum-values/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<EnumValue>(response)
+    },
+
+    async deleteEnumValue(id: string) {
+      const response = await fetchImpl(
+        url(`/enum-values/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      return readJSON<{ success: boolean }>(response)
+    },
+
+    async getCatalogItems(query: CatalogItemQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.kind) params.set('kind', query.kind)
+      if (query.q) params.set('q', query.q)
+      if (query.active) params.set('active', 'true')
+      if (query.limit !== undefined) params.set('limit', String(query.limit))
+      if (query.offset !== undefined) params.set('offset', String(query.offset))
+      const search = params.toString()
+      const response = await fetchImpl(
+        url(`/catalog-items${search ? `?${search}` : ''}`),
+        credentialedRequest(),
+      )
+      const result = await readJSON<CatalogItemListResult>(response)
+      return { items: readArray(result?.items), total: result?.total ?? 0 }
+    },
+
+    async getCatalogItemById(id: string) {
+      const response = await fetchImpl(
+        url(`/catalog-items/${encodeURIComponent(id)}`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return readJSON<CatalogItem>(response)
+    },
+
+    async createCatalogItem(input: CatalogItemInput) {
+      const response = await fetchImpl(url('/catalog-items'), jsonRequest('POST', input))
+      return readJSON<CatalogItem>(response)
+    },
+
+    async updateCatalogItem(id: string, input: CatalogItemInput) {
+      const response = await fetchImpl(
+        url(`/catalog-items/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<CatalogItem>(response)
+    },
+
+    async deleteCatalogItem(id: string) {
+      const response = await fetchImpl(
+        url(`/catalog-items/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      return readJSON<{ success: boolean }>(response)
+    },
+
+    async getSettings() {
+      const response = await fetchImpl(url('/settings'), credentialedRequest())
+      return readJSON<OrganizationSettings>(response)
+    },
+
+    async updateSettings(settings: OrganizationSettings) {
+      const response = await fetchImpl(url('/settings'), jsonRequest('PUT', settings))
+      return readJSON<OrganizationSettings>(response)
+    },
+
+    async listUsers() {
+      const response = await fetchImpl(url('/users'), credentialedRequest())
+      return readArray(await readJSON<ManagedUser[]>(response))
+    },
+
+    async createUser(input: CreateUserInput) {
+      const response = await fetchImpl(url('/users'), jsonRequest('POST', input))
+      return readJSON<ManagedUser>(response)
+    },
+
+    async updateUser(id: string, input: UpdateUserInput) {
+      const response = await fetchImpl(
+        url(`/users/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<ManagedUser>(response)
+    },
+
+    async deleteUser(id: string) {
+      const response = await fetchImpl(
+        url(`/users/${encodeURIComponent(id)}`),
         credentialedRequest({ method: 'DELETE' }),
       )
       return readJSON<{ success: boolean }>(response)
@@ -195,6 +338,12 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
         method: 'DELETE',
       }))
       return readJSON<DeleteWorkOrderResponse>(response)
+    },
+
+    async getWorkOrderPreviewHtml(order: WorkOrder) {
+      const response = await fetchImpl(url('/work-orders/preview'), jsonRequest('POST', order))
+      if (!response.ok) throw new Error(i18n.t('common.previewError'))
+      return response.text()
     },
 
     async getPublicWorkOrderStatus(token: string) {

@@ -149,29 +149,71 @@ func (s *SQLiteStore) DeleteSession(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *SQLiteStore) Customers(ctx context.Context) ([]domain.Customer, error) {
-	rows, err := s.db.QueryContext(
-		ctx,
-		`SELECT id, name, contact_name, email, phone FROM customers ORDER BY name COLLATE NOCASE`,
+func (s *SQLiteStore) Customers(ctx context.Context, query CustomerQuery) (CustomerListResult, error) {
+	var (
+		where string
+		args  []any
 	)
+	if search := strings.TrimSpace(query.Search); search != "" {
+		where = " WHERE (name LIKE ? COLLATE NOCASE OR pib LIKE ? OR mb LIKE ?)"
+		like := "%" + search + "%"
+		args = append(args, like, like, like)
+	}
+
+	var total int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM customers`+where, args...).Scan(&total); err != nil {
+		return CustomerListResult{}, fmt.Errorf("count customers: %w", err)
+	}
+
+	sqlText := `SELECT id, name, contact_name, email, phone, pib, mb FROM customers` + where + ` ORDER BY name COLLATE NOCASE`
+	if query.Limit > 0 {
+		sqlText += " LIMIT ? OFFSET ?"
+		args = append(args, query.Limit, maxInt(query.Offset, 0))
+	}
+
+	rows, err := s.db.QueryContext(ctx, sqlText, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list customers: %w", err)
+		return CustomerListResult{}, fmt.Errorf("list customers: %w", err)
 	}
 	defer rows.Close()
 
 	customers := make([]domain.Customer, 0)
 	for rows.Next() {
 		var customer domain.Customer
-		var contactName, email, phone sql.NullString
-		if err := rows.Scan(&customer.ID, &customer.Name, &contactName, &email, &phone); err != nil {
-			return nil, fmt.Errorf("scan customer: %w", err)
+		var contactName, email, phone, pib, mb sql.NullString
+		if err := rows.Scan(&customer.ID, &customer.Name, &contactName, &email, &phone, &pib, &mb); err != nil {
+			return CustomerListResult{}, fmt.Errorf("scan customer: %w", err)
 		}
 		customer.ContactName = nullStringPtr(contactName)
 		customer.Email = nullStringPtr(email)
 		customer.Phone = nullStringPtr(phone)
+		customer.Pib = nullStringPtr(pib)
+		customer.Mb = nullStringPtr(mb)
 		customers = append(customers, customer)
 	}
-	return customers, rows.Err()
+	return CustomerListResult{Items: customers, Total: total}, rows.Err()
+}
+
+func (s *SQLiteStore) CustomerByID(ctx context.Context, id string) (*domain.Customer, error) {
+	var customer domain.Customer
+	var contactName, email, phone, pib, mb sql.NullString
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT id, name, contact_name, email, phone, pib, mb FROM customers WHERE id = ?`,
+		id,
+	).Scan(&customer.ID, &customer.Name, &contactName, &email, &phone, &pib, &mb)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load customer: %w", err)
+	}
+	customer.ContactName = nullStringPtr(contactName)
+	customer.Email = nullStringPtr(email)
+	customer.Phone = nullStringPtr(phone)
+	customer.Pib = nullStringPtr(pib)
+	customer.Mb = nullStringPtr(mb)
+	return &customer, nil
 }
 
 func (s *SQLiteStore) Locations(ctx context.Context) ([]domain.Location, error) {
@@ -204,21 +246,28 @@ func (s *SQLiteStore) UpsertCustomer(
 	if strings.TrimSpace(customer.ID) == "" || strings.TrimSpace(customer.Name) == "" {
 		return nil, newValidationError(invalidWorkOrderMessage)
 	}
+	if msg := domain.ValidateCustomerIdentifiers(customer.Pib, customer.Mb); msg != "" {
+		return nil, newValidationError(msg)
+	}
 	if _, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO customers(id, name, contact_name, email, phone, updated_at)
-		 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		`INSERT INTO customers(id, name, contact_name, email, phone, pib, mb, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		 ON CONFLICT(id) DO UPDATE SET
 		   name = excluded.name,
 		   contact_name = excluded.contact_name,
 		   email = excluded.email,
 		   phone = excluded.phone,
+		   pib = excluded.pib,
+		   mb = excluded.mb,
 		   updated_at = CURRENT_TIMESTAMP`,
 		customer.ID,
 		customer.Name,
 		ptrStringValue(customer.ContactName),
 		ptrStringValue(customer.Email),
 		ptrStringValue(customer.Phone),
+		ptrStringValue(customer.Pib),
+		ptrStringValue(customer.Mb),
 	); err != nil {
 		return nil, fmt.Errorf("upsert customer: %w", err)
 	}
@@ -347,7 +396,20 @@ func (s *SQLiteStore) CreateWorkOrder(
 	ctx context.Context,
 	input domain.CreateWorkOrderInput,
 ) (*domain.WorkOrder, error) {
-	if err := validateCreateWorkOrderInput(input); err != nil {
+	custom, err := s.customEnums(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCreateWorkOrderInput(input, custom); err != nil {
+		return nil, err
+	}
+
+	// Look up catalog cost prices before opening the write transaction: the
+	// SQLite pool is single-connection, so querying inside the open tx would
+	// deadlock waiting for the connection the tx already holds.
+	draft := normalizeInvoiceDraft(input.InvoiceDraft, input.JobDescription, input.Price)
+	costs, err := s.catalogCostsAsOf(ctx, catalogItemIDs(draft.LineItems), input.IssueDate)
+	if err != nil {
 		return nil, err
 	}
 
@@ -400,8 +462,15 @@ func (s *SQLiteStore) CreateWorkOrder(
 		Attachments:   input.Attachments,
 		MaterialUsage: input.MaterialUsage,
 		TimeEntries:   input.TimeEntries,
-		InvoiceDraft:  normalizeInvoiceDraft(input.InvoiceDraft, input.JobDescription, input.Price),
+		InvoiceDraft:  draft,
 		Communication: normalizeCommunication(input.Communication, sequence, nil),
+	}
+
+	workOrder.InvoiceDraft.LineItems, workOrder.Profit, workOrder.NeedsCostReview = applyLineItemCosts(
+		workOrder.InvoiceDraft.LineItems, costs, nil, costModeCreate,
+	)
+	if workOrder.NeedsCostReview {
+		workOrder.Events = applyCostReviewEvents(workOrder.Events, false, true, input.IssuedBy, now)
 	}
 
 	if err := putWorkOrder(ctx, tx, workOrder); err != nil {
@@ -422,11 +491,43 @@ func (s *SQLiteStore) UpdateWorkOrder(
 	if err != nil || current == nil {
 		return current, err
 	}
-	updated, err := applyWorkOrderChanges(*current, changes)
+	custom, err := s.customEnums(ctx)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := applyWorkOrderChanges(*current, changes, custom)
 	if err != nil {
 		return nil, err
 	}
 	updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	// Pick the cost-capture mode: freeze on completion (re-snapshot from the
+	// completion-date cost, the final authoritative value), otherwise preserve
+	// already-frozen costs and only cost genuinely new catalog lines.
+	mode := costModePreserve
+	costDate := updated.IssueDate
+	if !current.IsCompleted && updated.IsCompleted {
+		mode = costModeCompletion
+		if updated.CompletionDate != nil {
+			costDate = *updated.CompletionDate
+		} else {
+			costDate = time.Now().UTC().Format("2006-01-02")
+		}
+	}
+	costs, err := s.catalogCostsAsOf(ctx, catalogItemIDs(updated.InvoiceDraft.LineItems), costDate)
+	if err != nil {
+		return nil, err
+	}
+	wasNeeded := current.NeedsCostReview
+	updated.InvoiceDraft.LineItems, updated.Profit, updated.NeedsCostReview = applyLineItemCosts(
+		updated.InvoiceDraft.LineItems, costs, current.InvoiceDraft.LineItems, mode,
+	)
+	actor := updated.IssuedBy
+	if updated.ExecutedBy != nil && *updated.ExecutedBy != "" {
+		actor = *updated.ExecutedBy
+	}
+	updated.Events = applyCostReviewEvents(updated.Events, wasNeeded, updated.NeedsCostReview, actor, updated.UpdatedAt)
+
 	if err := s.PutWorkOrder(ctx, updated); err != nil {
 		return nil, err
 	}
@@ -502,9 +603,9 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 		ctx,
 		`INSERT INTO work_orders(
 		   id, order_number, customer_id, location_id, client_name, job_description,
-		   issued_by, assigned_to, status, issue_date, due_date, price, payload,
-		   created_at, updated_at
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		   issued_by, assigned_to, status, issue_date, due_date, price, needs_cost_review,
+		   payload, created_at, updated_at
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   order_number = excluded.order_number,
 		   customer_id = excluded.customer_id,
@@ -517,6 +618,7 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 		   issue_date = excluded.issue_date,
 		   due_date = excluded.due_date,
 		   price = excluded.price,
+		   needs_cost_review = excluded.needs_cost_review,
 		   payload = excluded.payload,
 		   created_at = excluded.created_at,
 		   updated_at = excluded.updated_at`,
@@ -532,6 +634,7 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 		workOrder.IssueDate,
 		ptrStringValue(workOrder.DueDate),
 		ptrFloatValue(workOrder.Price),
+		boolInt(workOrder.NeedsCostReview),
 		string(payload),
 		workOrder.CreatedAt,
 		workOrder.UpdatedAt,
@@ -636,6 +739,9 @@ func buildWorkOrderWhere(query WorkOrderListQuery) (string, []any) {
 	if query.DateTo != "" {
 		clauses = append(clauses, `issue_date <= ?`)
 		args = append(args, query.DateTo)
+	}
+	if query.NeedsCostReview {
+		clauses = append(clauses, `needs_cost_review = 1`)
 	}
 	if len(clauses) == 0 {
 		return "", args

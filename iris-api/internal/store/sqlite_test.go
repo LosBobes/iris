@@ -22,8 +22,8 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WorkOrders() returned error: %v", err)
 	}
-	if result.Total != 28 || len(result.Items) != 10 {
-		t.Fatalf("result = %#v, want total 28 and limited page", result)
+	if result.Total != 43 || len(result.Items) != 10 {
+		t.Fatalf("result = %#v, want total 43 and limited page", result)
 	}
 	if err := sqliteStore.Close(); err != nil {
 		t.Fatalf("Close() returned error: %v", err)
@@ -81,12 +81,12 @@ func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
 
-	customers, err := sqliteStore.Customers(ctx)
+	customers, err := sqliteStore.Customers(ctx, CustomerQuery{})
 	if err != nil {
 		t.Fatalf("Customers() returned error: %v", err)
 	}
-	if customers == nil {
-		t.Fatal("Customers() = nil, want empty slice")
+	if customers.Items == nil {
+		t.Fatal("Customers().Items = nil, want empty slice")
 	}
 
 	locations, err := sqliteStore.Locations(ctx)

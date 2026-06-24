@@ -1,7 +1,13 @@
 // App-wide font/UI scaling. The Iris UI uses fixed px sizes throughout, so a
 // root `font-size` tweak alone would not move most text. Instead we scale the
-// whole document with CSS `zoom`, which enlarges text and layout proportionally
-// and works reliably across the px-based design.
+// whole app with a CSS `transform: scale()` on a wrapper element, which enlarges
+// text and layout proportionally across the px-based design.
+//
+// We deliberately use `transform` rather than `zoom`: Radix popovers/selects/
+// tooltips are positioned by Floating UI, which compensates for an ancestor
+// `transform: scale` but is blind to CSS `zoom`. Under `zoom` every popover
+// rendered inside the scaled tree lands offset by the scale factor. The wrapper
+// is sized to `100vw / scale` so that after scaling it fills the real viewport.
 
 export const FONT_SCALE_STORAGE_KEY = "iris-font-scale";
 
@@ -45,30 +51,31 @@ export function persistFontScale(scale: number): void {
   }
 }
 
-export function applyFontScale(scale: number): void {
+// Applies the scale to `target` (the wrapper that contains the whole app and
+// the overlay portal node). `--iris-font-scale` is also published on the root
+// element for any CSS that needs the factor (e.g. `.iris-screen`).
+export function applyFontScale(scale: number, target: HTMLElement | null): void {
   const clamped = clampFontScale(scale);
-  const root = document.documentElement;
-  const appRoot = document.getElementById("root");
-  root.style.setProperty("--iris-font-scale", String(clamped));
-  root.style.setProperty("zoom", String(clamped));
+  document.documentElement.style.setProperty("--iris-font-scale", String(clamped));
 
-  if (clamped !== DEFAULT_FONT_SCALE) {
-    const compensatedViewport = `calc(100dvh / ${clamped})`;
-    document.body.style.overflow = "hidden";
-    document.body.style.minHeight = compensatedViewport;
-    if (appRoot) {
-      appRoot.style.minHeight = compensatedViewport;
-      appRoot.style.height = compensatedViewport;
-      appRoot.style.overflow = "hidden";
-    }
+  if (!target) return;
+
+  if (clamped === DEFAULT_FONT_SCALE) {
+    target.style.removeProperty("transform");
+    target.style.removeProperty("transform-origin");
+    target.style.removeProperty("width");
+    target.style.removeProperty("height");
+    target.style.removeProperty("overflow");
     return;
   }
 
-  document.body.style.removeProperty("overflow");
-  document.body.style.removeProperty("min-height");
-  if (appRoot) {
-    appRoot.style.removeProperty("min-height");
-    appRoot.style.removeProperty("height");
-    appRoot.style.removeProperty("overflow");
-  }
+  // Lay the wrapper out at the inverse size, then scale it back up from the
+  // top-left so it fills the real viewport. Top-level screens are `position:
+  // fixed` (AppShell, Login, public tracking); the `transform` makes the
+  // wrapper their containing block, so they stay pinned to the visible area.
+  target.style.transform = `scale(${clamped})`;
+  target.style.transformOrigin = "0 0";
+  target.style.width = `calc(100vw / ${clamped})`;
+  target.style.height = `calc(100dvh / ${clamped})`;
+  target.style.overflow = "hidden";
 }

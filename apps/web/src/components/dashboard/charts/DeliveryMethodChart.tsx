@@ -7,9 +7,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useTranslation } from "react-i18next";
 import type { DeliveryMethod } from "@/types/work-order";
 import type { DeliveryCount } from "@/lib/dashboard/aggregations";
-import { WORK_ORDER_DELIVERY_LABELS } from "@/shared/utils/work-orders";
+import { getWorkOrderDeliveryLabel } from "@/shared/utils/work-orders";
 
 interface DeliveryMethodChartProps {
   deliveryDistribution: DeliveryCount[];
@@ -18,15 +19,16 @@ interface DeliveryMethodChartProps {
 export function DeliveryMethodChart({
   deliveryDistribution,
 }: DeliveryMethodChartProps): React.JSX.Element {
+  const { t } = useTranslation();
   const data = deliveryDistribution.map(({ method, count }) => ({
-    label: WORK_ORDER_DELIVERY_LABELS[method as DeliveryMethod],
+    label: getWorkOrderDeliveryLabel(method as DeliveryMethod),
     count,
   }));
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
       <h2 className="mb-5 text-sm font-medium text-card-foreground">
-        Metod isporuke
+        {t("dashboard.charts.deliveryMethod")}
       </h2>
       {data.length === 0 ? (
         <p className="mt-8 text-center text-sm text-muted-foreground">

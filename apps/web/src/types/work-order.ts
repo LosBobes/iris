@@ -1,8 +1,26 @@
-export type DeliveryMethod = 'pickup' | 'postExpress' | 'cityExpress' | 'fieldVisit'
+// The delivery, postage, billing, and priority fields accept admin-defined
+// custom values in addition to the built-in defaults. The `(string & {})` arm
+// keeps editor autocomplete for the built-ins while still allowing any custom
+// value the administrator adds via Settings.
+export type DeliveryMethod =
+  | 'pickup'
+  | 'postExpress'
+  | 'cityExpress'
+  | 'fieldVisit'
+  | (string & {})
 
-export type PostagePaymentType = 'cod' | 'ourAccount' | 'advance' | 'viaInvoice'
+export type PostagePaymentType =
+  | 'cod'
+  | 'ourAccount'
+  | 'advance'
+  | 'viaInvoice'
+  | (string & {})
 
-export type BillingDocumentType = 'invoice' | 'cashCollection' | 'proforma'
+export type BillingDocumentType =
+  | 'invoice'
+  | 'cashCollection'
+  | 'proforma'
+  | (string & {})
 
 export type WorkOrderStatus =
   | 'new'
@@ -14,11 +32,39 @@ export type WorkOrderStatus =
   | 'cancelled'
   | 'invoiced'
 
-export type WorkOrderPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type WorkOrderPriority = 'low' | 'normal' | 'high' | 'urgent' | (string & {})
+
+export type EnumField =
+  | 'deliveryMethod'
+  | 'postagePaymentType'
+  | 'billingDocumentType'
+  | 'priority'
+  | 'invoiceUnit'
+
+export interface EnumValue {
+  id: string
+  field: EnumField
+  value: string
+  label: string
+  sortOrder: number
+  isBuiltin: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface EnumValueInput {
+  field: EnumField
+  value: string
+  label: string
+  sortOrder: number
+}
 export type WorkOrderNoteVisibility = 'internal' | 'customer'
 export type InvoiceDraftStatus = 'none' | 'draft' | 'issued' | 'paid'
 export type InvoiceLineItemKind = 'service' | 'goods'
-export type InvoiceUnit = 'kom' | 'm2' | 'set'
+// Built-in units of measure. The field is admin-extensible via the
+// `invoiceUnit` managed enum, so stored values may be any non-empty string.
+export type BuiltinInvoiceUnit = 'kom' | 'm2' | 'set'
+export type InvoiceUnit = string
 
 export interface JobDetails {
   productCode: string | null
@@ -47,6 +93,10 @@ export interface Customer {
   contactName: string | null
   email: string | null
   phone: string | null
+  // Serbian firm identifiers. Optional on imported records; validated when set.
+  // PIB: 9 digits + ISO 7064 MOD 11,10 control digit. MB: exactly 8 digits.
+  pib: string | null
+  mb: string | null
 }
 
 export interface Location {
@@ -54,6 +104,17 @@ export interface Location {
   customerId: string
   name: string
   address: string | null
+}
+
+export interface CustomerListQuery {
+  q?: string
+  limit?: number
+  offset?: number
+}
+
+export interface CustomerListResult {
+  items: Customer[]
+  total: number
 }
 
 export interface Assignment {
@@ -114,6 +175,14 @@ export interface InvoiceLineItem {
   quantity: number
   unit: InvoiceUnit
   unitPrice: number
+  // Per-unit cost frozen onto the line at save time: catalog cost as of the
+  // issue date (re-snapshot to completion date on completion) for catalog lines,
+  // or an admin-entered value for ad-hoc lines. null = cost not yet captured
+  // (ad-hoc line awaiting admin review), distinct from a genuine 0. Admin-only:
+  // the API returns null for non-admin users. Margin = unitPrice - unitCost.
+  unitCost?: number | null
+  // Set when the line was picked from the catalog; null for ad-hoc services.
+  catalogItemId?: string | null
 }
 
 export interface InvoiceDraft {
@@ -157,6 +226,18 @@ export interface WorkOrder {
   status: WorkOrderStatus
   /** Null means unbilled / price not yet set */
   price: number | null
+  /**
+   * Cached margin: sum of (unitPrice - unitCost) * quantity over line items
+   * with a captured cost, recomputed server-side on every save. Provisional
+   * while needsCostReview is true. Admin-only — null/absent for non-admin users.
+   */
+  profit?: number | null
+  /**
+   * True when any line item has no captured cost (usually ad-hoc lines). Such
+   * orders save normally but appear in the admin cost-review queue until an
+   * admin enters the missing costs. Admin-only — false for non-admin users.
+   */
+  needsCostReview?: boolean
   note: string | null
   /** ISO-8601 datetime string */
   createdAt: string
@@ -258,6 +339,8 @@ export interface WorkOrderListQuery {
   assignedTo?: string
   dateFrom?: string
   dateTo?: string
+  /** Admin-only: when true, returns only orders awaiting cost entry. */
+  needsCostReview?: boolean
   limit?: number
   offset?: number
   sort?: string

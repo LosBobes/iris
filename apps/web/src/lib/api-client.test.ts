@@ -87,13 +87,16 @@ describe('createHttpApi', () => {
   it('loads normalized customers and locations from the API', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(response([{ id: 'cust-1', name: 'Stamparija Demo' }]))
+      .mockResolvedValueOnce(
+        response({ items: [{ id: 'cust-1', name: 'Stamparija Demo' }], total: 1 }),
+      )
       .mockResolvedValueOnce(response([{ id: 'loc-1', customerId: 'cust-1' }]))
     const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
 
-    await expect(api.getCustomers()).resolves.toEqual([
-      { id: 'cust-1', name: 'Stamparija Demo' },
-    ])
+    await expect(api.getCustomers()).resolves.toEqual({
+      items: [{ id: 'cust-1', name: 'Stamparija Demo' }],
+      total: 1,
+    })
     await expect(api.getLocations()).resolves.toEqual([
       { id: 'loc-1', customerId: 'cust-1' },
     ])
@@ -108,7 +111,7 @@ describe('createHttpApi', () => {
       .mockResolvedValueOnce(response(null))
     const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
 
-    await expect(api.getCustomers()).resolves.toEqual([])
+    await expect(api.getCustomers()).resolves.toEqual({ items: [], total: 0 })
     await expect(api.getLocations()).resolves.toEqual([])
     await expect(api.getWorkOrders()).resolves.toEqual({ items: [], total: 0 })
     await expect(api.getWorkOrderOperators()).resolves.toEqual([])

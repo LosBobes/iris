@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -12,7 +13,6 @@ import {
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type {
-  Customer,
   Location,
   WorkOrder,
   WorkOrderNote,
@@ -24,10 +24,10 @@ function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
 }
 
 function WorkOrderEditPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,14 +46,14 @@ function WorkOrderEditPage(): React.JSX.Element {
         if (isCancelled) return;
 
         if (!data) {
-          setError("Radni nalog nije pronađen");
+          setError(t("workOrders.detail.notFound"));
           return;
         }
 
         setOrder(data);
       } catch {
         if (!isCancelled) {
-          setError("Greška pri učitavanju radnog naloga");
+          setError(t("workOrders.detail.loadError"));
         }
       } finally {
         if (!isCancelled) {
@@ -67,15 +67,10 @@ function WorkOrderEditPage(): React.JSX.Element {
     return () => {
       isCancelled = true;
     };
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
-    void Promise.all([window.api.getCustomers(), window.api.getLocations()]).then(
-      ([nextCustomers, nextLocations]) => {
-        setCustomers(nextCustomers);
-        setLocations(nextLocations);
-      },
-    );
+    void window.api.getLocations().then(setLocations);
   }, []);
 
   const handleSubmit = useCallback(
@@ -108,16 +103,16 @@ function WorkOrderEditPage(): React.JSX.Element {
           communication: values.communication,
         });
         if (!updated) {
-          toast.error("Radni nalog nije pronađen.");
+          toast.error(t("workOrders.toast.notFound"));
           return;
         }
-        toast.success(`Radni nalog ${updated.orderNumber} je ažuriran`);
+        toast.success(t("workOrders.toast.updated", { order: updated.orderNumber }));
         navigate(`/work-orders/${updated.id}`);
       } catch {
-        toast.error("Greška pri ažuriranju radnog naloga");
+        toast.error(t("workOrders.toast.updateError"));
       }
     },
-    [id, order, navigate],
+    [id, order, navigate, t],
   );
 
   const handleToggleStatus = useCallback(async () => {
@@ -134,15 +129,20 @@ function WorkOrderEditPage(): React.JSX.Element {
         completionDate: isCompleting ? now : null,
       });
       if (!updated) {
-        toast.error("Radni nalog nije pronađen.");
+        toast.error(t("workOrders.toast.notFound"));
         return;
       }
       setOrder(updated);
-      toast.success(`Nalog ${updated.orderNumber}: ${getWorkOrderStatusLabel(newStatus)}`);
+      toast.success(
+        t("workOrders.toast.statusChanged", {
+          order: updated.orderNumber,
+          status: getWorkOrderStatusLabel(newStatus),
+        }),
+      );
     } catch {
-      toast.error("Greška pri promeni statusa");
+      toast.error(t("workOrders.toast.statusError"));
     }
-  }, [id, order]);
+  }, [id, order, t]);
 
   const handleCancel = useCallback(() => {
     navigate("/work-orders");
@@ -158,18 +158,18 @@ function WorkOrderEditPage(): React.JSX.Element {
             className="iris-focusable iris-press group mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
             <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
-            Nazad na naloge
+            {t("workOrders.create.back")}
           </button>
           <div className="flex items-end justify-between">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Iris · izmena
+                {t("workOrders.edit.eyebrow")}
               </div>
               <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-                {order ? `Izmena naloga ${order.orderNumber}` : "Izmena naloga"}
+                {order ? t("workOrders.edit.title", { order: order.orderNumber }) : t("workOrders.edit.titleNew")}
               </h1>
               <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-                {order?.clientName ?? "Izmena postojećeg naloga"}
+                {order?.clientName ?? t("workOrders.edit.subtitleFallback")}
               </div>
             </div>
             {order && canToggleWorkOrderCompletion(order.status) && (
@@ -178,7 +178,7 @@ function WorkOrderEditPage(): React.JSX.Element {
                 size="sm"
                 onClick={handleToggleStatus}
               >
-                Pomeri u {getWorkOrderStatusLabel(getPrimaryWorkOrderTransition(order.status)!)}
+                {t("workOrders.detail.moveTo")} {getWorkOrderStatusLabel(getPrimaryWorkOrderTransition(order.status)!)}
               </Button>
             )}
           </div>
@@ -191,7 +191,7 @@ function WorkOrderEditPage(): React.JSX.Element {
               style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
             >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Učitavanje naloga...</span>
+              <span className="text-sm">{t("workOrders.list.loading")}</span>
             </div>
           </div>
         )}
@@ -208,7 +208,6 @@ function WorkOrderEditPage(): React.JSX.Element {
           <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
             <WorkOrderForm
               initialData={order}
-              customers={customers}
               locations={locations}
               onSubmit={handleSubmit}
               onCancel={handleCancel}

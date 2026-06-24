@@ -5,7 +5,9 @@
     "clientName": "Firma Doo",
     "jobDescription": "Štampa vizitkardi 500 kom",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "marko.petrovic",
     "issueDate": "2024-10-03",
     "isCompleted": true,
@@ -21,7 +23,9 @@
     "clientName": "Kompanija AB",
     "jobDescription": "Izrada kataloga proizvoda A4",
     "billingDocumentType": "proforma",
-    "shipping": { "deliveryMethod": "cityExpress" },
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
     "issuedBy": "ana.jovic",
     "issueDate": "2024-10-08",
     "isCompleted": true,
@@ -37,7 +41,9 @@
     "clientName": "Studio XYZ",
     "jobDescription": "Štampa plakata B1 format",
     "billingDocumentType": "cashCollection",
-    "shipping": { "deliveryMethod": "pickup" },
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
     "issuedBy": "stefan.nikolic",
     "issueDate": "2024-10-15",
     "isCompleted": false,
@@ -53,7 +59,9 @@
     "clientName": "Agencija Pro",
     "jobDescription": "Štampa flajera A5 1000 kom",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "jelena.markovic",
     "issueDate": "2024-10-21",
     "isCompleted": true,
@@ -69,7 +77,9 @@
     "clientName": "TehnoServis",
     "jobDescription": "Izrada reklamnog banera 3x1m",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "fieldVisit" },
+    "shipping": {
+      "deliveryMethod": "fieldVisit"
+    },
     "issuedBy": "marko.petrovic",
     "issueDate": "2024-11-05",
     "isCompleted": true,
@@ -85,7 +95,9 @@
     "clientName": "Firma Doo",
     "jobDescription": "Štampa memoranduma i koverata",
     "billingDocumentType": "proforma",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "ana.jovic",
     "issueDate": "2024-11-11",
     "isCompleted": true,
@@ -101,7 +113,9 @@
     "clientName": "EkoGrad",
     "jobDescription": "Štampa nalepnica za proizvode",
     "billingDocumentType": "cashCollection",
-    "shipping": { "deliveryMethod": "cityExpress" },
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
     "issuedBy": "stefan.nikolic",
     "issueDate": "2024-11-19",
     "isCompleted": false,
@@ -117,7 +131,9 @@
     "clientName": "MediaPlus",
     "jobDescription": "Izrada brošura A4 trifold",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "pickup" },
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
     "issuedBy": "jelena.markovic",
     "issueDate": "2024-11-27",
     "isCompleted": true,
@@ -133,7 +149,9 @@
     "clientName": "InfraGroup",
     "jobDescription": "Štampa godišnjeg izveštaja 200 str",
     "billingDocumentType": "proforma",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "marko.petrovic",
     "issueDate": "2024-12-02",
     "isCompleted": true,
@@ -149,7 +167,9 @@
     "clientName": "Kompanija AB",
     "jobDescription": "Štampa promotivnih majica 100 kom",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "cityExpress" },
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
     "issuedBy": "ana.jovic",
     "issueDate": "2024-12-10",
     "isCompleted": true,
@@ -165,7 +185,9 @@
     "clientName": "SportCenter",
     "jobDescription": "Štampa pozivnica za sportski događaj",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "fieldVisit" },
+    "shipping": {
+      "deliveryMethod": "fieldVisit"
+    },
     "issuedBy": "stefan.nikolic",
     "issueDate": "2024-12-17",
     "isCompleted": false,
@@ -181,7 +203,9 @@
     "clientName": "Agencija Pro",
     "jobDescription": "Štampa kalendara zidnih A3",
     "billingDocumentType": "cashCollection",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "jelena.markovic",
     "issueDate": "2024-12-23",
     "isCompleted": true,
@@ -197,7 +221,9 @@
     "clientName": "BioLab Doo",
     "jobDescription": "Štampa etiketa za laboratoriju",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "marko.petrovic",
     "issueDate": "2025-01-07",
     "isCompleted": true,
@@ -213,7 +239,9 @@
     "clientName": "Firma Doo",
     "jobDescription": "Štampa prezentacija i fascikli",
     "billingDocumentType": "proforma",
-    "shipping": { "deliveryMethod": "cityExpress" },
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
     "issuedBy": "ana.jovic",
     "issueDate": "2025-01-13",
     "isCompleted": true,
@@ -229,7 +257,9 @@
     "clientName": "TehnoServis",
     "jobDescription": "Štampa uputstava za upotrebu",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "pickup" },
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
     "issuedBy": "stefan.nikolic",
     "issueDate": "2025-01-20",
     "isCompleted": false,
@@ -245,7 +275,9 @@
     "clientName": "MediaPlus",
     "jobDescription": "Štampa reklamnih roll-up banera",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "jelena.markovic",
     "issueDate": "2025-01-28",
     "isCompleted": true,
@@ -261,7 +293,9 @@
     "clientName": "EkoGrad",
     "jobDescription": "Štampa eko kesa sa logom",
     "billingDocumentType": "cashCollection",
-    "shipping": { "deliveryMethod": "fieldVisit" },
+    "shipping": {
+      "deliveryMethod": "fieldVisit"
+    },
     "issuedBy": "marko.petrovic",
     "issueDate": "2025-02-04",
     "isCompleted": true,
@@ -277,7 +311,9 @@
     "clientName": "InfraGroup",
     "jobDescription": "Štampa tehničke dokumentacije",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "ana.jovic",
     "issueDate": "2025-02-10",
     "isCompleted": true,
@@ -293,7 +329,9 @@
     "clientName": "Kompanija AB",
     "jobDescription": "Izrada promotivnog materijala za sajam",
     "billingDocumentType": "proforma",
-    "shipping": { "deliveryMethod": "cityExpress" },
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
     "issuedBy": "stefan.nikolic",
     "issueDate": "2025-02-18",
     "isCompleted": false,
@@ -309,7 +347,9 @@
     "clientName": "SportCenter",
     "jobDescription": "Štampa diploma i sertifikata",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "pickup" },
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
     "issuedBy": "jelena.markovic",
     "issueDate": "2025-02-24",
     "isCompleted": true,
@@ -325,7 +365,9 @@
     "clientName": "BioLab Doo",
     "jobDescription": "Štampa ambalaže za farmaceutske proizvode",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "marko.petrovic",
     "issueDate": "2025-03-03",
     "isCompleted": true,
@@ -341,7 +383,9 @@
     "clientName": "Agencija Pro",
     "jobDescription": "Štampa letaka za promociju",
     "billingDocumentType": "cashCollection",
-    "shipping": { "deliveryMethod": "fieldVisit" },
+    "shipping": {
+      "deliveryMethod": "fieldVisit"
+    },
     "issuedBy": "ana.jovic",
     "issueDate": "2025-03-10",
     "isCompleted": false,
@@ -357,7 +401,9 @@
     "clientName": "Firma Doo",
     "jobDescription": "Štampa korporativnih poklona",
     "billingDocumentType": "proforma",
-    "shipping": { "deliveryMethod": "postExpress" },
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
     "issuedBy": "stefan.nikolic",
     "issueDate": "2025-03-17",
     "isCompleted": true,
@@ -373,7 +419,9 @@
     "clientName": "Studio XYZ",
     "jobDescription": "Štampa umetničkih reprodukcija",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "cityExpress" },
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
     "issuedBy": "jelena.markovic",
     "issueDate": "2025-03-24",
     "isCompleted": true,
@@ -389,7 +437,9 @@
     "clientName": "TehnoServis",
     "jobDescription": "Štampa servisnih naloga",
     "billingDocumentType": "invoice",
-    "shipping": { "deliveryMethod": "pickup" },
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
     "issuedBy": "marko.petrovic",
     "issueDate": "2025-03-31",
     "isCompleted": false,
@@ -397,6 +447,307 @@
     "price": null,
     "createdAt": "2025-03-31T07:00:00Z",
     "updatedAt": "2025-03-31T07:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "26",
+    "orderNumber": "RN-2026-0001",
+    "clientName": "Firma Doo",
+    "customerId": "cust-1",
+    "locationId": "loc-1",
+    "jobDescription": "Hitna štampa kataloga za sajam",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
+    "issuedBy": "marko.petrovic",
+    "issueDate": "2026-06-02",
+    "isCompleted": false,
+    "status": "inProgress",
+    "price": 45000,
+    "dueDate": "2026-06-12",
+    "createdAt": "2026-06-02T09:00:00Z",
+    "updatedAt": "2026-06-02T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "27",
+    "orderNumber": "RN-2026-0002",
+    "clientName": "Kompanija AB",
+    "customerId": "cust-2",
+    "locationId": "loc-2",
+    "jobDescription": "Štampa godišnjih izveštaja 200 str",
+    "billingDocumentType": "proforma",
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
+    "issuedBy": "ana.jovic",
+    "issueDate": "2026-06-01",
+    "isCompleted": false,
+    "status": "assigned",
+    "price": 38000,
+    "dueDate": "2026-06-10",
+    "createdAt": "2026-06-01T09:00:00Z",
+    "updatedAt": "2026-06-01T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "28",
+    "orderNumber": "RN-2026-0003",
+    "clientName": "TehnoServis",
+    "customerId": "cust-5",
+    "locationId": "loc-5",
+    "jobDescription": "Reklamni baner za izlog 3x1m",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "fieldVisit"
+    },
+    "issuedBy": "stefan.nikolic",
+    "issueDate": "2026-05-28",
+    "isCompleted": false,
+    "status": "inProgress",
+    "price": 21000,
+    "dueDate": "2026-06-08",
+    "createdAt": "2026-05-28T09:00:00Z",
+    "updatedAt": "2026-05-28T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "29",
+    "orderNumber": "RN-2026-0004",
+    "clientName": "Agencija Pro",
+    "customerId": "cust-4",
+    "locationId": "loc-4",
+    "jobDescription": "Flajeri za kampanju 5000 kom",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
+    "issuedBy": "jelena.markovic",
+    "issueDate": "2026-06-05",
+    "isCompleted": false,
+    "status": "assigned",
+    "price": 12000,
+    "dueDate": "2026-06-17",
+    "createdAt": "2026-06-05T09:00:00Z",
+    "updatedAt": "2026-06-05T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "30",
+    "orderNumber": "RN-2026-0005",
+    "clientName": "Firma Doo",
+    "customerId": "cust-1",
+    "locationId": "loc-1",
+    "jobDescription": "Vizitkarte za upravu 1000 kom",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
+    "issuedBy": "marko.petrovic",
+    "issueDate": "2026-06-14",
+    "isCompleted": false,
+    "status": "inProgress",
+    "price": 8000,
+    "dueDate": "2026-06-21",
+    "createdAt": "2026-06-14T09:00:00Z",
+    "updatedAt": "2026-06-14T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "31",
+    "orderNumber": "RN-2026-0006",
+    "clientName": "Studio XYZ",
+    "jobDescription": "Plakati B1 za izložbu",
+    "billingDocumentType": "cashCollection",
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
+    "issuedBy": "stefan.nikolic",
+    "issueDate": "2026-06-15",
+    "isCompleted": false,
+    "status": "inProgress",
+    "price": 9500,
+    "dueDate": "2026-06-21",
+    "createdAt": "2026-06-15T09:00:00Z",
+    "updatedAt": "2026-06-15T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "32",
+    "orderNumber": "RN-2026-0007",
+    "clientName": "Kompanija AB",
+    "customerId": "cust-2",
+    "locationId": "loc-2",
+    "jobDescription": "Brošure A4 trifold 1000 kom",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
+    "issuedBy": "ana.jovic",
+    "issueDate": "2026-06-16",
+    "isCompleted": false,
+    "status": "assigned",
+    "price": 26000,
+    "dueDate": "2026-06-24",
+    "createdAt": "2026-06-16T09:00:00Z",
+    "updatedAt": "2026-06-16T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "33",
+    "orderNumber": "RN-2026-0008",
+    "clientName": "EkoGrad",
+    "jobDescription": "Eko kese sa logom 2000 kom",
+    "billingDocumentType": "cashCollection",
+    "shipping": {
+      "deliveryMethod": "fieldVisit"
+    },
+    "issuedBy": "marko.petrovic",
+    "issueDate": "2026-06-17",
+    "isCompleted": false,
+    "status": "inProgress",
+    "price": 18000,
+    "dueDate": "2026-06-26",
+    "createdAt": "2026-06-17T09:00:00Z",
+    "updatedAt": "2026-06-17T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "34",
+    "orderNumber": "RN-2026-0009",
+    "clientName": "SportCenter",
+    "jobDescription": "Diplome i sertifikati za turnir",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
+    "issuedBy": "jelena.markovic",
+    "issueDate": "2026-06-18",
+    "isCompleted": false,
+    "status": "new",
+    "price": 5500,
+    "dueDate": "2026-06-28",
+    "createdAt": "2026-06-18T09:00:00Z",
+    "updatedAt": "2026-06-18T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "35",
+    "orderNumber": "RN-2026-0010",
+    "clientName": "BioLab Doo",
+    "jobDescription": "Etikete za laboratoriju — čeka odobrenje dizajna",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
+    "issuedBy": "marko.petrovic",
+    "issueDate": "2026-06-10",
+    "isCompleted": false,
+    "status": "waitingForCustomer",
+    "price": 16000,
+    "dueDate": "2026-07-08",
+    "createdAt": "2026-06-10T09:00:00Z",
+    "updatedAt": "2026-06-10T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "36",
+    "orderNumber": "RN-2026-0011",
+    "clientName": "MediaPlus",
+    "jobDescription": "Roll-up baneri — čeka se finalni tekst",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
+    "issuedBy": "jelena.markovic",
+    "issueDate": "2026-06-12",
+    "isCompleted": false,
+    "status": "waitingForCustomer",
+    "price": 13000,
+    "dueDate": null,
+    "createdAt": "2026-06-12T09:00:00Z",
+    "updatedAt": "2026-06-12T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "37",
+    "orderNumber": "RN-2026-0012",
+    "clientName": "InfraGroup",
+    "jobDescription": "Tehnička dokumentacija — čeka se papir 120g",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
+    "issuedBy": "ana.jovic",
+    "issueDate": "2026-06-09",
+    "isCompleted": false,
+    "status": "waitingForMaterials",
+    "price": 29000,
+    "dueDate": "2026-07-10",
+    "createdAt": "2026-06-09T09:00:00Z",
+    "updatedAt": "2026-06-09T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "38",
+    "orderNumber": "RN-2026-0013",
+    "clientName": "TehnoServis",
+    "customerId": "cust-5",
+    "locationId": "loc-5",
+    "jobDescription": "Servisni nalozi — čeka se samolepljiva folija",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "pickup"
+    },
+    "issuedBy": "stefan.nikolic",
+    "issueDate": "2026-06-11",
+    "isCompleted": false,
+    "status": "waitingForMaterials",
+    "price": 7200,
+    "dueDate": null,
+    "createdAt": "2026-06-11T09:00:00Z",
+    "updatedAt": "2026-06-11T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "39",
+    "orderNumber": "RN-2026-0014",
+    "clientName": "Studio XYZ",
+    "jobDescription": "Umetničke reprodukcije A2 — još nije dodeljeno",
+    "billingDocumentType": "invoice",
+    "shipping": {
+      "deliveryMethod": "cityExpress"
+    },
+    "issuedBy": "",
+    "issueDate": "2026-06-19",
+    "isCompleted": false,
+    "status": "new",
+    "price": null,
+    "dueDate": null,
+    "createdAt": "2026-06-19T09:00:00Z",
+    "updatedAt": "2026-06-19T09:00:00Z",
+    "completionDate": null
+  },
+  {
+    "id": "40",
+    "orderNumber": "RN-2026-0015",
+    "clientName": "Agencija Pro",
+    "customerId": "cust-4",
+    "locationId": "loc-4",
+    "jobDescription": "Zidni kalendari A3 — još nije dodeljeno",
+    "billingDocumentType": "cashCollection",
+    "shipping": {
+      "deliveryMethod": "postExpress"
+    },
+    "issuedBy": "",
+    "issueDate": "2026-06-20",
+    "isCompleted": false,
+    "status": "new",
+    "price": null,
+    "dueDate": null,
+    "createdAt": "2026-06-20T09:00:00Z",
+    "updatedAt": "2026-06-20T09:00:00Z",
     "completionDate": null
   }
 ]

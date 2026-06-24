@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,19 +23,20 @@ export function DeleteWorkOrderDialog({
   onOpenChange,
   onConfirm,
 }: DeleteWorkOrderDialogProps): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Brisanje radnog naloga</AlertDialogTitle>
+          <AlertDialogTitle>{t('workOrders.deleteDialog.title')}</AlertDialogTitle>
           <AlertDialogDescription>
-            Da li ste sigurni da želite da obrišete radni nalog {orderNumber}?
+            {t('workOrders.deleteDialog.confirm', { order: orderNumber })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Otkaži</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={onConfirm}>
-            Obriši
+            {t('common.delete')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

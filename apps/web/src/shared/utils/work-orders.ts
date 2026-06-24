@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 import type {
   BillingDocumentType,
   DeliveryMethod,
@@ -9,82 +10,64 @@ import type {
 
 export const WORK_ORDER_SELECT_NONE_VALUE = "__none__";
 
-export const WORK_ORDER_DELIVERY_LABELS: Record<DeliveryMethod, string> = {
-  pickup: "Lično preuzimanje",
-  postExpress: "Post Express",
-  cityExpress: "City Express",
-  fieldVisit: "Terenski obilazak",
-};
+// Enum labels are resolved through i18n (sr default / en alternate). Utility
+// callers (CSV export, search haystack) read the current language at call time;
+// components re-render on language change via their own useTranslation usage.
+export function getWorkOrderDeliveryLabel(method: DeliveryMethod): string {
+  return i18n.t(`workOrders.delivery.${method}`);
+}
 
-export const WORK_ORDER_BILLING_LABELS: Record<BillingDocumentType, string> = {
-  invoice: "Faktura",
-  cashCollection: "Gotovinski račun",
-  proforma: "Profaktura",
-};
-
-export const WORK_ORDER_POSTAGE_LABELS: Record<PostagePaymentType, string> = {
-  cod: "Poštarina pouzećem",
-  ourAccount: "Poštarina na naš račun",
-  advance: "Avans poštarina",
-  viaInvoice: "Poštarina preko fakture",
-};
-
-export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
-  new: "Nov",
-  assigned: "Dodeljen",
-  inProgress: "U toku",
-  waitingForCustomer: "Čeka klijenta",
-  waitingForMaterials: "Čeka materijal",
-  completed: "Završen",
-  cancelled: "Otkazan",
-  invoiced: "Fakturisan",
-};
+export function getWorkOrderPostageLabel(type: PostagePaymentType): string {
+  return i18n.t(`workOrders.postage.${type}`);
+}
 
 export function getWorkOrderStatusLabel(status: WorkOrderStatus): string {
-  return WORK_ORDER_STATUS_LABELS[status];
+  return i18n.t(`workOrders.status.${status}`);
 }
-
-export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
-  low: "Nizak",
-  normal: "Normalan",
-  high: "Visok",
-  urgent: "Hitno",
-};
 
 export function getWorkOrderPriorityLabel(priority: WorkOrderPriority): string {
-  return WORK_ORDER_PRIORITY_LABELS[priority];
+  return i18n.t(`workOrders.priority.${priority}`);
 }
 
-const WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX = "Status promenjen na ";
+export function getWorkOrderBillingDocumentLabel(
+  type: BillingDocumentType | null,
+): string {
+  if (!type) return "";
+  return i18n.t(`workOrders.billing.${type}`);
+}
+
+const WORK_ORDER_STATUSES: WorkOrderStatus[] = [
+  "new",
+  "assigned",
+  "inProgress",
+  "waitingForCustomer",
+  "waitingForMaterials",
+  "completed",
+  "cancelled",
+  "invoiced",
+];
+
+// Status-change events are stored with the Serbian prefix; match on it but emit
+// the translated prefix + status so the timeline follows the active language.
+const STORED_STATUS_CHANGE_PREFIX = "Status promenjen na ";
 
 function isWorkOrderStatus(value: string): value is WorkOrderStatus {
-  return value in WORK_ORDER_STATUS_LABELS;
+  return (WORK_ORDER_STATUSES as string[]).includes(value);
 }
 
 /** Localizes status-change timeline labels that still store raw enum values. */
 export function formatWorkOrderEventLabel(label: string, kind?: string): string {
-  if (kind !== "status" || !label.startsWith(WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX)) {
+  if (kind !== "status" || !label.startsWith(STORED_STATUS_CHANGE_PREFIX)) {
     return label;
   }
 
-  const rawStatus = label.slice(WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX.length);
+  const rawStatus = label.slice(STORED_STATUS_CHANGE_PREFIX.length);
   if (!isWorkOrderStatus(rawStatus)) {
     return label;
   }
 
-  return `${WORK_ORDER_STATUS_CHANGE_LABEL_PREFIX}${getWorkOrderStatusLabel(rawStatus)}`;
+  return `${i18n.t("workOrders.statusChangePrefix")}${getWorkOrderStatusLabel(rawStatus)}`;
 }
-
-export const WORK_ORDER_CUSTOMER_NEXT_STEPS: Record<WorkOrderStatus, string> = {
-  new: "Nalog je evidentiran i čeka dodelu operateru.",
-  assigned: "Nalog je dodeljen operateru i priprema je u toku.",
-  inProgress: "Rad je u toku; javljamo se čim bude spremno za sledeći korak.",
-  waitingForCustomer: "Čekamo vašu potvrdu materijala/dizajna.",
-  waitingForMaterials: "Čekamo potreban materijal pre nastavka izrade.",
-  completed: "Nalog je završen i spreman za preuzimanje ili isporuku.",
-  invoiced: "Nalog je fakturisan; ostaje još administrativna obrada po dokumentu.",
-  cancelled: "Nalog je otkazan.",
-};
 
 export const WORK_ORDER_STATUS_VARIANTS: Record<
   WorkOrderStatus,
@@ -163,7 +146,7 @@ export function getPrimaryWorkOrderTransition(
 }
 
 export function getWorkOrderCustomerNextStep(status: WorkOrderStatus): string {
-  return WORK_ORDER_CUSTOMER_NEXT_STEPS[status];
+  return i18n.t(`workOrders.customerNextSteps.${status}`);
 }
 
 export function buildWorkOrderCustomerNotice(
@@ -172,10 +155,10 @@ export function buildWorkOrderCustomerNotice(
   const customerDueDate = order.dueDate ?? order.assignment.scheduledDate;
 
   return [
-    `Radni nalog ${order.orderNumber}`,
-    `Status: ${getWorkOrderStatusLabel(order.status)}`,
-    `Rok: ${customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}`,
-    `Sledeći korak: ${getWorkOrderCustomerNextStep(order.status)}`,
+    `${i18n.t("workOrders.notice.workOrder")} ${order.orderNumber}`,
+    `${i18n.t("workOrders.notice.status")}: ${getWorkOrderStatusLabel(order.status)}`,
+    `${i18n.t("workOrders.notice.dueDate")}: ${customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}`,
+    `${i18n.t("workOrders.notice.nextStep")}: ${getWorkOrderCustomerNextStep(order.status)}`,
   ].join("\n");
 }
 

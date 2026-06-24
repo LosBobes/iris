@@ -10,6 +10,13 @@ import {
   getLocalIsoDate,
   WORK_ORDER_STATUS_ORDER,
 } from "@/shared/utils/work-orders";
+import { readStoredDefaultPageSize } from "@/lib/list-preferences";
+import i18n from "@/i18n";
+import {
+  buildSearchHaystack,
+  type WorkOrderColumnKey,
+} from "@/lib/work-order-columns";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 
 export type SortField =
   | "orderNumber"
@@ -37,10 +44,14 @@ export interface WorkOrdersFiltersState {
   customerId: string;
   dateFrom: string;
   dateTo: string;
+  /** Admin-only: show only orders awaiting cost entry. */
+  needsCostReview: boolean;
 }
 
 export interface UseWorkOrdersResult {
   orders: WorkOrder[];
+  /** All filtered + sorted orders (every page), for export. */
+  filteredSortedOrders: WorkOrder[];
   totalFiltered: number;
   allOrdersCount: number;
   loading: boolean;
@@ -68,9 +79,8 @@ const INITIAL_FILTERS: WorkOrdersFiltersState = {
   customerId: "",
   dateFrom: "",
   dateTo: "",
+  needsCostReview: false,
 };
-
-const DEFAULT_PAGE_SIZE: PageSize = 10;
 
 const QUEUE_VALUES = ["all", "unassigned", "overdue", "today", "thisWeek"] as const;
 const BILLING_VALUES: BillingDocumentType[] = [
@@ -123,6 +133,7 @@ export function filtersFromSearchParams(
     customerId: searchParams.get("customerId") ?? "",
     dateFrom: searchParams.get("dateFrom") ?? "",
     dateTo: searchParams.get("dateTo") ?? "",
+    needsCostReview: searchParams.get("needsCostReview") === "true",
   };
 }
 
@@ -143,6 +154,7 @@ export function filtersToSearchParams(
   if (filters.customerId) searchParams.set("customerId", filters.customerId);
   if (filters.dateFrom) searchParams.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) searchParams.set("dateTo", filters.dateTo);
+  if (filters.needsCostReview) searchParams.set("needsCostReview", "true");
 
   return searchParams;
 }
@@ -159,7 +171,8 @@ function areFiltersEqual(
     left.queue === right.queue &&
     left.customerId === right.customerId &&
     left.dateFrom === right.dateFrom &&
-    left.dateTo === right.dateTo
+    left.dateTo === right.dateTo &&
+    left.needsCostReview === right.needsCostReview
   );
 }
 
@@ -167,7 +180,13 @@ export function filterWorkOrdersForList(
   orders: WorkOrder[],
   filters: WorkOrdersFiltersState,
   today = getLocalIsoDate(),
+  // When provided, free-text search and the status/document filters are scoped
+  // to the columns the user has chosen to show. Defaults to all columns.
+  visibleColumns?: ReadonlySet<WorkOrderColumnKey>,
 ): WorkOrder[] {
+  const isColumnVisible = (key: WorkOrderColumnKey): boolean =>
+    visibleColumns ? visibleColumns.has(key) : true;
+
   return orders.filter((order) => {
     if (filters.customerId && order.customerId !== filters.customerId) {
       return false;
@@ -175,15 +194,22 @@ export function filterWorkOrdersForList(
 
     if (filters.search && !filters.customerId) {
       const q = filters.search.toLowerCase();
-      const matches =
-        order.orderNumber.toLowerCase().includes(q) ||
-        order.clientName.toLowerCase().includes(q) ||
-        order.jobDescription.toLowerCase().includes(q);
-      if (!matches) return false;
+      // Searchable across the visible columns only: br naloga, klijent, opis
+      // posla, operater, prioritet, tip dokumenta, plan (datumi) and cena.
+      // Enum-backed fields contribute raw value + Serbian label; price
+      // contributes raw + formatted; dates contribute ISO + DD.MM.YYYY. Hidden
+      // columns are excluded so the field list governs search scope.
+      const haystack = buildSearchHaystack(order, visibleColumns);
+      if (!haystack.includes(q)) return false;
     }
-    if (filters.status !== "all" && order.status !== filters.status)
+    if (
+      isColumnVisible("status") &&
+      filters.status !== "all" &&
+      order.status !== filters.status
+    )
       return false;
     if (
+      isColumnVisible("billing") &&
       filters.billingDocumentType !== "all" &&
       order.billingDocumentType !== filters.billingDocumentType
     )
@@ -222,6 +248,7 @@ export function filterWorkOrdersForList(
     }
     if (filters.dateFrom && order.issueDate < filters.dateFrom) return false;
     if (filters.dateTo && order.issueDate > filters.dateTo) return false;
+    if (filters.needsCostReview && !order.needsCostReview) return false;
     return true;
   });
 }
@@ -238,7 +265,10 @@ export function useWorkOrders(): UseWorkOrdersResult {
   const [sortField, setSortField] = useState<SortField>("issueDate");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<PageSize>(() =>
+    readStoredDefaultPageSize(),
+  );
+  const { visibleColumnSet } = useColumnVisibility();
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -247,7 +277,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
       const data = await window.api.getWorkOrders();
       setOrders(data.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nepoznata greška");
+      setError(err instanceof Error ? err.message : i18n.t("common.unknownError"));
     } finally {
       setLoading(false);
     }
@@ -269,8 +299,8 @@ export function useWorkOrders(): UseWorkOrdersResult {
   }, [searchParamsKey]);
 
   const filteredOrders = useMemo(() => {
-    return filterWorkOrdersForList(orders, filters);
-  }, [orders, filters]);
+    return filterWorkOrdersForList(orders, filters, undefined, visibleColumnSet);
+  }, [orders, filters, visibleColumnSet]);
 
   const sortedOrders = useMemo(() => {
     const sorted = [...filteredOrders];
@@ -367,6 +397,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
 
   return {
     orders: paginatedOrders,
+    filteredSortedOrders: sortedOrders,
     totalFiltered: sortedOrders.length,
     allOrdersCount: orders.length,
     loading,
