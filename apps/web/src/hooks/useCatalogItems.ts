@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { CatalogItem, CatalogItemQuery } from '@/types/catalog'
+import i18n from '@/i18n'
 
 interface UseCatalogItemsResult {
   items: CatalogItem[]
@@ -28,7 +29,7 @@ export function useCatalogItems(query: CatalogItemQuery = {}): UseCatalogItemsRe
       setItems(result.items)
       setTotal(result.total)
     } catch {
-      toast.error('Greška pri učitavanju kataloga.')
+      toast.error(i18n.t('common.loadCatalogError'))
     } finally {
       setLoading(false)
     }

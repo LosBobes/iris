@@ -388,7 +388,11 @@ export function WorkOrdersTable({
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-background px-6 py-3 text-[11px] text-[color:var(--iris-ink-mute)]">
         <div>
-          Ukupno {totalFiltered} naloga · stranica {currentPage} od {totalPages}
+          {t("workOrders.table.pageSummary", {
+            total: totalFiltered,
+            page: currentPage,
+            pages: totalPages,
+          })}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -397,7 +401,7 @@ export function WorkOrdersTable({
             onClick={() => onPageChange(currentPage - 1)}
             className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
-            ← Prethodna
+            {t("workOrders.table.prev")}
           </button>
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .filter((page) => {
@@ -436,11 +440,11 @@ export function WorkOrdersTable({
             onClick={() => onPageChange(currentPage + 1)}
             className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Sledeća →
+            {t("workOrders.table.next")}
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <span>Po strani</span>
+          <span>{t("workOrders.table.perPage")}</span>
           <Select
             value={String(pageSize)}
             onValueChange={(value) =>

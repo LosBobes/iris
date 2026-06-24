@@ -1168,7 +1168,7 @@ export function WorkOrderForm({
                       htmlFor="shipping.waitForPayment"
                       className="text-[12px] text-[color:var(--iris-ink-soft)]"
                     >
-                      Čeka se uplata
+                      {t("workOrders.form.waitForPayment")}
                     </label>
                   </div>
                 )}
@@ -1590,7 +1590,7 @@ export function WorkOrderForm({
                         htmlFor="communication.emailNotificationsEnabled"
                         className="text-[12px] text-[color:var(--iris-ink-soft)]"
                       >
-                        Email obaveštenja
+                        {t("workOrders.form.emailNotifications")}
                       </label>
                     </div>
                   )}

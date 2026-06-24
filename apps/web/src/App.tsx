@@ -1,4 +1,5 @@
 import { lazy, Suspense, startTransition, useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Login } from "@/components/Login/Login";
@@ -8,6 +9,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
 import { DEFAULT_FIRM_NAME } from "@/types/settings";
+import i18n from "@/i18n";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
@@ -42,11 +44,12 @@ function StartupLoadingScreen(): React.JSX.Element {
 }
 
 function RouteLoadingScreen(): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
       <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
         <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Učitavanje...</span>
+        <span>{t("app.loading")}</span>
       </div>
     </main>
   );
@@ -59,14 +62,15 @@ function BackendUnavailableScreen({
   message: string;
   onRetry: () => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
       <div className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
         <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Iris · backend
+          {t("app.backendEyebrow")}
         </div>
         <h1 className="mt-2 text-[26px] font-normal tracking-[-0.6px] text-foreground">
-          Backend nije dostupan
+          {t("app.backendUnavailable")}
         </h1>
         <p className="mt-3 text-sm leading-6 text-[color:var(--iris-ink-soft)]">
           {message}
@@ -76,7 +80,7 @@ function BackendUnavailableScreen({
           onClick={onRetry}
           className="iris-focusable iris-press mt-6 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
         >
-          Pokušaj ponovo
+          {t("app.retry")}
         </button>
       </div>
     </main>
@@ -104,8 +108,7 @@ function App(): React.JSX.Element {
           setBootstrapState({
             kind: "error",
             message:
-              status.message ??
-              "Backend servis trenutno nije dostupan.",
+              status.message ?? i18n.t("app.backendUnavailableMessage"),
           });
         });
         return;
@@ -133,8 +136,7 @@ function App(): React.JSX.Element {
       startTransition(() => {
         setBootstrapState({
           kind: "error",
-          message:
-            "Greška pri proveri backend servisa. Proverite konfiguraciju i pokušajte ponovo.",
+          message: i18n.t("app.backendCheckError"),
         });
       });
     }

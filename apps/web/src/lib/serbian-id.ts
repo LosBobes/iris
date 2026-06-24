@@ -1,3 +1,5 @@
+import i18n from '@/i18n'
+
 // Serbian firm identifier validation, mirroring
 // iris-api/internal/domain/validation.go so the UI rejects bad input before it
 // reaches the API.
@@ -31,5 +33,5 @@ export function isValidMb(mb: string): boolean {
   return trimmed.length === 8 && allDigits(trimmed)
 }
 
-export const PIB_ERROR = 'PIB mora imati 9 cifara sa ispravnom kontrolnom cifrom.'
-export const MB_ERROR = 'Matični broj mora imati tačno 8 cifara.'
+export const PIB_ERROR = i18n.t('validation.pibInvalid')
+export const MB_ERROR = i18n.t('validation.mbExactly8')

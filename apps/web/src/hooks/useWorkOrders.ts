@@ -11,6 +11,7 @@ import {
   WORK_ORDER_STATUS_ORDER,
 } from "@/shared/utils/work-orders";
 import { readStoredDefaultPageSize } from "@/lib/list-preferences";
+import i18n from "@/i18n";
 import {
   buildSearchHaystack,
   type WorkOrderColumnKey,
@@ -276,7 +277,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
       const data = await window.api.getWorkOrders();
       setOrders(data.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nepoznata greška");
+      setError(err instanceof Error ? err.message : i18n.t("common.unknownError"));
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import type { UseFormWatch } from "react-hook-form";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
 import type { WorkOrder, WorkOrderNote } from "@/types/work-order";
+import i18n from "@/i18n";
 
 // A4 rendered at ~96dpi. The print sheet uses mm units, which the browser lays
 // out at this pixel size; we scale the whole page down to fit the side pane.
@@ -23,7 +25,7 @@ function buildPreviewOrder(
     initialData ??
     ({
       id: "preview",
-      orderNumber: "(novi nalog)",
+      orderNumber: i18n.t("workOrders.detail.previewOrderNumber"),
       issuedBy: "",
       executedBy: null,
       isCompleted: false,
@@ -74,6 +76,7 @@ export function WorkOrderPreviewPane({
 }: {
   order: WorkOrder;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   // Serialize the order so the fetch only re-runs when the rendered shape
   // actually changes (the form passes a fresh object on every keystroke).
   const orderKey = useMemo(() => JSON.stringify(order), [order]);
@@ -122,7 +125,7 @@ export function WorkOrderPreviewPane({
     <div>
       <div className="mb-3 flex items-center justify-between">
         <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Pregled štampe
+          {t("workOrders.detail.printPreview")}
         </div>
         {loading && (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--iris-ink-mute)]" />

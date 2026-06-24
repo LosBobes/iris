@@ -24,6 +24,7 @@ import type {
   ManagedUser,
   UpdateUserInput,
 } from '@/types/user'
+import i18n from '@/i18n'
 
 type FetchLike = typeof fetch
 
@@ -102,7 +103,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     async getBackendStatus() {
       const unavailable = {
         ready: false as const,
-        message: 'Backend servis nije dostupan. Pokrenite iris-api i pokušajte ponovo.',
+        message: i18n.t('common.backendUnavailable'),
       }
       try {
         const response = await fetchImpl(url('/healthz'), credentialedRequest())
@@ -341,7 +342,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async getWorkOrderPreviewHtml(order: WorkOrder) {
       const response = await fetchImpl(url('/work-orders/preview'), jsonRequest('POST', order))
-      if (!response.ok) throw new Error('Greška pri generisanju pregleda.')
+      if (!response.ok) throw new Error(i18n.t('common.previewError'))
       return response.text()
     },
 

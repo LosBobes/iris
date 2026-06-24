@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import i18n from '@/i18n'
 
 // Delivery, postage, billing, and priority allow admin-defined custom values in
 // addition to the built-ins, so these accept any non-empty string. The set of
@@ -25,8 +26,8 @@ const jobDetailsSchema = z.object({
   dimensions: z.string().nullable(),
   quantity: z
     .number()
-    .int({ message: 'Količina mora biti ceo broj' })
-    .positive({ message: 'Količina mora biti pozitivan broj' })
+    .int({ message: i18n.t('validation.quantityInteger') })
+    .positive({ message: i18n.t('validation.quantityPositive') })
     .nullable(),
   finishingNote: z.string().nullable(),
 })
@@ -132,9 +133,9 @@ export const workOrderFormSchema = z
     billingDocumentNumber: emptyToNullString,
     shipping: shippingSchema,
     assignment: assignmentSchema,
-    price: z.number().min(0, { message: 'Cena ne može biti negativna' }).nullable(),
+    price: z.number().min(0, { message: i18n.t('validation.priceNegative') }).nullable(),
     note: emptyToNullString,
-    issueDate: z.string().min(1, { message: 'Datum izdavanja je obavezan' }),
+    issueDate: z.string().min(1, { message: i18n.t('validation.issueDateRequired') }),
     dueDate: emptyToNullString,
     executedBy: emptyToNullString,
     internalNotes: z.array(noteSchema),
@@ -154,7 +155,7 @@ export const workOrderFormSchema = z
     ) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Adresa za dostavu je obavezna kada je izabran način dostave',
+        message: i18n.t('validation.shippingAddressRequired'),
         path: ['shipping', 'shippingAddress'],
       })
     }

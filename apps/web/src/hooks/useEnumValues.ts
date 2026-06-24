@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { EnumField, EnumValue, EnumValueInput } from '@/types/work-order'
+import i18n from '@/i18n'
 
 export interface EnumOption {
   value: string
@@ -41,7 +42,7 @@ export function useEnumValues(): UseEnumValuesResult {
       })
       .catch((err: unknown) => {
         if (active) {
-          setError(err instanceof Error ? err.message : 'Greška pri učitavanju šifarnika.')
+          setError(err instanceof Error ? err.message : i18n.t('common.loadEnumsError'))
         }
       })
       .finally(() => {

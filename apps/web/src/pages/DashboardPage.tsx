@@ -70,7 +70,7 @@ function DashboardPage(): React.JSX.Element {
         {!loading && error && (
           <div className="px-5 sm:px-8">
             <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
-              Greška pri učitavanju podataka: {error}
+              {t('dashboard.loadError', { error })}
             </div>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type {
   BillingDocumentType,
   Location,
@@ -5,6 +6,7 @@ import type {
   WorkOrder,
 } from "@/types/work-order";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
+import i18n from "@/i18n";
 
 interface PrintCheckRow {
   label: string;
@@ -12,12 +14,15 @@ interface PrintCheckRow {
 }
 
 const PRINT_BILLING_ROWS: Array<{
-  label: string;
+  labelKey: string;
   billingDocumentType: BillingDocumentType;
 }> = [
-  { label: "FAKTURA", billingDocumentType: "invoice" },
-  { label: "OTKUP", billingDocumentType: "cashCollection" },
-  { label: "PROFAKTURA", billingDocumentType: "proforma" },
+  { labelKey: "workOrders.print.billing.invoice", billingDocumentType: "invoice" },
+  {
+    labelKey: "workOrders.print.billing.cashCollection",
+    billingDocumentType: "cashCollection",
+  },
+  { labelKey: "workOrders.print.billing.proforma", billingDocumentType: "proforma" },
 ];
 
 function uppercaseLine(value: string | null | undefined): string | null {
@@ -34,7 +39,7 @@ function formatPrintPrice(price: number | null): string | null {
     maximumFractionDigits: 2,
   }).format(price);
 
-  return `${value} DINARA`;
+  return i18n.t("workOrders.print.price", { value });
 }
 
 function formatOptionalDate(value: string | null | undefined): string {
@@ -57,19 +62,37 @@ export function getPrintDeliveryRows(shipping: Shipping): PrintCheckRow[] {
   const postage = shipping.postagePaymentType;
 
   return [
-    { label: "VOZI SE", checked: shipping.drivesOut },
-    { label: "LIČNO", checked: method === "pickup" },
-    { label: "POST EXPRES", checked: method === "postExpress" },
-    { label: "CITY EXPRES", checked: method === "cityExpress" },
-    { label: "POŠTARINA POUZEĆEM", checked: postage === "cod" },
-    { label: "POŠTARINA NA NAŠ RAČUN", checked: postage === "ourAccount" },
-    { label: "AVANS POŠTARINA", checked: postage === "advance" },
+    { label: i18n.t("workOrders.print.delivery.drivesOut"), checked: shipping.drivesOut },
+    { label: i18n.t("workOrders.print.delivery.pickup"), checked: method === "pickup" },
     {
-      label: "POŠTARINA SE NAPLAĆUJE PREKO FAKTURE",
+      label: i18n.t("workOrders.print.delivery.postExpress"),
+      checked: method === "postExpress",
+    },
+    {
+      label: i18n.t("workOrders.print.delivery.cityExpress"),
+      checked: method === "cityExpress",
+    },
+    { label: i18n.t("workOrders.print.delivery.cod"), checked: postage === "cod" },
+    {
+      label: i18n.t("workOrders.print.delivery.ourAccount"),
+      checked: postage === "ourAccount",
+    },
+    {
+      label: i18n.t("workOrders.print.delivery.advance"),
+      checked: postage === "advance",
+    },
+    {
+      label: i18n.t("workOrders.print.delivery.viaInvoice"),
       checked: postage === "viaInvoice",
     },
-    { label: "ČEKA SE UPLATA", checked: shipping.waitForPayment },
-    { label: "IZLAZAK NA TEREN", checked: method === "fieldVisit" },
+    {
+      label: i18n.t("workOrders.print.delivery.waitForPayment"),
+      checked: shipping.waitForPayment,
+    },
+    {
+      label: i18n.t("workOrders.print.delivery.fieldVisit"),
+      checked: method === "fieldVisit",
+    },
   ];
 }
 
@@ -77,7 +100,7 @@ export function getPrintBillingRows(
   billingDocumentType: BillingDocumentType | null,
 ): PrintCheckRow[] {
   return PRINT_BILLING_ROWS.map((row) => ({
-    label: row.label,
+    label: i18n.t(row.labelKey),
     checked: row.billingDocumentType === billingDocumentType,
   }));
 }
@@ -100,9 +123,13 @@ export function buildPrintJobLines(order: WorkOrder): string[] {
   const detailLines = jobDetailsHasContent(details)
     ? [
         uppercaseLine(details?.productCode),
-        details?.paperWeightGsm ? `${details.paperWeightGsm}G` : null,
+        details?.paperWeightGsm
+          ? i18n.t("workOrders.print.gsmSuffix", { value: details.paperWeightGsm })
+          : null,
         uppercaseLine(details?.dimensions),
-        details?.quantity ? `${details.quantity}KOM` : null,
+        details?.quantity
+          ? i18n.t("workOrders.print.pcsSuffix", { value: details.quantity })
+          : null,
         uppercaseLine(details?.finishingNote),
       ].filter((line): line is string => Boolean(line))
     : [];
@@ -115,9 +142,11 @@ export function buildPrintJobLines(order: WorkOrder): string[] {
         );
 
   const price = formatPrintPrice(order.price);
-  if (price) lines.push(`CENA: ${price}`);
+  if (price) lines.push(price);
 
-  return lines.length > 0 ? lines : ["OPIS POSLA NIJE UNET"];
+  return lines.length > 0
+    ? lines
+    : [i18n.t("workOrders.print.noDescription")];
 }
 
 function buildPrintNoteLines(order: WorkOrder): string[] {
@@ -125,7 +154,9 @@ function buildPrintNoteLines(order: WorkOrder): string[] {
     uppercaseLine(order.note),
     ...order.customerNotes.map((note) => uppercaseLine(note.body)),
     order.billingDocumentNumber
-      ? `BROJ DOKUMENTA: ${order.billingDocumentNumber}`
+      ? i18n.t("workOrders.print.documentNumber", {
+          number: order.billingDocumentNumber,
+        })
       : null,
   ].filter((line): line is string => Boolean(line));
 }
@@ -145,6 +176,7 @@ export function WorkOrderPrintSheet({
   order: WorkOrder;
   locations?: Location[];
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const jobLines = buildPrintJobLines(order);
   const deliveryRows = getPrintDeliveryRows(order.shipping);
   const billingRows = getPrintBillingRows(order.billingDocumentType);
@@ -156,26 +188,32 @@ export function WorkOrderPrintSheet({
 
   return (
     <section
-      aria-label={`Radni nalog ${order.orderNumber} za štampu`}
+      aria-label={t("workOrders.print.ariaLabel", { order: order.orderNumber })}
       className="work-order-print-sheet"
     >
-      <h1 className="work-order-print-title">RADNI NALOG</h1>
+      <h1 className="work-order-print-title">{t("workOrders.print.title")}</h1>
 
       <div className="work-order-print-hero">
         <div className="work-order-print-main-panel">
           <div className="work-order-print-top-grid">
             <div className="work-order-print-client-box">
-              <div className="work-order-print-label">KLIJENT</div>
+              <div className="work-order-print-label">
+                {t("workOrders.print.client")}
+              </div>
               <div className="work-order-print-client-name">
                 {uppercaseLine(order.clientName)}
               </div>
-              <div className="work-order-print-subline">OPIS POSLA</div>
+              <div className="work-order-print-subline">
+                {t("workOrders.print.jobDescription")}
+              </div>
             </div>
             <div className="work-order-print-issue-box">
               <div className="work-order-print-date">
                 {formatOptionalDate(order.issueDate)}
               </div>
-              <div className="work-order-print-label">DATUM IZDAVANJA</div>
+              <div className="work-order-print-label">
+                {t("workOrders.print.issueDate")}
+              </div>
             </div>
           </div>
 
@@ -222,7 +260,9 @@ export function WorkOrderPrintSheet({
 
       <div className="work-order-print-notes-row">
         <div className="work-order-print-note-box">
-          <div className="work-order-print-label">NAPOMENA</div>
+          <div className="work-order-print-label">
+            {t("workOrders.print.note")}
+          </div>
           <div className="work-order-print-note-lines">
             {noteLines.length > 0
               ? noteLines.map((line) => <div key={line}>{line}</div>)
@@ -230,7 +270,9 @@ export function WorkOrderPrintSheet({
           </div>
         </div>
         <div className="work-order-print-address-box">
-          <div className="work-order-print-label">ADRESA ZA SLANJE:</div>
+          <div className="work-order-print-label">
+            {t("workOrders.print.shipTo")}
+          </div>
           {shippingAddress && (
             <div className="work-order-print-address">{shippingAddress}</div>
           )}
@@ -239,11 +281,11 @@ export function WorkOrderPrintSheet({
 
       <div className="work-order-print-completion-row">
         <div className="work-order-print-completion-state">
-          <span>RADNI NALOG ZAVRŠEN</span>
+          <span>{t("workOrders.print.completed")}</span>
           <PrintCheckBox checked={completed} />
         </div>
         <div className="work-order-print-completion-date">
-          <span>DATUM IZVRŠENJA POSLA</span>
+          <span>{t("workOrders.print.completionDate")}</span>
           <span className="work-order-print-date-line">
             {formatOptionalDate(order.completionDate)}
           </span>
@@ -252,14 +294,16 @@ export function WorkOrderPrintSheet({
 
       <div className="work-order-print-signatures">
         <div>
-          <div className="work-order-print-label">RN IZDAO</div>
+          <div className="work-order-print-label">
+            {t("workOrders.print.issuedBy")}
+          </div>
           <div className="work-order-print-signature-value">
             {order.issuedBy}
           </div>
         </div>
         <div>
           <div className="work-order-print-label work-order-print-align-right">
-            IZVRŠILAC POSLA
+            {t("workOrders.print.executor")}
           </div>
           <div className="work-order-print-signature-value">
             {order.executedBy ?? ""}

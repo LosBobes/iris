@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { DashboardFilters, WorkOrder } from '@/types/work-order'
+import i18n from '@/i18n'
 import {
   buildClientAttentionRows,
   buildSignalCounts,
@@ -48,7 +49,7 @@ export function useDashboardData() {
       })
       .catch((err: unknown) => {
         setError(
-          err instanceof Error ? err.message : 'Greška pri učitavanju podataka.'
+          err instanceof Error ? err.message : i18n.t('common.loadDataError')
         )
       })
       .finally(() => setLoading(false))
