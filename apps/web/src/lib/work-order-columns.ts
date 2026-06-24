@@ -3,6 +3,7 @@
 // haystack (so hidden fields are excluded from free-text search). The visible
 // set is persisted per-device.
 
+import i18n from "@/i18n";
 import type { SortField } from "@/hooks/useWorkOrders";
 import type { WorkOrder } from "@/types/work-order";
 import {
@@ -25,7 +26,8 @@ export type WorkOrderColumnKey =
 
 export interface WorkOrderColumnMeta {
   key: WorkOrderColumnKey;
-  label: string;
+  /** i18n key under `workOrders.columns`. Resolve with columnLabel(). */
+  labelKey: string;
   sortField: SortField;
   width?: string;
   align?: "left" | "right";
@@ -34,16 +36,21 @@ export interface WorkOrderColumnMeta {
 }
 
 export const WORK_ORDER_COLUMNS: WorkOrderColumnMeta[] = [
-  { key: "orderNumber", label: "Br. naloga", sortField: "orderNumber", width: "110px", locked: true },
-  { key: "clientName", label: "Klijent", sortField: "clientName", width: "140px" },
-  { key: "jobDescription", label: "Opis posla", sortField: "jobDescription" },
-  { key: "assigned", label: "Operater", sortField: "assignment.assignedTo", width: "120px" },
-  { key: "priority", label: "Prioritet", sortField: "assignment.priority", width: "90px" },
-  { key: "billing", label: "Tip dokumenta", sortField: "billingDocumentType", width: "130px" },
-  { key: "schedule", label: "Plan", sortField: "assignment.scheduledDate", width: "110px" },
-  { key: "price", label: "Cena", sortField: "price", width: "110px", align: "right" },
-  { key: "status", label: "Status", sortField: "status", width: "130px" },
+  { key: "orderNumber", labelKey: "workOrders.columns.orderNumber", sortField: "orderNumber", width: "110px", locked: true },
+  { key: "clientName", labelKey: "workOrders.columns.clientName", sortField: "clientName", width: "140px" },
+  { key: "jobDescription", labelKey: "workOrders.columns.jobDescription", sortField: "jobDescription" },
+  { key: "assigned", labelKey: "workOrders.columns.assigned", sortField: "assignment.assignedTo", width: "120px" },
+  { key: "priority", labelKey: "workOrders.columns.priority", sortField: "assignment.priority", width: "90px" },
+  { key: "billing", labelKey: "workOrders.columns.billing", sortField: "billingDocumentType", width: "130px" },
+  { key: "schedule", labelKey: "workOrders.columns.schedule", sortField: "assignment.scheduledDate", width: "110px" },
+  { key: "price", labelKey: "workOrders.columns.price", sortField: "price", width: "110px", align: "right" },
+  { key: "status", labelKey: "workOrders.columns.status", sortField: "status", width: "130px" },
 ];
+
+/** Resolves a column's display label in the active language. */
+export function columnLabel(column: WorkOrderColumnMeta): string {
+  return i18n.t(column.labelKey);
+}
 
 export const ALL_COLUMN_KEYS: WorkOrderColumnKey[] = WORK_ORDER_COLUMNS.map(
   (column) => column.key,

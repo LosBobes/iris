@@ -45,13 +45,13 @@ function DashboardPage(): React.JSX.Element {
           className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10"
         >
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Iris · pregled
+            {t('dashboard.header.eyebrow')}
           </div>
           <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-            Kontrolna tabla
+            {t('nav.dashboard')}
           </h1>
           <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-            Klijenti, rokovi i otvoreni redovi rada
+            {t('dashboard.header.subtitle')}
           </div>
         </div>
 

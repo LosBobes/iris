@@ -678,7 +678,7 @@ export function WorkOrderForm({
                     ]
                       .filter(Boolean)
                       .join(" · ")
-                  : "Pretražite po nazivu ili PIB-u"
+                  : t("workOrders.form.clientSearchHint")
               }
             >
               <AsyncCombobox
@@ -797,7 +797,7 @@ export function WorkOrderForm({
                   aria-expanded={showJobDetails}
                   className="iris-focusable iris-press bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
                 >
-                  {showJobDetails ? "Sakrij detalje posla" : "Prikaži detalje posla"}
+                  {showJobDetails ? t("workOrders.form.jobDetailsHide") : t("workOrders.form.jobDetailsShow")}
                 </button>
               </div>
             )}
@@ -1178,15 +1178,15 @@ export function WorkOrderForm({
 
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
             {[
-              { name: "shipping.hasPackaging" as const, label: "Pakovanje", id: "hasPackaging" },
-              { name: "shipping.hasLabeling" as const, label: "Označavanje", id: "hasLabeling" },
-              { name: "shipping.isFragile" as const, label: "Lomljivo", id: "isFragile" },
+              { name: "shipping.hasPackaging" as const, label: t("workOrders.form.packaging"), id: "hasPackaging" },
+              { name: "shipping.hasLabeling" as const, label: t("workOrders.form.labeling"), id: "hasLabeling" },
+              { name: "shipping.isFragile" as const, label: t("workOrders.form.fragile"), id: "isFragile" },
               {
                 name: "shipping.requiresSignature" as const,
-                label: "Potpis",
+                label: t("workOrders.form.requiresSignature"),
                 id: "requiresSignature",
               },
-              { name: "shipping.hasInsurance" as const, label: "Osiguranje", id: "hasInsurance" },
+              { name: "shipping.hasInsurance" as const, label: t("workOrders.form.insurance"), id: "hasInsurance" },
             ].map((opt) => (
               <Controller
                 key={opt.id}

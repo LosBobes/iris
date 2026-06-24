@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { format, parse } from "date-fns";
+import { format, isAfter, isBefore, parse, startOfDay } from "date-fns";
 import { CalendarBlank } from "@phosphor-icons/react";
+import { useTranslation } from "react-i18next";
 import { calendarLocale, dateLocale } from "@/lib/i18n-date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,9 +47,16 @@ export function DatePicker({
   fromDate,
   toDate,
 }: DatePickerProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   const selected = value ? parseIso(value) : undefined;
+
+  const today = startOfDay(new Date());
+  // "Today" is only offered when it falls inside any configured bounds.
+  const todayDisabled =
+    (fromDate ? isBefore(today, startOfDay(fromDate)) : false) ||
+    (toDate ? isAfter(today, startOfDay(toDate)) : false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -94,6 +102,36 @@ export function DatePicker({
             ...(toDate ? [{ after: toDate }] : []),
           ]}
         />
+        <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={todayDisabled}
+            onClick={() => {
+              onChange(format(today, "yyyy-MM-dd"));
+              setOpen(false);
+            }}
+            className="h-7 px-2 text-xs font-normal"
+          >
+            <CalendarBlank className="mr-1.5 size-3.5" />
+            {t("common.today")}
+          </Button>
+          {value && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+              className="h-7 px-2 text-xs font-normal text-muted-foreground"
+            >
+              {t("common.clear")}
+            </Button>
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );

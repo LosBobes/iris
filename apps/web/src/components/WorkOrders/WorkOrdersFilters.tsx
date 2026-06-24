@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   parse,
   format,
@@ -33,6 +34,7 @@ import {
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import {
   WORK_ORDER_COLUMNS,
+  columnLabel,
   isColumnLocked,
 } from "@/lib/work-order-columns";
 
@@ -42,44 +44,25 @@ interface WorkOrdersFiltersProps {
   resetFilters: () => void;
 }
 
-const STATUS_OPTIONS: Array<{ value: WorkOrdersFiltersState["status"]; label: string }> = [
-  { value: "all", label: "Svi statusi" },
-  ...WORK_ORDER_STATUS_ORDER.map((status) => ({
-    value: status,
-    label: getWorkOrderStatusLabel(status),
-  })),
+// Option value lists; labels are resolved via i18n at render time.
+const BILLING_VALUES: Array<WorkOrdersFiltersState["billingDocumentType"]> = [
+  "invoice",
+  "cashCollection",
+  "proforma",
 ];
 
-const BILLING_OPTIONS: Array<{
-  value: WorkOrdersFiltersState["billingDocumentType"];
-  label: string;
-}> = [
-  { value: "all", label: "Svi tipovi" },
-  { value: "invoice", label: "Faktura" },
-  { value: "cashCollection", label: "Gotovinski račun" },
-  { value: "proforma", label: "Profaktura" },
+const DELIVERY_VALUES: Array<WorkOrdersFiltersState["deliveryMethod"]> = [
+  "pickup",
+  "postExpress",
+  "cityExpress",
+  "fieldVisit",
 ];
 
-const DELIVERY_OPTIONS: Array<{
-  value: WorkOrdersFiltersState["deliveryMethod"];
-  label: string;
-}> = [
-  { value: "all", label: "Sve dostave" },
-  { value: "pickup", label: "Lično preuzimanje" },
-  { value: "postExpress", label: "Post Express" },
-  { value: "cityExpress", label: "City Express" },
-  { value: "fieldVisit", label: "Terenski obilazak" },
-];
-
-const QUEUE_OPTIONS: Array<{
-  value: WorkOrdersFiltersState["queue"];
-  label: string;
-}> = [
-  { value: "all", label: "Svi redovi" },
-  { value: "unassigned", label: "Nedodeljeni" },
-  { value: "overdue", label: "Kasne" },
-  { value: "today", label: "Danas" },
-  { value: "thisWeek", label: "Ove nedelje" },
+const QUEUE_VALUES: Array<Exclude<WorkOrdersFiltersState["queue"], "all">> = [
+  "unassigned",
+  "overdue",
+  "today",
+  "thisWeek",
 ];
 
 interface FilterPillProps {
@@ -152,17 +135,21 @@ function isoDate(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
 
-// Quick date-range presets. Weeks start Monday (Serbian convention).
-const DATE_PRESETS: Array<{ label: string; getRange: () => { from: string; to: string } }> = [
+// Quick date-range presets. Weeks start Monday (Serbian convention). Labels are
+// resolved via i18n (workOrders.filters.presets.<key>) at render time.
+const DATE_PRESETS: Array<{
+  key: "today" | "thisWeek" | "thisMonth" | "lastMonth";
+  getRange: () => { from: string; to: string };
+}> = [
   {
-    label: "Danas",
+    key: "today",
     getRange: () => {
       const today = isoDate(new Date());
       return { from: today, to: today };
     },
   },
   {
-    label: "Ova nedelja",
+    key: "thisWeek",
     getRange: () => {
       const now = new Date();
       return {
@@ -172,14 +159,14 @@ const DATE_PRESETS: Array<{ label: string; getRange: () => { from: string; to: s
     },
   },
   {
-    label: "Ovaj mesec",
+    key: "thisMonth",
     getRange: () => {
       const now = new Date();
       return { from: isoDate(startOfMonth(now)), to: isoDate(endOfMonth(now)) };
     },
   },
   {
-    label: "Prošli mesec",
+    key: "lastMonth",
     getRange: () => {
       const prev = subMonths(new Date(), 1);
       return {
@@ -190,35 +177,112 @@ const DATE_PRESETS: Array<{ label: string; getRange: () => { from: string; to: s
   },
 ];
 
-function DateRangePresetsPill({
-  onSelect,
+/** Compact DD.MM. label for a range trigger, e.g. "12.03." */
+function shortDmy(iso: string): string {
+  return format(parse(iso, "yyyy-MM-dd", new Date()), "dd.MM.");
+}
+
+/**
+ * Unified date-range control: quick presets plus explicit from/to pickers in a
+ * single popover, so date filtering reads as one coherent pill alongside the
+ * other filters instead of a separate preset button and a floating field box.
+ */
+function DateRangePill({
+  dateFrom,
+  dateTo,
+  onChange,
 }: {
-  onSelect: (range: { from: string; to: string }) => void;
+  dateFrom: string;
+  dateTo: string;
+  onChange: (patch: { dateFrom?: string; dateTo?: string }) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
+  const isActive = dateFrom !== "" || dateTo !== "";
+
+  // Active-range label shown on the trigger.
+  let label = t("workOrders.filters.date");
+  if (dateFrom && dateTo) {
+    label =
+      dateFrom === dateTo
+        ? shortDmy(dateFrom)
+        : `${shortDmy(dateFrom)} – ${shortDmy(dateTo)}`;
+  } else if (dateFrom) {
+    label = t("workOrders.filters.rangeFrom", { date: shortDmy(dateFrom) });
+  } else if (dateTo) {
+    label = t("workOrders.filters.rangeTo", { date: shortDmy(dateTo) });
+  }
+
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="iris-focusable iris-press group flex items-center gap-2 border border-border bg-card px-3 py-2 text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
+          className={`iris-focusable iris-press group flex items-center gap-2 border bg-card px-3 py-2 text-[12px] hover:bg-black/[0.02] ${
+            isActive
+              ? "border-foreground/40 font-medium text-foreground"
+              : "border-border text-[color:var(--iris-ink-soft)] hover:text-foreground"
+          }`}
         >
-          Brzi opseg
+          {isActive && (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-[color:var(--iris-accent)]"
+            />
+          )}
+          {label}
           <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-44 rounded-none border-border p-1" align="start">
-        <div className="flex flex-col">
+      <PopoverContent className="w-64 rounded-none border-border p-0" align="start">
+        <div className="grid grid-cols-2 gap-1 border-b border-border p-2">
           {DATE_PRESETS.map((preset) => (
             <button
-              key={preset.label}
+              key={preset.key}
               type="button"
-              onClick={() => onSelect(preset.getRange())}
-              className="iris-focusable bg-transparent px-3 py-2 text-left text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+              onClick={() => {
+                const range = preset.getRange();
+                onChange({ dateFrom: range.from, dateTo: range.to });
+              }}
+              className="iris-focusable iris-press border border-border bg-transparent px-2 py-1.5 text-center text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
             >
-              {preset.label}
+              {t(`workOrders.filters.presets.${preset.key}`)}
             </button>
           ))}
         </div>
+        <div className="space-y-2 p-2">
+          <label className="flex items-center justify-between gap-2 text-[11px] text-[color:var(--iris-ink-soft)]">
+            <span className="w-6 shrink-0">{t("workOrders.filters.from")}</span>
+            <DatePicker
+              value={dateFrom || null}
+              onChange={(v) => onChange({ dateFrom: v ?? "" })}
+              placeholder={t("workOrders.filters.dateFrom")}
+              className="flex-1"
+              toDate={dateTo ? parse(dateTo, "yyyy-MM-dd", new Date()) : undefined}
+            />
+          </label>
+          <label className="flex items-center justify-between gap-2 text-[11px] text-[color:var(--iris-ink-soft)]">
+            <span className="w-6 shrink-0">{t("workOrders.filters.to")}</span>
+            <DatePicker
+              value={dateTo || null}
+              onChange={(v) => onChange({ dateTo: v ?? "" })}
+              placeholder={t("workOrders.filters.dateTo")}
+              className="flex-1"
+              fromDate={dateFrom ? parse(dateFrom, "yyyy-MM-dd", new Date()) : undefined}
+            />
+          </label>
+        </div>
+        {isActive && (
+          <div className="border-t border-border p-1">
+            <button
+              type="button"
+              onClick={() => onChange({ dateFrom: "", dateTo: "" })}
+              className="iris-focusable iris-press flex w-full items-center justify-center gap-1 bg-transparent px-2 py-1.5 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+              {t("workOrders.filters.clearRange")}
+            </button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -231,6 +295,7 @@ function SavedViewsPill({
   filters: WorkOrdersFiltersState;
   onApply: (next: WorkOrdersFiltersState) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const [views, setViews] = useState<SavedView[]>(() => readSavedViews());
   const [name, setName] = useState("");
 
@@ -258,18 +323,18 @@ function SavedViewsPill({
           }`}
         >
           <Bookmark className="h-3 w-3 text-[color:var(--iris-ink-faint)]" />
-          Pogledi
+          {t("workOrders.filters.views.label")}
           <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 rounded-none border-border p-1" align="start">
         <div className="px-3 py-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Sačuvani pogledi
+          {t("workOrders.filters.views.saved")}
         </div>
         <div className="flex flex-col">
           {views.length === 0 && (
             <div className="px-3 py-2 text-[12px] text-[color:var(--iris-ink-faint)]">
-              Još nema sačuvanih pogleda.
+              {t("workOrders.filters.views.empty")}
             </div>
           )}
           {views.map((view) => (
@@ -292,7 +357,7 @@ function SavedViewsPill({
               </button>
               <button
                 type="button"
-                aria-label={`Obriši pogled ${view.name}`}
+                aria-label={t("workOrders.filters.views.deleteAria", { name: view.name })}
                 onClick={() => setViews(removeSavedView(view.id))}
                 className="iris-focusable iris-press shrink-0 bg-transparent p-1.5 text-[color:var(--iris-ink-faint)] opacity-0 transition-opacity group-hover/view:opacity-100 hover:text-[color:var(--iris-status-cancelled)]"
               >
@@ -312,7 +377,7 @@ function SavedViewsPill({
                 handleSave();
               }
             }}
-            placeholder="Sačuvaj trenutne filtere…"
+            placeholder={t("workOrders.filters.views.savePlaceholder")}
             className="w-full border border-border bg-card px-2 py-1.5 text-[12px] text-foreground placeholder:text-[color:var(--iris-ink-mute)] focus:border-foreground focus:outline-none"
           />
           <button
@@ -321,7 +386,7 @@ function SavedViewsPill({
             disabled={name.trim() === ""}
             className="iris-focusable iris-press shrink-0 bg-foreground px-2.5 py-1.5 text-[11px] font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Sačuvaj
+            {t("workOrders.filters.views.save")}
           </button>
         </div>
       </PopoverContent>
@@ -330,6 +395,7 @@ function SavedViewsPill({
 }
 
 function ColumnsPill(): React.JSX.Element {
+  const { t } = useTranslation();
   const { isVisible, toggleColumn, resetColumns, visibleColumns } =
     useColumnVisibility();
   // Locked columns are always on, so "all visible" means every non-locked
@@ -344,14 +410,14 @@ function ColumnsPill(): React.JSX.Element {
           className="iris-focusable iris-press group flex items-center gap-2 border border-border bg-card px-3 py-2 text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
         >
           <Columns3 className="h-3 w-3 text-[color:var(--iris-ink-faint)]" />
-          Polja
+          {t("workOrders.filters.fields.label")}
           <ChevronDown className="h-3 w-3 text-[color:var(--iris-ink-faint)] transition-transform duration-200 ease-out group-aria-expanded:rotate-180" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-60 rounded-none border-border p-1" align="start">
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Prikazana polja
+            {t("workOrders.filters.fields.shown")}
           </span>
           {!allVisible && (
             <button
@@ -359,7 +425,7 @@ function ColumnsPill(): React.JSX.Element {
               onClick={resetColumns}
               className="iris-focusable text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
             >
-              Sve
+              {t("workOrders.filters.fields.all")}
             </button>
           )}
         </div>
@@ -388,11 +454,11 @@ function ColumnsPill(): React.JSX.Element {
                   <Check size={11} strokeWidth={3} />
                 </span>
                 <span className={checked ? "text-foreground" : undefined}>
-                  {col.label}
+                  {columnLabel(col)}
                 </span>
                 {locked && (
                   <span className="ml-auto text-[10px] text-[color:var(--iris-ink-faint)]">
-                    obavezno
+                    {t("workOrders.filters.fields.required")}
                   </span>
                 )}
               </button>
@@ -409,8 +475,52 @@ export function WorkOrdersFilters({
   updateFilters,
   resetFilters,
 }: WorkOrdersFiltersProps): React.JSX.Element {
+  const { t } = useTranslation();
   const { isVisible } = useColumnVisibility();
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Option lists with i18n labels; "all" sentinels reuse the per-filter
+  // "all…" copy, the rest reuse the shared status/billing/delivery labels.
+  const statusOptions = useMemo(
+    () => [
+      { value: "all" as const, label: t("workOrders.filters.allStatuses") },
+      ...WORK_ORDER_STATUS_ORDER.map((status) => ({
+        value: status,
+        label: getWorkOrderStatusLabel(status),
+      })),
+    ],
+    [t],
+  );
+  const billingOptions = useMemo(
+    () => [
+      { value: "all" as const, label: t("workOrders.filters.allTypes") },
+      ...BILLING_VALUES.map((value) => ({
+        value,
+        label: t(`workOrders.billing.${value}`),
+      })),
+    ],
+    [t],
+  );
+  const deliveryOptions = useMemo(
+    () => [
+      { value: "all" as const, label: t("workOrders.filters.allDeliveries") },
+      ...DELIVERY_VALUES.map((value) => ({
+        value,
+        label: t(`workOrders.delivery.${value}`),
+      })),
+    ],
+    [t],
+  );
+  const queueOptions = useMemo(
+    () => [
+      { value: "all" as const, label: t("workOrders.filters.allQueues") },
+      ...QUEUE_VALUES.map((value) => ({
+        value,
+        label: t(`workOrders.filters.queue.${value}`),
+      })),
+    ],
+    [t],
+  );
 
   // "/" focuses search from anywhere on the page (unless typing in a field).
   useEffect(() => {
@@ -443,15 +553,17 @@ export function WorkOrdersFilters({
     filters.dateTo !== "";
 
   const statusLabel =
-    STATUS_OPTIONS.find((o) => o.value === filters.status)?.label ?? "Svi statusi";
+    statusOptions.find((o) => o.value === filters.status)?.label ??
+    t("workOrders.filters.allStatuses");
   const billingLabel =
-    BILLING_OPTIONS.find((o) => o.value === filters.billingDocumentType)?.label ??
-    "Svi tipovi";
+    billingOptions.find((o) => o.value === filters.billingDocumentType)?.label ??
+    t("workOrders.filters.allTypes");
   const deliveryLabel =
-    DELIVERY_OPTIONS.find((o) => o.value === filters.deliveryMethod)?.label ??
-    "Sve dostave";
+    deliveryOptions.find((o) => o.value === filters.deliveryMethod)?.label ??
+    t("workOrders.filters.allDeliveries");
   const queueLabel =
-    QUEUE_OPTIONS.find((o) => o.value === filters.queue)?.label ?? "Svi redovi";
+    queueOptions.find((o) => o.value === filters.queue)?.label ??
+    t("workOrders.filters.allQueues");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -460,7 +572,7 @@ export function WorkOrdersFilters({
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Pretraži po nalogu, klijentu, opisu, operateru, ceni…"
+          placeholder={t("workOrders.filters.searchPlaceholder")}
           value={filters.search}
           onChange={(e) => updateFilters({ search: e.target.value })}
           onKeyDown={(e) => {
@@ -474,7 +586,7 @@ export function WorkOrdersFilters({
         {filters.search !== "" ? (
           <button
             type="button"
-            aria-label="Obriši pretragu"
+            aria-label={t("workOrders.filters.clearSearch")}
             onClick={() => {
               updateFilters({ search: "" });
               searchInputRef.current?.focus();
@@ -493,7 +605,7 @@ export function WorkOrdersFilters({
       {isVisible("status") && (
         <FilterPill label={statusLabel} isActive={filters.status !== "all"}>
           <OptionList
-            options={STATUS_OPTIONS}
+            options={statusOptions}
             current={filters.status}
             onSelect={(value) => updateFilters({ status: value })}
           />
@@ -506,7 +618,7 @@ export function WorkOrdersFilters({
           isActive={filters.billingDocumentType !== "all"}
         >
           <OptionList
-            options={BILLING_OPTIONS}
+            options={billingOptions}
             current={filters.billingDocumentType}
             onSelect={(value) => updateFilters({ billingDocumentType: value })}
           />
@@ -518,7 +630,7 @@ export function WorkOrdersFilters({
         isActive={filters.deliveryMethod !== "all"}
       >
         <OptionList
-          options={DELIVERY_OPTIONS}
+          options={deliveryOptions}
           current={filters.deliveryMethod}
           onSelect={(value) => updateFilters({ deliveryMethod: value })}
         />
@@ -526,45 +638,23 @@ export function WorkOrdersFilters({
 
       <FilterPill label={queueLabel} isActive={filters.queue !== "all"}>
         <OptionList
-          options={QUEUE_OPTIONS}
+          options={queueOptions}
           current={filters.queue}
           onSelect={(value) => updateFilters({ queue: value })}
         />
       </FilterPill>
 
+      <DateRangePill
+        dateFrom={filters.dateFrom}
+        dateTo={filters.dateTo}
+        onChange={updateFilters}
+      />
+
+      <span aria-hidden className="mx-0.5 h-5 w-px self-center bg-border" />
+
       <SavedViewsPill filters={filters} onApply={updateFilters} />
 
       <ColumnsPill />
-
-      <DateRangePresetsPill
-        onSelect={(range) =>
-          updateFilters({ dateFrom: range.from, dateTo: range.to })
-        }
-      />
-
-      <div className="flex items-center gap-1.5 border border-border bg-card px-3 py-1">
-        <DatePicker
-          value={filters.dateFrom || null}
-          onChange={(v) => updateFilters({ dateFrom: v ?? "" })}
-          placeholder="Od datuma"
-          toDate={
-            filters.dateTo
-              ? parse(filters.dateTo, "yyyy-MM-dd", new Date())
-              : undefined
-          }
-        />
-        <span className="text-[color:var(--iris-ink-faint)]">-</span>
-        <DatePicker
-          value={filters.dateTo || null}
-          onChange={(v) => updateFilters({ dateTo: v ?? "" })}
-          placeholder="Do datuma"
-          fromDate={
-            filters.dateFrom
-              ? parse(filters.dateFrom, "yyyy-MM-dd", new Date())
-              : undefined
-          }
-        />
-      </div>
 
       {hasActiveFilters && (
         <button
@@ -573,7 +663,7 @@ export function WorkOrdersFilters({
           className="iris-focusable iris-press animate-iris-fade flex items-center gap-1 bg-transparent px-2 py-2 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
         >
           <X className="h-3 w-3" />
-          Resetuj
+          {t("workOrders.filters.reset")}
         </button>
       )}
     </div>

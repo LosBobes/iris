@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import {
   Select,
@@ -34,6 +35,7 @@ import { getRowHeightClass } from "@/lib/list-preferences";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import {
   WORK_ORDER_COLUMNS,
+  columnLabel,
   type WorkOrderColumnKey,
 } from "@/lib/work-order-columns";
 import {
@@ -181,6 +183,7 @@ export function WorkOrdersTable({
   onOpen,
   canDelete,
 }: WorkOrdersTableProps): React.JSX.Element {
+  const { t } = useTranslation();
   // Stagger the entrance animation only on the very first paint. Subsequent
   // sort / filter / page changes should swap rows in place - no shimmer.
   const isFirstPaintRef = useRef(true);
@@ -234,11 +237,14 @@ export function WorkOrdersTable({
                     className="iris-focusable iris-press inline-flex cursor-pointer items-center gap-1 bg-transparent p-0 text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
                     aria-label={
                       isActive
-                        ? `Sortirano po ${col.label}, ${sortDirection === "asc" ? "rastuće" : "opadajuće"}`
-                        : `Sortiraj po ${col.label}`
+                        ? t("workOrders.table.sortedBy", {
+                            col: columnLabel(col),
+                            dir: sortDirection === "asc" ? t("workOrders.table.ascending") : t("workOrders.table.descending"),
+                          })
+                        : t("workOrders.table.sortBy", { col: columnLabel(col) })
                     }
                   >
-                    {col.label}
+                    {columnLabel(col)}
                     <SortIcon
                       field={col.sortField}
                       currentField={sortField}
@@ -261,8 +267,8 @@ export function WorkOrdersTable({
             const canToggleStatus = canToggleWorkOrderCompletion(order.status);
             const statusTransition = getPrimaryWorkOrderTransition(order.status);
             const statusActionLabel = canToggleStatus
-              ? `Promeni u ${getWorkOrderStatusLabel(statusTransition!)}`
-              : "Status ovog naloga se ne menja iz liste";
+              ? t("workOrders.table.changeStatusTo", { status: getWorkOrderStatusLabel(statusTransition!) })
+              : t("workOrders.table.statusNotFromList");
             // Cap stagger so a 100-row page doesn't take 3s to settle.
             const rowDelayMs = Math.min(idx, 12) * 22;
             return (
@@ -272,7 +278,7 @@ export function WorkOrdersTable({
                 tabIndex={onOpen ? 0 : undefined}
                 aria-label={
                   onOpen
-                    ? `Otvori nalog ${order.orderNumber} – ${order.clientName}`
+                    ? t("workOrders.table.openRow", { order: order.orderNumber, client: order.clientName })
                     : undefined
                 }
                 onKeyDown={
@@ -340,20 +346,20 @@ export function WorkOrdersTable({
                         />
                       </button>
                     </ActionTooltip>
-                    <ActionTooltip label="Izmeni">
+                    <ActionTooltip label={t("common.edit")}>
                       <button
                         type="button"
-                        aria-label="Izmeni"
+                        aria-label={t("common.edit")}
                         onClick={() => onEdit(order)}
                         className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
                       >
                         <Pencil className="h-[18px] w-[18px]" />
                       </button>
                     </ActionTooltip>
-                    <ActionTooltip label="Dupliraj">
+                    <ActionTooltip label={t("workOrders.detail.duplicate")}>
                       <button
                         type="button"
-                        aria-label="Dupliraj"
+                        aria-label={t("workOrders.detail.duplicate")}
                         onClick={() => onDuplicate(order)}
                         className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
                       >
@@ -361,10 +367,10 @@ export function WorkOrdersTable({
                       </button>
                     </ActionTooltip>
                     {canDelete && (
-                      <ActionTooltip label="Obriši">
+                      <ActionTooltip label={t("common.delete")}>
                         <button
                           type="button"
-                          aria-label="Obriši"
+                          aria-label={t("common.delete")}
                           onClick={() => onDelete(order)}
                           className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
                         >

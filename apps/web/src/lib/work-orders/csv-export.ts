@@ -5,6 +5,7 @@
 import type { WorkOrder } from "@/types/work-order";
 import {
   WORK_ORDER_COLUMNS,
+  columnLabel,
   type WorkOrderColumnKey,
 } from "@/lib/work-order-columns";
 import {
@@ -58,7 +59,7 @@ export function workOrdersToCsv(
   const columns = WORK_ORDER_COLUMNS.filter((column) =>
     visibleColumns.has(column.key),
   );
-  const header = columns.map((column) => escapeCsv(column.label)).join(",");
+  const header = columns.map((column) => escapeCsv(columnLabel(column))).join(",");
   const rows = orders.map((order) =>
     columns
       .map((column) => escapeCsv(exportCellValue(order, column.key)))

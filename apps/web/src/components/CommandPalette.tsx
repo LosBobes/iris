@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -34,6 +35,7 @@ function normalize(text: string): string {
 }
 
 export function CommandPalette(): React.JSX.Element | null {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { setTheme } = useTheme();
   const [open, setOpen] = useState(false);
@@ -58,16 +60,16 @@ export function CommandPalette(): React.JSX.Element | null {
       close();
     };
     return [
-      { id: "nav-dashboard", label: "Kontrolna tabla", icon: LayoutDashboard, keywords: "dashboard pocetna", run: go("/") },
-      { id: "nav-orders", label: "Radni nalozi", icon: ClipboardList, keywords: "work orders lista", run: go("/work-orders") },
-      { id: "nav-new-order", label: "Novi radni nalog", hint: "Kreiraj", icon: Plus, keywords: "create new order dodaj", run: go("/work-orders/new") },
-      { id: "nav-customers", label: "Klijenti", icon: Users, keywords: "customers musterije", run: go("/customers") },
-      { id: "nav-settings", label: "Podešavanja", icon: Settings, keywords: "settings opcije", run: go("/settings") },
-      { id: "theme-light", label: "Tema: Svetla", icon: Sun, keywords: "theme light", run: theme("light") },
-      { id: "theme-dark", label: "Tema: Tamna", icon: Moon, keywords: "theme dark mracna", run: theme("dark") },
-      { id: "theme-system", label: "Tema: Sistemska", icon: Monitor, keywords: "theme system", run: theme("system") },
+      { id: "nav-dashboard", label: t("nav.dashboard"), icon: LayoutDashboard, keywords: "dashboard pocetna kontrolna tabla", run: go("/") },
+      { id: "nav-orders", label: t("nav.workOrders"), icon: ClipboardList, keywords: "work orders lista radni nalozi", run: go("/work-orders") },
+      { id: "nav-new-order", label: t("workOrders.list.newOrder"), hint: t("command.create"), icon: Plus, keywords: "create new order dodaj novi nalog", run: go("/work-orders/new") },
+      { id: "nav-customers", label: t("nav.customers"), icon: Users, keywords: "customers musterije klijenti", run: go("/customers") },
+      { id: "nav-settings", label: t("nav.settings"), icon: Settings, keywords: "settings opcije podesavanja", run: go("/settings") },
+      { id: "theme-light", label: `${t("command.themePrefix")} ${t("settings.theme.light")}`, icon: Sun, keywords: "theme light svetla", run: theme("light") },
+      { id: "theme-dark", label: `${t("command.themePrefix")} ${t("settings.theme.dark")}`, icon: Moon, keywords: "theme dark mracna tamna", run: theme("dark") },
+      { id: "theme-system", label: `${t("command.themePrefix")} ${t("settings.theme.system")}`, icon: Monitor, keywords: "theme system sistemska", run: theme("system") },
     ];
-  }, [navigate, setTheme, close]);
+  }, [navigate, setTheme, close, t]);
 
   const filtered = useMemo(() => {
     const q = normalize(query.trim());
@@ -143,7 +145,7 @@ export function CommandPalette(): React.JSX.Element | null {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Pretraži komande…"
+            placeholder={t("command.searchPlaceholder")}
             className="w-full border-none bg-transparent text-[13px] text-foreground placeholder:text-[color:var(--iris-ink-mute)] focus:outline-none"
           />
           <kbd className="hidden shrink-0 border border-[color:var(--iris-border-soft)] px-1.5 py-px font-sans text-[10px] text-[color:var(--iris-ink-faint)] sm:inline-block">
@@ -154,7 +156,7 @@ export function CommandPalette(): React.JSX.Element | null {
         <div ref={listRef} className="max-h-80 overflow-y-auto p-1">
           {filtered.length === 0 ? (
             <div className="px-3 py-6 text-center text-[12px] text-[color:var(--iris-ink-faint)]">
-              Nema rezultata
+              {t("command.noResults")}
             </div>
           ) : (
             filtered.map((command, index) => {
