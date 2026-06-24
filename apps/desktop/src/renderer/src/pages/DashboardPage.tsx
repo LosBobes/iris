@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters'
@@ -12,6 +13,7 @@ import { WorkOrdersPerMonthChart } from '@/components/dashboard/charts/WorkOrder
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const {
     summary,
     monthlyOrders,
@@ -38,13 +40,13 @@ function DashboardPage(): React.JSX.Element {
           className="animate-iris-enter border-b border-border px-10 pt-7 pb-5"
         >
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Iris · pregled
+            {t('dashboard.eyebrow')}
           </div>
           <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-            Kontrolna tabla
+            {t('dashboard.title')}
           </h1>
           <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-            Sažetak poslovanja
+            {t('dashboard.subtitle')}
           </div>
         </div>
 
@@ -59,7 +61,7 @@ function DashboardPage(): React.JSX.Element {
               style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
             >
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              <span className="text-sm">Učitavanje podataka...</span>
+              <span className="text-sm">{t('dashboard.loading')}</span>
             </div>
           </div>
         )}
@@ -67,7 +69,7 @@ function DashboardPage(): React.JSX.Element {
         {!loading && error && (
           <div className="px-8">
             <div className="animate-iris-fade border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
-              Greška pri učitavanju podataka: {error}
+              {t('dashboard.loadError', { error })}
             </div>
           </div>
         )}
@@ -76,7 +78,7 @@ function DashboardPage(): React.JSX.Element {
           <div className="px-8">
             <div className="animate-iris-fade py-20 text-center">
               <p className="text-sm text-muted-foreground">
-                Nema radnih naloga u bazi podataka.
+                {t('dashboard.emptyDb')}
               </p>
             </div>
           </div>
@@ -88,7 +90,7 @@ function DashboardPage(): React.JSX.Element {
             style={{ animationDelay: "120ms" }}
           >
             <p className="text-sm text-muted-foreground">
-              Prikazan je demo pregled mesečnih trendova dok podaci ne budu dostupni.
+              {t('dashboard.demoNote')}
             </p>
             <div className="grid grid-cols-2 gap-5">
               <WorkOrdersPerMonthChart monthlyOrders={getMockMonthlyOrders()} />
@@ -101,7 +103,7 @@ function DashboardPage(): React.JSX.Element {
           <div className="px-8">
             <div className="animate-iris-fade py-20 text-center">
               <p className="text-sm text-muted-foreground">
-                Nema radnih naloga koji odgovaraju izabranim filterima.
+                {t('dashboard.emptyFilters')}
               </p>
             </div>
           </div>

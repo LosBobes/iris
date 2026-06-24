@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import {
   Select,
@@ -25,8 +26,8 @@ import {
   type SortDirection,
 } from "@/hooks/useWorkOrders";
 import {
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
+  getWorkOrderBillingDocumentLabel,
+  getWorkOrderDeliveryLabel,
   canToggleWorkOrderCompletion,
   formatWorkOrderDate,
   formatWorkOrderPrice,
@@ -34,22 +35,22 @@ import {
 
 interface ColDef {
   key: string;
-  label: string;
+  labelKey: string;
   field?: SortField;
   width?: string;
   align?: "left" | "right";
 }
 
 const COLUMNS: ColDef[] = [
-  { key: "orderNumber", label: "Br. naloga", field: "orderNumber", width: "110px" },
-  { key: "clientName", label: "Klijent", field: "clientName", width: "140px" },
-  { key: "jobDescription", label: "Opis posla", field: "jobDescription" },
-  { key: "billing", label: "Tip dokumenta", field: "billingDocumentType", width: "130px" },
-  { key: "delivery", label: "Dostava", field: "shipping.deliveryMethod", width: "150px" },
-  { key: "price", label: "Cena", field: "price", width: "110px", align: "right" },
-  { key: "status", label: "Status", field: "status", width: "130px" },
-  { key: "date", label: "Datum", field: "issueDate", width: "110px" },
-  { key: "actions", label: "", width: "110px" },
+  { key: "orderNumber", labelKey: "workOrders.table.colOrderNumber", field: "orderNumber", width: "110px" },
+  { key: "clientName", labelKey: "workOrders.table.colClient", field: "clientName", width: "140px" },
+  { key: "jobDescription", labelKey: "workOrders.table.colJobDescription", field: "jobDescription" },
+  { key: "billing", labelKey: "workOrders.table.colBilling", field: "billingDocumentType", width: "130px" },
+  { key: "delivery", labelKey: "workOrders.table.colDelivery", field: "shipping.deliveryMethod", width: "150px" },
+  { key: "price", labelKey: "workOrders.table.colPrice", field: "price", width: "110px", align: "right" },
+  { key: "status", labelKey: "workOrders.table.colStatus", field: "status", width: "130px" },
+  { key: "date", labelKey: "workOrders.table.colDate", field: "issueDate", width: "110px" },
+  { key: "actions", labelKey: "", width: "110px" },
 ];
 
 interface WorkOrdersTableProps {
@@ -106,6 +107,7 @@ export function WorkOrdersTable({
   onToggleStatus,
   onOpen,
 }: WorkOrdersTableProps): React.JSX.Element {
+  const { t } = useTranslation();
   // Stagger the entrance animation only on the very first paint. Subsequent
   // sort / filter / page changes should swap rows in place - no shimmer.
   const isFirstPaintRef = useRef(true);
@@ -145,11 +147,17 @@ export function WorkOrdersTable({
                       className="iris-focusable iris-press inline-flex cursor-pointer items-center gap-1 bg-transparent p-0 text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
                       aria-label={
                         isActive
-                          ? `Sortirano po ${col.label}, ${sortDirection === "asc" ? "rastuće" : "opadajuće"}`
-                          : `Sortiraj po ${col.label}`
+                          ? t("workOrders.table.sortedBy", {
+                              col: t(col.labelKey),
+                              dir:
+                                sortDirection === "asc"
+                                  ? t("workOrders.table.ascending")
+                                  : t("workOrders.table.descending"),
+                            })
+                          : t("workOrders.table.sortBy", { col: t(col.labelKey) })
                       }
                     >
-                      {col.label}
+                      {t(col.labelKey)}
                       <SortIcon
                         field={col.field!}
                         currentField={sortField}
@@ -157,7 +165,7 @@ export function WorkOrdersTable({
                       />
                     </button>
                   ) : (
-                    col.label
+                    t(col.labelKey)
                   )}
                 </th>
               );
@@ -198,12 +206,12 @@ export function WorkOrdersTable({
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.billingDocumentType
-                    ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+                    ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
                     : "-"}
                 </td>
                 <td className="px-4 text-[color:var(--iris-ink-soft)]">
                   {order.shipping.deliveryMethod
-                    ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
+                    ? getWorkOrderDeliveryLabel(order.shipping.deliveryMethod)
                     : "-"}
                 </td>
                 <td
@@ -229,16 +237,16 @@ export function WorkOrdersTable({
                       title={
                         canToggleStatus
                           ? order.status === "completed"
-                            ? "Označi kao aktivan"
-                            : "Označi kao završen"
-                          : "Status ovog naloga se ne menja iz liste"
+                            ? t("workOrders.table.markActive")
+                            : t("workOrders.table.markCompleted")
+                          : t("workOrders.table.statusNotFromList")
                       }
                       aria-label={
                         canToggleStatus
                           ? order.status === "completed"
-                            ? "Označi kao aktivan"
-                            : "Označi kao završen"
-                          : "Status ovog naloga se ne menja iz liste"
+                            ? t("workOrders.table.markActive")
+                            : t("workOrders.table.markCompleted")
+                          : t("workOrders.table.statusNotFromList")
                       }
                       onClick={() => onToggleStatus(order)}
                       className="iris-focusable iris-press relative grid size-3.5 place-items-center bg-transparent p-0 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
@@ -260,8 +268,8 @@ export function WorkOrdersTable({
                     </button>
                     <button
                       type="button"
-                      title="Izmeni"
-                      aria-label="Izmeni"
+                      title={t("workOrders.table.edit")}
+                      aria-label={t("workOrders.table.edit")}
                       onClick={() => onEdit(order)}
                       className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
                     >
@@ -269,8 +277,8 @@ export function WorkOrdersTable({
                     </button>
                     <button
                       type="button"
-                      title="Dupliraj"
-                      aria-label="Dupliraj"
+                      title={t("workOrders.table.duplicate")}
+                      aria-label={t("workOrders.table.duplicate")}
                       onClick={() => onDuplicate(order)}
                       className="iris-focusable iris-press bg-transparent p-0 hover:text-foreground"
                     >
@@ -278,8 +286,8 @@ export function WorkOrdersTable({
                     </button>
                     <button
                       type="button"
-                      title="Obriši"
-                      aria-label="Obriši"
+                      title={t("workOrders.table.delete")}
+                      aria-label={t("workOrders.table.delete")}
                       onClick={() => onDelete(order)}
                       className="iris-focusable iris-press bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
                     >
@@ -295,7 +303,11 @@ export function WorkOrdersTable({
 
       <div className="flex items-center justify-between border-t border-border bg-background px-6 py-3 text-[11px] text-[color:var(--iris-ink-mute)]">
         <div>
-          Ukupno {totalFiltered} naloga · stranica {currentPage} od {totalPages}
+          {t("workOrders.table.pageSummary", {
+            total: totalFiltered,
+            page: currentPage,
+            pages: totalPages,
+          })}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -304,7 +316,7 @@ export function WorkOrdersTable({
             onClick={() => onPageChange(currentPage - 1)}
             className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
-            ← Prethodna
+            {t("workOrders.table.prev")}
           </button>
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .filter((page) => {
@@ -343,11 +355,11 @@ export function WorkOrdersTable({
             onClick={() => onPageChange(currentPage + 1)}
             className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Sledeća →
+            {t("workOrders.table.next")}
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <span>Po strani</span>
+          <span>{t("workOrders.table.perPage")}</span>
           <Select
             value={String(pageSize)}
             onValueChange={(value) =>

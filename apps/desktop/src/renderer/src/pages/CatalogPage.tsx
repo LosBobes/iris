@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Save, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
@@ -56,6 +57,7 @@ function toInput(draft: CatalogItem): CatalogItemInput {
 }
 
 function CatalogPage(): React.JSX.Element {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
 
@@ -93,7 +95,7 @@ function CatalogPage(): React.JSX.Element {
 
   const saveItem = useCallback(async () => {
     if (!draft.name.trim()) {
-      toast.error("Naziv je obavezan.");
+      toast.error(t("catalog.nameRequired"));
       return;
     }
     try {
@@ -105,11 +107,11 @@ function CatalogPage(): React.JSX.Element {
       }
       setDraft(emptyDraft);
       await reload();
-      toast.success("Stavka kataloga je sačuvana.");
+      toast.success(t("catalog.saved"));
     } catch (error) {
-      toast.error(formatActionError("Greška pri čuvanju stavke", error));
+      toast.error(formatActionError(t("catalog.saveError"), error));
     }
-  }, [draft, isEditing, reload]);
+  }, [draft, isEditing, reload, t]);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -120,26 +122,24 @@ function CatalogPage(): React.JSX.Element {
       );
       setDeleteTarget(null);
       await reload();
-      toast.success("Stavka je obrisana.");
+      toast.success(t("catalog.deleted"));
     } catch {
-      toast.error("Greška pri brisanju stavke.");
+      toast.error(t("catalog.deleteItemError"));
     }
-  }, [deleteTarget, reload]);
+  }, [deleteTarget, reload, t]);
 
   return (
     <AppShell>
       <div className="space-y-8">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Iris · katalog
+            {t("catalog.eyebrow")}
           </div>
           <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
-            Usluge i artikli
+            {t("catalog.title")}
           </h1>
           <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
-            {isAdmin
-              ? "Definišite stavke koje radnici biraju u radnim nalozima"
-              : "Pregled usluga i artikala za radne naloge"}
+            {isAdmin ? t("catalog.adminSubtitle") : t("catalog.viewSubtitle")}
           </div>
         </div>
 
@@ -151,7 +151,7 @@ function CatalogPage(): React.JSX.Element {
               <input
                 value={search}
                 onChange={(event) => changeSearch(event.target.value)}
-                placeholder="Pretraga po nazivu ili šifri"
+                placeholder={t("catalog.searchPlaceholder")}
                 className="block w-full border border-border bg-background py-2 pl-8 pr-2 text-[13px] text-foreground"
               />
             </div>
@@ -170,18 +170,18 @@ function CatalogPage(): React.JSX.Element {
 
           <section className="min-w-0 border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-4 py-3 text-[13px] font-medium">
-              <span>Stavke</span>
+              <span>{t("catalog.items")}</span>
               <span className="text-[11px] font-normal text-[color:var(--iris-ink-soft)]">
-                {loading ? "" : `${total} ukupno`}
+                {loading ? "" : t("catalog.totalCount", { count: total })}
               </span>
             </div>
             {loading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Učitavanje kataloga...
+                {t("catalog.loading")}
               </div>
             ) : items.length === 0 ? (
-              <EmptyListNote text="Nema stavki za izabrane filtere." />
+              <EmptyListNote text={t("catalog.emptyFilters")} />
             ) : (
               <div className="divide-y divide-[color:var(--iris-border-soft)]">
                 {items.map((item) => (
@@ -217,18 +217,18 @@ function CatalogPage(): React.JSX.Element {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Brisanje stavke</AlertDialogTitle>
+            <AlertDialogTitle>{t("catalog.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Da li ste sigurni da želite da obrišete {deleteTarget?.name}?
+              {t("catalog.deleteConfirm", { name: deleteTarget?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Otkaži</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={() => void confirmDelete()}
             >
-              Obriši
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -244,10 +244,11 @@ function KindTabs({
   value: KindFilter;
   onChange: (value: KindFilter) => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   const tabs: Array<{ id: KindFilter; label: string }> = [
-    { id: "service", label: "Usluge" },
-    { id: "article", label: "Artikli" },
-    { id: "all", label: "Sve" },
+    { id: "service", label: t("catalog.tabService") },
+    { id: "article", label: t("catalog.tabArticle") },
+    { id: "all", label: t("catalog.tabAll") },
   ];
   return (
     <div className="inline-flex border border-border">
@@ -286,6 +287,7 @@ function CatalogForm({
   onSave: () => void;
   onCancel: () => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <form
       onSubmit={(event) => {
@@ -298,7 +300,7 @@ function CatalogForm({
       {editingName !== null && (
         <div className="animate-iris-fade flex items-center justify-between gap-3 border-l-2 border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-3 py-2 text-[12px] text-[color:var(--iris-ink-soft)] sm:col-span-2 lg:col-span-3">
           <span className="min-w-0 truncate">
-            Izmena:{" "}
+            {t("catalog.editing")}{" "}
             <span className="font-medium text-foreground">{editingName}</span>
           </span>
           <button
@@ -307,18 +309,18 @@ function CatalogForm({
             className="iris-focusable iris-press flex shrink-0 items-center gap-1 bg-transparent text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
           >
             <X className="h-3 w-3" />
-            Otkaži
+            {t("common.cancel")}
           </button>
         </div>
       )}
       <TextInput
-        label="Naziv"
+        label={t("catalog.name")}
         value={value.name}
         required
         onChange={(name) => onChange({ ...value, name })}
       />
       <label className="text-[11px] text-[color:var(--iris-ink-soft)]">
-        Vrsta
+        {t("catalog.kind")}
         <select
           value={value.kind}
           onChange={(event) =>
@@ -326,24 +328,24 @@ function CatalogForm({
           }
           className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
         >
-          <option value="service">Usluga</option>
-          <option value="article">Artikal</option>
+          <option value="service">{t("catalog.kindServiceOption")}</option>
+          <option value="article">{t("catalog.kindArticleOption")}</option>
         </select>
       </label>
       <TextInput
-        label="Jedinica mere"
+        label={t("catalog.unit")}
         value={value.unit}
-        placeholder="kom, set, m2..."
+        placeholder={t("catalog.unitPlaceholder")}
         onChange={(unit) => onChange({ ...value, unit })}
       />
       <TextInput
-        label="Šifra"
+        label={t("catalog.code")}
         value={value.code}
-        placeholder="Automatski ako ostane prazno"
+        placeholder={t("catalog.codePlaceholder")}
         onChange={(code) => onChange({ ...value, code })}
       />
       <label className="text-[11px] text-[color:var(--iris-ink-soft)]">
-        {value.kind === "service" ? "Cena rada (RSD)" : "Nabavna cena (RSD)"}
+        {value.kind === "service" ? t("catalog.costService") : t("catalog.costArticle")}
         <input
           type="number"
           step="0.01"
@@ -360,7 +362,7 @@ function CatalogForm({
         />
       </label>
       <label className="text-[11px] text-[color:var(--iris-ink-soft)]">
-        Prodajna cena (RSD)
+        {t("catalog.salePrice")}
         <input
           type="number"
           step="0.01"
@@ -385,7 +387,7 @@ function CatalogForm({
           }
           className="h-4 w-4"
         />
-        Aktivno
+        {t("catalog.active")}
       </label>
       <div className="sm:col-span-2 lg:col-span-3">
         <button
@@ -393,7 +395,7 @@ function CatalogForm({
           className="iris-focusable iris-press flex items-center justify-center gap-2 bg-foreground px-3 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
         >
           <Save className="h-3.5 w-3.5" />
-          {isEditing ? "Sačuvaj izmene" : "Dodaj stavku"}
+          {isEditing ? t("catalog.saveChanges") : t("catalog.addItem")}
         </button>
       </div>
     </form>
@@ -411,6 +413,7 @@ function CatalogRow({
   onEdit: () => void;
   onDelete: () => void;
 }): React.JSX.Element {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
       <div className="min-w-0">
@@ -423,7 +426,7 @@ function CatalogRow({
           </span>
           {!item.isActive && (
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-[color:var(--iris-status-cancelled)]">
-              neaktivno
+              {t("catalog.inactive")}
             </span>
           )}
         </div>
@@ -439,7 +442,7 @@ function CatalogRow({
             type="button"
             onClick={onEdit}
             className="iris-focusable iris-press text-[color:var(--iris-ink-soft)] hover:text-foreground"
-            aria-label="Izmeni"
+            aria-label={t("common.edit")}
           >
             <Pencil className="h-4 w-4" />
           </button>
@@ -447,7 +450,7 @@ function CatalogRow({
             type="button"
             onClick={onDelete}
             className="iris-focusable iris-press text-[color:var(--iris-status-cancelled)] hover:opacity-80"
-            aria-label="Obriši"
+            aria-label={t("common.delete")}
           >
             <Trash2 className="h-4 w-4" />
           </button>

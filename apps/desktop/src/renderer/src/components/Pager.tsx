@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface PagerProps {
   /** Zero-based current page. */
@@ -19,13 +20,14 @@ export function Pager({
   onPrev,
   onNext,
 }: PagerProps): React.JSX.Element {
+  const { t } = useTranslation();
   const from = total === 0 ? 0 : page * pageSize + 1;
   const to = Math.min(total, (page + 1) * pageSize);
 
   return (
     <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
       <span className="tnum">
-        {from}–{to} od {total}
+        {t("pager.range", { from, to, total })}
       </span>
       <div className="flex items-center gap-2">
         <button
@@ -33,10 +35,10 @@ export function Pager({
           onClick={onPrev}
           disabled={page <= 0}
           className="iris-focusable iris-press inline-flex items-center gap-1 border border-border px-2 py-1 disabled:opacity-40"
-          aria-label="Prethodna strana"
+          aria-label={t("pager.prevAria")}
         >
           <ChevronLeft className="h-4 w-4" />
-          Prethodna
+          {t("pager.prev")}
         </button>
         <span className="tnum">
           {page + 1} / {totalPages}
@@ -46,9 +48,9 @@ export function Pager({
           onClick={onNext}
           disabled={page >= totalPages - 1}
           className="iris-focusable iris-press inline-flex items-center gap-1 border border-border px-2 py-1 disabled:opacity-40"
-          aria-label="Sledeća strana"
+          aria-label={t("pager.nextAria")}
         >
-          Sledeća
+          {t("pager.next")}
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>

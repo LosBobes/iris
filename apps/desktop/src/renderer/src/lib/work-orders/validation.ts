@@ -1,16 +1,17 @@
 import { z } from 'zod'
+import i18n from '@/i18n'
 
 const deliveryMethodEnum = z.enum(['pickup', 'postExpress', 'cityExpress', 'fieldVisit'])
 const billingDocumentTypeEnum = z.enum(['invoice', 'cashCollection', 'proforma'])
 
 const jobDetailsSchema = z.object({
   productCode: z.string().nullable(),
-  paperWeightGsm: z.number().positive({ message: 'Gramatura mora biti pozitivan broj' }).nullable(),
+  paperWeightGsm: z.number().positive({ message: i18n.t('validation.paperWeightPositive') }).nullable(),
   dimensions: z.string().nullable(),
   quantity: z
     .number()
-    .int({ message: 'Količina mora biti ceo broj' })
-    .positive({ message: 'Količina mora biti pozitivan broj' })
+    .int({ message: i18n.t('validation.quantityInteger') })
+    .positive({ message: i18n.t('validation.quantityPositive') })
     .nullable(),
   finishingNote: z.string().nullable(),
 })
@@ -27,16 +28,16 @@ const shippingSchema = z.object({
 
 export const workOrderFormSchema = z
   .object({
-    clientName: z.string().min(1, { message: 'Naziv klijenta je obavezan' }),
+    clientName: z.string().min(1, { message: i18n.t('validation.clientNameRequired') }),
     contactPerson: z.string().nullable(),
-    jobDescription: z.string().min(1, { message: 'Opis posla je obavezan' }),
+    jobDescription: z.string().min(1, { message: i18n.t('validation.jobDescriptionRequired') }),
     jobDetails: jobDetailsSchema.nullable(),
     billingDocumentType: billingDocumentTypeEnum.nullable(),
     billingDocumentNumber: z.string().nullable(),
     shipping: shippingSchema,
-    price: z.number().min(0, { message: 'Cena ne može biti negativna' }).nullable(),
+    price: z.number().min(0, { message: i18n.t('validation.priceNegative') }).nullable(),
     note: z.string().nullable(),
-    issueDate: z.string().min(1, { message: 'Datum izdavanja je obavezan' }),
+    issueDate: z.string().min(1, { message: i18n.t('validation.issueDateRequired') }),
     dueDate: z.string().nullable(),
     executedBy: z.string().nullable(),
   })
@@ -49,7 +50,7 @@ export const workOrderFormSchema = z
     ) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Adresa za dostavu je obavezna kada je izabran način dostave',
+        message: i18n.t('validation.shippingAddressRequired'),
         path: ['shipping', 'shippingAddress'],
       })
     }

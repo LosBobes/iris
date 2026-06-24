@@ -1,4 +1,5 @@
 import type { CatalogItemKind } from "@/types/catalog";
+import i18n from "@/i18n";
 
 const priceFormatter = new Intl.NumberFormat("sr-RS", {
   style: "currency",
@@ -12,5 +13,7 @@ export function formatCatalogPrice(price: number | null): string {
 }
 
 export function kindLabel(kind: CatalogItemKind): string {
-  return kind === "service" ? "Usluga" : "Artikal";
+  return kind === "service"
+    ? i18n.t("catalog.kindServiceOption")
+    : i18n.t("catalog.kindArticleOption");
 }

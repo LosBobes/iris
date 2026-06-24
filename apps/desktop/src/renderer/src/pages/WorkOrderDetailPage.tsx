@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { AppShell } from "@/components/layout/AppShell";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import type { WorkOrder } from "@/types/work-order";
 import {
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
+  getWorkOrderBillingDocumentLabel,
+  getWorkOrderDeliveryLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -15,6 +16,7 @@ import {
 function WorkOrderDetailPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
   useEffect(() => {
     if (!id) {
       setOrder(null);
-      setError("Radni nalog nije pronađen");
+      setError(t("workOrders.detail.notFound"));
       setLoading(false);
       return;
     }
@@ -39,14 +41,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
         if (cancelled) return;
         if (!data) {
           setOrder(null);
-          setError("Radni nalog nije pronađen");
+          setError(t("workOrders.detail.notFound"));
           return;
         }
         setOrder(data);
       } catch {
         if (!cancelled) {
           setOrder(null);
-          setError("Greška pri učitavanju radnog naloga");
+          setError(t("workOrders.detail.loadError"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -57,7 +59,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, t]);
 
   return (
     <AppShell>
@@ -70,7 +72,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
               className="iris-focusable iris-press group flex items-center gap-1 bg-transparent p-0 text-[color:var(--iris-ink-mute)] hover:text-foreground"
             >
               <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
-              Radni nalozi
+              {t("workOrders.detail.back")}
             </button>
             <span className="text-[color:var(--iris-ink-faint)]">/</span>
             <span className="tnum text-foreground">
@@ -98,7 +100,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   onClick={() => window.print()}
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
-                  Štampaj
+                  {t("workOrders.detail.print")}
                 </button>
                 <button
                   type="button"
@@ -109,14 +111,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   }
                   className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
                 >
-                  Dupliraj
+                  {t("workOrders.detail.duplicate")}
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate(`/work-orders/${order.id}/edit`)}
                   className="iris-focusable iris-press bg-foreground px-3.5 py-[7px] text-[12px] font-medium text-background hover:bg-foreground/90"
                 >
-                  Izmeni
+                  {t("workOrders.detail.edit")}
                 </button>
               </div>
             </div>
@@ -129,7 +131,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
             style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
           >
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            <span className="text-sm">Učitavanje naloga...</span>
+            <span className="text-sm">{t("workOrders.detail.loading")}</span>
           </div>
         )}
 
@@ -152,23 +154,24 @@ function WorkOrderDetailPage(): React.JSX.Element {
 }
 
 function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
+  const { t } = useTranslation();
   const metaCells: Array<[string, string]> = [
     [
-      "Tip dokumenta",
+      t("workOrders.detail.documentType"),
       order.billingDocumentType
-        ? WORK_ORDER_BILLING_LABELS[order.billingDocumentType]
+        ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
         : "-",
     ],
-    ["Datum izdavanja", formatWorkOrderDate(order.issueDate)],
+    [t("workOrders.detail.issueDate"), formatWorkOrderDate(order.issueDate)],
     [
-      "Dostava",
+      t("workOrders.detail.delivery"),
       order.shipping.deliveryMethod
-        ? WORK_ORDER_DELIVERY_LABELS[order.shipping.deliveryMethod]
+        ? getWorkOrderDeliveryLabel(order.shipping.deliveryMethod)
         : "-",
     ],
-    ["Rok", order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],
+    [t("workOrders.detail.dueDate"), order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],
     [
-      "Broj dokumenta",
+      t("workOrders.detail.documentNumber"),
       order.billingDocumentNumber ? order.billingDocumentNumber : "-",
     ],
   ];
@@ -180,7 +183,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
   const timeline: Array<{ time: string; label: string; who: string; state: "done" | "current" | "pending" }> = [
     {
       time: formatWorkOrderDateTime(order.createdAt),
-      label: "Nalog kreiran",
+      label: t("workOrders.detail.orderCreated"),
       who: order.issuedBy,
       state: "done",
     },
@@ -188,8 +191,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       ? ([
           {
             time: "-",
-            label: "U proizvodnji",
-            who: "u toku",
+            label: t("workOrders.detail.inProduction"),
+            who: t("workOrders.detail.inProgress"),
             state: "current",
           },
         ] as const)
@@ -198,7 +201,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       ? ([
           {
             time: formatWorkOrderDateTime(order.completionDate),
-            label: "Nalog završen",
+            label: t("workOrders.detail.orderCompleted"),
             who: order.executedBy ?? "-",
             state: "done",
           },
@@ -208,7 +211,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       ? ([
           {
             time: formatWorkOrderDateTime(order.updatedAt),
-            label: "Nalog otkazan",
+            label: t("workOrders.detail.orderCancelled"),
             who: order.executedBy ?? "-",
             state: "done",
           },
@@ -218,8 +221,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       ? ([
           {
             time: order.dueDate ? formatWorkOrderDate(order.dueDate) : "-",
-            label: "Isporuka",
-            who: order.dueDate ? "zakazana" : "-",
+            label: t("workOrders.detail.deliveryStep"),
+            who: order.dueDate ? t("workOrders.detail.scheduled") : "-",
             state: "pending",
           },
         ] as const)
@@ -245,7 +248,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       <div className="grid grid-cols-[1fr_1.6fr]">
         <div className="border-r border-border p-8">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Tok posla
+            {t("workOrders.detail.workflow")}
           </div>
           {timeline.map((e, i) => {
             const isLast = i === timeline.length - 1;
@@ -299,7 +302,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {order.note && (
             <div className="mt-6 border-t border-[color:var(--iris-border-soft)] pt-5">
               <div className="mb-3 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Beleške
+                {t("workOrders.detail.notes")}
               </div>
               <div
                 className="px-3.5 py-2.5 text-[12px] leading-[1.6] text-[color:var(--iris-ink-soft)]"
@@ -316,16 +319,16 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
 
         <div className="p-8">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Stavke
+            {t("workOrders.detail.items")}
           </div>
           <table className="w-full border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="py-2 text-left text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                  Opis
+                  {t("workOrders.detail.description")}
                 </th>
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                  Iznos
+                  {t("workOrders.detail.amount")}
                 </th>
               </tr>
             </thead>
@@ -345,7 +348,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             <div className="mt-4 flex justify-end">
               <div className="w-64 text-[12px]">
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
-                  <span>Osnovica</span>
+                  <span>{t("workOrders.detail.base")}</span>
                   <span className="tnum">
                     {new Intl.NumberFormat("sr-Latn-RS", {
                       minimumFractionDigits: 0,
@@ -354,7 +357,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
-                  <span>PDV (20%)</span>
+                  <span>{t("workOrders.detail.vat")}</span>
                   <span className="tnum">
                     {new Intl.NumberFormat("sr-Latn-RS", {
                       minimumFractionDigits: 0,
@@ -363,7 +366,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   </span>
                 </div>
                 <div className="mt-1.5 flex justify-between border-t border-foreground py-2.5 text-foreground">
-                  <span className="font-medium">Za uplatu</span>
+                  <span className="font-medium">{t("workOrders.detail.toPay")}</span>
                   <span className="tnum text-[14px] font-medium">
                     {formatWorkOrderPrice(total)}
                   </span>

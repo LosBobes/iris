@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useForm, Controller, type UseFormWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -17,10 +18,12 @@ import {
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
 import {
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
+  BILLING_DOCUMENT_TYPES,
+  DELIVERY_METHODS,
   WORK_ORDER_SELECT_NONE_VALUE,
-  WORK_ORDER_STATUS_LABELS,
+  getWorkOrderBillingDocumentLabel,
+  getWorkOrderDeliveryLabel,
+  getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -99,6 +102,7 @@ export function WorkOrderForm({
   onSubmit,
   onCancel,
 }: WorkOrderFormProps): React.JSX.Element {
+  const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const isEdit = !!initialData;
 
@@ -186,7 +190,7 @@ export function WorkOrderForm({
           <div className="mb-8 flex flex-wrap gap-x-10 gap-y-4 border border-[color:var(--iris-border-soft)] bg-card px-6 py-4 text-[12px]">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Broj naloga
+                {t("workOrders.form.orderNumber")}
               </div>
               <div className="tnum mt-1 text-foreground">
                 {initialData.orderNumber}
@@ -194,15 +198,15 @@ export function WorkOrderForm({
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Status
+                {t("workOrders.form.status")}
               </div>
               <div className="mt-1 text-foreground">
-                {WORK_ORDER_STATUS_LABELS[initialData.status]}
+                {getWorkOrderStatusLabel(initialData.status)}
               </div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Kreiran
+                {t("workOrders.form.created")}
               </div>
               <div className="tnum mt-1 text-foreground">
                 {formatWorkOrderDateTime(initialData.createdAt)}
@@ -210,19 +214,19 @@ export function WorkOrderForm({
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                Izdao
+                {t("workOrders.form.issuedBy")}
               </div>
               <div className="mt-1 text-foreground">{initialData.issuedBy}</div>
             </div>
           </div>
         )}
 
-        <FormSection title="Klijent">
+        <FormSection title={t("workOrders.form.sectionClient")}>
           <div className="grid grid-cols-2 gap-6">
             <FieldShell
               id="clientName"
-              label="Naziv klijenta *"
-              hint="Izaberite iz liste ili dodajte novog"
+              label={t("workOrders.form.clientNameRequired")}
+              hint={t("workOrders.form.clientNameHint")}
               error={errors.clientName?.message}
             >
               <input
@@ -231,7 +235,7 @@ export function WorkOrderForm({
                 {...register("clientName")}
               />
             </FieldShell>
-            <FieldShell id="contactPerson" label="Kontakt osoba">
+            <FieldShell id="contactPerson" label={t("workOrders.form.contactPerson")}>
               <input
                 id="contactPerson"
                 className={underlineInput}
@@ -243,11 +247,11 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection title="Posao">
+        <FormSection title={t("workOrders.form.sectionJob")}>
           <div className="space-y-6">
             <FieldShell
               id="jobDescription"
-              label="Opis *"
+              label={t("workOrders.form.jobDescriptionRequired")}
               error={errors.jobDescription?.message}
               full
             >
@@ -266,7 +270,9 @@ export function WorkOrderForm({
                 aria-expanded={showJobDetails}
                 className="iris-focusable iris-press bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
               >
-                {showJobDetails ? "Sakrij detalje posla" : "Prikaži detalje posla"}
+                {showJobDetails
+                  ? t("workOrders.form.jobDetailsHide")
+                  : t("workOrders.form.jobDetailsShow")}
               </button>
             </div>
 
@@ -278,7 +284,7 @@ export function WorkOrderForm({
                     "iris-fade-up 320ms var(--iris-ease-out) both",
                 }}
               >
-                <FieldShell id="jobDetails.productCode" label="Šifra proizvoda">
+                <FieldShell id="jobDetails.productCode" label={t("workOrders.form.productCode")}>
                   <input
                     id="jobDetails.productCode"
                     className={underlineInput}
@@ -289,7 +295,7 @@ export function WorkOrderForm({
                 </FieldShell>
                 <FieldShell
                   id="jobDetails.paperWeightGsm"
-                  label="Gramatura papira (gsm)"
+                  label={t("workOrders.form.paperWeight")}
                 >
                   <input
                     id="jobDetails.paperWeightGsm"
@@ -300,7 +306,7 @@ export function WorkOrderForm({
                     })}
                   />
                 </FieldShell>
-                <FieldShell id="jobDetails.dimensions" label="Dimenzije">
+                <FieldShell id="jobDetails.dimensions" label={t("workOrders.form.dimensions")}>
                   <input
                     id="jobDetails.dimensions"
                     className={underlineInput}
@@ -309,7 +315,7 @@ export function WorkOrderForm({
                     })}
                   />
                 </FieldShell>
-                <FieldShell id="jobDetails.quantity" label="Količina">
+                <FieldShell id="jobDetails.quantity" label={t("workOrders.form.quantity")}>
                   <input
                     id="jobDetails.quantity"
                     type="number"
@@ -321,7 +327,7 @@ export function WorkOrderForm({
                 </FieldShell>
                 <FieldShell
                   id="jobDetails.finishingNote"
-                  label="Napomena o doradi"
+                  label={t("workOrders.form.finishingNote")}
                   full
                 >
                   <input
@@ -337,9 +343,9 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection title="Dokument i isporuka">
+        <FormSection title={t("workOrders.form.sectionDocument")}>
           <div className="grid grid-cols-2 gap-6">
-            <FieldShell id="billingDocumentType" label="Tip dokumenta">
+            <FieldShell id="billingDocumentType" label={t("workOrders.form.documentType")}>
               <Controller
                 name="billingDocumentType"
                 control={control}
@@ -355,26 +361,24 @@ export function WorkOrderForm({
                       aria-labelledby="billingDocumentType-label"
                       className={underlineTrigger}
                     >
-                      <SelectValue placeholder="Izaberite tip" />
+                      <SelectValue placeholder={t("workOrders.form.selectType")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
-                        Nije izabrano
+                        {t("workOrders.form.notSelected")}
                       </SelectItem>
-                      {Object.entries(WORK_ORDER_BILLING_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {BILLING_DOCUMENT_TYPES.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {getWorkOrderBillingDocumentLabel(value)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
               />
             </FieldShell>
 
-            <FieldShell id="shipping.deliveryMethod" label="Način dostave">
+            <FieldShell id="shipping.deliveryMethod" label={t("workOrders.form.deliveryMethod")}>
               <Controller
                 name="shipping.deliveryMethod"
                 control={control}
@@ -390,19 +394,17 @@ export function WorkOrderForm({
                       aria-labelledby="shipping.deliveryMethod-label"
                       className={underlineTrigger}
                     >
-                      <SelectValue placeholder="Izaberite način" />
+                      <SelectValue placeholder={t("workOrders.form.selectMethod")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
-                        Nije izabrano
+                        {t("workOrders.form.notSelected")}
                       </SelectItem>
-                      {Object.entries(WORK_ORDER_DELIVERY_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {DELIVERY_METHODS.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {getWorkOrderDeliveryLabel(value)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}
@@ -411,7 +413,7 @@ export function WorkOrderForm({
 
             <FieldShell
               id="billingDocumentNumber"
-              label="Broj dokumenta"
+              label={t("workOrders.form.documentNumber")}
             >
               <input
                 id="billingDocumentNumber"
@@ -424,7 +426,7 @@ export function WorkOrderForm({
 
             <FieldShell
               id="issueDate"
-              label="Datum izdavanja *"
+              label={t("workOrders.form.issueDate")}
               error={errors.issueDate?.message}
             >
               <Controller
@@ -435,14 +437,14 @@ export function WorkOrderForm({
                     id="issueDate"
                     value={field.value}
                     onChange={(v) => field.onChange(v ?? "")}
-                    placeholder="Datum izdavanja"
+                    placeholder={t("workOrders.form.issueDatePlaceholder")}
                     disabled={submitting}
                   />
                 )}
               />
             </FieldShell>
 
-            <FieldShell id="dueDate" label="Rok završetka">
+            <FieldShell id="dueDate" label={t("workOrders.form.dueDate")}>
               <Controller
                 name="dueDate"
                 control={control}
@@ -451,7 +453,7 @@ export function WorkOrderForm({
                     id="dueDate"
                     value={field.value}
                     onChange={(v) => field.onChange(v)}
-                    placeholder="Rok završetka"
+                    placeholder={t("workOrders.form.dueDate")}
                     disabled={submitting}
                   />
                 )}
@@ -461,7 +463,7 @@ export function WorkOrderForm({
             {showShippingAddress && (
               <FieldShell
                 id="shippingAddress"
-                label="Adresa za dostavu *"
+                label={t("workOrders.form.shippingAddress")}
                 error={errors.shipping?.shippingAddress?.message}
                 full
               >
@@ -482,15 +484,15 @@ export function WorkOrderForm({
 
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
             {[
-              { name: "shipping.hasPackaging" as const, label: "Pakovanje", id: "hasPackaging" },
-              { name: "shipping.hasLabeling" as const, label: "Označavanje", id: "hasLabeling" },
-              { name: "shipping.isFragile" as const, label: "Lomljivo", id: "isFragile" },
+              { name: "shipping.hasPackaging" as const, label: t("workOrders.form.packaging"), id: "hasPackaging" },
+              { name: "shipping.hasLabeling" as const, label: t("workOrders.form.labeling"), id: "hasLabeling" },
+              { name: "shipping.isFragile" as const, label: t("workOrders.form.fragile"), id: "isFragile" },
               {
                 name: "shipping.requiresSignature" as const,
-                label: "Potpis",
+                label: t("workOrders.form.requiresSignature"),
                 id: "requiresSignature",
               },
-              { name: "shipping.hasInsurance" as const, label: "Osiguranje", id: "hasInsurance" },
+              { name: "shipping.hasInsurance" as const, label: t("workOrders.form.insurance"), id: "hasInsurance" },
             ].map((opt) => (
               <Controller
                 key={opt.id}
@@ -516,11 +518,11 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection title="Finansije i napomena">
+        <FormSection title={t("workOrders.form.sectionFinanceNotes")}>
           <div className="grid grid-cols-2 gap-6">
             <FieldShell
               id="price"
-              label="Cena (RSD)"
+              label={t("workOrders.form.price")}
               error={errors.price?.message}
             >
               <input
@@ -535,7 +537,7 @@ export function WorkOrderForm({
             </FieldShell>
 
             {isEdit && (
-              <FieldShell id="executedBy" label="Izvršilac">
+              <FieldShell id="executedBy" label={t("workOrders.form.executedBy")}>
                 <input
                   id="executedBy"
                   className={underlineInput}
@@ -546,12 +548,12 @@ export function WorkOrderForm({
               </FieldShell>
             )}
 
-            <FieldShell id="note" label="Napomena" full>
+            <FieldShell id="note" label={t("workOrders.form.note")} full>
               <textarea
                 id="note"
                 rows={3}
                 className={`w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground`}
-                placeholder="Dodatne napomene za operatera…"
+                placeholder={t("workOrders.form.notePlaceholder")}
                 {...register("note", {
                   setValueAs: (v: string) => (v === "" ? null : v),
                 })}
@@ -571,7 +573,7 @@ export function WorkOrderForm({
             className="iris-focusable iris-press flex items-center justify-center gap-2 bg-foreground px-4 py-[11px] text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90 disabled:opacity-60"
           >
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Sačuvaj nalog
+            {t("workOrders.form.submit")}
           </button>
           <button
             type="button"
@@ -579,7 +581,7 @@ export function WorkOrderForm({
             disabled={submitting}
             className="iris-focusable iris-press bg-transparent py-2 text-[11px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
           >
-            Odustani
+            {t("workOrders.form.cancel")}
           </button>
         </div>
       </aside>
@@ -593,6 +595,7 @@ interface SummaryPanelProps {
 }
 
 function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
+  const { t } = useTranslation();
   const clientName = watch("clientName");
   const jobDescription = watch("jobDescription");
   const billingDocumentType = watch("billingDocumentType");
@@ -602,21 +605,26 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
   const dueDate = watch("dueDate");
 
   const rows: Array<[string, string]> = [
-    ["Klijent", clientName || "-"],
-    ["Opis", jobDescription || "-"],
+    [t("workOrders.summary.client"), clientName || "-"],
+    [t("workOrders.summary.description"), jobDescription || "-"],
     [
-      "Tip dokumenta",
-      billingDocumentType ? WORK_ORDER_BILLING_LABELS[billingDocumentType] : "-",
+      t("workOrders.summary.documentType"),
+      billingDocumentType
+        ? getWorkOrderBillingDocumentLabel(billingDocumentType)
+        : "-",
     ],
-    ["Dostava", deliveryMethod ? WORK_ORDER_DELIVERY_LABELS[deliveryMethod] : "-"],
-    ["Datum izdavanja", issueDate ? formatWorkOrderDate(issueDate) : "-"],
-    ["Rok", dueDate ? formatWorkOrderDate(dueDate) : "-"],
+    [
+      t("workOrders.summary.delivery"),
+      deliveryMethod ? getWorkOrderDeliveryLabel(deliveryMethod) : "-",
+    ],
+    [t("workOrders.summary.issueDate"), issueDate ? formatWorkOrderDate(issueDate) : "-"],
+    [t("workOrders.summary.dueDate"), dueDate ? formatWorkOrderDate(dueDate) : "-"],
   ];
 
   return (
     <>
       <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-        Pregled naloga
+        {t("workOrders.summary.title")}
       </div>
       <div className="flex flex-col gap-3 text-[12px]">
         {rows.map(([k, v]) => (
@@ -631,11 +639,11 @@ function SummaryPanel({ watch, isEdit }: SummaryPanelProps): React.JSX.Element {
 
       <div className="mt-6 border-t border-border pt-5">
         <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          Procena
+          {t("workOrders.summary.estimate")}
         </div>
         <div className="flex items-baseline justify-between">
           <span className="text-[12px] text-[color:var(--iris-ink-soft)]">
-            {isEdit ? "Cena" : "Ukupno"}
+            {isEdit ? t("workOrders.summary.price") : t("workOrders.summary.total")}
           </span>
           <span className="tnum text-[22px] font-normal tracking-[-0.3px] text-foreground">
             {formatWorkOrderPrice(price ?? null)}

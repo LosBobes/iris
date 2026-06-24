@@ -5,6 +5,7 @@ import type {
   BillingDocumentType,
   DeliveryMethod,
 } from "@/types/work-order";
+import i18n from "@/i18n";
 
 export type SortField =
   | "orderNumber"
@@ -78,7 +79,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
       const data = await window.api.getWorkOrders();
       setOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nepoznata greška");
+      setError(err instanceof Error ? err.message : i18n.t("common.unknownError"));
     } finally {
       setLoading(false);
     }

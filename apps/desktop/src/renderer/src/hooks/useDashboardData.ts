@@ -7,6 +7,7 @@ import {
   monthlyBuckets,
   topClients
 } from '@/lib/dashboard/aggregations'
+import i18n from '@/i18n'
 
 const DEFAULT_FILTERS: DashboardFilters = {
   dateFrom: null,
@@ -29,7 +30,7 @@ export function useDashboardData() {
       })
       .catch((err: unknown) => {
         setError(
-          err instanceof Error ? err.message : 'Greška pri učitavanju podataka.'
+          err instanceof Error ? err.message : i18n.t('common.loadDataError')
         )
       })
       .finally(() => setLoading(false))

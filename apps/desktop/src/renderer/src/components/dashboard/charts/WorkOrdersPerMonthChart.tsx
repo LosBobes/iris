@@ -7,6 +7,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { useTranslation } from 'react-i18next'
+import i18n from '@/i18n'
 import { formatMonthLabel, resolveChartMonths } from './utils'
 
 interface WorkOrdersPerMonthChartProps {
@@ -15,7 +17,10 @@ interface WorkOrdersPerMonthChartProps {
 
 // Serbian count noun: "1 nalog", "2 naloga", "14 naloga", "21 nalog".
 function workOrderCountNoun(count: number): string {
-  return count % 10 === 1 && count % 100 !== 11 ? 'nalog' : 'naloga'
+  const singular = count % 10 === 1 && count % 100 !== 11
+  return singular
+    ? i18n.t('dashboard.charts.orderNounSingular')
+    : i18n.t('dashboard.charts.orderNounPlural')
 }
 
 interface MonthTooltipProps {
@@ -42,6 +47,7 @@ function MonthTooltip({
 export function WorkOrdersPerMonthChart({
   monthlyOrders,
 }: WorkOrdersPerMonthChartProps): React.JSX.Element {
+  const { t } = useTranslation()
   const chartMonths = resolveChartMonths(monthlyOrders.map(({ month }) => month))
   const ordersLookup = new Map(monthlyOrders.map(({ month, count }) => [month, count]))
   const data = chartMonths.map((month) => {
@@ -54,7 +60,7 @@ export function WorkOrdersPerMonthChart({
   return (
     <div className="rounded-lg border border-border bg-card p-6">
       <h2 className="mb-5 text-sm font-medium text-card-foreground">
-        Radni nalozi po mesecu
+        {t('dashboard.charts.ordersPerMonth')}
       </h2>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>

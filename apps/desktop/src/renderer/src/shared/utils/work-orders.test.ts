@@ -1,7 +1,4 @@
 import {
-  WORK_ORDER_BILLING_LABELS,
-  WORK_ORDER_DELIVERY_LABELS,
-  WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_STATUS_VARIANTS,
   WORK_ORDER_SELECT_NONE_VALUE,
   canToggleWorkOrderCompletion,
@@ -9,14 +6,17 @@ import {
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
   getLocalIsoDate,
+  getWorkOrderBillingDocumentLabel,
+  getWorkOrderDeliveryLabel,
+  getWorkOrderStatusLabel,
 } from "./work-orders";
 
 describe("work-order shared utils", () => {
-  it("exposes the select sentinel and label maps", () => {
+  it("exposes the select sentinel and i18n-backed labels", () => {
     expect(WORK_ORDER_SELECT_NONE_VALUE).toBe("__none__");
-    expect(WORK_ORDER_BILLING_LABELS.invoice).toBe("Faktura");
-    expect(WORK_ORDER_DELIVERY_LABELS.pickup).toBe("Lično preuzimanje");
-    expect(WORK_ORDER_STATUS_LABELS.completed).toBe("Završen");
+    expect(getWorkOrderBillingDocumentLabel("invoice")).toBe("Faktura");
+    expect(getWorkOrderDeliveryLabel("pickup")).toBe("Lično preuzimanje");
+    expect(getWorkOrderStatusLabel("completed")).toBe("Završen");
     expect(WORK_ORDER_STATUS_VARIANTS.cancelled).toBe("destructive");
   });
 
