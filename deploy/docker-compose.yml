@@ -1,0 +1,61 @@
+# Deployment compose for the Iris stack on the client's Windows Server.
+#
+# This runs Linux containers (Docker with the WSL2 backend). The server tracks
+# the :latest tags and updates on a schedule via deploy/update.ps1, which runs
+# `docker compose pull` then `docker compose up -d` from this directory.
+#
+# The `build:` blocks let `docker compose build` work from a clean checkout
+# (CI and local dev); on the deployed server only `image:` is used, since the
+# server pulls prebuilt images from GHCR instead of building.
+#
+# Build context is the repository root (..), one level up from this file.
+
+services:
+  backend:
+    image: ghcr.io/losbobes/iris-backend:latest
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      IRIS_ENV: "${IRIS_ENV:-production}"
+      # IRIS_SESSION_SECRET must be a strong random value in production.
+      # TODO: set a real secret on the server (e.g. via a .env file next to
+      # this compose, which is gitignored). Never commit the real value.
+      IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:-CHANGE_ME_IN_PRODUCTION}"
+      DATABASE_PATH: "/data/iris.db"
+      # Same-origin: the browser hits nginx, which proxies /api/ to this
+      # service, so no cross-origin allow-list is required.
+      IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-}"
+    # Internal only: the backend is never published to the LAN directly.
+    # nginx (frontend) reaches it over the compose network on this port.
+    expose:
+      - "8080"
+    volumes:
+      # SQLite database persists here. This named volume survives every
+      # container recreate during an update; only `docker compose down -v`
+      # would delete it.
+      - iris_sqlite_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    image: ghcr.io/losbobes/iris-frontend:latest
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    # The only inbound port published to the LAN. Outbound HTTPS to ghcr.io
+    # (for image pulls) is independent and needs no inbound publishing.
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  iris_sqlite_data:
