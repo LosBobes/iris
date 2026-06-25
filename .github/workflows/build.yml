@@ -1,0 +1,66 @@
+name: Build and push images
+
+# Build both app images and push them to GHCR on every push to main.
+# Each image gets :latest (which the server tracks) plus an immutable
+# version tag (git-<sha7>, and a semver tag when a v* git tag is pushed)
+# so a known-good build can always be pinned for rollback.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - name: backend
+            dockerfile: backend/Dockerfile
+          - name: frontend
+            dockerfile: frontend/Dockerfile
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compute image name and tags
+        id: meta
+        run: |
+          owner_lc="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner_lc}/iris-${{ matrix.image.name }}"
+          sha7="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+
+          # Always publish :latest and an immutable :git-<sha7> tag.
+          tags="${image}:latest"$'\n'"${image}:git-${sha7}"
+
+          # On a semver git tag (refs/tags/v1.4.2), also publish :1.4.2.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            tags="${tags}"$'\n'"${image}:${version}"
+          fi
+
+          {
+            echo "tags<<EOF"
+            echo "${tags}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.image.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
