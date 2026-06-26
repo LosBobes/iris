@@ -33,7 +33,7 @@ Images (published to GHCR as **public** packages, so pulling needs no login):
 
 ### 2. Confirm registry access
 
-The GHCR packages are **public**, so the server can pull them anonymously — no
+The GHCR packages are **public**, so the server can pull them anonymously. No
 `docker login` and no access token are required. The only requirement is
 **outbound HTTPS to `ghcr.io`**. This is independent of the inbound LAN access;
 do not add any inbound port publishing beyond the frontend's `80:80`.
@@ -46,9 +46,9 @@ docker pull ghcr.io/losbobes/iris-frontend:latest
 
 > Note: if the packages are ever switched back to **private**, the server must
 > authenticate before it can pull. In that case, log in once with a GitHub
-> personal access token (classic) that has the `read:packages` scope —
+> personal access token (classic) that has the `read:packages` scope. Run
 > `docker login ghcr.io -u <github-username>` and paste the token as the
-> password — which stores the credentials so the scheduled task can pull
+> password, which stores the credentials so the scheduled task can pull
 > without prompting. If pulls start failing after that, an expired or revoked
 > token is the first thing to check.
 
@@ -65,6 +65,37 @@ it:
 Optionally create a `.env` file next to `docker-compose.yml` to set
 `IRIS_SESSION_SECRET` (a strong random value) and `IRIS_ENV=production`. Do not
 commit that file; it stays only on the server.
+
+### 3a. (Optional) Seed the database from an existing SQLite file
+
+If you already have a SQLite database you want to start from, place it into the
+`iris_sqlite_data` volume as `/data/iris.db` **before the backend first starts**.
+The backend opens (and, if missing, creates) the database at that path, so the
+seed must be in place first. The file must be a database produced by this same
+app version, since the backend runs migrations against whatever it finds.
+
+1. Copy your seed file into the deploy directory, for example as `seed.db`:
+   ```powershell
+   cd C:\apps\iris
+   copy <path-to-your>\iris.db .\seed.db
+   ```
+2. If the stack is already running, stop it first (this keeps the volume):
+   ```powershell
+   docker compose down
+   ```
+3. Write the seed file into the volume as `/data/iris.db`. The backend runs as
+   uid `65532`, so set ownership to match:
+   ```powershell
+   docker run --rm -v iris_iris_sqlite_data:/data -v ${PWD}:/seed alpine `
+     sh -c "cp /seed/seed.db /data/iris.db && chown 65532:65532 /data/iris.db"
+   ```
+   The volume is named `<project>_iris_sqlite_data`, where `<project>` is the
+   deploy folder name (so `iris_iris_sqlite_data` for `C:\apps\iris`). Confirm
+   the exact name with `docker volume ls` if unsure.
+
+After this, continue with the start step below. To **replace** the database on
+a server that is already live, run the same steps (stop, copy in, then
+`docker compose up -d`); the new `iris.db` overwrites the old one.
 
 Pull and start the stack once to verify:
 
