@@ -14,7 +14,7 @@ The stack is two services (see `docker-compose.yml`):
 - `backend`: the Go API, internal only (not published), with the SQLite
   database stored in the `iris_sqlite_data` named volume.
 
-Images:
+Images (published to GHCR as **public** packages, so pulling needs no login):
 
 - `ghcr.io/losbobes/iris-backend:latest`
 - `ghcr.io/losbobes/iris-frontend:latest`
@@ -31,26 +31,26 @@ Images:
    ```
    This must print `linux`.
 
-### 2. Log in to GHCR
+### 2. Confirm registry access
 
-The GHCR packages are private, so the server must authenticate before it can
-pull. Use a GitHub personal access token (classic) with the `read:packages`
-scope:
+The GHCR packages are **public**, so the server can pull them anonymously — no
+`docker login` and no access token are required. The only requirement is
+**outbound HTTPS to `ghcr.io`**. This is independent of the inbound LAN access;
+do not add any inbound port publishing beyond the frontend's `80:80`.
+
+You can verify access from the server without starting the stack:
 
 ```powershell
-docker login ghcr.io -u <github-username>
-# paste the personal access token when prompted for a password
+docker pull ghcr.io/losbobes/iris-frontend:latest
 ```
 
-This stores the credentials so the scheduled task can pull without prompting.
-
-Note: if pulls start failing later (the scheduled task stops updating), an
-expired or revoked token is the first thing to check. Re-run `docker login`
-with a fresh token.
-
-The server needs **outbound HTTPS to `ghcr.io`** to pull images. This is
-independent of the inbound LAN access; do not add any inbound port publishing
-beyond the frontend's `80:80`.
+> Note: if the packages are ever switched back to **private**, the server must
+> authenticate before it can pull. In that case, log in once with a GitHub
+> personal access token (classic) that has the `read:packages` scope —
+> `docker login ghcr.io -u <github-username>` and paste the token as the
+> password — which stores the credentials so the scheduled task can pull
+> without prompting. If pulls start failing after that, an expired or revoked
+> token is the first thing to check.
 
 ### 3. Copy the deploy files to the server
 
