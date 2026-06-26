@@ -66,6 +66,14 @@ Optionally create a `.env` file next to `docker-compose.yml` to set
 `IRIS_SESSION_SECRET` (a strong random value) and `IRIS_ENV=production`. Do not
 commit that file; it stays only on the server.
 
+Error reporting goes to Sentry. The DSN is baked into the published backend
+image at build time, from the `SENTRY_DSN` GitHub Actions secret, so it works
+with no server config. To point at a different Sentry project or disable it,
+uncomment the `SENTRY_DSN` line in `docker-compose.yml` and set it in the
+`.env` file (an empty value disables Sentry, since the backend enables it only
+on a non-empty DSN). You can also set `IRIS_RELEASE` (for example the deployed
+git sha) so events are tagged with a version.
+
 ### 3a. (Optional) Seed the database from an existing SQLite file
 
 If you already have a SQLite database you want to start from, place it into the

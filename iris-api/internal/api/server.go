@@ -18,6 +18,7 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/store"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 )
 
 // Server owns the HTTP layer for the Iris API.
@@ -71,6 +72,11 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// Report panics to Sentry, then re-panic so chi's Recoverer still writes
+	// the 500. This is a no-op when Sentry was not initialized (no DSN), so it
+	// is always safe to register. Must sit inside Recoverer so it sees the
+	// panic before Recoverer swallows it.
+	r.Use(sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle)
 	r.Use(s.corsMiddleware)
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {

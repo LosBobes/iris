@@ -64,3 +64,8 @@ jobs:
           file: ${{ matrix.image.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          # Bake the Sentry DSN into the backend image. The frontend Dockerfile
+          # ignores this build-arg (it does not declare it), so passing it for
+          # both matrix entries is harmless.
+          build-args: |
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}

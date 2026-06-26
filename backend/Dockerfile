@@ -34,10 +34,17 @@ RUN apk add --no-cache ca-certificates \
 # Copy only the compiled binary from the build stage.
 COPY --from=build /out/iris-api /usr/local/bin/iris-api
 
+# Sentry DSN baked in at build time from the SENTRY_DSN GitHub Actions secret
+# (see .github/workflows/build.yml). A DSN is an ingestion key, not a secret,
+# so embedding it in the image is fine; runtime env can still override it, and
+# leaving it empty disables Sentry. Empty by default for local/source builds.
+ARG SENTRY_DSN=""
+
 # The SQLite database lives under /data, which is backed by a named volume so
 # it survives container recreation (see docker-compose.yml).
 ENV IRIS_API_ADDR=":8080" \
-    DATABASE_PATH="/data/iris.db"
+    DATABASE_PATH="/data/iris.db" \
+    SENTRY_DSN="${SENTRY_DSN}"
 
 USER nonroot
 

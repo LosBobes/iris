@@ -10,6 +10,7 @@ import (
 
 	"github.com/LosBobes/iris/iris-api/internal/api"
 	"github.com/LosBobes/iris/iris-api/internal/store"
+	"github.com/getsentry/sentry-go"
 )
 
 const defaultDatabasePath = "./data/iris.db"
@@ -26,6 +27,24 @@ const defaultDatabasePath = "./data/iris.db"
 func main() {
 	ctx := context.Background()
 	env := getenv("IRIS_ENV", "development")
+
+	// Error reporting is optional: Sentry is only initialized when SENTRY_DSN
+	// is set, so local/dev runs without it stay silent. Flushing happens in
+	// the HTTP middleware per request; the deferred Flush here covers any
+	// events captured outside a request before the process exits.
+	if dsn := strings.TrimSpace(os.Getenv("SENTRY_DSN")); dsn != "" {
+		if err := sentry.Init(sentry.ClientOptions{
+			Dsn:         dsn,
+			Environment: env,
+			Release:     os.Getenv("IRIS_RELEASE"),
+		}); err != nil {
+			log.Printf("sentry.Init: %s", err)
+		} else {
+			defer sentry.Flush(2 * time.Second)
+			log.Printf("sentry error reporting enabled (environment=%s)", env)
+		}
+	}
+
 	dbPath, explicitDBPath := databasePathFromEnv(env)
 	sessionSecret := os.Getenv("IRIS_SESSION_SECRET")
 	if env == "production" {

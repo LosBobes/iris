@@ -27,6 +27,16 @@ services:
       # Same-origin: the browser hits nginx, which proxies /api/ to this
       # service, so no cross-origin allow-list is required.
       IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-}"
+      # Error reporting (Sentry). The DSN is baked into the published backend
+      # image at build time from the SENTRY_DSN GitHub Actions secret, so it
+      # works with no server config and is intentionally NOT set here: an
+      # explicit value (even empty) would override the baked-in one. To point
+      # at a different project or disable Sentry, uncomment and set it below
+      # (an empty value disables Sentry, since it initializes only on a
+      # non-empty DSN):
+      # SENTRY_DSN: "${SENTRY_DSN:-}"
+      # Optional release identifier shown in Sentry (e.g. the git sha or tag).
+      IRIS_RELEASE: "${IRIS_RELEASE:-}"
     # Internal only: the backend is never published to the LAN directly.
     # nginx (frontend) reaches it over the compose network on this port.
     expose:
