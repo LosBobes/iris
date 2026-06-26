@@ -53,8 +53,6 @@ Work orders progress sequentially through a defined lifecycle. Transitions are s
 | `new` | `Nov` | Initial state. Order is created but operator has not been assigned. |
 | `assigned` | `Dodeljen` | Operator assigned and target scheduled date set. |
 | `inProgress` | `U toku` | Physical production is currently active on the shop floor. |
-| `waitingForCustomer` | `Čeka klijenta` | Production paused awaiting print proof approvals or sign-offs. |
-| `waitingForMaterials` | `Čeka materijal` | Production paused awaiting supply arrivals. |
 | `completed` | `Završen` | Physical work finished. Eligible to move to billing. |
 | `cancelled` | `Otkazan` | Job aborted. Terminal status. |
 | `invoiced` | `Fakturisan` | Job invoiced. Invoice draft compiled. Terminal status. |

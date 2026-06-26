@@ -1,9 +1,24 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Coins, Copy, FileText, Loader2, Trash2, X } from "lucide-react";
+import i18n from "@/i18n";
+import {
+  ArrowLeft,
+  Ban,
+  Coins,
+  Copy,
+  Download,
+  Eye,
+  Files,
+  Loader2,
+  Pencil,
+  Printer,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import { CancelWorkOrderDialog } from "@/components/WorkOrders/CancelWorkOrderDialog";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
@@ -16,6 +31,7 @@ import {
   getWorkOrderDeliveryLabel,
   getWorkOrderStatusLabel,
   getPrimaryWorkOrderTransition,
+  getAllowedWorkOrderTransitions,
   formatWorkOrderEventLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
@@ -24,6 +40,25 @@ import {
   getWorkOrderCustomerNextStep,
 } from "@/shared/utils/work-orders";
 
+
+/**
+ * Masks the monetary *amount* in a price-change timeline event for non-admin
+ * operators: they still see that the price was entered/changed (lifecycle), just
+ * not the figure. The stored label is "Cena: <before> → <after>" (see diffPrice
+ * in the store); "—" on the before side means the price was set for the first
+ * time. Cost-workflow markers ("Čeka unos troška", "Trošak unet") carry no
+ * figure already, so they pass through unchanged. Returns the original label for
+ * every non-price event.
+ */
+function maskMoneyTimelineLabel(label: string, kind: string): string {
+  if (kind !== "change" || !label.startsWith("Cena:")) return label;
+  const arrow = label.indexOf(" → ");
+  const before = (arrow === -1 ? label.slice(5) : label.slice(5, arrow)).trim();
+  const firstTime = before === "" || before === "—";
+  return i18n.t(
+    firstTime ? "workOrders.detail.priceEntered" : "workOrders.detail.priceChanged",
+  );
+}
 
 // Renders a timeline label. Field-change events arrive as
 // "<polje>: <pre> → <posle>"; we style the before/after so the diff reads at a
@@ -108,10 +143,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   // Deleting is admin-only on the API; gate the button to match.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
+  const canCancelOrder = order
+    ? getAllowedWorkOrderTransitions(order.status).includes("cancelled")
+    : false;
 
   const handleAdvanceStatus = async (): Promise<void> => {
     if (!order) return;
@@ -138,6 +177,26 @@ function WorkOrderDetailPage(): React.JSX.Element {
       );
     } catch {
       toast.error(t("workOrders.toast.statusError"));
+    }
+  };
+
+  const handleCancelConfirm = async (): Promise<void> => {
+    if (!order) return;
+    try {
+      const updated = await window.api.updateWorkOrder(order.id, {
+        status: "cancelled",
+      });
+      if (!updated) {
+        toast.error(t("workOrders.toast.notFound"));
+        return;
+      }
+      setOrder(updated);
+      setCancelOpen(false);
+      toast.success(
+        t("workOrders.toast.cancelled", { order: updated.orderNumber }),
+      );
+    } catch {
+      toast.error(t("workOrders.toast.cancelError"));
     }
   };
 
@@ -245,12 +304,12 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   <span className="text-foreground">{order.clientName}</span>
                 </div>
               </div>
-              <div className="flex flex-wrap justify-end gap-1.5">
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
                 {getPrimaryWorkOrderTransition(order.status) && (
                   <button
                     type="button"
                     onClick={() => void handleAdvanceStatus()}
-                    className="iris-focusable iris-press border border-[color:var(--iris-accent)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/10"
+                    className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-accent)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/10"
                   >
                     {t("workOrders.detail.moveTo")}{" "}
                     {getWorkOrderStatusLabel(
@@ -261,40 +320,48 @@ function WorkOrderDetailPage(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => void printWorkOrder(order)}
-                  className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                  title={t("workOrders.detail.print")}
+                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
                 >
+                  <Printer className="h-3.5 w-3.5" />
                   {t("workOrders.detail.print")}
                 </button>
                 <button
                   type="button"
                   onClick={() => openWorkOrderPdf(order.id)}
-                  className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                  title={t("workOrders.detail.pdf")}
+                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
                 >
+                  <Download className="h-3.5 w-3.5" />
                   {t("workOrders.detail.pdf")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setPreviewOpen((open) => !open)}
                   aria-pressed={previewOpen}
-                  className={`iris-focusable iris-press flex items-center gap-1 border px-3 py-[7px] text-[12px] ${
+                  title={t("workOrders.detail.preview")}
+                  className={`iris-focusable iris-press flex items-center gap-1.5 border px-3 py-2 text-[12px] font-medium tracking-[0.3px] ${
                     previewOpen
                       ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
-                      : "border-border bg-transparent text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                      : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
                   }`}
                 >
-                  <FileText className="h-3 w-3" />
+                  <Eye className="h-3.5 w-3.5" />
                   {t("workOrders.detail.preview")}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     void navigator.clipboard?.writeText(
-                      window.api.getPublicTrackingUrl(order.communication.publicToken),
+                      window.api.getPublicTrackingUrl(
+                        order.communication.publicToken,
+                      ),
                     );
                   }}
-                  className="iris-focusable iris-press flex items-center gap-1 border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                  title={t("workOrders.detail.publicLink")}
+                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
                 >
-                  <Copy className="h-3 w-3" />
+                  <Copy className="h-3.5 w-3.5" />
                   {t("workOrders.detail.publicLink")}
                 </button>
                 <button
@@ -304,27 +371,48 @@ function WorkOrderDetailPage(): React.JSX.Element {
                       state: { duplicateFrom: order },
                     })
                   }
-                  className="iris-focusable iris-press border border-border bg-transparent px-3 py-[7px] text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground"
+                  title={t("workOrders.detail.duplicate")}
+                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
                 >
+                  <Files className="h-3.5 w-3.5" />
                   {t("workOrders.detail.duplicate")}
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate(`/work-orders/${order.id}/edit`)}
-                  className="iris-focusable iris-press bg-foreground px-3.5 py-[7px] text-[12px] font-medium text-background hover:bg-foreground/90"
+                  className="iris-focusable iris-press flex items-center gap-1.5 bg-foreground px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
                 >
+                  <Pencil className="h-3.5 w-3.5" />
                   {t("common.edit")}
                 </button>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteOpen(true)}
-                    aria-label={t("common.delete")}
-                    className="iris-focusable iris-press flex items-center gap-1 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-[7px] text-[12px] font-medium text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {t("common.delete")}
-                  </button>
+                {/* Destructive actions grouped together behind a divider so
+                    cancel + delete read as one "danger" cluster, not scattered. */}
+                {(canCancelOrder || isAdmin) && (
+                  <div className="flex items-center gap-1.5 sm:ml-1 sm:border-l sm:border-border sm:pl-2.5">
+                    {canCancelOrder && (
+                      <button
+                        type="button"
+                        onClick={() => setCancelOpen(true)}
+                        title={t("workOrders.detail.cancelOrder")}
+                        className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                      >
+                        <Ban className="h-3.5 w-3.5" />
+                        {t("workOrders.detail.cancelOrder")}
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteOpen(true)}
+                        aria-label={t("common.delete")}
+                        title={t("common.delete")}
+                        className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {t("common.delete")}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -377,6 +465,12 @@ function WorkOrderDetailPage(): React.JSX.Element {
         </AppShell>
       </div>
       {order && <WorkOrderPrintSheet order={order} locations={locations} />}
+      <CancelWorkOrderDialog
+        orderNumber={order?.orderNumber ?? ""}
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        onConfirm={() => void handleCancelConfirm()}
+      />
       <DeleteWorkOrderDialog
         orderNumber={order?.orderNumber ?? ""}
         open={deleteOpen}
@@ -426,13 +520,18 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     state: "done" | "current" | "pending";
   }> =
     order.events.length > 0
-      ? order.events.map((event, index) => ({
-          time: formatWorkOrderDateTime(event.createdAt),
-          label: formatWorkOrderEventLabel(event.label, event.kind),
-          kind: event.kind,
-          who: event.actor,
-          state: index === order.events.length - 1 ? "current" : "done",
-        }))
+      ? order.events.map((event, index) => {
+          // Operators keep every event but never see the price amount — the
+          // price-change label is replaced with an amount-free marker.
+          const formatted = formatWorkOrderEventLabel(event.label, event.kind);
+          return {
+            time: formatWorkOrderDateTime(event.createdAt),
+            label: isAdmin ? formatted : maskMoneyTimelineLabel(formatted, event.kind),
+            kind: event.kind,
+            who: event.actor,
+            state: index === order.events.length - 1 ? "current" : "done",
+          };
+        })
       : [
           {
             time: formatWorkOrderDateTime(order.createdAt),
@@ -447,16 +546,16 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     <>
       <CustomerSummaryPanel order={order} />
 
-      <div className="grid grid-cols-7 border-b border-border bg-card">
-        {metaCells.map(([k, v], i) => (
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] border-b border-border bg-card">
+        {metaCells.map(([k, v]) => (
           <div
             key={k}
-            className={`px-6 py-4 ${i < metaCells.length - 1 ? "border-r border-[color:var(--iris-border-soft)]" : ""}`}
+            className="min-w-0 border-r border-b border-[color:var(--iris-border-soft)] px-6 py-4"
           >
             <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
               {k}
             </div>
-            <div className="tnum mt-1.5 text-[14px] text-foreground">{v}</div>
+            <div className="tnum mt-1.5 break-words text-[14px] text-foreground">{v}</div>
           </div>
         ))}
       </div>

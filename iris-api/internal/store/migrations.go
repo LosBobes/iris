@@ -249,6 +249,48 @@ ALTER TABLE work_orders ADD COLUMN needs_cost_review INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_work_orders_needs_cost_review ON work_orders(needs_cost_review);
 `
 
+// customerContactsMigration adds the 1-N child tables for a firm's corporate
+// emails and contact people. The legacy single contact_name/email/phone columns
+// on customers are retained for back-compat and backfilled into the new tables
+// (one email row, one contact row) so existing records keep their data.
+const customerContactsMigration = `
+CREATE TABLE IF NOT EXISTS customer_emails (
+	id TEXT PRIMARY KEY,
+	customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+	email TEXT NOT NULL,
+	label TEXT,
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_emails_customer ON customer_emails(customer_id);
+
+CREATE TABLE IF NOT EXISTS customer_contacts (
+	id TEXT PRIMARY KEY,
+	customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+	name TEXT NOT NULL,
+	email TEXT,
+	phone TEXT,
+	role TEXT,
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_contacts_customer ON customer_contacts(customer_id);
+
+INSERT INTO customer_emails(id, customer_id, email, sort_order)
+SELECT 'cem-' || id, id, email, 0
+FROM customers
+WHERE email IS NOT NULL AND TRIM(email) <> '';
+
+INSERT INTO customer_contacts(id, customer_id, name, email, phone, sort_order)
+SELECT 'cct-' || id, id, contact_name, email, phone, 0
+FROM customers
+WHERE contact_name IS NOT NULL AND TRIM(contact_name) <> '';
+`
+
 // sqliteMigrations is the ordered list of schema versions. Each entry is applied
 // once, in order, and recorded in schema_migrations so existing databases pick
 // up later versions on the next startup.
@@ -264,6 +306,7 @@ var sqliteMigrations = []struct {
 	{version: 6, sql: appSettingsMigration},
 	{version: 7, sql: catalogCostHistoryMigration},
 	{version: 8, sql: workOrderCostReviewMigration},
+	{version: 9, sql: customerContactsMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

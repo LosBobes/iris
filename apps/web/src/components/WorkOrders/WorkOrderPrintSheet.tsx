@@ -6,6 +6,9 @@ import type {
   WorkOrder,
 } from "@/types/work-order";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
+import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
 
 interface PrintCheckRow {
@@ -118,7 +121,7 @@ function jobDetailsHasContent(
   );
 }
 
-export function buildPrintJobLines(order: WorkOrder): string[] {
+export function buildPrintJobLines(order: WorkOrder, includePrice = true): string[] {
   const details = order.jobDetails;
   const detailLines = jobDetailsHasContent(details)
     ? [
@@ -141,7 +144,10 @@ export function buildPrintJobLines(order: WorkOrder): string[] {
           Boolean(line),
         );
 
-  const price = formatPrintPrice(order.price);
+  // Operators never see money: skip the price line on their printout. (The
+  // server-rendered PDF/HTML strips it too; this covers a browser Ctrl+P of the
+  // client-rendered sheet.)
+  const price = includePrice ? formatPrintPrice(order.price) : null;
   if (price) lines.push(price);
 
   return lines.length > 0
@@ -177,7 +183,9 @@ export function WorkOrderPrintSheet({
   locations?: Location[];
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const jobLines = buildPrintJobLines(order);
+  const { currentUser } = useAuth();
+  const { pdfSections } = useOrganization();
+  const jobLines = buildPrintJobLines(order, currentUser.role === "admin");
   const deliveryRows = getPrintDeliveryRows(order.shipping);
   const billingRows = getPrintBillingRows(order.billingDocumentType);
   const noteLines = buildPrintNoteLines(order);
@@ -193,7 +201,12 @@ export function WorkOrderPrintSheet({
     >
       <h1 className="work-order-print-title">{t("workOrders.print.title")}</h1>
 
-      <div className="work-order-print-hero">
+      <div
+        className={cn(
+          "work-order-print-hero",
+          !pdfSections.delivery && "work-order-print-hero-solo",
+        )}
+      >
         <div className="work-order-print-main-panel">
           <div className="work-order-print-top-grid">
             <div className="work-order-print-client-box">
@@ -231,85 +244,99 @@ export function WorkOrderPrintSheet({
           </div>
         </div>
 
-        <div className="work-order-print-delivery-box">
-          {deliveryRows.map((row) => (
-            <div className="work-order-print-check-row" key={row.label}>
-              <span>{row.label}</span>
-              <PrintCheckBox checked={row.checked} />
-            </div>
-          ))}
-          <div className="work-order-print-empty-field" />
-        </div>
+        {pdfSections.delivery && (
+          <div className="work-order-print-delivery-box">
+            {deliveryRows.map((row) => (
+              <div className="work-order-print-check-row" key={row.label}>
+                <span>{row.label}</span>
+                <PrintCheckBox checked={row.checked} />
+              </div>
+            ))}
+            <div className="work-order-print-empty-field" />
+          </div>
+        )}
       </div>
 
       <div className="work-order-print-document-row">
         <div className="work-order-print-planned-date">
           {formatOptionalDate(plannedDate)}
         </div>
-        <div className="work-order-print-billing-box">
-          {billingRows.map((row) => (
-            <div className="work-order-print-billing-row" key={row.label}>
-              <span>{row.label}</span>
-              <span className="work-order-print-mark">
-                {row.checked ? "X" : ""}
-              </span>
-            </div>
-          ))}
-        </div>
+        {pdfSections.billing && (
+          <div className="work-order-print-billing-box">
+            {billingRows.map((row) => (
+              <div className="work-order-print-billing-row" key={row.label}>
+                <span>{row.label}</span>
+                <span className="work-order-print-mark">
+                  {row.checked ? "X" : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="work-order-print-notes-row">
-        <div className="work-order-print-note-box">
-          <div className="work-order-print-label">
-            {t("workOrders.print.note")}
-          </div>
-          <div className="work-order-print-note-lines">
-            {noteLines.length > 0
-              ? noteLines.map((line) => <div key={line}>{line}</div>)
-              : null}
-          </div>
-        </div>
-        <div className="work-order-print-address-box">
-          <div className="work-order-print-label">
-            {t("workOrders.print.shipTo")}
-          </div>
-          {shippingAddress && (
-            <div className="work-order-print-address">{shippingAddress}</div>
+      {(pdfSections.notes || pdfSections.shippingAddress) && (
+        <div className="work-order-print-notes-row">
+          {pdfSections.notes && (
+            <div className="work-order-print-note-box">
+              <div className="work-order-print-label">
+                {t("workOrders.print.note")}
+              </div>
+              <div className="work-order-print-note-lines">
+                {noteLines.length > 0
+                  ? noteLines.map((line) => <div key={line}>{line}</div>)
+                  : null}
+              </div>
+            </div>
+          )}
+          {pdfSections.shippingAddress && (
+            <div className="work-order-print-address-box">
+              <div className="work-order-print-label">
+                {t("workOrders.print.shipTo")}
+              </div>
+              {shippingAddress && (
+                <div className="work-order-print-address">{shippingAddress}</div>
+              )}
+            </div>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="work-order-print-completion-row">
-        <div className="work-order-print-completion-state">
-          <span>{t("workOrders.print.completed")}</span>
-          <PrintCheckBox checked={completed} />
+      {pdfSections.completion && (
+        <div className="work-order-print-completion-row">
+          <div className="work-order-print-completion-state">
+            <span>{t("workOrders.print.completed")}</span>
+            <PrintCheckBox checked={completed} />
+          </div>
+          <div className="work-order-print-completion-date">
+            <span>{t("workOrders.print.completionDate")}</span>
+            <span className="work-order-print-date-line">
+              {formatOptionalDate(order.completionDate)}
+            </span>
+          </div>
         </div>
-        <div className="work-order-print-completion-date">
-          <span>{t("workOrders.print.completionDate")}</span>
-          <span className="work-order-print-date-line">
-            {formatOptionalDate(order.completionDate)}
-          </span>
-        </div>
-      </div>
+      )}
 
-      <div className="work-order-print-signatures">
-        <div>
-          <div className="work-order-print-label">
-            {t("workOrders.print.issuedBy")}
+      {pdfSections.signatures && (
+        <div className="work-order-print-signatures">
+          <div>
+            <div className="work-order-print-label">
+              {t("workOrders.print.issuedBy")}
+            </div>
+            <div className="work-order-print-signature-value">
+              {order.issuedBy}
+            </div>
           </div>
-          <div className="work-order-print-signature-value">
-            {order.issuedBy}
+          <div>
+            <div className="work-order-print-label work-order-print-align-right">
+              {t("workOrders.print.executor")}
+            </div>
+            <div className="work-order-print-signature-value">
+              {order.executedBy ?? ""}
+            </div>
           </div>
         </div>
-        <div>
-          <div className="work-order-print-label work-order-print-align-right">
-            {t("workOrders.print.executor")}
-          </div>
-          <div className="work-order-print-signature-value">
-            {order.executedBy ?? ""}
-          </div>
-        </div>
-      </div>
+      )}
     </section>
   );
 }

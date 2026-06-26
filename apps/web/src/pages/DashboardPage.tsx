@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { AppShell } from '@/components/layout/AppShell'
 import { DashboardActionSection } from '@/components/dashboard/DashboardActionSection'
 import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
+import { OperatorQueueGrid } from '@/components/dashboard/OperatorQueueGrid'
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
@@ -20,6 +21,8 @@ function DashboardPage(): React.JSX.Element {
     itemProfit,
     selectedCompanyKey,
     setSelectedCompanyKey,
+    operatorQueue,
+    currentUserName,
     operators,
     filters,
     setFilters,
@@ -87,6 +90,11 @@ function DashboardPage(): React.JSX.Element {
 
         {showDashboard && (
           <div className="space-y-8 px-5 pb-8 sm:px-8">
+            {/* Operators get a personal at-a-glance grid of their own work. */}
+            {!showFinance && (
+              <OperatorQueueGrid queue={operatorQueue} username={currentUserName} />
+            )}
+
             {showFinance && (
               <DashboardFinanceSection
                 summary={summary}

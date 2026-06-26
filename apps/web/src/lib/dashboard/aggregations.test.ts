@@ -91,9 +91,6 @@ describe("dashboard attention aggregations", () => {
       getWorkOrderAttentionSignals(makeOrder({ dueDate: "2026-06-09" }), today),
     ).toContain("dueThisWeek");
     expect(
-      getWorkOrderAttentionSignals(makeOrder({ status: "waitingForCustomer" }), today),
-    ).toContain("waitingForCustomer");
-    expect(
       getWorkOrderAttentionSignals(
         makeOrder({ assignment: { assignedTo: null, priority: "normal", scheduledDate: null } }),
         today,
@@ -125,7 +122,7 @@ describe("dashboard attention aggregations", () => {
           orderNumber: "RN-3",
           customerId: null,
           clientName: "  LEGACY client  ",
-          status: "waitingForCustomer",
+          dueDate: "2026-06-08",
         }),
         makeOrder({
           id: "4",
@@ -133,9 +130,10 @@ describe("dashboard attention aggregations", () => {
           customerId: null,
           clientName: "legacy CLIENT",
           dueDate: "2026-06-09",
+          updatedAt: "2026-06-02T08:00:00Z",
         }),
       ],
-      ["overdue", "dueToday", "dueThisWeek", "waitingForCustomer"],
+      ["overdue", "dueToday", "dueThisWeek"],
       today,
     );
 
@@ -159,8 +157,7 @@ describe("dashboard attention aggregations", () => {
       customerId: null,
       displayName: "legacy CLIENT",
       counts: {
-        dueThisWeek: 1,
-        waitingForCustomer: 1,
+        dueThisWeek: 2,
       },
     });
   });
@@ -168,7 +165,6 @@ describe("dashboard attention aggregations", () => {
   it("counts internal signals separately from core client attention", () => {
     const counts = buildSignalCounts(
       [
-        makeOrder({ id: "1", status: "waitingForMaterials" }),
         makeOrder({
           id: "2",
           assignment: { assignedTo: null, priority: "normal", scheduledDate: null },
@@ -180,7 +176,6 @@ describe("dashboard attention aggregations", () => {
 
     expect(counts).toMatchObject({
       overdue: 1,
-      waitingForMaterials: 1,
       unassigned: 1,
     });
   });

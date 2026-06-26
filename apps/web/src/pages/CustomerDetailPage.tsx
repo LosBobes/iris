@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2, MapPin, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowLeft, Loader2, Mail, MapPin, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -18,14 +18,22 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   blankToNull,
   emptyCustomer,
+  emptyCustomerContact,
+  emptyCustomerEmail,
   emptyLocation,
   formatActionError,
   getMissingLocationFields,
+  normalizeCustomerCollections,
   removeLocation,
   slugId,
   validateCustomerIdentifiers,
 } from "@/lib/customers";
-import type { Customer, Location } from "@/types/work-order";
+import type {
+  Customer,
+  CustomerContact,
+  CustomerEmail,
+  Location,
+} from "@/types/work-order";
 
 type DeleteTarget =
   | { kind: "customer" }
@@ -84,7 +92,7 @@ function CustomerDetailPage(): React.JSX.Element {
     }
     setSaving(true);
     try {
-      const payload: Customer = {
+      const payload: Customer = normalizeCustomerCollections({
         ...customer,
         id: customer.id.trim() || slugId("cust", customer.name),
         contactName: blankToNull(customer.contactName),
@@ -92,7 +100,7 @@ function CustomerDetailPage(): React.JSX.Element {
         phone: blankToNull(customer.phone),
         pib: blankToNull(customer.pib),
         mb: blankToNull(customer.mb),
-      };
+      });
       const saved = await window.api.upsertCustomer(payload);
       toast.success(t("customerDetail.saved"));
       if (isNew) {
@@ -239,7 +247,14 @@ function CustomerDetailPage(): React.JSX.Element {
             <dl className="mt-4 space-y-3 text-[12px]">
               <SummaryRow label={t("customerDetail.pib")} value={customer.pib} />
               <SummaryRow label={t("customerDetail.mb")} value={customer.mb} />
-              <SummaryRow label={t("customerDetail.contact")} value={customer.contactName} />
+              <div className="flex items-center justify-between">
+                <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.emails")}</dt>
+                <dd className="tnum text-foreground">{customer.emails.length}</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.contacts")}</dt>
+                <dd className="tnum text-foreground">{customer.contacts.length}</dd>
+              </div>
               {!isNew && (
                 <div className="flex items-center justify-between">
                   <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.locations")}</dt>
@@ -338,38 +353,167 @@ function DetailsForm({
 }): React.JSX.Element {
   const { t } = useTranslation();
   return (
+    <div className="space-y-8">
+      <section>
+        <div className="mb-3 border-b border-border pb-2 text-[13px] font-medium">{t("customerDetail.companyData")}</div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label={t("customerDetail.nameField")} value={value.name} onChange={(name) => onChange({ ...value, name })} />
+          <Field
+            label={t("customerDetail.pibField")}
+            value={value.pib ?? ""}
+            placeholder={t("customerDetail.pibPlaceholder")}
+            onChange={(pib) => onChange({ ...value, pib })}
+          />
+          <Field
+            label={t("customerDetail.mbField")}
+            value={value.mb ?? ""}
+            placeholder={t("customerDetail.mbPlaceholder")}
+            onChange={(mb) => onChange({ ...value, mb })}
+          />
+        </div>
+      </section>
+
+      <EmailsEditor value={value} onChange={onChange} />
+      <ContactsEditor value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+function EmailsEditor({
+  value,
+  onChange,
+}: {
+  value: Customer;
+  onChange: (value: Customer) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const update = (emails: CustomerEmail[]): void => onChange({ ...value, emails });
+  return (
     <section>
-      <div className="mb-3 border-b border-border pb-2 text-[13px] font-medium">{t("customerDetail.companyData")}</div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={t("customerDetail.nameField")} value={value.name} onChange={(name) => onChange({ ...value, name })} />
-        <Field
-          label={t("workOrders.form.contactPerson")}
-          value={value.contactName ?? ""}
-          onChange={(contactName) => onChange({ ...value, contactName })}
-        />
-        <Field
-          label={t("customerDetail.email")}
-          value={value.email ?? ""}
-          onChange={(email) => onChange({ ...value, email })}
-        />
-        <Field
-          label={t("customerDetail.phone")}
-          value={value.phone ?? ""}
-          onChange={(phone) => onChange({ ...value, phone })}
-        />
-        <Field
-          label={t("customerDetail.pibField")}
-          value={value.pib ?? ""}
-          placeholder={t("customerDetail.pibPlaceholder")}
-          onChange={(pib) => onChange({ ...value, pib })}
-        />
-        <Field
-          label={t("customerDetail.mbField")}
-          value={value.mb ?? ""}
-          placeholder={t("customerDetail.mbPlaceholder")}
-          onChange={(mb) => onChange({ ...value, mb })}
-        />
+      <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
+        <span className="text-[13px] font-medium">{t("customerDetail.emails")}</span>
+        <button
+          type="button"
+          onClick={() => update([...value.emails, emptyCustomerEmail()])}
+          className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t("customerDetail.addEmail")}
+        </button>
       </div>
+      {value.emails.length === 0 ? (
+        <p className="border border-dashed border-border bg-background px-4 py-4 text-[12px] text-[color:var(--iris-ink-mute)]">
+          {t("customerDetail.noEmails")}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {value.emails.map((email, index) => (
+            <div key={email.id} className="flex items-center gap-2">
+              <Mail className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)]" />
+              <input
+                type="email"
+                value={email.email}
+                placeholder={t("customerDetail.emailAddressPlaceholder")}
+                onChange={(event) =>
+                  update(value.emails.map((e, i) => (i === index ? { ...e, email: event.target.value } : e)))
+                }
+                className="min-w-0 flex-[2] border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+              <input
+                value={email.label ?? ""}
+                placeholder={t("customerDetail.emailLabelPlaceholder")}
+                onChange={(event) =>
+                  update(
+                    value.emails.map((e, i) => (i === index ? { ...e, label: event.target.value } : e)),
+                  )
+                }
+                className="min-w-0 flex-1 border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+              <button
+                type="button"
+                onClick={() => update(value.emails.filter((_, i) => i !== index))}
+                aria-label={t("customerDetail.removeEmailAria")}
+                className="iris-focusable iris-press shrink-0 text-[color:var(--iris-status-cancelled)] hover:opacity-80"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ContactsEditor({
+  value,
+  onChange,
+}: {
+  value: Customer;
+  onChange: (value: Customer) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const update = (contacts: CustomerContact[]): void => onChange({ ...value, contacts });
+  const patch = (index: number, changes: Partial<CustomerContact>): void =>
+    update(value.contacts.map((c, i) => (i === index ? { ...c, ...changes } : c)));
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
+        <span className="text-[13px] font-medium">{t("customerDetail.contacts")}</span>
+        <button
+          type="button"
+          onClick={() => update([...value.contacts, emptyCustomerContact()])}
+          className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t("customerDetail.addContact")}
+        </button>
+      </div>
+      {value.contacts.length === 0 ? (
+        <p className="border border-dashed border-border bg-background px-4 py-4 text-[12px] text-[color:var(--iris-ink-mute)]">
+          {t("customerDetail.noContacts")}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {value.contacts.map((contact, index) => (
+            <div key={contact.id} className="grid gap-2 border border-border bg-card p-3 sm:grid-cols-[1fr_1fr_auto]">
+              <input
+                value={contact.name}
+                placeholder={t("customerDetail.contactNamePlaceholder")}
+                onChange={(event) => patch(index, { name: event.target.value })}
+                className="min-w-0 border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+              <input
+                value={contact.role ?? ""}
+                placeholder={t("customerDetail.contactRolePlaceholder")}
+                onChange={(event) => patch(index, { role: event.target.value })}
+                className="min-w-0 border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+              <button
+                type="button"
+                onClick={() => update(value.contacts.filter((_, i) => i !== index))}
+                aria-label={t("customerDetail.removeContactAria")}
+                className="iris-focusable iris-press flex items-center justify-center text-[color:var(--iris-status-cancelled)] hover:opacity-80 sm:row-span-2"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <input
+                type="email"
+                value={contact.email ?? ""}
+                placeholder={t("customerDetail.email")}
+                onChange={(event) => patch(index, { email: event.target.value })}
+                className="min-w-0 border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+              <input
+                value={contact.phone ?? ""}
+                placeholder={t("customerDetail.phone")}
+                onChange={(event) => patch(index, { phone: event.target.value })}
+                className="min-w-0 border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

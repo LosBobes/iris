@@ -8,7 +8,7 @@ import {
   type UseFormWatch,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, MapPin, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,6 +35,7 @@ import {
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
 import type { CatalogItem } from "@/types/catalog";
+import { formatActionError, slugId } from "@/lib/customers";
 import { AsyncCombobox } from "@/components/WorkOrders/AsyncCombobox";
 import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
 import {
@@ -130,6 +131,10 @@ const underlineInput =
 const underlineTrigger =
   "w-full justify-between border-0 border-b border-border bg-transparent py-2 !h-auto text-[13px] text-foreground rounded-none shadow-none focus-visible:border-foreground focus-visible:ring-0";
 
+// Sentinel for the contact picker's read-only "this was typed in, not one of the
+// firm's contacts" option (e.g. a contact saved before the firm had a contact list).
+const WORK_ORDER_CONTACT_CUSTOM_VALUE = "__custom_contact__";
+
 const INVOICE_UNITS_BY_KIND: Record<InvoiceLineItemKind, BuiltinInvoiceUnit[]> = {
   service: ["kom", "m2", "set"],
   goods: ["kom", "m2"],
@@ -144,6 +149,20 @@ export function getInvoiceUnitOptions(
   kind: InvoiceLineItemKind,
 ): BuiltinInvoiceUnit[] {
   return INVOICE_UNITS_BY_KIND[kind];
+}
+
+/**
+ * Sums qty × unit price across invoice line items. This is the order's headline
+ * Cena, so it stays derived from the breakdown rather than hand-typed.
+ */
+export function computeLineItemsTotal(
+  lineItems: Array<{ quantity?: number | null; unitPrice?: number | null }> | null | undefined,
+): number {
+  return (lineItems ?? []).reduce(
+    (sum, line) =>
+      sum + (Number(line?.quantity) || 0) * (Number(line?.unitPrice) || 0),
+    0,
+  );
 }
 
 function isInvoiceLineItemKind(value: unknown): value is InvoiceLineItemKind {
@@ -471,12 +490,58 @@ export function WorkOrderForm({
   const selectedLocationId = watch("locationId");
   const shippingAddress = watch("shipping.shippingAddress");
   const invoiceLineItems = watch("invoiceDraft.lineItems");
+  // Cena is the order total: always the sum of qty × unit price across line
+  // items, never hand-typed. Keeping it derived stops the headline price from
+  // drifting away from the invoice breakdown.
+  const lineItemsTotal = useMemo(
+    () => computeLineItemsTotal(invoiceLineItems),
+    [invoiceLineItems],
+  );
+  useEffect(() => {
+    setValue("price", lineItemsTotal, { shouldValidate: true, shouldDirty: true });
+  }, [lineItemsTotal, setValue]);
+  // Locations created inline from this form are merged with the prop list so a
+  // freshly added location is immediately selectable without a page reload.
+  const [createdLocations, setCreatedLocations] = useState<Location[]>([]);
+  const [locationDraft, setLocationDraft] = useState<{ name: string; address: string } | null>(
+    null,
+  );
+  const [savingLocation, setSavingLocation] = useState(false);
+  // Inline "Nov klijent" quick-create, mirroring the add-location flow: a new
+  // registry firm is persisted and selected without leaving the order form.
+  const [customerDraft, setCustomerDraft] = useState<{
+    name: string;
+    pib: string;
+    contact: string;
+  } | null>(null);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+
+  // Registered operator users backing the operator selects.
+  const [operators, setOperators] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    window.api
+      .getWorkOrderOperators()
+      .then((list) => {
+        if (active) setOperators(list);
+      })
+      .catch(() => {
+        /* non-fatal: the select falls back to the current value only */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const allLocations = useMemo(
+    () => [...locations, ...createdLocations],
+    [locations, createdLocations],
+  );
   const filteredLocations = useMemo(
     () =>
       selectedCustomerId
-        ? locations.filter((location) => location.customerId === selectedCustomerId)
-        : locations,
-    [locations, selectedCustomerId],
+        ? allLocations.filter((location) => location.customerId === selectedCustomerId)
+        : allLocations,
+    [allLocations, selectedCustomerId],
   );
 
   // The client and catalog lists are large, so both pickers search the server
@@ -493,6 +558,8 @@ export function WorkOrderForm({
           phone: null,
           pib: null,
           mb: null,
+          emails: [],
+          contacts: [],
         }
       : null,
   );
@@ -536,10 +603,70 @@ export function WorkOrderForm({
     setSelectedCustomer(customer);
     setValue("customerId", customer.id);
     setValue("clientName", customer.name);
-    setValue("contactPerson", customer.contactName);
-    setValue("communication.notificationEmail", customer.email);
-    const firstLocation = locations.find((location) => location.customerId === customer.id);
+    // Default the contact to the firm's first contact person (falling back to
+    // the legacy single field), and the notification email to its first email.
+    const firstContact = customer.contacts[0];
+    setValue("contactPerson", firstContact?.name ?? customer.contactName);
+    setValue(
+      "communication.notificationEmail",
+      firstContact?.email ?? customer.emails[0]?.email ?? customer.email,
+    );
+    const firstLocation = allLocations.find((location) => location.customerId === customer.id);
     setValue("locationId", firstLocation?.id ?? null);
+  };
+
+  const handleSaveLocation = async (): Promise<void> => {
+    if (!locationDraft || !selectedCustomerId) return;
+    const name = locationDraft.name.trim();
+    if (!name) return;
+    setSavingLocation(true);
+    try {
+      const saved = await window.api.upsertLocation({
+        id: slugId("loc", name),
+        customerId: selectedCustomerId,
+        name,
+        address: locationDraft.address.trim() || null,
+      });
+      setCreatedLocations((current) => [...current, saved]);
+      setValue("locationId", saved.id);
+      setLocationDraft(null);
+    } catch (error) {
+      toast.error(formatActionError(t("workOrders.form.locationAddError"), error));
+    } finally {
+      setSavingLocation(false);
+    }
+  };
+
+  const handleSaveCustomer = async (): Promise<void> => {
+    if (!customerDraft) return;
+    const name = customerDraft.name.trim();
+    if (!name) return;
+    setSavingCustomer(true);
+    try {
+      const contact = customerDraft.contact.trim();
+      const saved = await window.api.upsertCustomer({
+        id: slugId("cust", name),
+        name,
+        contactName: contact || null,
+        email: null,
+        phone: null,
+        pib: customerDraft.pib.trim() || null,
+        mb: null,
+        emails: [],
+        contacts: [],
+      });
+      // Select the freshly created firm exactly as picking it from the registry.
+      setSelectedCustomer(saved);
+      setValue("customerId", saved.id);
+      setValue("clientName", saved.name);
+      setValue("contactPerson", saved.contactName);
+      setValue("locationId", null);
+      setCustomerDraft(null);
+    } catch (error) {
+      toast.error(formatActionError(t("workOrders.form.customerAddError"), error));
+    } finally {
+      setSavingCustomer(false);
+    }
   };
 
   const handleAddCatalogLineItem = (item: ComboboxItem | null): void => {
@@ -562,13 +689,13 @@ export function WorkOrderForm({
       shippingAddress,
       deliveryMethod,
       selectedLocationId,
-      locations,
+      allLocations,
     );
 
     if (nextAddress !== shippingAddress) {
       setValue("shipping.shippingAddress", nextAddress);
     }
-  }, [deliveryMethod, locations, selectedLocationId, setValue, shippingAddress]);
+  }, [deliveryMethod, allLocations, selectedLocationId, setValue, shippingAddress]);
 
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
@@ -582,7 +709,7 @@ export function WorkOrderForm({
             values.shipping.shippingAddress,
             values.shipping.deliveryMethod,
             values.locationId,
-            locations,
+            allLocations,
           ),
         },
       });
@@ -613,6 +740,64 @@ export function WorkOrderForm({
   const handleAddInvoiceLineItem = (kind: InvoiceLineItemKind): void => {
     appendInvoiceLineItem(createInvoiceLineItem(kind));
   };
+
+  // Operator selects share this renderer. They pick from registered operators
+  // but keep showing an off-registry value already stored on the order (e.g. a
+  // legacy free-typed name) via a read-only "custom" fallback option.
+  const renderOperatorSelect = (
+    name: "assignment.assignedTo" | "executedBy",
+    triggerId: string,
+  ): React.JSX.Element => (
+    <Controller
+      name={name}
+      control={control}
+      render={({ field }) => {
+        const known = field.value ? operators.includes(field.value) : false;
+        return (
+          <Select
+            value={
+              field.value && known
+                ? field.value
+                : field.value
+                  ? WORK_ORDER_CONTACT_CUSTOM_VALUE
+                  : WORK_ORDER_SELECT_NONE_VALUE
+            }
+            onValueChange={(v) => {
+              if (v === WORK_ORDER_SELECT_NONE_VALUE) {
+                field.onChange(null);
+                return;
+              }
+              if (v === WORK_ORDER_CONTACT_CUSTOM_VALUE) return;
+              field.onChange(v);
+            }}
+          >
+            <SelectTrigger
+              id={triggerId}
+              aria-labelledby={`${triggerId}-label`}
+              className={underlineTrigger}
+            >
+              <SelectValue placeholder={t("workOrders.form.selectOperator")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                {t("workOrders.detail.unassigned")}
+              </SelectItem>
+              {operators.map((operator) => (
+                <SelectItem key={operator} value={operator}>
+                  {operator}
+                </SelectItem>
+              ))}
+              {field.value && !known && (
+                <SelectItem value={WORK_ORDER_CONTACT_CUSTOM_VALUE}>
+                  {field.value} ({t("workOrders.form.customContact")})
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        );
+      }}
+    />
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
@@ -691,6 +876,76 @@ export function WorkOrderForm({
                 emptyText={t("workOrders.form.noClients")}
                 clearLabel={t("workOrders.form.newClient")}
               />
+              {/* Inline add-client, mirroring the add-location flow below: persists
+                  a new registry firm and selects it without leaving the form. */}
+              {customerDraft === null ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCustomerDraft({ name: "", pib: "", contact: "" })
+                  }
+                  className="iris-focusable iris-press mt-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
+                >
+                  <Plus className="h-3 w-3" />
+                  {t("workOrders.form.addCustomer")}
+                </button>
+              ) : (
+                <div className="mt-2 space-y-2 border border-border bg-card p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-soft)]">
+                      <UserPlus className="h-3.5 w-3.5" />
+                      {t("workOrders.form.addCustomer")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerDraft(null)}
+                      className="iris-focusable iris-press inline-flex items-center gap-1 bg-transparent text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                      {t("workOrders.form.cancel")}
+                    </button>
+                  </div>
+                  <input
+                    value={customerDraft.name}
+                    placeholder={t("workOrders.form.newCustomerName")}
+                    onChange={(event) =>
+                      setCustomerDraft((draft) =>
+                        draft ? { ...draft, name: event.target.value } : draft,
+                      )
+                    }
+                    className="block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+                  />
+                  <input
+                    value={customerDraft.pib}
+                    placeholder={t("workOrders.form.newCustomerPib")}
+                    onChange={(event) =>
+                      setCustomerDraft((draft) =>
+                        draft ? { ...draft, pib: event.target.value } : draft,
+                      )
+                    }
+                    className="block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+                  />
+                  <input
+                    value={customerDraft.contact}
+                    placeholder={t("workOrders.form.newCustomerContact")}
+                    onChange={(event) =>
+                      setCustomerDraft((draft) =>
+                        draft ? { ...draft, contact: event.target.value } : draft,
+                      )
+                    }
+                    className="block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveCustomer()}
+                    disabled={savingCustomer || customerDraft.name.trim() === ""}
+                    className="iris-focusable iris-press inline-flex items-center gap-1.5 bg-foreground px-3 py-1.5 text-[12px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60"
+                  >
+                    {savingCustomer && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {t("workOrders.form.saveCustomer")}
+                  </button>
+                </div>
+              )}
             </FieldShell>
 
             <FieldShell id="locationId" label={t("workOrders.form.location")}>
@@ -725,6 +980,65 @@ export function WorkOrderForm({
                   </Select>
                 )}
               />
+              {/* Inline add-location, available once a registry firm is picked
+                  (an off-registry client has nothing to attach a location to). */}
+              {selectedCustomerId &&
+                (locationDraft === null ? (
+                  <button
+                    type="button"
+                    onClick={() => setLocationDraft({ name: "", address: "" })}
+                    className="iris-focusable iris-press mt-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {t("workOrders.form.addLocation")}
+                  </button>
+                ) : (
+                  <div className="mt-2 space-y-2 border border-border bg-card p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-soft)]">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {t("workOrders.form.addLocation")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setLocationDraft(null)}
+                        className="iris-focusable iris-press inline-flex items-center gap-1 bg-transparent text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                        {t("workOrders.form.cancel")}
+                      </button>
+                    </div>
+                    <input
+                      value={locationDraft.name}
+                      placeholder={t("workOrders.form.newLocationName")}
+                      onChange={(event) =>
+                        setLocationDraft((draft) =>
+                          draft ? { ...draft, name: event.target.value } : draft,
+                        )
+                      }
+                      className="block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+                    />
+                    <input
+                      value={locationDraft.address}
+                      placeholder={t("workOrders.form.newLocationAddress")}
+                      onChange={(event) =>
+                        setLocationDraft((draft) =>
+                          draft ? { ...draft, address: event.target.value } : draft,
+                        )
+                      }
+                      className="block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveLocation()}
+                      disabled={savingLocation || locationDraft.name.trim() === ""}
+                      className="iris-focusable iris-press inline-flex items-center gap-1.5 bg-foreground px-3 py-1.5 text-[12px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60"
+                    >
+                      {savingLocation && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {t("workOrders.form.saveLocation")}
+                    </button>
+                  </div>
+                ))}
             </FieldShell>
 
             {/* A registry client supplies its own name/contact, so the
@@ -739,10 +1053,75 @@ export function WorkOrderForm({
                     {selectedCustomer.name}
                   </div>
                 </FieldShell>
-                <FieldShell id="contactPerson-display" label={t("workOrders.form.contactPerson")}>
-                  <div className="py-1 text-[14px] text-foreground">
-                    {selectedCustomer.contactName?.trim() || "—"}
-                  </div>
+                <FieldShell id="contactPerson" label={t("workOrders.form.contactPerson")}>
+                  {selectedCustomer.contacts.length > 0 ? (
+                    <Controller
+                      name="contactPerson"
+                      control={control}
+                      render={({ field }) => {
+                        const known = selectedCustomer.contacts.some(
+                          (contact) => contact.name === field.value,
+                        );
+                        return (
+                          <Select
+                            value={
+                              field.value && known
+                                ? field.value
+                                : field.value
+                                  ? WORK_ORDER_CONTACT_CUSTOM_VALUE
+                                  : WORK_ORDER_SELECT_NONE_VALUE
+                            }
+                            onValueChange={(v) => {
+                              if (v === WORK_ORDER_SELECT_NONE_VALUE) {
+                                field.onChange(null);
+                                return;
+                              }
+                              if (v === WORK_ORDER_CONTACT_CUSTOM_VALUE) return;
+                              field.onChange(v);
+                              const picked = selectedCustomer.contacts.find(
+                                (contact) => contact.name === v,
+                              );
+                              if (picked?.email) {
+                                setValue("communication.notificationEmail", picked.email);
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              id="contactPerson"
+                              aria-labelledby="contactPerson-label"
+                              className={underlineTrigger}
+                            >
+                              <SelectValue placeholder={t("workOrders.form.selectContact")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                                Nije izabrano
+                              </SelectItem>
+                              {selectedCustomer.contacts.map((contact) => (
+                                <SelectItem key={contact.id} value={contact.name}>
+                                  {contact.name}
+                                  {contact.role ? ` · ${contact.role}` : ""}
+                                </SelectItem>
+                              ))}
+                              {field.value && !known && (
+                                <SelectItem value={WORK_ORDER_CONTACT_CUSTOM_VALUE}>
+                                  {field.value} ({t("workOrders.form.customContact")})
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <input
+                      id="contactPerson"
+                      className={underlineInput}
+                      {...register("contactPerson", {
+                        setValueAs: (v: string) => (v === "" ? null : v),
+                      })}
+                    />
+                  )}
                 </FieldShell>
               </>
             ) : (
@@ -876,13 +1255,9 @@ export function WorkOrderForm({
 
         {isAdmin && (
         <FormSection title={t("workOrders.form.sectionAssignment")}>
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid gap-x-6 gap-y-5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
             <FieldShell id="assignment.assignedTo" label={t("workOrders.form.operator")}>
-              <input
-                id="assignment.assignedTo"
-                className={underlineInput}
-                {...register("assignment.assignedTo")}
-              />
+              {renderOperatorSelect("assignment.assignedTo", "assignment.assignedTo")}
             </FieldShell>
 
             <FieldShell id="assignment.priority" label={t("workOrders.form.priority")}>
@@ -1221,27 +1596,25 @@ export function WorkOrderForm({
                 label={t("workOrders.form.price")}
                 error={errors.price?.message}
               >
+                {/* Read-only: derived from the line items, not hand-editable. */}
                 <input
                   id="price"
-                  type="number"
-                  step="0.01"
-                  className={`${underlineInput} tnum`}
-                  {...register("price", {
-                    setValueAs: (v: string) => (v === "" ? null : Number(v)),
-                  })}
+                  type="text"
+                  readOnly
+                  aria-readonly="true"
+                  tabIndex={-1}
+                  value={lineItemsTotal.toLocaleString("sr-RS")}
+                  className={`${underlineInput} tnum cursor-default`}
                 />
+                <p className="mt-1 text-[11px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.form.priceAutoHint")}
+                </p>
               </FieldShell>
             )}
 
             {isAdmin && isEdit && (
               <FieldShell id="executedBy" label={t("workOrders.form.executedBy")}>
-                <input
-                  id="executedBy"
-                  className={underlineInput}
-                  {...register("executedBy", {
-                    setValueAs: (v: string) => (v === "" ? null : v),
-                  })}
-                />
+                {renderOperatorSelect("executedBy", "executedBy")}
               </FieldShell>
             )}
 
@@ -1334,7 +1707,11 @@ export function WorkOrderForm({
                   {t("workOrders.form.noItems")}
                 </div>
               ) : (
-                <div className="space-y-4">
+                // Container (not viewport) query: the row only goes multi-column
+                // when this list is actually wide enough. With the live preview
+                // open the form column is narrow even on a wide screen, so a
+                // viewport breakpoint would cram the columns and overlap labels.
+                <div className="@container space-y-4">
                   {invoiceLineItemFields.map((lineItem, index) => {
                     const selectedKind =
                       invoiceLineItems[index]?.kind === "goods"
@@ -1369,8 +1746,8 @@ export function WorkOrderForm({
                         key={lineItem.id}
                         className={`grid grid-cols-1 gap-4 border-b border-[color:var(--iris-border-soft)] pb-4 last:border-b-0 last:pb-0 ${
                           isAdmin
-                            ? "xl:grid-cols-[110px_minmax(0,1fr)_70px_90px_100px_100px_36px]"
-                            : "xl:grid-cols-[120px_minmax(0,1fr)_80px_100px_36px]"
+                            ? "@3xl:grid-cols-[110px_minmax(0,1fr)_70px_90px_100px_100px_36px]"
+                            : "@xl:grid-cols-[120px_minmax(0,1fr)_80px_100px_36px]"
                         }`}
                       >
                         <FieldShell

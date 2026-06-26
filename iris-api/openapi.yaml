@@ -329,7 +329,7 @@ paths:
   /settings:
     get:
       tags: [Settings]
-      summary: Return shop-wide organization settings (firm name)
+      summary: Return shop-wide organization settings (firm name, PDF sections)
       operationId: getSettings
       responses:
         '200':
@@ -347,7 +347,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganizationSettings'
+              $ref: '#/components/schemas/OrganizationSettingsUpdate'
       responses:
         '200':
           description: Updated organization settings
@@ -486,7 +486,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+            enum: [new, assigned, inProgress, completed, cancelled, invoiced]
         - name: assignedTo
           in: query
           schema:
@@ -827,7 +827,7 @@ components:
           example: Bulevar 1
     Customer:
       type: object
-      required: [id, name, contactName, email, phone, pib, mb]
+      required: [id, name, contactName, email, phone, pib, mb, emails, contacts]
       properties:
         id:
           type: string
@@ -839,6 +839,20 @@ components:
           type: [string, 'null']
         phone:
           type: [string, 'null']
+        emails:
+          type: array
+          description: >-
+            Corporate email addresses for the firm. Replaces the single legacy
+            `email` field, which is retained for back-compat.
+          items:
+            $ref: '#/components/schemas/CustomerEmail'
+        contacts:
+          type: array
+          description: >-
+            Contact people at the firm, each with their own optional email and
+            phone. Replaces the single legacy `contactName`/`phone` fields.
+          items:
+            $ref: '#/components/schemas/CustomerContact'
         pib:
           type: [string, 'null']
           description: >-
@@ -852,6 +866,36 @@ components:
             Serbian company registration number (matični broj): exactly 8 digits.
             Optional on imported records; validated as format only.
           example: '53671888'
+    CustomerEmail:
+      type: object
+      required: [id, email, label, sortOrder]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        label:
+          type: [string, 'null']
+          description: Optional free-text tag, e.g. "Računovodstvo".
+        sortOrder:
+          type: integer
+    CustomerContact:
+      type: object
+      required: [id, name, email, phone, role, sortOrder]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: [string, 'null']
+        phone:
+          type: [string, 'null']
+        role:
+          type: [string, 'null']
+          description: Optional job title or role of the contact person.
+        sortOrder:
+          type: integer
     Location:
       type: object
       required: [id, customerId, name, address]
@@ -1047,14 +1091,52 @@ components:
         createdAt:
           type: string
           format: date-time
+    PDFSections:
+      type: object
+      description: >-
+        Which sections of the work-order printout are rendered. Every field
+        defaults to true for an unconfigured shop.
+      required: [delivery, billing, notes, shippingAddress, completion, signatures]
+      properties:
+        delivery:
+          type: boolean
+          description: The delivery-method / postage checklist box.
+        billing:
+          type: boolean
+          description: The billing-document box (invoice / cash collection / proforma).
+        notes:
+          type: boolean
+          description: The notes section.
+        shippingAddress:
+          type: boolean
+          description: The shipping-address box.
+        completion:
+          type: boolean
+          description: The completion state + date row.
+        signatures:
+          type: boolean
+          description: The issuer / executor signature lines.
     OrganizationSettings:
       type: object
-      required: [firmName]
+      required: [firmName, pdfSections]
       properties:
         firmName:
           type: string
           description: The shop's display name shown in the app branding.
           example: Grafika Čobanović
+        pdfSections:
+          $ref: '#/components/schemas/PDFSections'
+    OrganizationSettingsUpdate:
+      type: object
+      description: >-
+        Partial update for organization settings. Omitted fields are left
+        unchanged.
+      properties:
+        firmName:
+          type: string
+          description: The shop's display name shown in the app branding.
+        pdfSections:
+          $ref: '#/components/schemas/PDFSections'
     CatalogItemInput:
       type: object
       required: [name, kind, unit]
@@ -1157,7 +1239,7 @@ components:
           type: boolean
         status:
           type: string
-          enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+          enum: [new, assigned, inProgress, completed, cancelled, invoiced]
           example: inProgress
         price:
           type: [number, 'null']
@@ -1364,7 +1446,7 @@ components:
           type: boolean
         status:
           type: string
-          enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+          enum: [new, assigned, inProgress, completed, cancelled, invoiced]
         price:
           type: [number, 'null']
           format: double
@@ -1414,7 +1496,7 @@ components:
           type: string
         status:
           type: string
-          enum: [new, assigned, inProgress, waitingForCustomer, waitingForMaterials, completed, cancelled, invoiced]
+          enum: [new, assigned, inProgress, completed, cancelled, invoiced]
         dueDate:
           type: [string, 'null']
           format: date

@@ -15,12 +15,9 @@ describe('work-order lifecycle transitions', () => {
     expect(getAllowedWorkOrderTransitions('new')).toEqual(['assigned', 'cancelled'])
     expect(getAllowedWorkOrderTransitions('assigned')).toEqual([
       'inProgress',
-      'waitingForMaterials',
       'cancelled',
     ])
     expect(getAllowedWorkOrderTransitions('inProgress')).toEqual([
-      'waitingForCustomer',
-      'waitingForMaterials',
       'completed',
       'cancelled',
     ])
@@ -37,12 +34,12 @@ describe('work-order lifecycle transitions', () => {
   it('treats invoiced and cancelled work orders as terminal', () => {
     expect(isWorkOrderStatusTerminal('invoiced')).toBe(true)
     expect(isWorkOrderStatusTerminal('cancelled')).toBe(true)
-    expect(isWorkOrderStatusTerminal('waitingForCustomer')).toBe(false)
+    expect(isWorkOrderStatusTerminal('inProgress')).toBe(false)
   })
 
   it('returns customer-safe next step copy by status', () => {
-    expect(getWorkOrderCustomerNextStep('waitingForCustomer')).toBe(
-      'Čekamo vašu potvrdu materijala/dizajna.',
+    expect(getWorkOrderCustomerNextStep('inProgress')).toBe(
+      'Rad je u toku; javljamo se čim bude spremno za sledeći korak.',
     )
     expect(getWorkOrderCustomerNextStep('completed')).toBe(
       'Nalog je završen i spreman za preuzimanje ili isporuku.',
@@ -60,8 +57,8 @@ describe('work-order lifecycle transitions', () => {
     expect(getWorkOrderStatusLabel('new')).toBe('Nov')
     expect(getWorkOrderStatusLabel('assigned')).toBe('Dodeljen')
     expect(getWorkOrderStatusLabel('inProgress')).toBe('U toku')
-    expect(getWorkOrderStatusLabel('waitingForCustomer')).toBe('Čeka klijenta')
-    expect(getWorkOrderStatusLabel('waitingForMaterials')).toBe('Čeka materijal')
+    expect(getWorkOrderStatusLabel('completed')).toBe('Završen')
+    expect(getWorkOrderStatusLabel('cancelled')).toBe('Otkazan')
   })
 
   it('localizes status-change timeline labels with raw enum values', () => {
@@ -78,7 +75,7 @@ describe('work-order lifecycle transitions', () => {
     expect(
       buildWorkOrderCustomerNotice({
         orderNumber: 'RN-42',
-        status: 'waitingForCustomer',
+        status: 'inProgress',
         dueDate: null,
         assignment: {
           assignedTo: 'ana',
@@ -89,9 +86,9 @@ describe('work-order lifecycle transitions', () => {
     ).toBe(
       [
         'Radni nalog RN-42',
-        'Status: Čeka klijenta',
+        'Status: U toku',
         'Rok: 03.06.2026',
-        'Sledeći korak: Čekamo vašu potvrdu materijala/dizajna.',
+        'Sledeći korak: Rad je u toku; javljamo se čim bude spremno za sledeći korak.',
       ].join('\n'),
     )
   })

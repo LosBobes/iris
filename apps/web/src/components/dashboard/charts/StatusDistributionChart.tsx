@@ -17,8 +17,6 @@ const STATUS_COLORS: Record<WorkOrderStatus, string> = {
   new: "#a1a1aa",
   assigned: "#3b82f6",
   inProgress: "#0ea5e9",
-  waitingForCustomer: "#f59e0b",
-  waitingForMaterials: "#d97706",
   completed: "#22c55e",
   cancelled: "#ef4444",
   invoiced: "#16a34a",

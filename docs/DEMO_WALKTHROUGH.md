@@ -49,11 +49,11 @@ redovi rada".
 
 1. **Zahteva pažnju** ("Needs attention") groups open work by customer, ordered
    most-urgent-first. The chips on the right summarize the queues:
-   - **Kasni** (overdue), **Danas** (due today), **Ove nedelje** (this week),
-     **Čeka klijenta** (waiting on customer) — each with a count.
+   - **Kasni** (overdue), **Danas** (due today), **Ove nedelje** (this week) —
+     each with a count.
 2. Click any chip to scope the list to that queue; click a customer row's **›**
    to drill straight into the work-orders list filtered to that customer.
-3. Scroll to **Interno** for internal signals (e.g. *Materijal*, *Nedodeljeno*).
+3. Scroll to **Interno** for internal signals (e.g. *Nedodeljeno*).
 4. Scroll to the **Admin** section **Finansije i trendovi** (collapsed by
    default — expand it) to see the charts:
    - **Radni nalozi po mesecu** (work orders per month) — hover a bar; the
@@ -155,8 +155,8 @@ Status transitions are guided — only valid next steps are offered.
 2. The badge updates, a **Status promenjen na …** entry appears in **Tok posla**,
    and completing/invoicing sets the completion date automatically.
 
-Lifecycle: `Nov → Dodeljen → U toku → (Čeka klijenta / Čeka materijal) →
-Završen → Fakturisan`, with `Otkazan` available where allowed.
+Lifecycle: `Nov → Dodeljen → U toku → Završen → Fakturisan`, with `Otkazan`
+available as an off-ramp from any active stage (the **Otkaži** button).
 
 What it demonstrates: server-enforced transition rules; the UI only surfaces
 legal moves.

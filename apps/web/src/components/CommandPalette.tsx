@@ -11,6 +11,7 @@ import {
   Moon,
   Monitor,
   Search,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
@@ -65,6 +66,7 @@ export function CommandPalette(): React.JSX.Element | null {
       { id: "nav-new-order", label: t("workOrders.list.newOrder"), hint: t("command.create"), icon: Plus, keywords: "create new order dodaj novi nalog", run: go("/work-orders/new") },
       { id: "nav-customers", label: t("nav.customers"), icon: Users, keywords: "customers musterije klijenti", run: go("/customers") },
       { id: "nav-settings", label: t("nav.settings"), icon: Settings, keywords: "settings opcije podesavanja", run: go("/settings") },
+      { id: "nav-help", label: t("nav.help"), icon: HelpCircle, keywords: "help pomoc statusi uputstvo", run: go("/help") },
       { id: "theme-light", label: `${t("command.themePrefix")} ${t("settings.theme.light")}`, icon: Sun, keywords: "theme light svetla", run: theme("light") },
       { id: "theme-dark", label: `${t("command.themePrefix")} ${t("settings.theme.dark")}`, icon: Moon, keywords: "theme dark mracna tamna", run: theme("dark") },
       { id: "theme-system", label: `${t("command.themePrefix")} ${t("settings.theme.system")}`, icon: Monitor, keywords: "theme system sistemska", run: theme("system") },

@@ -75,14 +75,14 @@ describe("work order filter query params", () => {
   it("reads supported dashboard deep-link params into filter state", () => {
     const filters = filtersFromSearchParams(
       new URLSearchParams(
-        "queue=overdue&search=Acme&status=waitingForCustomer&billingDocumentType=invoice&deliveryMethod=pickup&dateFrom=2026-06-01&dateTo=2026-06-30",
+        "queue=overdue&search=Acme&status=inProgress&billingDocumentType=invoice&deliveryMethod=pickup&dateFrom=2026-06-01&dateTo=2026-06-30",
       ),
     );
 
     expect(filters).toMatchObject({
       queue: "overdue",
       search: "Acme",
-      status: "waitingForCustomer",
+      status: "inProgress",
       billingDocumentType: "invoice",
       deliveryMethod: "pickup",
       dateFrom: "2026-06-01",
@@ -102,12 +102,12 @@ describe("work order filter query params", () => {
     const params = filtersToSearchParams({
       ...filters,
       queue: "thisWeek",
-      status: "waitingForMaterials",
+      status: "inProgress",
       dateFrom: "2026-06-01",
     });
 
     expect(params.toString()).toBe(
-      "search=Kompanija&status=waitingForMaterials&queue=thisWeek&dateFrom=2026-06-01",
+      "search=Kompanija&status=inProgress&queue=thisWeek&dateFrom=2026-06-01",
     );
   });
 
@@ -156,6 +156,56 @@ describe("work order filter query params", () => {
         dateTo: "",
       }).map((order) => order.orderNumber),
     ).toEqual(["RN-old", "RN-new"]);
+  });
+
+  it("round-trips the operator assignedTo deep-link param", () => {
+    const filters = filtersFromSearchParams(
+      new URLSearchParams("assignedTo=ana&queue=today"),
+    );
+
+    expect(filters.assignedTo).toBe("ana");
+    expect(filtersToSearchParams(filters).toString()).toBe(
+      "queue=today&assignedTo=ana",
+    );
+  });
+
+  it("filters by assigned operator for operator dashboard cells", () => {
+    const orders = [
+      makeOrder({
+        id: "a",
+        orderNumber: "RN-a",
+        assignment: { assignedTo: "ana", priority: "normal", scheduledDate: null },
+      }),
+      makeOrder({
+        id: "b",
+        orderNumber: "RN-b",
+        assignment: { assignedTo: "marko", priority: "normal", scheduledDate: null },
+      }),
+      makeOrder({
+        id: "u",
+        orderNumber: "RN-u",
+        assignment: { assignedTo: null, priority: "normal", scheduledDate: null },
+      }),
+    ];
+
+    const base = {
+      search: "",
+      status: "all",
+      billingDocumentType: "all",
+      deliveryMethod: "all",
+      queue: "all",
+      customerId: "",
+      assignedTo: "",
+      dateFrom: "",
+      dateTo: "",
+      needsCostReview: false,
+    } as const;
+
+    expect(
+      filterWorkOrdersForList(orders, { ...base, assignedTo: "ana" }).map(
+        (order) => order.orderNumber,
+      ),
+    ).toEqual(["RN-a"]);
   });
 
   it("filters to orders needing cost review when the flag is set", () => {

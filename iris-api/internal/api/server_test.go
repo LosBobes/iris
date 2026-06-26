@@ -439,7 +439,7 @@ func TestUpdateWorkOrderEndpoint(t *testing.T) {
 		newTestServer(t),
 		http.MethodPatch,
 		"/work-orders/3",
-		`{"status":"waitingForMaterials"}`,
+		`{"status":"cancelled"}`,
 	)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -449,8 +449,8 @@ func TestUpdateWorkOrderEndpoint(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if updated.Status != domain.WorkOrderStatusWaitingForMaterials || updated.IsCompleted {
-		t.Fatalf("updated = %#v, want waiting-for-materials order", updated)
+	if updated.Status != domain.WorkOrderStatusCancelled || updated.IsCompleted {
+		t.Fatalf("updated = %#v, want cancelled order", updated)
 	}
 }
 

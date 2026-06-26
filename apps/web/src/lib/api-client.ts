@@ -272,7 +272,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
       return readJSON<OrganizationSettings>(response)
     },
 
-    async updateSettings(settings: OrganizationSettings) {
+    async updateSettings(settings: Partial<OrganizationSettings>) {
       const response = await fetchImpl(url('/settings'), jsonRequest('PUT', settings))
       return readJSON<OrganizationSettings>(response)
     },

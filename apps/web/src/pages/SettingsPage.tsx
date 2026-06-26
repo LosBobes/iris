@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
 import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
+import { PdfSectionsSettings } from "@/components/settings/PdfSectionsSettings";
 import { useOrganization } from "@/hooks/useOrganization";
 
 // Maps a font-scale option value to its i18n key suffix under settings.font.
@@ -234,6 +235,8 @@ export function SettingsPage(): React.JSX.Element {
           </section>
 
           <ListDensitySettings />
+
+          {isAdmin && <PdfSectionsSettings />}
 
           {isAdmin && <EnumValuesSettings />}
         </div>

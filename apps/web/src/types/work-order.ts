@@ -26,8 +26,6 @@ export type WorkOrderStatus =
   | 'new'
   | 'assigned'
   | 'inProgress'
-  | 'waitingForCustomer'
-  | 'waitingForMaterials'
   | 'completed'
   | 'cancelled'
   | 'invoiced'
@@ -87,6 +85,24 @@ export interface Shipping {
   shippingAddress: string | null
 }
 
+export interface CustomerEmail {
+  id: string
+  email: string
+  // Optional free-text tag, e.g. "Računovodstvo".
+  label: string | null
+  sortOrder: number
+}
+
+export interface CustomerContact {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  // Optional job title or role of the contact person.
+  role: string | null
+  sortOrder: number
+}
+
 export interface Customer {
   id: string
   name: string
@@ -97,6 +113,10 @@ export interface Customer {
   // PIB: 9 digits + ISO 7064 MOD 11,10 control digit. MB: exactly 8 digits.
   pib: string | null
   mb: string | null
+  // 1-N child collections. The legacy single contactName/email/phone fields
+  // above are kept for back-compat and seeded into these by the API migration.
+  emails: CustomerEmail[]
+  contacts: CustomerContact[]
 }
 
 export interface Location {

@@ -44,9 +44,7 @@ export function DashboardSummaryCards({
   const openOrders =
     summary.statusCounts.new +
     summary.statusCounts.assigned +
-    summary.statusCounts.inProgress +
-    summary.statusCounts.waitingForCustomer +
-    summary.statusCounts.waitingForMaterials
+    summary.statusCounts.inProgress
 
   return (
     <div className="flex border border-border bg-card">

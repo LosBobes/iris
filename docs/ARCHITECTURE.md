@@ -76,14 +76,14 @@ Canonical work-order statuses:
 1. `new`
 2. `assigned`
 3. `inProgress`
-4. `waitingForCustomer`
-5. `waitingForMaterials`
-6. `completed`
-7. `cancelled`
-8. `invoiced`
+4. `completed`
+5. `cancelled`
+6. `invoiced`
 
 The Go API still accepts legacy `draft` and `active` inputs where fixture
-normalization requires backward compatibility.
+normalization requires backward compatibility. The retired `waitingForCustomer`
+and `waitingForMaterials` statuses are likewise accepted from older data and
+normalized to `inProgress`.
 
 ## Request Flows
 

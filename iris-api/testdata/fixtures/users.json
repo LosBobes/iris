@@ -4,5 +4,29 @@
     "username": "admin",
     "password": "admin123",
     "role": "admin"
+  },
+  {
+    "id": "2",
+    "username": "ana.jovic",
+    "password": "operater123",
+    "role": "user"
+  },
+  {
+    "id": "3",
+    "username": "marko.petrovic",
+    "password": "operater123",
+    "role": "user"
+  },
+  {
+    "id": "4",
+    "username": "jelena.markovic",
+    "password": "operater123",
+    "role": "user"
+  },
+  {
+    "id": "5",
+    "username": "stefan.nikolic",
+    "password": "operater123",
+    "role": "user"
   }
 ]

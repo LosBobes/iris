@@ -57,12 +57,19 @@ func TestFixtureStoreUsers(t *testing.T) {
 		t.Fatalf("Users() returned error: %v", err)
 	}
 
-	if len(users) != 1 {
-		t.Fatalf("Users() length = %d, want 1", len(users))
+	if len(users) != 5 {
+		t.Fatalf("Users() length = %d, want 5", len(users))
 	}
 
-	if users[0].Username != "admin" {
-		t.Fatalf("Users()[0].Username = %q, want %q", users[0].Username, "admin")
+	byName := make(map[string]domain.UserRole, len(users))
+	for _, user := range users {
+		byName[user.Username] = user.Role
+	}
+	if byName["admin"] != domain.RoleAdmin {
+		t.Fatalf("expected admin user with admin role, got %q", byName["admin"])
+	}
+	if byName["ana.jovic"] != domain.RoleUser {
+		t.Fatalf("expected ana.jovic with user role, got %q", byName["ana.jovic"])
 	}
 }
 

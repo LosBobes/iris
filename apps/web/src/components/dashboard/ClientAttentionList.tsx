@@ -21,10 +21,6 @@ const BADGE_STYLES: Record<AttentionSignal, string> = {
     "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]",
   dueThisWeek:
     "border-foreground/25 bg-foreground/5 text-foreground",
-  waitingForCustomer:
-    "border-[color:var(--iris-border-soft)] bg-background text-[color:var(--iris-ink-soft)]",
-  waitingForMaterials:
-    "border-[color:var(--iris-border-soft)] bg-background text-[color:var(--iris-ink-soft)]",
   unassigned:
     "border-[color:var(--iris-border-soft)] bg-background text-[color:var(--iris-ink-soft)]",
 };
@@ -40,13 +36,7 @@ function buildWorkOrdersUrl(
     params.set("search", row.displayName);
   }
 
-  if (signal === "waitingForCustomer") {
-    params.set("queue", "all");
-    params.set("status", "waitingForCustomer");
-  } else if (signal === "waitingForMaterials") {
-    params.set("queue", "all");
-    params.set("status", "waitingForMaterials");
-  } else if (signal === "dueToday") {
+  if (signal === "dueToday") {
     params.set("queue", "today");
   } else if (signal === "dueThisWeek") {
     params.set("queue", "thisWeek");

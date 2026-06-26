@@ -77,7 +77,7 @@ declare global {
       updateCatalogItem: (id: string, input: CatalogItemInput) => Promise<CatalogItem>
       deleteCatalogItem: (id: string) => Promise<{ success: boolean }>
       getSettings: () => Promise<OrganizationSettings>
-      updateSettings: (settings: OrganizationSettings) => Promise<OrganizationSettings>
+      updateSettings: (settings: Partial<OrganizationSettings>) => Promise<OrganizationSettings>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

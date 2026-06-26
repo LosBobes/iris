@@ -3,6 +3,7 @@ package reports
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
@@ -115,6 +116,43 @@ func TestPrintHelpers(t *testing.T) {
 	}
 }
 
+func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
+	order := domain.WorkOrder{
+		ID:             "rn-1",
+		OrderNumber:    "RN-2026-0001",
+		ClientName:     "Profesionalni Upravnik",
+		JobDescription: "Vizit karte",
+	}
+
+	full, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections())
+	if err != nil {
+		t.Fatalf("render full: %v", err)
+	}
+	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA SLANJE", "RADNI NALOG ZAVRŠEN", "RN IZDAO"} {
+		if !strings.Contains(full, marker) {
+			t.Errorf("full sheet missing %q", marker)
+		}
+	}
+
+	none, err := RenderWorkOrderHTML(order, nil, domain.PDFSections{})
+	if err != nil {
+		t.Fatalf("render none: %v", err)
+	}
+	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA SLANJE", "RADNI NALOG ZAVRŠEN", "RN IZDAO"} {
+		if strings.Contains(none, marker) {
+			t.Errorf("disabled sheet still contains %q", marker)
+		}
+	}
+	// The client name (a non-configurable core field) must always render.
+	if !strings.Contains(none, "PROFESIONALNI UPRAVNIK") {
+		t.Errorf("disabled sheet dropped core client field")
+	}
+	// Hiding delivery collapses the hero to a single column.
+	if !strings.Contains(none, "work-order-print-hero-solo") {
+		t.Errorf("expected hero-solo class when delivery hidden")
+	}
+}
+
 func TestRenderWorkOrderPDF(t *testing.T) {
 	p1450 := 1450.0
 	baseOrder := domain.WorkOrder{
@@ -126,7 +164,7 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, nil)
+	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, nil, domain.DefaultPDFSections())
 	if err != nil {
 		t.Logf("Failed to render PDF using chromedp: %v", err)
 		// We log instead of erroring out to handle environments without chrome gracefully

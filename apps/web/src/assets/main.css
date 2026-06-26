@@ -188,9 +188,12 @@
     --iris-dur-page: 520ms;
   }
 
-  /* Honor reduced-motion: disable all animations and instant-snap transitions. */
+  /* Honor reduced-motion: disable all animations and instant-snap transitions.
+     Elements marked [data-allow-motion] are exempt — used for essential
+     navigation affordances (the mobile drawer slide + backdrop fade) where the
+     motion communicates where the panel comes from. */
   @media (prefers-reduced-motion: reduce) {
-    *,
+    *:not([data-allow-motion]),
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
@@ -386,6 +389,14 @@
     flex: 1 1 auto;
     min-height: 0;
     border-bottom: 2px solid #000;
+  }
+
+  .work-order-print-hero-solo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .work-order-print-hero-solo .work-order-print-main-panel {
+    border-right: none;
   }
 
   .work-order-print-main-panel {

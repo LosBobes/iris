@@ -139,8 +139,8 @@ flowchart TD
 
     subgraph dash ["📊 Kontrolna tabla"]
         DASH["Kontrolna tabla /"]
-        DASH --> ATT["🔴 Zahteva pažnju<br/>Kasni · Danas · Ove nedelje · Čeka klijenta"]
-        DASH --> INT["🟡 Interno<br/>Čeka materijal · Nedodeljeni"]
+        DASH --> ATT["🔴 Zahteva pažnju<br/>Kasni · Danas · Ove nedelje"]
+        DASH --> INT["🟡 Interno<br/>Nedodeljeni"]
     end
 
     subgraph wo ["📋 Radni nalozi"]
@@ -339,8 +339,6 @@ sequenceDiagram
 | `new` | Nov | Nalog kreiran, niko nije dodeljen |
 | `assigned` | Dodeljen | Operater i datum planirani |
 | `inProgress` | U toku | Štampa u toku |
-| `waitingForCustomer` | Čeka klijenta | Pauza — čeka odobrenje klijenta |
-| `waitingForMaterials` | Čeka materijal | Pauza — nema papira/materijala |
 | `completed` | Završen | Posao gotov, spreman za fakturisanje |
 | `invoiced` | Fakturisan | Zatvoren sa fakturom |
 | `cancelled` | Otkazan | Otkazan posao |
@@ -386,9 +384,9 @@ sequenceDiagram
 
 1. **Sidebar** — Iris / Grafika Čobanović; na dnu: Podešavanja, korisnik, Odjava; *Skupi meni* na desktopu
 2. Sekcija **„Zahteva pažnju“** — filteri (dugmad sa brojevima):
-   - **Kasni**, **Danas**, **Ove nedelje**, **Čeka klijenta**
+   - **Kasni**, **Danas**, **Ove nedelje**
 3. Lista **po klijentima** — klikni red → otvara filtrirane naloge
-4. Sklopljena sekcija **„Interno“** — *Čeka materijal*, *Nedodeljeni* (otvori ako ima vremena)
+4. Sklopljena sekcija **„Interno“** — *Nedodeljeni* (otvori ako ima vremena)
 5. **„Finansije i trendovi“** (sklopljeno `<details>`) — otvori na kraju, samo admin
 
 **Šta reći:**
@@ -417,7 +415,7 @@ sequenceDiagram
 
 > „Kompletan registar sa pametnim filterima. Red *Kasne* odgovara dashboardu. Status se menja iz liste gde ima smisla — sistem vas obavesti toast porukom. Sortiranje po roku, klijentu ili ceni.“
 
-**Demo trik:** filter **Kasne** ili status **Čeka klijenta** — posle `seed-demo` uvek ima sadržaja.
+**Demo trik:** filter **Kasne** ili status **U toku** — posle `seed-demo` uvek ima sadržaja.
 
 ---
 

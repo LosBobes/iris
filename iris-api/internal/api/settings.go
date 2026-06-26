@@ -24,7 +24,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 // handleUpdateSettings persists changes to the organization settings. Gated to
 // admins by requireAdmin at the route.
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	var input domain.OrganizationSettings
+	var input domain.OrganizationSettingsUpdate
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}

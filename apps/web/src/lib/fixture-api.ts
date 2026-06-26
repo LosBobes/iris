@@ -27,7 +27,12 @@ import type {
   WorkOrderStatusHistory,
 } from '@/types/work-order'
 import type { CatalogItem } from '@/types/catalog'
-import { DEFAULT_FIRM_NAME, type OrganizationSettings } from '@/types/settings'
+import {
+  DEFAULT_FIRM_NAME,
+  DEFAULT_PDF_SECTIONS,
+  type OrganizationSettings,
+  type PDFSections,
+} from '@/types/settings'
 
 interface FixtureUser extends AuthenticatedUser {
   password: string
@@ -78,7 +83,29 @@ const INVALID_WORK_ORDER = 'Prosleđeni podaci nisu ispravni.'
 
 let users = [...(rawUsers as FixtureUser[])]
 let nextUserSequence = users.length + 1
-const customers = rawCustomers as Customer[]
+// Fixture JSON predates the emails/contacts collections; backfill them (and
+// seed one row from the legacy single fields) so the in-memory store matches
+// the API shape.
+const customers = (rawCustomers as Partial<Customer>[]).map((raw): Customer => {
+  const contactName = raw.contactName ?? null
+  const email = raw.email ?? null
+  const phone = raw.phone ?? null
+  return {
+    id: raw.id ?? '',
+    name: raw.name ?? '',
+    contactName,
+    email,
+    phone,
+    pib: raw.pib ?? null,
+    mb: raw.mb ?? null,
+    emails: raw.emails ?? (email ? [{ id: `cem-${raw.id}`, email, label: null, sortOrder: 0 }] : []),
+    contacts:
+      raw.contacts ??
+      (contactName
+        ? [{ id: `cct-${raw.id}`, name: contactName, email, phone, role: null, sortOrder: 0 }]
+        : []),
+  }
+})
 const locations = rawLocations as Location[]
 
 function cloneValue<T>(value: T): T {
@@ -363,6 +390,7 @@ let catalogItems: CatalogItem[] = [
 let nextCatalogSequence = 4
 
 let firmName = DEFAULT_FIRM_NAME
+let pdfSections: PDFSections = { ...DEFAULT_PDF_SECTIONS }
 
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
   return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
@@ -720,14 +748,21 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName }
+      return { firmName, pdfSections }
     },
 
-    async updateSettings(settings: OrganizationSettings): Promise<OrganizationSettings> {
-      const next = settings.firmName.trim()
-      if (!next) throw new Error('Naziv firme je obavezan.')
-      firmName = next
-      return { firmName }
+    async updateSettings(
+      settings: Partial<OrganizationSettings>,
+    ): Promise<OrganizationSettings> {
+      if (settings.firmName !== undefined) {
+        const next = settings.firmName.trim()
+        if (!next) throw new Error('Naziv firme je obavezan.')
+        firmName = next
+      }
+      if (settings.pdfSections !== undefined) {
+        pdfSections = { ...settings.pdfSections }
+      }
+      return { firmName, pdfSections }
     },
 
     async getWorkOrders(query) {
@@ -735,17 +770,12 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getWorkOrderOperators() {
-      return [
-        ...new Set(
-          workOrders
-            .flatMap((order) => [
-              order.issuedBy,
-              order.assignment.assignedTo,
-              order.executedBy,
-            ])
-            .filter((value): value is string => Boolean(value)),
-        ),
-      ].sort((a, b) => a.localeCompare(b, 'sr-Latn'))
+      // Registered operator users (role 'user'), matching the API which sources
+      // the assignable-operator list from the user registry.
+      return users
+        .filter((user) => user.role === 'user')
+        .map((user) => user.username)
+        .sort((a, b) => a.localeCompare(b, 'sr-Latn'))
     },
 
     async getWorkOrderById(id) {

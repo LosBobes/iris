@@ -87,7 +87,7 @@ type Store interface {
 	DeleteCatalogItem(ctx context.Context, id string) error
 
 	OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error)
-	UpdateOrganizationSettings(ctx context.Context, settings domain.OrganizationSettings) (domain.OrganizationSettings, error)
+	UpdateOrganizationSettings(ctx context.Context, update domain.OrganizationSettingsUpdate) (domain.OrganizationSettings, error)
 
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	UserByID(ctx context.Context, id string) (*domain.User, error)

@@ -8,7 +8,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/CommandPalette";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
-import { DEFAULT_FIRM_NAME } from "@/types/settings";
+import {
+  DEFAULT_FIRM_NAME,
+  DEFAULT_PDF_SECTIONS,
+  type PDFSections,
+} from "@/types/settings";
 import i18n from "@/i18n";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
@@ -23,6 +27,7 @@ const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
 const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const HelpPage = lazy(() => import("@/pages/HelpPage"));
 
 type AppBootstrapState =
   | { kind: "loading" }
@@ -95,6 +100,8 @@ function App(): React.JSX.Element {
     kind: "loading",
   });
   const [firmName, setFirmName] = useState(DEFAULT_FIRM_NAME);
+  const [pdfSections, setPdfSections] =
+    useState<PDFSections>(DEFAULT_PDF_SECTIONS);
 
   const checkBackendStatus = useCallback(async () => {
     startTransition(() => {
@@ -123,6 +130,7 @@ function App(): React.JSX.Element {
         try {
           const settings = await window.api.getSettings();
           if (settings?.firmName) setFirmName(settings.firmName);
+          if (settings?.pdfSections) setPdfSections(settings.pdfSections);
         } catch {
           // Keep the default firm name.
         }
@@ -182,7 +190,7 @@ function App(): React.JSX.Element {
                 <Login onLoginSuccess={handleLoginSuccess} />
               ) : (
                 <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-                  <OrganizationContext.Provider value={{ firmName, setFirmName }}>
+                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections }}>
                   <TooltipProvider>
                     <Routes>
                       <Route path="/" element={<DashboardPage />} />
@@ -197,6 +205,7 @@ function App(): React.JSX.Element {
                       <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
                       <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
+                      <Route path="/help" element={<HelpPage />} />
                       {currentUser.role === "admin" && (
                         <Route path="/users" element={<UsersPage />} />
                       )}

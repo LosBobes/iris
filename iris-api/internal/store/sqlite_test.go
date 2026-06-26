@@ -40,6 +40,46 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	}
 }
 
+// TestSQLiteStoreCreateWorkOrderNumberAvoidsCollision guards against deriving the
+// order number from the numeric id sequence. Seeded data can have non-numeric ids
+// (e.g. "wo-cob-1") with current-year order numbers; the next create must continue
+// the order-number sequence rather than restart at 0001 and hit the UNIQUE index.
+func TestSQLiteStoreCreateWorkOrderNumberAvoidsCollision(t *testing.T) {
+	ctx := context.Background()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	year := time.Now().UTC().Year()
+	existingNumber := formatOrderNumber(year, 1)
+	if err := sqliteStore.PutWorkOrder(ctx, domain.WorkOrder{
+		ID:             "wo-cob-1", // non-numeric id, excluded from the id sequence
+		OrderNumber:    existingNumber,
+		ClientName:     "Seed Co",
+		JobDescription: "seeded order",
+		IssuedBy:       "admin",
+		IssueDate:      time.Now().UTC().Format("2006-01-02"),
+		Status:         domain.WorkOrderStatusNew,
+	}); err != nil {
+		t.Fatalf("PutWorkOrder() returned error: %v", err)
+	}
+
+	created, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "New Co",
+		JobDescription: "fresh order",
+		IssuedBy:       "admin",
+		IssueDate:      time.Now().UTC().Format("2006-01-02"),
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() returned error: %v", err)
+	}
+	if created.OrderNumber == existingNumber {
+		t.Fatalf("OrderNumber = %q, collided with existing seed order", created.OrderNumber)
+	}
+	if want := formatOrderNumber(year, 2); created.OrderNumber != want {
+		t.Fatalf("OrderNumber = %q, want %q", created.OrderNumber, want)
+	}
+}
+
 func TestSQLiteStoreAuthSessionsAndBackup(t *testing.T) {
 	ctx := context.Background()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))

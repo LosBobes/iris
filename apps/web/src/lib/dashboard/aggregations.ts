@@ -36,11 +36,9 @@ export const CORE_ATTENTION_SIGNALS = [
   'overdue',
   'dueToday',
   'dueThisWeek',
-  'waitingForCustomer',
 ] as const
 
 export const INTERNAL_ATTENTION_SIGNALS = [
-  'waitingForMaterials',
   'unassigned',
 ] as const
 
@@ -66,8 +64,6 @@ const ATTENTION_SIGNAL_SEVERITY: Record<AttentionSignal, number> = {
   overdue: 600,
   dueToday: 500,
   dueThisWeek: 400,
-  waitingForCustomer: 300,
-  waitingForMaterials: 200,
   unassigned: 100,
 }
 
@@ -167,12 +163,6 @@ export function getWorkOrderAttentionSignals(
     }
   }
 
-  if (order.status === 'waitingForCustomer') {
-    signals.push('waitingForCustomer')
-  }
-  if (order.status === 'waitingForMaterials') {
-    signals.push('waitingForMaterials')
-  }
   if (!order.assignment.assignedTo) {
     signals.push('unassigned')
   }

@@ -20,6 +20,7 @@ import {
   filtersToSearchParams,
   type WorkOrdersFiltersState,
 } from "@/hooks/useWorkOrders";
+import { useAuth } from "@/hooks/useAuth";
 import { Search, X, ChevronDown, Check, Columns3, Bookmark, Trash2 } from "lucide-react";
 import {
   addSavedView,
@@ -398,6 +399,12 @@ function ColumnsPill(): React.JSX.Element {
   const { t } = useTranslation();
   const { isVisible, toggleColumn, resetColumns, visibleColumns } =
     useColumnVisibility();
+  // Operators never see money, so the price column isn't offered in the picker.
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser.role === "admin";
+  const pickableColumns = WORK_ORDER_COLUMNS.filter(
+    (col) => isAdmin || col.key !== "price",
+  );
   // Locked columns are always on, so "all visible" means every non-locked
   // column is shown too.
   const allVisible = visibleColumns.length === WORK_ORDER_COLUMNS.length;
@@ -430,7 +437,7 @@ function ColumnsPill(): React.JSX.Element {
           )}
         </div>
         <div className="flex flex-col">
-          {WORK_ORDER_COLUMNS.map((col) => {
+          {pickableColumns.map((col) => {
             const checked = isVisible(col.key);
             const locked = isColumnLocked(col.key);
             return (

@@ -52,6 +52,7 @@ type FixtureStore struct {
 	usersLoaded      bool
 	fixtureUsers     []domain.FixtureUser
 	firmName         string
+	pdfSections      *domain.PDFSections
 	sessions         map[string]fixtureSession
 }
 
@@ -401,10 +402,12 @@ func (s *FixtureStore) CreateWorkOrder(
 
 	sequence := s.nextSequence
 	s.nextSequence++
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
+	orderNumber := nextOrderNumberFromList(s.workOrders, now.Year())
+	createdAt := now.Format(time.RFC3339)
 	newOrder := domain.WorkOrder{
 		ID:                    strconv.Itoa(sequence),
-		OrderNumber:           generateOrderNumber(sequence),
+		OrderNumber:           orderNumber,
 		CustomerID:            input.CustomerID,
 		LocationID:            input.LocationID,
 		ClientName:            input.ClientName,
@@ -423,16 +426,16 @@ func (s *FixtureStore) CreateWorkOrder(
 		Status:                domain.WorkOrderStatusNew,
 		Price:                 input.Price,
 		Note:                  input.Note,
-		CreatedAt:             now,
-		UpdatedAt:             now,
+		CreatedAt:             createdAt,
+		UpdatedAt:             createdAt,
 		CompletionDate:        nil,
 		StatusHistory: []domain.WorkOrderStatusHistory{
-			{Status: domain.WorkOrderStatusNew, ChangedAt: now, ChangedBy: input.IssuedBy},
+			{Status: domain.WorkOrderStatusNew, ChangedAt: createdAt, ChangedBy: input.IssuedBy},
 		},
 		InternalNotes: input.InternalNotes,
 		CustomerNotes: input.CustomerNotes,
 		Events: []domain.WorkOrderEvent{
-			{ID: "event-created", Kind: "created", Label: "Nalog kreiran", Actor: input.IssuedBy, CreatedAt: now},
+			{ID: "event-created", Kind: "created", Label: "Nalog kreiran", Actor: input.IssuedBy, CreatedAt: createdAt},
 		},
 		Attachments:   input.Attachments,
 		MaterialUsage: input.MaterialUsage,
@@ -446,7 +449,7 @@ func (s *FixtureStore) CreateWorkOrder(
 		newOrder.InvoiceDraft.LineItems, costs, nil, costModeCreate,
 	)
 	if newOrder.NeedsCostReview {
-		newOrder.Events = applyCostReviewEvents(newOrder.Events, false, true, input.IssuedBy, now)
+		newOrder.Events = applyCostReviewEvents(newOrder.Events, false, true, input.IssuedBy, createdAt)
 	}
 
 	s.workOrders = append(s.workOrders, newOrder)
@@ -525,33 +528,20 @@ func (s *FixtureStore) DeleteWorkOrder(_ context.Context, id string) (domain.Del
 }
 
 // Operators derives a sorted, unique operator list from the work-order data.
+// Operators returns the usernames of registered operator users (role "user"),
+// sorted — the assignable-operator list for the work-order operator selects.
 func (s *FixtureStore) Operators(_ context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := s.ensureWorkOrdersLoaded(); err != nil {
+	if err := s.ensureUsersLoadedLocked(); err != nil {
 		return nil, err
 	}
 
-	seen := make(map[string]struct{}, len(s.workOrders))
-	operators := make([]string, 0, len(s.workOrders))
-	for _, workOrder := range s.workOrders {
-		candidates := []string{workOrder.IssuedBy}
-		if workOrder.Assignment.AssignedTo != nil {
-			candidates = append(candidates, *workOrder.Assignment.AssignedTo)
-		}
-		if workOrder.ExecutedBy != nil {
-			candidates = append(candidates, *workOrder.ExecutedBy)
-		}
-		for _, candidate := range candidates {
-			if candidate == "" {
-				continue
-			}
-			if _, exists := seen[candidate]; exists {
-				continue
-			}
-			seen[candidate] = struct{}{}
-			operators = append(operators, candidate)
+	operators := make([]string, 0, len(s.fixtureUsers))
+	for _, user := range s.fixtureUsers {
+		if user.Role == domain.RoleUser {
+			operators = append(operators, user.Username)
 		}
 	}
 
@@ -847,7 +837,10 @@ func normalizeStatus(status domain.WorkOrderStatus) domain.WorkOrderStatus {
 	switch status {
 	case "", domain.WorkOrderStatusDraft:
 		return domain.WorkOrderStatusNew
-	case domain.WorkOrderStatusActive:
+	case domain.WorkOrderStatusActive,
+		// Retired "waiting" statuses collapse into inProgress for older data.
+		domain.WorkOrderStatusWaitingForCustomer,
+		domain.WorkOrderStatusWaitingForMaterials:
 		return domain.WorkOrderStatusInProgress
 	default:
 		return status
@@ -873,8 +866,39 @@ func nextSequenceStart(workOrders []domain.WorkOrder) int {
 	return maxID + 1
 }
 
-func generateOrderNumber(sequence int) string {
-	return fmt.Sprintf("RN-%d-%04d", time.Now().UTC().Year(), sequence)
+// formatOrderNumber renders the canonical RN-<year>-<seq> order number. Order
+// numbers are scoped per calendar year and carry their own UNIQUE constraint —
+// they are deliberately independent of the work-order id, which may be
+// non-numeric (e.g. a seeded "wo-cob-1"). Deriving them from the id sequence is
+// what caused duplicate order numbers when the id wasn't a dense integer.
+func formatOrderNumber(year, sequence int) string {
+	return fmt.Sprintf("RN-%d-%04d", year, sequence)
+}
+
+// orderNumberSequence extracts the trailing sequence from an RN-<year>-<seq>
+// order number for the given year, reporting false when it doesn't match.
+func orderNumberSequence(orderNumber string, year int) (int, bool) {
+	rest, ok := strings.CutPrefix(orderNumber, fmt.Sprintf("RN-%d-", year))
+	if !ok {
+		return 0, false
+	}
+	seq, err := strconv.Atoi(rest)
+	if err != nil {
+		return 0, false
+	}
+	return seq, true
+}
+
+// nextOrderNumberFromList returns the next free order number for year by scanning
+// existing order numbers, so it never collides regardless of the id scheme.
+func nextOrderNumberFromList(workOrders []domain.WorkOrder, year int) string {
+	maxSeq := 0
+	for _, workOrder := range workOrders {
+		if seq, ok := orderNumberSequence(workOrder.OrderNumber, year); ok && seq > maxSeq {
+			maxSeq = seq
+		}
+	}
+	return formatOrderNumber(year, maxSeq+1)
 }
 
 func idSequence(id string) int {
@@ -1489,8 +1513,6 @@ func isValidStatus(value domain.WorkOrderStatus) bool {
 	case domain.WorkOrderStatusNew,
 		domain.WorkOrderStatusAssigned,
 		domain.WorkOrderStatusInProgress,
-		domain.WorkOrderStatusWaitingForCustomer,
-		domain.WorkOrderStatusWaitingForMaterials,
 		domain.WorkOrderStatusCompleted,
 		domain.WorkOrderStatusCancelled,
 		domain.WorkOrderStatusInvoiced:
@@ -1560,21 +1582,10 @@ func canTransition(from domain.WorkOrderStatus, to domain.WorkOrderStatus) bool 
 		},
 		domain.WorkOrderStatusAssigned: {
 			domain.WorkOrderStatusInProgress,
-			domain.WorkOrderStatusWaitingForMaterials,
 			domain.WorkOrderStatusCancelled,
 		},
 		domain.WorkOrderStatusInProgress: {
-			domain.WorkOrderStatusWaitingForCustomer,
-			domain.WorkOrderStatusWaitingForMaterials,
 			domain.WorkOrderStatusCompleted,
-			domain.WorkOrderStatusCancelled,
-		},
-		domain.WorkOrderStatusWaitingForCustomer: {
-			domain.WorkOrderStatusInProgress,
-			domain.WorkOrderStatusCancelled,
-		},
-		domain.WorkOrderStatusWaitingForMaterials: {
-			domain.WorkOrderStatusInProgress,
 			domain.WorkOrderStatusCancelled,
 		},
 		domain.WorkOrderStatusCompleted: {
@@ -1812,6 +1823,30 @@ func cloneCustomer(customer domain.Customer) domain.Customer {
 	cloned.Phone = clonePtrString(customer.Phone)
 	cloned.Pib = clonePtrString(customer.Pib)
 	cloned.Mb = clonePtrString(customer.Mb)
+	cloned.Emails = cloneCustomerEmails(customer.Emails)
+	cloned.Contacts = cloneCustomerContacts(customer.Contacts)
+	return cloned
+}
+
+// cloneCustomerEmails deep-copies the slice and always returns a non-nil value
+// so the JSON shape stays an array even for customers without emails.
+func cloneCustomerEmails(emails []domain.CustomerEmail) []domain.CustomerEmail {
+	cloned := make([]domain.CustomerEmail, len(emails))
+	for i, email := range emails {
+		email.Label = clonePtrString(email.Label)
+		cloned[i] = email
+	}
+	return cloned
+}
+
+func cloneCustomerContacts(contacts []domain.CustomerContact) []domain.CustomerContact {
+	cloned := make([]domain.CustomerContact, len(contacts))
+	for i, contact := range contacts {
+		contact.Email = clonePtrString(contact.Email)
+		contact.Phone = clonePtrString(contact.Phone)
+		contact.Role = clonePtrString(contact.Role)
+		cloned[i] = contact
+	}
 	return cloned
 }
 

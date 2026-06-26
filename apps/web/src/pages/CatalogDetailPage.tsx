@@ -167,7 +167,9 @@ function CatalogDetailPage(): React.JSX.Element {
                   value={formatCatalogPrice(item.purchasePrice)}
                 />
               )}
-              <SummaryRow label={t("catalog.detail.sale")} value={formatCatalogPrice(item.salePrice)} />
+              {isAdmin && (
+                <SummaryRow label={t("catalog.detail.sale")} value={formatCatalogPrice(item.salePrice)} />
+              )}
               {isAdmin && item.purchasePrice !== null && item.salePrice !== null && (
                 <SummaryRow
                   label={t("catalog.detail.margin")}
@@ -311,12 +313,15 @@ function DetailsForm({
             onChange={(purchasePrice) => onChange({ ...value, purchasePrice })}
           />
         )}
-        <PriceInput
-          label={t("catalog.detail.salePriceField")}
-          value={value.salePrice}
-          readOnly={readOnly}
-          onChange={(salePrice) => onChange({ ...value, salePrice })}
-        />
+        {/* Operators see no money: the sale price is admin-only too. */}
+        {!readOnly && (
+          <PriceInput
+            label={t("catalog.detail.salePriceField")}
+            value={value.salePrice}
+            readOnly={readOnly}
+            onChange={(salePrice) => onChange({ ...value, salePrice })}
+          />
+        )}
         <Field
           label={t("catalog.detail.barcode")}
           value={value.barcode ?? ""}

@@ -49,11 +49,13 @@ const (
 	WorkOrderStatusNew                 WorkOrderStatus = "new"
 	WorkOrderStatusAssigned            WorkOrderStatus = "assigned"
 	WorkOrderStatusInProgress          WorkOrderStatus = "inProgress"
-	WorkOrderStatusWaitingForCustomer  WorkOrderStatus = "waitingForCustomer"
-	WorkOrderStatusWaitingForMaterials WorkOrderStatus = "waitingForMaterials"
 	WorkOrderStatusCompleted           WorkOrderStatus = "completed"
 	WorkOrderStatusCancelled           WorkOrderStatus = "cancelled"
 	WorkOrderStatusInvoiced            WorkOrderStatus = "invoiced"
+
+	// Retired statuses: accepted from older data and normalized to inProgress.
+	WorkOrderStatusWaitingForCustomer  WorkOrderStatus = "waitingForCustomer"
+	WorkOrderStatusWaitingForMaterials WorkOrderStatus = "waitingForMaterials"
 )
 
 type WorkOrderPriority string
@@ -166,10 +168,44 @@ type CatalogItemInput struct {
 // administrator changes it via the organization settings.
 const DefaultFirmName = "Grafika Čobanović"
 
-// OrganizationSettings holds shop-wide branding/config an admin can edit. For
-// now this is just the firm name shown in the app header and settings.
+// PDFSections controls which sections of the work-order printout are rendered.
+// Every section defaults to true (see DefaultPDFSections) so an unconfigured shop
+// keeps the full sheet.
+type PDFSections struct {
+	Delivery        bool `json:"delivery"`
+	Billing         bool `json:"billing"`
+	Notes           bool `json:"notes"`
+	ShippingAddress bool `json:"shippingAddress"`
+	Completion      bool `json:"completion"`
+	Signatures      bool `json:"signatures"`
+}
+
+// DefaultPDFSections returns the all-enabled configuration used when a shop has
+// not customized its printout.
+func DefaultPDFSections() PDFSections {
+	return PDFSections{
+		Delivery:        true,
+		Billing:         true,
+		Notes:           true,
+		ShippingAddress: true,
+		Completion:      true,
+		Signatures:      true,
+	}
+}
+
+// OrganizationSettings holds shop-wide branding/config an admin can edit: the
+// firm name shown in the app header and the work-order PDF section toggles.
 type OrganizationSettings struct {
-	FirmName string `json:"firmName"`
+	FirmName    string      `json:"firmName"`
+	PDFSections PDFSections `json:"pdfSections"`
+}
+
+// OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
+// Nil fields are left unchanged, so a firm-name-only save does not wipe the PDF
+// configuration and vice versa.
+type OrganizationSettingsUpdate struct {
+	FirmName    *string      `json:"firmName"`
+	PDFSections *PDFSections `json:"pdfSections"`
 }
 
 type User struct {
@@ -231,6 +267,32 @@ type Customer struct {
 	// whenever present; see internal/domain/validation.go.
 	Pib *string `json:"pib"`
 	Mb  *string `json:"mb"`
+	// Emails and Contacts are 1-N child collections persisted in their own
+	// tables. The legacy single Email/ContactName/Phone fields above are kept
+	// for back-compat and seeded into these collections by migration. Always
+	// serialized as arrays (never null); see internal/store.
+	Emails   []CustomerEmail   `json:"emails"`
+	Contacts []CustomerContact `json:"contacts"`
+}
+
+// CustomerEmail is one of a firm's corporate email addresses. Label is an
+// optional free-text tag (e.g. "Računovodstvo").
+type CustomerEmail struct {
+	ID        string  `json:"id"`
+	Email     string  `json:"email"`
+	Label     *string `json:"label"`
+	SortOrder int     `json:"sortOrder"`
+}
+
+// CustomerContact is one of a firm's contact people, with their own optional
+// email and phone.
+type CustomerContact struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Email     *string `json:"email"`
+	Phone     *string `json:"phone"`
+	Role      *string `json:"role"`
+	SortOrder int     `json:"sortOrder"`
 }
 
 type Location struct {

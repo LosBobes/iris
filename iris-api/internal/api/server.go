@@ -590,7 +590,13 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 		stripWorkOrderRenderMoney(workOrder)
 	}
 
-	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, locationAddress)
+	settings, err := s.store.OrganizationSettings(r.Context())
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+
+	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, locationAddress, settings.PDFSections)
 	if err != nil {
 		writeServerError(w, err)
 		return
@@ -633,7 +639,13 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 		stripWorkOrderRenderMoney(&order)
 	}
 
-	html, err := reports.RenderWorkOrderHTML(order, locationAddress)
+	settings, err := s.store.OrganizationSettings(r.Context())
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+
+	html, err := reports.RenderWorkOrderHTML(order, locationAddress, settings.PDFSections)
 	if err != nil {
 		writeServerError(w, err)
 		return

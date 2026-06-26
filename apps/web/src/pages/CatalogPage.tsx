@@ -143,7 +143,11 @@ function CatalogPage(): React.JSX.Element {
                           )}
                         </span>
                         <span className="block truncate text-[11px] text-[color:var(--iris-ink-soft)]">
-                          {[item.code, item.unit, formatCatalogPrice(item.salePrice)]
+                          {[
+                            item.code,
+                            item.unit,
+                            isAdmin ? formatCatalogPrice(item.salePrice) : null,
+                          ]
                             .filter(Boolean)
                             .join(" · ")}
                         </span>

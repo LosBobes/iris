@@ -34,6 +34,14 @@ type WorkOrderPrintData struct {
 	CompletionDate  string
 	IssuedBy        string
 	ExecutedBy      string
+
+	// Section visibility, driven by the shop's PDF configuration.
+	ShowDelivery        bool
+	ShowBilling         bool
+	ShowNotes           bool
+	ShowShippingAddress bool
+	ShowCompletion      bool
+	ShowSignatures      bool
 }
 
 func uppercaseLine(value *string) string {
@@ -315,6 +323,14 @@ const htmlTemplateStr = `<!DOCTYPE html>
       border-bottom: 2px solid #000;
     }
 
+    .work-order-print-hero-solo {
+      grid-template-columns: 1fr;
+    }
+
+    .work-order-print-hero-solo .work-order-print-main-panel {
+      border-right: none;
+    }
+
     .work-order-print-main-panel {
       display: grid;
       grid-template-rows: auto 1fr;
@@ -568,7 +584,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
   <section class="work-order-print-sheet">
     <h1 class="work-order-print-title">RADNI NALOG</h1>
 
-    <div class="work-order-print-hero">
+    <div class="work-order-print-hero{{if not .ShowDelivery}} work-order-print-hero-solo{{end}}">
       <div class="work-order-print-main-panel">
         <div class="work-order-print-top-grid">
           <div class="work-order-print-client-box">
@@ -594,6 +610,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
         </div>
       </div>
 
+      {{if .ShowDelivery}}
       <div class="work-order-print-delivery-box">
         {{range .DeliveryRows}}
           <div class="work-order-print-check-row">
@@ -603,10 +620,12 @@ const htmlTemplateStr = `<!DOCTYPE html>
         {{end}}
         <div class="work-order-print-empty-field"></div>
       </div>
+      {{end}}
     </div>
 
     <div class="work-order-print-document-row">
       <div class="work-order-print-planned-date">{{.PlannedDate}}</div>
+      {{if .ShowBilling}}
       <div class="work-order-print-billing-box">
         {{range .BillingRows}}
           <div class="work-order-print-billing-row">
@@ -615,9 +634,12 @@ const htmlTemplateStr = `<!DOCTYPE html>
           </div>
         {{end}}
       </div>
+      {{end}}
     </div>
 
+    {{if or .ShowNotes .ShowShippingAddress}}
     <div class="work-order-print-notes-row">
+      {{if .ShowNotes}}
       <div class="work-order-print-note-box">
         <div class="work-order-print-label">NAPOMENA</div>
         <div class="work-order-print-note-lines">
@@ -626,14 +648,19 @@ const htmlTemplateStr = `<!DOCTYPE html>
           {{end}}
         </div>
       </div>
+      {{end}}
+      {{if .ShowShippingAddress}}
       <div class="work-order-print-address-box">
         <div class="work-order-print-label">ADRESA ZA SLANJE:</div>
         {{if .ShippingAddress}}
           <div class="work-order-print-address">{{.ShippingAddress}}</div>
         {{end}}
       </div>
+      {{end}}
     </div>
+    {{end}}
 
+    {{if .ShowCompletion}}
     <div class="work-order-print-completion-row">
       <div class="work-order-print-completion-state">
         <span>RADNI NALOG ZAVRŠEN</span>
@@ -644,7 +671,9 @@ const htmlTemplateStr = `<!DOCTYPE html>
         <span class="work-order-print-date-line">{{.CompletionDate}}</span>
       </div>
     </div>
+    {{end}}
 
+    {{if .ShowSignatures}}
     <div class="work-order-print-signatures">
       <div>
         <div class="work-order-print-label">RN IZDAO</div>
@@ -655,6 +684,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
         <div class="work-order-print-signature-value">{{.ExecutedBy}}</div>
       </div>
     </div>
+    {{end}}
   </section>
 </body>
 </html>`
@@ -675,7 +705,7 @@ func ResolvePrintShippingAddress(order domain.WorkOrder, locationAddress *string
 	return ""
 }
 
-func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string) (string, error) {
+func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sections domain.PDFSections) (string, error) {
 	plannedDate := order.DueDate
 	if plannedDate == nil {
 		plannedDate = order.Assignment.ScheduledDate
@@ -706,6 +736,13 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string) (strin
 		CompletionDate:  formatOptionalDate(order.CompletionDate),
 		IssuedBy:        order.IssuedBy,
 		ExecutedBy:      execBy,
+
+		ShowDelivery:        sections.Delivery,
+		ShowBilling:         sections.Billing,
+		ShowNotes:           sections.Notes,
+		ShowShippingAddress: sections.ShippingAddress,
+		ShowCompletion:      sections.Completion,
+		ShowSignatures:      sections.Signatures,
 	}
 
 	var sb strings.Builder
@@ -715,8 +752,8 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string) (strin
 	return sb.String(), nil
 }
 
-func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAddress *string) ([]byte, error) {
-	htmlContent, err := RenderWorkOrderHTML(order, locationAddress)
+func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAddress *string, sections domain.PDFSections) ([]byte, error) {
+	htmlContent, err := RenderWorkOrderHTML(order, locationAddress, sections)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render HTML template: %w", err)
 	}

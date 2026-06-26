@@ -217,6 +217,9 @@ func TestOrganizationSettings(t *testing.T) {
 	if settings.FirmName != domain.DefaultFirmName {
 		t.Fatalf("default firmName = %q, want %q", settings.FirmName, domain.DefaultFirmName)
 	}
+	if settings.PDFSections != domain.DefaultPDFSections() {
+		t.Fatalf("default pdfSections = %+v, want all-enabled", settings.PDFSections)
+	}
 
 	if rec := roleRequest(t, server, userToken, http.MethodPut, "/settings", `{"firmName":"Hack"}`); rec.Code != http.StatusForbidden {
 		t.Fatalf("PUT /settings as user = %d, want %d", rec.Code, http.StatusForbidden)
@@ -229,6 +232,13 @@ func TestOrganizationSettings(t *testing.T) {
 		t.Fatalf("PUT /settings as admin = %d, want %d", rec.Code, http.StatusOK)
 	}
 
+	// A pdfSections-only update must persist and must not wipe the firm name.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"pdfSections":{"delivery":false,"billing":true,"notes":true,"shippingAddress":false,"completion":true,"signatures":true}}`,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("PUT pdfSections as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+
 	afterRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
 	var after domain.OrganizationSettings
 	if err := json.Unmarshal(afterRec.Body.Bytes(), &after); err != nil {
@@ -236,6 +246,12 @@ func TestOrganizationSettings(t *testing.T) {
 	}
 	if after.FirmName != "Grafika Novi Naziv" {
 		t.Fatalf("persisted firmName = %q, want %q", after.FirmName, "Grafika Novi Naziv")
+	}
+	if after.PDFSections.Delivery || after.PDFSections.ShippingAddress {
+		t.Fatalf("pdfSections not persisted: %+v", after.PDFSections)
+	}
+	if !after.PDFSections.Billing || !after.PDFSections.Signatures {
+		t.Fatalf("pdfSections-only update wiped enabled sections: %+v", after.PDFSections)
 	}
 }
 

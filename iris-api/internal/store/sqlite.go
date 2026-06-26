@@ -2,13 +2,14 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -191,7 +192,90 @@ func (s *SQLiteStore) Customers(ctx context.Context, query CustomerQuery) (Custo
 		customer.Mb = nullStringPtr(mb)
 		customers = append(customers, customer)
 	}
-	return CustomerListResult{Items: customers, Total: total}, rows.Err()
+	if err := rows.Err(); err != nil {
+		return CustomerListResult{}, err
+	}
+	if err := s.loadCustomerChildren(ctx, customers); err != nil {
+		return CustomerListResult{}, err
+	}
+	return CustomerListResult{Items: customers, Total: total}, nil
+}
+
+// loadCustomerChildren populates the Emails and Contacts collections for the
+// given customers in two batched queries (avoiding N+1). The slices are always
+// initialized to non-nil so they serialize as [] rather than null.
+func (s *SQLiteStore) loadCustomerChildren(ctx context.Context, customers []domain.Customer) error {
+	indexByID := make(map[string]int, len(customers))
+	for i := range customers {
+		customers[i].Emails = []domain.CustomerEmail{}
+		customers[i].Contacts = []domain.CustomerContact{}
+		indexByID[customers[i].ID] = i
+	}
+	if len(customers) == 0 {
+		return nil
+	}
+
+	args := make([]any, len(customers))
+	placeholders := make([]string, len(customers))
+	for i := range customers {
+		args[i] = customers[i].ID
+		placeholders[i] = "?"
+	}
+	in := strings.Join(placeholders, ",")
+
+	emailRows, err := s.db.QueryContext(
+		ctx,
+		`SELECT id, customer_id, email, label, sort_order FROM customer_emails
+		 WHERE customer_id IN (`+in+`) ORDER BY sort_order, email COLLATE NOCASE`,
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("load customer emails: %w", err)
+	}
+	defer emailRows.Close()
+	for emailRows.Next() {
+		var email domain.CustomerEmail
+		var customerID string
+		var label sql.NullString
+		if err := emailRows.Scan(&email.ID, &customerID, &email.Email, &label, &email.SortOrder); err != nil {
+			return fmt.Errorf("scan customer email: %w", err)
+		}
+		email.Label = nullStringPtr(label)
+		if i, ok := indexByID[customerID]; ok {
+			customers[i].Emails = append(customers[i].Emails, email)
+		}
+	}
+	if err := emailRows.Err(); err != nil {
+		return err
+	}
+
+	contactRows, err := s.db.QueryContext(
+		ctx,
+		`SELECT id, customer_id, name, email, phone, role, sort_order FROM customer_contacts
+		 WHERE customer_id IN (`+in+`) ORDER BY sort_order, name COLLATE NOCASE`,
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("load customer contacts: %w", err)
+	}
+	defer contactRows.Close()
+	for contactRows.Next() {
+		var contact domain.CustomerContact
+		var customerID string
+		var email, phone, role sql.NullString
+		if err := contactRows.Scan(
+			&contact.ID, &customerID, &contact.Name, &email, &phone, &role, &contact.SortOrder,
+		); err != nil {
+			return fmt.Errorf("scan customer contact: %w", err)
+		}
+		contact.Email = nullStringPtr(email)
+		contact.Phone = nullStringPtr(phone)
+		contact.Role = nullStringPtr(role)
+		if i, ok := indexByID[customerID]; ok {
+			customers[i].Contacts = append(customers[i].Contacts, contact)
+		}
+	}
+	return contactRows.Err()
 }
 
 func (s *SQLiteStore) CustomerByID(ctx context.Context, id string) (*domain.Customer, error) {
@@ -213,7 +297,11 @@ func (s *SQLiteStore) CustomerByID(ctx context.Context, id string) (*domain.Cust
 	customer.Phone = nullStringPtr(phone)
 	customer.Pib = nullStringPtr(pib)
 	customer.Mb = nullStringPtr(mb)
-	return &customer, nil
+	loaded := []domain.Customer{customer}
+	if err := s.loadCustomerChildren(ctx, loaded); err != nil {
+		return nil, err
+	}
+	return &loaded[0], nil
 }
 
 func (s *SQLiteStore) Locations(ctx context.Context) ([]domain.Location, error) {
@@ -249,7 +337,14 @@ func (s *SQLiteStore) UpsertCustomer(
 	if msg := domain.ValidateCustomerIdentifiers(customer.Pib, customer.Mb); msg != "" {
 		return nil, newValidationError(msg)
 	}
-	if _, err := s.db.ExecContext(
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin upsert customer: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO customers(id, name, contact_name, email, phone, pib, mb, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -271,7 +366,79 @@ func (s *SQLiteStore) UpsertCustomer(
 	); err != nil {
 		return nil, fmt.Errorf("upsert customer: %w", err)
 	}
-	return &customer, nil
+
+	// Child collections are replaced wholesale: the request payload is the
+	// authoritative set, so removed rows disappear and reordering sticks.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM customer_emails WHERE customer_id = ?`, customer.ID); err != nil {
+		return nil, fmt.Errorf("clear customer emails: %w", err)
+	}
+	stored := customer
+	stored.Emails = make([]domain.CustomerEmail, 0, len(customer.Emails))
+	for i, email := range customer.Emails {
+		if strings.TrimSpace(email.Email) == "" {
+			continue
+		}
+		if strings.TrimSpace(email.ID) == "" {
+			id, idErr := newChildID("cem")
+			if idErr != nil {
+				return nil, idErr
+			}
+			email.ID = id
+		}
+		email.SortOrder = i
+		if _, err := tx.ExecContext(
+			ctx,
+			`INSERT INTO customer_emails(id, customer_id, email, label, sort_order)
+			 VALUES (?, ?, ?, ?, ?)`,
+			email.ID, customer.ID, strings.TrimSpace(email.Email), ptrStringValue(email.Label), email.SortOrder,
+		); err != nil {
+			return nil, fmt.Errorf("insert customer email: %w", err)
+		}
+		stored.Emails = append(stored.Emails, email)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM customer_contacts WHERE customer_id = ?`, customer.ID); err != nil {
+		return nil, fmt.Errorf("clear customer contacts: %w", err)
+	}
+	stored.Contacts = make([]domain.CustomerContact, 0, len(customer.Contacts))
+	for i, contact := range customer.Contacts {
+		if strings.TrimSpace(contact.Name) == "" {
+			continue
+		}
+		if strings.TrimSpace(contact.ID) == "" {
+			id, idErr := newChildID("cct")
+			if idErr != nil {
+				return nil, idErr
+			}
+			contact.ID = id
+		}
+		contact.SortOrder = i
+		if _, err := tx.ExecContext(
+			ctx,
+			`INSERT INTO customer_contacts(id, customer_id, name, email, phone, role, sort_order)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			contact.ID, customer.ID, strings.TrimSpace(contact.Name),
+			ptrStringValue(contact.Email), ptrStringValue(contact.Phone), ptrStringValue(contact.Role), contact.SortOrder,
+		); err != nil {
+			return nil, fmt.Errorf("insert customer contact: %w", err)
+		}
+		stored.Contacts = append(stored.Contacts, contact)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit upsert customer: %w", err)
+	}
+	return &stored, nil
+}
+
+// newChildID returns a short random identifier with the given prefix, used for
+// customer child rows (emails, contacts) when the client omits one.
+func newChildID(prefix string) (string, error) {
+	var raw [8]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("create %s id: %w", prefix, err)
+	}
+	return prefix + "-" + hex.EncodeToString(raw[:]), nil
 }
 
 func (s *SQLiteStore) UpsertLocation(
@@ -426,10 +593,15 @@ func (s *SQLiteStore) CreateWorkOrder(
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	nowTime := time.Now().UTC()
+	orderNumber, err := nextOrderNumber(ctx, tx, nowTime.Year())
+	if err != nil {
+		return nil, err
+	}
+	now := nowTime.Format(time.RFC3339)
 	workOrder := domain.WorkOrder{
 		ID:                    strconv.Itoa(sequence),
-		OrderNumber:           generateOrderNumber(sequence),
+		OrderNumber:           orderNumber,
 		CustomerID:            input.CustomerID,
 		LocationID:            input.LocationID,
 		ClientName:            input.ClientName,
@@ -552,34 +724,29 @@ func (s *SQLiteStore) DeleteWorkOrder(
 	return domain.DeleteWorkOrderResponse{Success: true}, nil
 }
 
+// Operators returns the usernames of registered operator users (role "user"),
+// sorted. This is the assignable-operator list backing the work-order operator
+// selects; admins are excluded since the field tracks who does the work.
 func (s *SQLiteStore) Operators(ctx context.Context) ([]string, error) {
-	result, err := s.WorkOrders(ctx, WorkOrderListQuery{})
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT username FROM users WHERE role = ? ORDER BY username COLLATE NOCASE`,
+		string(domain.RoleUser),
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list operators: %w", err)
 	}
-	seen := make(map[string]struct{}, len(result.Items))
-	operators := make([]string, 0, len(result.Items))
-	for _, workOrder := range result.Items {
-		candidates := []string{workOrder.IssuedBy}
-		if workOrder.Assignment.AssignedTo != nil {
-			candidates = append(candidates, *workOrder.Assignment.AssignedTo)
+	defer rows.Close()
+
+	operators := make([]string, 0)
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			return nil, fmt.Errorf("scan operator: %w", err)
 		}
-		if workOrder.ExecutedBy != nil {
-			candidates = append(candidates, *workOrder.ExecutedBy)
-		}
-		for _, candidate := range candidates {
-			if candidate == "" {
-				continue
-			}
-			if _, exists := seen[candidate]; exists {
-				continue
-			}
-			seen[candidate] = struct{}{}
-			operators = append(operators, candidate)
-		}
+		operators = append(operators, username)
 	}
-	sort.Strings(operators)
-	return operators, nil
+	return operators, rows.Err()
 }
 
 // sqlExecutor abstracts *sql.DB and *sql.Tx so write helpers can run either
@@ -715,6 +882,31 @@ func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
 		return 1, nil
 	}
 	return int(next.Int64), nil
+}
+
+// nextOrderNumber returns the next free RN-<year>-<seq> order number by scanning
+// the highest sequence already issued for that year. It reads order numbers
+// directly rather than deriving from the id sequence, so it stays correct even
+// when work-order ids are non-numeric (e.g. seeded "wo-cob-1"). Must run inside
+// the same write transaction as the insert so concurrent creates can't collide.
+func nextOrderNumber(ctx context.Context, db sqlExecutor, year int) (string, error) {
+	prefix := fmt.Sprintf("RN-%d-", year)
+	var next sql.NullInt64
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT COALESCE(MAX(CAST(substr(order_number, ?) AS INTEGER)), 0) + 1
+		 FROM work_orders
+		 WHERE order_number LIKE ?`,
+		len(prefix)+1, // substr is 1-indexed: start just past the "RN-<year>-" prefix
+		prefix+"%",
+	).Scan(&next); err != nil {
+		return "", fmt.Errorf("next order number: %w", err)
+	}
+	seq := 1
+	if next.Valid && next.Int64 > 1 {
+		seq = int(next.Int64)
+	}
+	return formatOrderNumber(year, seq), nil
 }
 
 func buildWorkOrderWhere(query WorkOrderListQuery) (string, []any) {

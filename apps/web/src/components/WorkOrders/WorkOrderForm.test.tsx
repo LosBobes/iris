@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeLineItemsTotal,
   getInvoiceUnitOptions,
   getFirstWorkOrderFormErrorTarget,
   normalizeWorkOrderFormDefaultValues,
@@ -176,6 +177,33 @@ describe("getInvoiceUnitOptions", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("computeLineItemsTotal", () => {
+  it("sums quantity × unit price across line items", () => {
+    expect(
+      computeLineItemsTotal([
+        { quantity: 1, unitPrice: 345 },
+        { quantity: 2, unitPrice: 345 },
+      ]),
+    ).toBe(1035);
+  });
+
+  it("treats missing/null quantity or price as zero", () => {
+    expect(
+      computeLineItemsTotal([
+        { quantity: null, unitPrice: 100 },
+        { quantity: 3, unitPrice: null },
+        { quantity: 2, unitPrice: 50 },
+      ]),
+    ).toBe(100);
+  });
+
+  it("returns 0 for empty or undefined input", () => {
+    expect(computeLineItemsTotal([])).toBe(0);
+    expect(computeLineItemsTotal(null)).toBe(0);
+    expect(computeLineItemsTotal(undefined)).toBe(0);
   });
 });
 

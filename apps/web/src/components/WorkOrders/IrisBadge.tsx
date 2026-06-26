@@ -5,8 +5,6 @@ const STATUS_CSS_VAR: Record<WorkOrderStatus, string> = {
   new: "var(--iris-status-draft)",
   assigned: "var(--iris-status-active)",
   inProgress: "var(--iris-status-active)",
-  waitingForCustomer: "var(--iris-accent)",
-  waitingForMaterials: "var(--iris-accent)",
   completed: "var(--iris-status-done)",
   cancelled: "var(--iris-status-cancelled)",
   invoiced: "var(--iris-status-done)",

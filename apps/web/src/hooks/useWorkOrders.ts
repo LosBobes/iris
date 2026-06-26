@@ -42,6 +42,8 @@ export interface WorkOrdersFiltersState {
   deliveryMethod: DeliveryMethod | "all";
   queue: "all" | "unassigned" | "overdue" | "today" | "thisWeek";
   customerId: string;
+  /** Operator username; "" = any. Used by the operator dashboard deep-links. */
+  assignedTo: string;
   dateFrom: string;
   dateTo: string;
   /** Admin-only: show only orders awaiting cost entry. */
@@ -77,6 +79,7 @@ const INITIAL_FILTERS: WorkOrdersFiltersState = {
   deliveryMethod: "all",
   queue: "all",
   customerId: "",
+  assignedTo: "",
   dateFrom: "",
   dateTo: "",
   needsCostReview: false,
@@ -131,6 +134,7 @@ export function filtersFromSearchParams(
     ),
     queue: readEnumParam(searchParams, "queue", QUEUE_VALUES, "all"),
     customerId: searchParams.get("customerId") ?? "",
+    assignedTo: searchParams.get("assignedTo") ?? "",
     dateFrom: searchParams.get("dateFrom") ?? "",
     dateTo: searchParams.get("dateTo") ?? "",
     needsCostReview: searchParams.get("needsCostReview") === "true",
@@ -152,6 +156,7 @@ export function filtersToSearchParams(
   }
   if (filters.queue !== "all") searchParams.set("queue", filters.queue);
   if (filters.customerId) searchParams.set("customerId", filters.customerId);
+  if (filters.assignedTo) searchParams.set("assignedTo", filters.assignedTo);
   if (filters.dateFrom) searchParams.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) searchParams.set("dateTo", filters.dateTo);
   if (filters.needsCostReview) searchParams.set("needsCostReview", "true");
@@ -170,6 +175,7 @@ function areFiltersEqual(
     left.deliveryMethod === right.deliveryMethod &&
     left.queue === right.queue &&
     left.customerId === right.customerId &&
+    left.assignedTo === right.assignedTo &&
     left.dateFrom === right.dateFrom &&
     left.dateTo === right.dateTo &&
     left.needsCostReview === right.needsCostReview
@@ -189,6 +195,10 @@ export function filterWorkOrdersForList(
 
   return orders.filter((order) => {
     if (filters.customerId && order.customerId !== filters.customerId) {
+      return false;
+    }
+
+    if (filters.assignedTo && order.assignment.assignedTo !== filters.assignedTo) {
       return false;
     }
 

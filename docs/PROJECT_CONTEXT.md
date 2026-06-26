@@ -79,9 +79,8 @@ Work orders use an expanded operational schema:
 
 - normalized `Customer` and `Location`
 - assignment with operator, priority, and scheduled date
-- canonical statuses: `new`, `assigned`, `inProgress`,
-  `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`,
-  `invoiced`
+- canonical statuses: `new`, `assigned`, `inProgress`, `completed`,
+  `cancelled`, `invoiced`
 - separate internal and customer notes
 - materials, time entries, attachments, events, and invoice draft fields
 - public communication token for external status lookup

@@ -46,15 +46,6 @@ export function DashboardActionSection({
           <div className="text-[12px] text-[color:var(--iris-ink-soft)]">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span>{t("dashboard.action.material")} {signalCounts.waitingForMaterials}</span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("dashboard.signals.descriptions.waitingForMaterials")}
-              </TooltipContent>
-            </Tooltip>{" "}
-            ·{" "}
-            <Tooltip>
-              <TooltipTrigger asChild>
                 <span>{t("dashboard.action.unassigned")} {signalCounts.unassigned}</span>
               </TooltipTrigger>
               <TooltipContent side="bottom">

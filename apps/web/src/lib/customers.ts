@@ -1,6 +1,11 @@
 import i18n from "@/i18n";
 import { isValidMb, isValidPib } from "@/lib/serbian-id";
-import type { Customer, Location } from "@/types/work-order";
+import type {
+  Customer,
+  CustomerContact,
+  CustomerEmail,
+  Location,
+} from "@/types/work-order";
 
 export const emptyCustomer: Customer = {
   id: "",
@@ -10,10 +15,60 @@ export const emptyCustomer: Customer = {
   phone: null,
   pib: null,
   mb: null,
+  emails: [],
+  contacts: [],
 };
 
 export function emptyLocation(customerId: string): Location {
   return { id: "", customerId, name: "", address: null };
+}
+
+// Editor rows carry a client-side id; the server replaces blank ids on save.
+export function emptyCustomerEmail(): CustomerEmail {
+  return { id: slugId("cem", Math.random().toString(36).slice(2)), email: "", label: null, sortOrder: 0 };
+}
+
+export function emptyCustomerContact(): CustomerContact {
+  return {
+    id: slugId("cct", Math.random().toString(36).slice(2)),
+    name: "",
+    email: null,
+    phone: null,
+    role: null,
+    sortOrder: 0,
+  };
+}
+
+/**
+ * Normalizes the customer's email/contact collections for saving: trims values,
+ * drops empty rows (no email / no contact name), and reassigns sortOrder from
+ * the current array order.
+ */
+export function normalizeCustomerCollections(customer: Customer): Customer {
+  const emails = customer.emails
+    .map((email) => ({ ...email, email: email.email.trim(), label: blankToNull(email.label) }))
+    .filter((email) => email.email !== "")
+    .map((email, sortOrder) => ({ ...email, sortOrder }));
+  const contacts = customer.contacts
+    .map((contact) => ({
+      ...contact,
+      name: contact.name.trim(),
+      email: blankToNull(contact.email),
+      phone: blankToNull(contact.phone),
+      role: blankToNull(contact.role),
+    }))
+    .filter((contact) => contact.name !== "")
+    .map((contact, sortOrder) => ({ ...contact, sortOrder }));
+  // Keep the legacy single fields in sync with the first entry so consumers that
+  // still read them (work-order notification email, list summaries) keep working.
+  return {
+    ...customer,
+    emails,
+    contacts,
+    email: emails[0]?.email ?? null,
+    contactName: contacts[0]?.name ?? null,
+    phone: contacts[0]?.phone ?? null,
+  };
 }
 
 /**

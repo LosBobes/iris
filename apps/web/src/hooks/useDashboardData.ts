@@ -111,6 +111,31 @@ export function useDashboardData() {
 
   const signalCounts = useMemo(() => buildSignalCounts(allOrders), [allOrders])
 
+  // Operator-personal queue: counts scoped to the signed-in operator's own open
+  // work, powering the operator dashboard grid. "available" is the one shop-wide
+  // cell — unassigned orders anyone can pick up.
+  const operatorQueue = useMemo(() => {
+    const today = getLocalIsoDate()
+    const me = currentUser.username
+    const dueDateOf = (order: WorkOrder): string | null =>
+      order.dueDate ?? order.assignment.scheduledDate
+    const mineOpen = allOrders.filter(
+      (order) => order.assignment.assignedTo === me && !order.isCompleted,
+    )
+    return {
+      assignedToMe: mineOpen.length,
+      dueToday: mineOpen.filter((order) => dueDateOf(order) === today).length,
+      overdue: mineOpen.filter((order) => {
+        const due = dueDateOf(order)
+        return Boolean(due && due < today)
+      }).length,
+      inProgress: mineOpen.filter((order) => order.status === 'inProgress').length,
+      available: allOrders.filter(
+        (order) => !order.assignment.assignedTo && !order.isCompleted,
+      ).length,
+    }
+  }, [allOrders, currentUser.username])
+
   const queueSummary = useMemo(() => {
     const today = getLocalIsoDate()
     return {
@@ -119,8 +144,6 @@ export function useDashboardData() {
         const dueDate = order.dueDate ?? order.assignment.scheduledDate
         return Boolean(dueDate && dueDate < today && !order.isCompleted)
       }).length,
-      waitingForCustomer: allOrders.filter((order) => order.status === 'waitingForCustomer').length,
-      waitingForMaterials: allOrders.filter((order) => order.status === 'waitingForMaterials').length,
       unassigned: allOrders.filter((order) => !order.assignment.assignedTo).length,
     }
   }, [allOrders])
@@ -139,6 +162,8 @@ export function useDashboardData() {
     selectedCompanyKey,
     setSelectedCompanyKey,
     queueSummary,
+    operatorQueue,
+    currentUserName: currentUser.username,
     operators,
     filters,
     setFilters,

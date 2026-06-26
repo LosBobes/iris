@@ -123,7 +123,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ---
 
 ## D-013: Standardize on an expanded work-order domain model
-- **Status**: `accepted`
+- **Status**: `accepted` (lifecycle later amended by D-014)
 - **Context**: Real-world operations need detailed steps beyond basic open/closed statuses-specifically tracking scheduling, materials, client approvals, and invoicing drafts.
 - **Decision**: Standardize all monorepo type contracts on a unified print-shop lifecycle (`new`, `assigned`, `inProgress`, `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`, `invoiced`) complete with normalized `Customer`, `Location`, `Assignment`, `InvoiceDraft`, and execution metrics. Legacy `draft` and `active` inputs are normalized at the API boundary where older fixture compatibility requires it.
 - **Consequences**:
@@ -132,4 +132,14 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-*Last verified against the checked-in repository state on 2026-05-31.*
+## D-014: Retire the two "waiting" work-order statuses
+- **Status**: `accepted` (amends D-013)
+- **Context**: `waitingForCustomer` and `waitingForMaterials` were never reachable through the UI (no control set them; only the single forward "Pomeri u …" transition existed), so they only ever appeared on imported/seed data. They added dashboard signals and lifecycle branches that carried no real operator workflow.
+- **Decision**: Remove `waitingForCustomer` and `waitingForMaterials` from the canonical lifecycle, leaving `new → assigned → inProgress → completed → invoiced` with `cancelled` as an off-ramp from any active stage. Cancellation is now a first-class UI action ("Otkaži") on the work-order detail page. The retired values are still accepted from older data and normalized to `inProgress` at the API boundary (alongside legacy `draft`/`active`).
+- **Consequences**:
+  - The two statuses were removed from the Go domain/store, OpenAPI enums, both TypeScript contracts, badges, dashboard attention signals, fixtures, and seed data.
+  - Old persisted rows remain valid: they read back as `inProgress`.
+
+---
+
+*Last verified against the checked-in repository state on 2026-06-26.*

@@ -55,11 +55,15 @@ function WorkOrdersPage(): React.JSX.Element {
       toast.info(t("workOrders.toast.nothingToExport"));
       return;
     }
-    downloadWorkOrdersCsv(filteredSortedOrders, visibleColumnSet);
+    // Operators never export money: drop the price column from their CSV.
+    const exportColumns = isAdmin
+      ? visibleColumnSet
+      : new Set([...visibleColumnSet].filter((key) => key !== "price"));
+    downloadWorkOrdersCsv(filteredSortedOrders, exportColumns);
     toast.success(
       t("workOrders.toast.exported", { count: filteredSortedOrders.length }),
     );
-  }, [filteredSortedOrders, visibleColumnSet, t]);
+  }, [filteredSortedOrders, visibleColumnSet, isAdmin, t]);
 
   const handleToggleStatus = useCallback(
     async (order: WorkOrder) => {
@@ -152,6 +156,7 @@ function WorkOrdersPage(): React.JSX.Element {
     filters.deliveryMethod !== "all" ||
     filters.queue !== "all" ||
     filters.customerId !== "" ||
+    filters.assignedTo !== "" ||
     filters.dateFrom !== "" ||
     filters.dateTo !== "" ||
     filters.needsCostReview;
