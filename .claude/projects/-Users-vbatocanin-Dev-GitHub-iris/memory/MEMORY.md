@@ -1,0 +1,1 @@
+- [Operators see no money](operators-no-money.md) — operator (role 'user') accounts must never see prices/money anywhere; gate every amount behind admin
