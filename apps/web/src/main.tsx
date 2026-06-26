@@ -1,3 +1,4 @@
+import './lib/sentry'
 import './assets/main.css'
 import './lib/web-api'
 import './i18n'

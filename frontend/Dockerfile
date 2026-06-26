@@ -18,6 +18,17 @@ WORKDIR /app
 # requests to /api/... instead of directly to the backend host.
 ENV VITE_IRIS_API_BASE_URL="/api"
 
+# Sentry DSN baked into the production bundle from the SENTRY_DSN_FRONTEND
+# GitHub Actions secret (see .github/workflows/build.yml). A DSN is a
+# client-side ingestion key, not a secret, so embedding it in the bundle is
+# expected. Empty by default, which disables Sentry for local/source builds.
+# Vite reads VITE_* env vars at build time, so this must be set before the
+# build step below.
+ARG VITE_SENTRY_DSN=""
+ARG VITE_SENTRY_RELEASE=""
+ENV VITE_SENTRY_DSN="${VITE_SENTRY_DSN}" \
+    VITE_SENTRY_RELEASE="${VITE_SENTRY_RELEASE}"
+
 # Cache npm install on the lockfile layer.
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci

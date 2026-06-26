@@ -66,13 +66,21 @@ Optionally create a `.env` file next to `docker-compose.yml` to set
 `IRIS_SESSION_SECRET` (a strong random value) and `IRIS_ENV=production`. Do not
 commit that file; it stays only on the server.
 
-Error reporting goes to Sentry. The DSN is baked into the published backend
-image at build time, from the `SENTRY_DSN` GitHub Actions secret, so it works
-with no server config. To point at a different Sentry project or disable it,
+Error reporting goes to Sentry, with a separate project per surface: the Go API
+reports to the backend project and the web client reports to the frontend one.
+Both DSNs are baked into the published images at build time, from the
+`SENTRY_DSN` and `SENTRY_DSN_FRONTEND` GitHub Actions secrets, so reporting
+works with no server config.
+
+For the backend, to point at a different Sentry project or disable it,
 uncomment the `SENTRY_DSN` line in `docker-compose.yml` and set it in the
 `.env` file (an empty value disables Sentry, since the backend enables it only
 on a non-empty DSN). You can also set `IRIS_RELEASE` (for example the deployed
 git sha) so events are tagged with a version.
+
+The frontend DSN is compiled into the static bundle at build time, so it cannot
+be changed by server-side env vars. Changing it means rebuilding the frontend
+image (CI does this on every push to `main`).
 
 ### 3a. (Optional) Seed the database from an existing SQLite file
 
