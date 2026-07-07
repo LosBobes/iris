@@ -1,0 +1,62 @@
+# Production compose for the Iris stack on a shared Hetzner host.
+#
+# This mirrors how gamgee is deployed on the same box: a host-level Caddy
+# terminates TLS (Let's Encrypt) and reverse-proxies each domain to a
+# loopback-only port. gamgee owns localhost:3000; Iris owns localhost:3001,
+# so the two stacks never collide.
+#
+# Only the frontend is published, and only on 127.0.0.1 — so nothing here is
+# reachable from the internet except through Caddy. The Go backend and the
+# SQLite volume stay on Iris's private compose network.
+#
+# Build context is the repository root (.), and the images are built ON THE
+# SERVER from source (docker compose ... up --build), the same as gamgee.
+# This is independent of the GHCR images built by .github/workflows/build.yml.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      IRIS_ENV: "${IRIS_ENV:-production}"
+      # Must be a strong random value in production (openssl rand -hex 32).
+      # Kept in the server's .env (gitignored), never committed.
+      IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:?set IRIS_SESSION_SECRET in .env}"
+      DATABASE_PATH: "/data/iris.db"
+      # Same-origin: the browser hits Caddy -> nginx -> /api/, so no
+      # cross-origin allow-list is needed.
+      IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-}"
+      # Optional release identifier shown in Sentry (e.g. the git sha).
+      IRIS_RELEASE: "${IRIS_RELEASE:-}"
+    # Internal only: never published to the host. nginx (frontend) reaches it
+    # over the compose network on this port.
+    expose:
+      - "8080"
+    volumes:
+      # SQLite database persists here. Survives every rebuild/recreate; only
+      # `docker compose down -v` would delete it.
+      - iris_sqlite_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Loopback only — reachable from Caddy on the same host, not the internet.
+    # gamgee uses 3000; Iris uses 3001.
+    ports:
+      - "127.0.0.1:3001:80"
+
+volumes:
+  iris_sqlite_data:

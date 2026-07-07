@@ -1,0 +1,12 @@
+# Iris vhost for the shared Hetzner host.
+#
+# Caddy runs on the host and already serves gamgee. Do NOT overwrite the
+# server's /etc/caddy/Caddyfile with this file — APPEND this block to it so
+# gamgee's existing block is left untouched. See docs/deployment-hetzner.md.
+#
+# Caddy automatically obtains and renews a Let's Encrypt TLS certificate for
+# this domain.
+
+iris-application.com {
+    reverse_proxy localhost:3001
+}

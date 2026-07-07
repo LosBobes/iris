@@ -1,0 +1,44 @@
+name: Deploy to Hetzner
+
+# Builds the Iris stack on the server from source, exactly like gamgee.
+# This is separate from build.yml (which publishes GHCR images); the Hetzner
+# host builds locally with docker compose, so no registry pull is involved.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host:     ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key:      ${{ secrets.HETZNER_SSH_KEY }}
+          port:     ${{ secrets.HETZNER_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            echo "▶ Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "▶ Rebuilding containers..."
+            # Secrets (IRIS_SESSION_SECRET etc.) live in the box's .env file
+            # next to docker-compose.prod.yml; compose reads them automatically.
+            docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
+
+            echo "▶ Pruning old images..."
+            docker image prune -f
+
+            echo "▶ Running containers:"
+            docker compose -f docker-compose.prod.yml ps
