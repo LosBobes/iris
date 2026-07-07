@@ -188,7 +188,10 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		if !ok {
 			return
 		}
+		// Attach both the user (for role checks) and the tenant (which scopes every
+		// store query) to the request context.
 		ctx := context.WithValue(r.Context(), currentUserContextKey, user)
+		ctx = store.ContextWithTenant(ctx, user.TenantID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -259,7 +262,20 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.store.AuthenticateUser(r.Context(), req.Username, req.Password)
+	// Resolve the organization first. A missing or unknown org yields the same
+	// generic error as bad credentials, so the form never reveals which orgs exist.
+	const invalidCredentials = "Neispravna organizacija, korisničko ime ili lozinka."
+	tenant, err := s.store.TenantBySlug(r.Context(), req.OrgSlug)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+	if tenant == nil {
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: invalidCredentials})
+		return
+	}
+
+	user, err := s.store.AuthenticateUser(r.Context(), tenant.ID, req.Username, req.Password)
 	if err != nil {
 		writeServerError(w, err)
 		return
@@ -268,7 +284,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		writeJSON(w, http.StatusOK, domain.LoginResponse{
 			Success: false,
-			Error:   "Neispravno korisničko ime ili lozinka.",
+			Error:   invalidCredentials,
 		})
 		return
 	}
@@ -666,32 +682,27 @@ func (s *Server) handlePublicWorkOrderStatus(w http.ResponseWriter, r *http.Requ
 	if s.serveWebIfHTML(w, r) {
 		return
 	}
-	result, err := s.store.WorkOrders(r.Context(), store.WorkOrderListQuery{})
+	token := chi.URLParam(r, "token")
+	workOrder, err := s.store.WorkOrderByPublicToken(r.Context(), token)
 	if err != nil {
 		writeServerError(w, err)
 		return
 	}
-
-	token := chi.URLParam(r, "token")
-	for _, workOrder := range result.Items {
-		if workOrder.Communication.PublicToken != token {
-			continue
-		}
-		writeJSON(w, http.StatusOK, domain.PublicWorkOrderStatus{
-			OrderNumber:       workOrder.OrderNumber,
-			ClientName:        workOrder.ClientName,
-			JobDescription:    workOrder.JobDescription,
-			Status:            workOrder.Status,
-			DueDate:           workOrder.DueDate,
-			CustomerNoteCount: len(workOrder.CustomerNotes),
-			InternalNoteCount: 0,
-			SignedBy:          workOrder.Communication.SignedBy,
-			SignedAt:          workOrder.Communication.SignedAt,
-		})
+	if workOrder == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
 		return
 	}
-
-	writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
+	writeJSON(w, http.StatusOK, domain.PublicWorkOrderStatus{
+		OrderNumber:       workOrder.OrderNumber,
+		ClientName:        workOrder.ClientName,
+		JobDescription:    workOrder.JobDescription,
+		Status:            workOrder.Status,
+		DueDate:           workOrder.DueDate,
+		CustomerNoteCount: len(workOrder.CustomerNotes),
+		InternalNoteCount: 0,
+		SignedBy:          workOrder.Communication.SignedBy,
+		SignedAt:          workOrder.Communication.SignedAt,
+	})
 }
 
 func (s *Server) serveWebIfHTML(w http.ResponseWriter, r *http.Request) bool {

@@ -73,8 +73,12 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
+// AuthenticateUser verifies credentials within a single tenant. The tenant id is
+// passed explicitly (not read from context) because authentication happens at
+// login, before any tenant is attached to the request context.
 func (s *SQLiteStore) AuthenticateUser(
 	ctx context.Context,
+	tenantID string,
 	username string,
 	password string,
 ) (*domain.User, error) {
@@ -82,9 +86,10 @@ func (s *SQLiteStore) AuthenticateUser(
 	var passwordHash string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, username, role, password_hash FROM users WHERE username = ?`,
+		`SELECT id, username, role, tenant_id, password_hash FROM users WHERE tenant_id = ? AND username = ?`,
+		tenantID,
 		username,
-	).Scan(&user.ID, &user.Username, &user.Role, &passwordHash)
+	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &passwordHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -123,12 +128,12 @@ func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*do
 	var expiresAtRaw string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT users.id, users.username, users.role, sessions.expires_at
+		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at
 		 FROM sessions
 		 JOIN users ON users.id = sessions.user_id
 		 WHERE sessions.token = ?`,
 		token,
-	).Scan(&user.ID, &user.Username, &user.Role, &expiresAtRaw)
+	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -150,13 +155,99 @@ func (s *SQLiteStore) DeleteSession(ctx context.Context, token string) error {
 	return nil
 }
 
+// TenantBySlug resolves an organization by its login slug (case-insensitive),
+// returning nil when no tenant matches. Used at login and by the CLI.
+func (s *SQLiteStore) TenantBySlug(ctx context.Context, slug string) (*domain.Tenant, error) {
+	var tenant domain.Tenant
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT id, slug, name FROM tenants WHERE slug = ? COLLATE NOCASE`,
+		strings.TrimSpace(slug),
+	).Scan(&tenant.ID, &tenant.Slug, &tenant.Name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load tenant: %w", err)
+	}
+	return &tenant, nil
+}
+
+// CreateTenant provisions a new organization. Slug is normalized to lowercase;
+// a duplicate slug is reported as a validation error.
+func (s *SQLiteStore) CreateTenant(ctx context.Context, id, slug, name string) (*domain.Tenant, error) {
+	id = strings.TrimSpace(id)
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	name = strings.TrimSpace(name)
+	if id == "" || slug == "" || name == "" {
+		return nil, newValidationError("Naziv, oznaka i ID organizacije su obavezni.")
+	}
+	if _, err := s.db.ExecContext(
+		ctx,
+		`INSERT INTO tenants(id, slug, name) VALUES (?, ?, ?)`,
+		id, slug, name,
+	); err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, newValidationError("Organizacija sa tom oznakom već postoji.")
+		}
+		return nil, fmt.Errorf("create tenant: %w", err)
+	}
+	return &domain.Tenant{ID: id, Slug: slug, Name: name}, nil
+}
+
+// EnsureTenant inserts a tenant if it does not already exist, making it safe to
+// call from idempotent seed paths.
+func (s *SQLiteStore) EnsureTenant(ctx context.Context, id, slug, name string) error {
+	if _, err := s.db.ExecContext(
+		ctx,
+		`INSERT OR IGNORE INTO tenants(id, slug, name) VALUES (?, ?, ?)`,
+		id, strings.ToLower(strings.TrimSpace(slug)), name,
+	); err != nil {
+		return fmt.Errorf("ensure tenant: %w", err)
+	}
+	return nil
+}
+
+// WorkOrderByPublicToken looks up a work order by its public tracking token. The
+// token is a globally unique random string, so this lookup is deliberately
+// cross-tenant (it needs no tenant in context) and backs the public tracking
+// endpoint that customers reach without logging in.
+func (s *SQLiteStore) WorkOrderByPublicToken(ctx context.Context, token string) (*domain.WorkOrder, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT payload FROM work_orders`)
+	if err != nil {
+		return nil, fmt.Errorf("scan work orders for public token: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			return nil, fmt.Errorf("scan work order: %w", err)
+		}
+		var workOrder domain.WorkOrder
+		if err := json.Unmarshal([]byte(payload), &workOrder); err != nil {
+			return nil, fmt.Errorf("decode work order payload: %w", err)
+		}
+		if workOrder.Communication.PublicToken == token {
+			workOrder = normalizeStoredWorkOrder(workOrder)
+			return &workOrder, nil
+		}
+	}
+	return nil, rows.Err()
+}
+
 func (s *SQLiteStore) Customers(ctx context.Context, query CustomerQuery) (CustomerListResult, error) {
-	var (
-		where string
-		args  []any
-	)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return CustomerListResult{}, err
+	}
+	where := " WHERE tenant_id = ?"
+	args := []any{tenantID}
 	if search := strings.TrimSpace(query.Search); search != "" {
-		where = " WHERE (name LIKE ? COLLATE NOCASE OR pib LIKE ? OR mb LIKE ?)"
+		where += " AND (name LIKE ? COLLATE NOCASE OR pib LIKE ? OR mb LIKE ?)"
 		like := "%" + search + "%"
 		args = append(args, like, like, like)
 	}
@@ -279,12 +370,17 @@ func (s *SQLiteStore) loadCustomerChildren(ctx context.Context, customers []doma
 }
 
 func (s *SQLiteStore) CustomerByID(ctx context.Context, id string) (*domain.Customer, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var customer domain.Customer
 	var contactName, email, phone, pib, mb sql.NullString
-	err := s.db.QueryRowContext(
+	err = s.db.QueryRowContext(
 		ctx,
-		`SELECT id, name, contact_name, email, phone, pib, mb FROM customers WHERE id = ?`,
+		`SELECT id, name, contact_name, email, phone, pib, mb FROM customers WHERE id = ? AND tenant_id = ?`,
 		id,
+		tenantID,
 	).Scan(&customer.ID, &customer.Name, &contactName, &email, &phone, &pib, &mb)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -305,9 +401,20 @@ func (s *SQLiteStore) CustomerByID(ctx context.Context, id string) (*domain.Cust
 }
 
 func (s *SQLiteStore) Locations(ctx context.Context) ([]domain.Location, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// locations has no tenant_id of its own; it is scoped through its parent
+	// customer, which does.
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, customer_id, name, address FROM locations ORDER BY name COLLATE NOCASE`,
+		`SELECT locations.id, locations.customer_id, locations.name, locations.address
+		 FROM locations
+		 JOIN customers ON customers.id = locations.customer_id
+		 WHERE customers.tenant_id = ?
+		 ORDER BY locations.name COLLATE NOCASE`,
+		tenantID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list locations: %w", err)
@@ -337,6 +444,10 @@ func (s *SQLiteStore) UpsertCustomer(
 	if msg := domain.ValidateCustomerIdentifiers(customer.Pib, customer.Mb); msg != "" {
 		return nil, newValidationError(msg)
 	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -344,10 +455,14 @@ func (s *SQLiteStore) UpsertCustomer(
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := ensureRowTenant(ctx, tx, "customers", customer.ID, tenantID); err != nil {
+		return nil, err
+	}
+
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO customers(id, name, contact_name, email, phone, pib, mb, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		`INSERT INTO customers(id, tenant_id, name, contact_name, email, phone, pib, mb, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		 ON CONFLICT(id) DO UPDATE SET
 		   name = excluded.name,
 		   contact_name = excluded.contact_name,
@@ -357,6 +472,7 @@ func (s *SQLiteStore) UpsertCustomer(
 		   mb = excluded.mb,
 		   updated_at = CURRENT_TIMESTAMP`,
 		customer.ID,
+		tenantID,
 		customer.Name,
 		ptrStringValue(customer.ContactName),
 		ptrStringValue(customer.Email),
@@ -431,6 +547,26 @@ func (s *SQLiteStore) UpsertCustomer(
 	return &stored, nil
 }
 
+// ensureRowTenant guards cross-tenant writes on tables that have a global primary
+// key but a client-supplied id: if a row with this id already exists under a
+// different tenant, the write is rejected instead of silently overwriting or
+// deleting another tenant's data. table is always an in-code constant, never
+// user input.
+func ensureRowTenant(ctx context.Context, db sqlExecutor, table, id, tenantID string) error {
+	var existing string
+	err := db.QueryRowContext(ctx, `SELECT tenant_id FROM `+table+` WHERE id = ?`, id).Scan(&existing)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("check %s tenant: %w", table, err)
+	}
+	if existing != tenantID {
+		return newValidationError("Zapis pripada drugoj organizaciji.")
+	}
+	return nil
+}
+
 // newChildID returns a short random identifier with the given prefix, used for
 // customer child rows (emails, contacts) when the client omits one.
 func newChildID(prefix string) (string, error) {
@@ -449,6 +585,35 @@ func (s *SQLiteStore) UpsertLocation(
 		strings.TrimSpace(location.CustomerID) == "" ||
 		strings.TrimSpace(location.Name) == "" {
 		return nil, newValidationError(invalidWorkOrderMessage)
+	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// The parent customer must belong to this tenant; and if the location already
+	// exists it must currently belong to this tenant too. locations has no
+	// tenant_id of its own, so both checks go through the customer.
+	var parentTenant string
+	err = s.db.QueryRowContext(ctx, `SELECT tenant_id FROM customers WHERE id = ?`, location.CustomerID).Scan(&parentTenant)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && parentTenant != tenantID) {
+		return nil, newValidationError("Klijent ne pripada vašoj organizaciji.")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("check location customer tenant: %w", err)
+	}
+	var existingTenant string
+	err = s.db.QueryRowContext(
+		ctx,
+		`SELECT customers.tenant_id FROM locations
+		 JOIN customers ON customers.id = locations.customer_id
+		 WHERE locations.id = ?`,
+		location.ID,
+	).Scan(&existingTenant)
+	if err == nil && existingTenant != tenantID {
+		return nil, newValidationError("Zapis pripada drugoj organizaciji.")
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("check existing location tenant: %w", err)
 	}
 	if _, err := s.db.ExecContext(
 		ctx,
@@ -470,14 +635,27 @@ func (s *SQLiteStore) UpsertLocation(
 }
 
 func (s *SQLiteStore) DeleteCustomer(ctx context.Context, id string) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id); err != nil {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ? AND tenant_id = ?`, id, tenantID); err != nil {
 		return fmt.Errorf("delete customer: %w", err)
 	}
 	return nil
 }
 
 func (s *SQLiteStore) DeleteLocation(ctx context.Context, id string) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM locations WHERE id = ?`, id); err != nil {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM locations
+		 WHERE id = ? AND customer_id IN (SELECT id FROM customers WHERE tenant_id = ?)`,
+		id, tenantID,
+	); err != nil {
 		return fmt.Errorf("delete location: %w", err)
 	}
 	return nil
@@ -487,7 +665,11 @@ func (s *SQLiteStore) WorkOrders(
 	ctx context.Context,
 	query WorkOrderListQuery,
 ) (WorkOrderListResult, error) {
-	where, args := buildWorkOrderWhere(query)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return WorkOrderListResult{}, err
+	}
+	where, args := buildWorkOrderWhere(tenantID, query)
 	var total int
 	if err := s.db.QueryRowContext(
 		ctx,
@@ -529,11 +711,16 @@ func (s *SQLiteStore) WorkOrders(
 }
 
 func (s *SQLiteStore) WorkOrderByID(ctx context.Context, id string) (*domain.WorkOrder, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var payload string
-	err := s.db.QueryRowContext(
+	err = s.db.QueryRowContext(
 		ctx,
-		`SELECT payload FROM work_orders WHERE id = ?`,
+		`SELECT payload FROM work_orders WHERE id = ? AND tenant_id = ?`,
 		id,
+		tenantID,
 	).Scan(&payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -563,6 +750,10 @@ func (s *SQLiteStore) CreateWorkOrder(
 	ctx context.Context,
 	input domain.CreateWorkOrderInput,
 ) (*domain.WorkOrder, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	custom, err := s.customEnums(ctx)
 	if err != nil {
 		return nil, err
@@ -594,7 +785,7 @@ func (s *SQLiteStore) CreateWorkOrder(
 		return nil, err
 	}
 	nowTime := time.Now().UTC()
-	orderNumber, err := nextOrderNumber(ctx, tx, nowTime.Year())
+	orderNumber, err := nextOrderNumber(ctx, tx, tenantID, nowTime.Year())
 	if err != nil {
 		return nil, err
 	}
@@ -645,7 +836,7 @@ func (s *SQLiteStore) CreateWorkOrder(
 		workOrder.Events = applyCostReviewEvents(workOrder.Events, false, true, input.IssuedBy, now)
 	}
 
-	if err := putWorkOrder(ctx, tx, workOrder); err != nil {
+	if err := putWorkOrder(ctx, tx, tenantID, workOrder); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -710,7 +901,11 @@ func (s *SQLiteStore) DeleteWorkOrder(
 	ctx context.Context,
 	id string,
 ) (domain.DeleteWorkOrderResponse, error) {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM work_orders WHERE id = ?`, id)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return domain.DeleteWorkOrderResponse{}, err
+	}
+	result, err := s.db.ExecContext(ctx, `DELETE FROM work_orders WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return domain.DeleteWorkOrderResponse{}, fmt.Errorf("delete work order: %w", err)
 	}
@@ -728,9 +923,14 @@ func (s *SQLiteStore) DeleteWorkOrder(
 // sorted. This is the assignable-operator list backing the work-order operator
 // selects; admins are excluded since the field tracks who does the work.
 func (s *SQLiteStore) Operators(ctx context.Context) ([]string, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT username FROM users WHERE role = ? ORDER BY username COLLATE NOCASE`,
+		`SELECT username FROM users WHERE tenant_id = ? AND role = ? ORDER BY username COLLATE NOCASE`,
+		tenantID,
 		string(domain.RoleUser),
 	)
 	if err != nil {
@@ -757,10 +957,14 @@ type sqlExecutor interface {
 }
 
 func (s *SQLiteStore) PutWorkOrder(ctx context.Context, workOrder domain.WorkOrder) error {
-	return putWorkOrder(ctx, s.db, workOrder)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	return putWorkOrder(ctx, s.db, tenantID, workOrder)
 }
 
-func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrder) error {
+func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrder domain.WorkOrder) error {
 	payload, err := json.Marshal(workOrder)
 	if err != nil {
 		return fmt.Errorf("encode work order payload: %w", err)
@@ -769,10 +973,10 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 	if _, err := db.ExecContext(
 		ctx,
 		`INSERT INTO work_orders(
-		   id, order_number, customer_id, location_id, client_name, job_description,
+		   id, tenant_id, order_number, customer_id, location_id, client_name, job_description,
 		   issued_by, assigned_to, status, issue_date, due_date, price, needs_cost_review,
 		   payload, created_at, updated_at
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   order_number = excluded.order_number,
 		   customer_id = excluded.customer_id,
@@ -788,8 +992,10 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, workOrder domain.WorkOrde
 		   needs_cost_review = excluded.needs_cost_review,
 		   payload = excluded.payload,
 		   created_at = excluded.created_at,
-		   updated_at = excluded.updated_at`,
+		   updated_at = excluded.updated_at
+		 WHERE work_orders.tenant_id = excluded.tenant_id`,
 		workOrder.ID,
+		tenantID,
 		workOrder.OrderNumber,
 		ptrStringValue(workOrder.CustomerID),
 		ptrStringValue(workOrder.LocationID),
@@ -822,20 +1028,25 @@ func (s *SQLiteStore) CreateUser(
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
 		return newValidationError(invalidWorkOrderMessage)
 	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
 	if _, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO users(id, username, password_hash, role, is_demo, updated_at)
-		 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-		 ON CONFLICT(username) DO UPDATE SET
+		`INSERT INTO users(id, tenant_id, username, password_hash, role, is_demo, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(tenant_id, username) DO UPDATE SET
 		   password_hash = excluded.password_hash,
 		   role = excluded.role,
 		   is_demo = excluded.is_demo,
 		   updated_at = CURRENT_TIMESTAMP`,
 		id,
+		tenantID,
 		username,
 		string(hash),
 		string(role),
@@ -846,12 +1057,30 @@ func (s *SQLiteStore) CreateUser(
 	return nil
 }
 
+// HasUserPassword reports whether any user in any tenant has the given username
+// and password. It is a cross-tenant safety check (used to block production
+// startup with demo credentials), not a data-access path, so it intentionally
+// scans every tenant rather than requiring one in context.
 func (s *SQLiteStore) HasUserPassword(ctx context.Context, username string, password string) (bool, error) {
-	user, err := s.AuthenticateUser(ctx, username, password)
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT password_hash FROM users WHERE username = ?`,
+		username,
+	)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("load user hashes: %w", err)
 	}
-	return user != nil, nil
+	defer rows.Close()
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			return false, fmt.Errorf("scan user hash: %w", err)
+		}
+		if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func (s *SQLiteStore) Backup(ctx context.Context, path string) error {
@@ -889,15 +1118,16 @@ func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
 // directly rather than deriving from the id sequence, so it stays correct even
 // when work-order ids are non-numeric (e.g. seeded "wo-cob-1"). Must run inside
 // the same write transaction as the insert so concurrent creates can't collide.
-func nextOrderNumber(ctx context.Context, db sqlExecutor, year int) (string, error) {
+func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year int) (string, error) {
 	prefix := fmt.Sprintf("RN-%d-", year)
 	var next sql.NullInt64
 	if err := db.QueryRowContext(
 		ctx,
 		`SELECT COALESCE(MAX(CAST(substr(order_number, ?) AS INTEGER)), 0) + 1
 		 FROM work_orders
-		 WHERE order_number LIKE ?`,
+		 WHERE tenant_id = ? AND order_number LIKE ?`,
 		len(prefix)+1, // substr is 1-indexed: start just past the "RN-<year>-" prefix
+		tenantID,
 		prefix+"%",
 	).Scan(&next); err != nil {
 		return "", fmt.Errorf("next order number: %w", err)
@@ -909,9 +1139,9 @@ func nextOrderNumber(ctx context.Context, db sqlExecutor, year int) (string, err
 	return formatOrderNumber(year, seq), nil
 }
 
-func buildWorkOrderWhere(query WorkOrderListQuery) (string, []any) {
-	clauses := []string{}
-	args := []any{}
+func buildWorkOrderWhere(tenantID string, query WorkOrderListQuery) (string, []any) {
+	clauses := []string{"tenant_id = ?"}
+	args := []any{tenantID}
 	if strings.TrimSpace(query.Search) != "" {
 		clauses = append(clauses, `(LOWER(order_number || ' ' || client_name || ' ' || job_description) LIKE ?)`)
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(query.Search))+"%")

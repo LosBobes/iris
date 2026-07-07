@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -9,7 +8,7 @@ import (
 )
 
 func TestSQLiteEnumValuesCRUDAndValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
 
@@ -75,7 +74,7 @@ func TestSQLiteEnumValuesCRUDAndValidation(t *testing.T) {
 }
 
 func TestSQLiteCustomInvoiceUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
 

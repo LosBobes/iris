@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 func strPtr(s string) *string { return &s }
 
 func TestUpsertCustomerRoundTripsEmailsAndContacts(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 
 	saved, err := sqliteStore.UpsertCustomer(ctx, domain.Customer{

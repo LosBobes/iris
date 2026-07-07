@@ -51,6 +51,7 @@ export const en: typeof sr = {
       'Print-shop work-order management. Every job on the record.',
     versionLabel: 'Version',
     version: 'Version {{version}}',
+    organization: 'Organization',
     username: 'Username',
     password: 'Password',
     forgot: 'forgot?',

@@ -73,7 +73,7 @@ func rawUpdate(t *testing.T, fields map[string]any) domain.UpdateWorkOrderInput 
 // Cost is frozen at creation from the catalog cost in effect at the issue date,
 // and a later non-status edit must not re-pull a changed catalog cost.
 func TestWorkOrderCostFrozenAndPreservedOnEdit(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	s := costTestStore(t, ctx)
 	catID := mustUpsertCatalog(t, ctx, s, "cat-a", 100, 250)
 
@@ -119,7 +119,7 @@ func TestWorkOrderCostFrozenAndPreservedOnEdit(t *testing.T) {
 
 // Completing an order re-snapshots catalog-line cost to the completion-date cost.
 func TestWorkOrderCostResnapshotOnCompletion(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	s := costTestStore(t, ctx)
 	catID := mustUpsertCatalog(t, ctx, s, "cat-b", 100, 250)
 
@@ -169,7 +169,7 @@ func TestWorkOrderCostResnapshotOnCompletion(t *testing.T) {
 // catalogCostsAsOf returns the cost effective on the date, and falls back to the
 // earliest record for dates before any record.
 func TestCatalogCostsAsOf(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	s := costTestStore(t, ctx)
 	id := mustUpsertCatalog(t, ctx, s, "cat-c", 100, 250)
 
@@ -205,7 +205,7 @@ func TestCatalogCostsAsOf(t *testing.T) {
 // flags for review, and raises a cost_review event. An admin entering the cost
 // clears the flag and raises cost_captured.
 func TestAdHocCostReviewLifecycle(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	s := costTestStore(t, ctx)
 
 	created, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{

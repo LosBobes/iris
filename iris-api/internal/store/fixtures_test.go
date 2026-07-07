@@ -11,11 +11,8 @@ import (
 )
 
 func TestUpdateWorkOrderAllowsBlankIssuedBy(t *testing.T) {
-	ctx := context.Background()
-	st, err := OpenSQLite(ctx, t.TempDir()+"/iris.db")
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	ctx := testTenantContext()
+	st := newSQLiteStoreForTest(t, ctx, t.TempDir()+"/iris.db")
 	defer st.Close()
 
 	created, err := st.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{

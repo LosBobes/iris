@@ -91,7 +91,7 @@ describe('iris-api-client', () => {
     const client = createIrisApiClient({ baseUrl: 'http://localhost:8080', fetchFn })
 
     await expect(
-      client.login({ username: 'admin', password: 'admin123' }),
+      client.login({ orgSlug: 'demo', username: 'admin', password: 'admin123' }),
     ).resolves.toEqual({
       success: true,
       user: { id: '1', username: 'admin', role: 'admin' },

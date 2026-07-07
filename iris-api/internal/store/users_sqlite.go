@@ -14,9 +14,14 @@ import (
 // ListUsers returns all accounts (id, username, role) ordered by username. The
 // password hash is never exposed.
 func (s *SQLiteStore) ListUsers(ctx context.Context) ([]domain.User, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, username, role FROM users ORDER BY username COLLATE NOCASE`,
+		`SELECT id, username, role, tenant_id FROM users WHERE tenant_id = ? ORDER BY username COLLATE NOCASE`,
+		tenantID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
@@ -27,7 +32,7 @@ func (s *SQLiteStore) ListUsers(ctx context.Context) ([]domain.User, error) {
 	for rows.Next() {
 		var user domain.User
 		var role string
-		if err := rows.Scan(&user.ID, &user.Username, &role); err != nil {
+		if err := rows.Scan(&user.ID, &user.Username, &role, &user.TenantID); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
 		user.Role = domain.UserRole(role)
@@ -36,15 +41,20 @@ func (s *SQLiteStore) ListUsers(ctx context.Context) ([]domain.User, error) {
 	return users, rows.Err()
 }
 
-// UserByID returns a single account or nil when no row matches.
+// UserByID returns a single account or nil when no row matches within the tenant.
 func (s *SQLiteStore) UserByID(ctx context.Context, id string) (*domain.User, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var user domain.User
 	var role string
-	err := s.db.QueryRowContext(
+	err = s.db.QueryRowContext(
 		ctx,
-		`SELECT id, username, role FROM users WHERE id = ?`,
+		`SELECT id, username, role, tenant_id FROM users WHERE id = ? AND tenant_id = ?`,
 		id,
-	).Scan(&user.ID, &user.Username, &role)
+		tenantID,
+	).Scan(&user.ID, &user.Username, &role, &user.TenantID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -71,6 +81,10 @@ func (s *SQLiteStore) CreateUserAccount(
 	if err := validateUserPassword(input.Password); err != nil {
 		return nil, err
 	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	id, err := newUserID()
 	if err != nil {
 		return nil, err
@@ -81,16 +95,16 @@ func (s *SQLiteStore) CreateUserAccount(
 	}
 	if _, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO users(id, username, password_hash, role, is_demo, updated_at)
-		 VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)`,
-		id, username, string(hash), string(input.Role),
+		`INSERT INTO users(id, tenant_id, username, password_hash, role, is_demo, updated_at)
+		 VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)`,
+		id, tenantID, username, string(hash), string(input.Role),
 	); err != nil {
 		if isUniqueConstraintError(err) {
 			return nil, newValidationError("Korisničko ime već postoji.")
 		}
 		return nil, fmt.Errorf("create user account: %w", err)
 	}
-	return &domain.User{ID: id, Username: username, Role: input.Role}, nil
+	return &domain.User{ID: id, Username: username, Role: input.Role, TenantID: tenantID}, nil
 }
 
 // UpdateUserAccount changes a user's role and, when a password is supplied,
@@ -118,15 +132,15 @@ func (s *SQLiteStore) UpdateUserAccount(
 		}
 		if _, err := s.db.ExecContext(
 			ctx,
-			`UPDATE users SET role = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-			string(input.Role), string(hash), id,
+			`UPDATE users SET role = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`,
+			string(input.Role), string(hash), id, existing.TenantID,
 		); err != nil {
 			return nil, fmt.Errorf("update user account: %w", err)
 		}
 	} else if _, err := s.db.ExecContext(
 		ctx,
-		`UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-		string(input.Role), id,
+		`UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`,
+		string(input.Role), id, existing.TenantID,
 	); err != nil {
 		return nil, fmt.Errorf("update user role: %w", err)
 	}
@@ -137,7 +151,11 @@ func (s *SQLiteStore) UpdateUserAccount(
 
 // DeleteUser removes an account by id.
 func (s *SQLiteStore) DeleteUser(ctx context.Context, id string) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id); err != nil {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ? AND tenant_id = ?`, id, tenantID); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
 	return nil

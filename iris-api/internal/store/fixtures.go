@@ -68,8 +68,21 @@ func NewFixtureStore(basePath string) *FixtureStore {
 	}
 }
 
+// TenantBySlug resolves the single fixture tenant. Fixtures model one shop, so
+// any slug matching the demo tenant resolves; everything else is unknown.
+func (s *FixtureStore) TenantBySlug(_ context.Context, slug string) (*domain.Tenant, error) {
+	if !strings.EqualFold(strings.TrimSpace(slug), DemoTenantSlug) {
+		return nil, nil
+	}
+	return &domain.Tenant{ID: DemoTenantID, Slug: DemoTenantSlug, Name: DemoTenantName}, nil
+}
+
+// AuthenticateUser verifies fixture credentials. Fixtures are single-tenant, so
+// tenantID is accepted for interface parity but not used to partition data; the
+// returned user still carries the fixture tenant id.
 func (s *FixtureStore) AuthenticateUser(
 	ctx context.Context,
+	tenantID string,
 	username string,
 	password string,
 ) (*domain.User, error) {
@@ -84,6 +97,7 @@ func (s *FixtureStore) AuthenticateUser(
 				ID:       user.ID,
 				Username: user.Username,
 				Role:     user.Role,
+				TenantID: DemoTenantID,
 			}, nil
 		}
 	}
@@ -125,7 +139,7 @@ func (s *FixtureStore) UserBySessionToken(ctx context.Context, token string) (*d
 	}
 	for _, user := range users {
 		if user.ID == session.userID {
-			return &domain.User{ID: user.ID, Username: user.Username, Role: user.Role}, nil
+			return &domain.User{ID: user.ID, Username: user.Username, Role: user.Role, TenantID: DemoTenantID}, nil
 		}
 	}
 	return nil, nil
@@ -381,6 +395,25 @@ func (s *FixtureStore) WorkOrderByID(_ context.Context, id string) (*domain.Work
 		}
 	}
 
+	return nil, nil
+}
+
+// WorkOrderByPublicToken finds a work order by its public tracking token.
+func (s *FixtureStore) WorkOrderByPublicToken(_ context.Context, token string) (*domain.WorkOrder, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureWorkOrdersLoaded(); err != nil {
+		return nil, err
+	}
+	for _, workOrder := range s.workOrders {
+		if workOrder.Communication.PublicToken == token {
+			return cloneWorkOrder(workOrder), nil
+		}
+	}
 	return nil, nil
 }
 

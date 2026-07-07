@@ -8,6 +8,7 @@ interface LoginProps {
 
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   const { t } = useTranslation();
+  const [orgSlug, setOrgSlug] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -43,7 +44,11 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
     setIsLoading(true);
 
     try {
-      const result = await window.api.login({ username, password });
+      const result = await window.api.login({
+        orgSlug: orgSlug.trim(),
+        username,
+        password,
+      });
 
       if (result.success && result.user) {
         onLoginSuccess(result.user);
@@ -118,6 +123,25 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
           </h1>
 
           <form onSubmit={handleSubmit} className="flex flex-col" noValidate>
+            <div className="mb-[18px]">
+              <label
+                htmlFor="org-slug"
+                className="mb-1.5 block text-[11px] text-[color:var(--iris-ink-soft)]"
+              >
+                {t("auth.organization")}
+              </label>
+              <input
+                id="org-slug"
+                type="text"
+                value={orgSlug}
+                onChange={(e) => setOrgSlug(e.target.value)}
+                autoComplete="organization"
+                required
+                disabled={isLoading}
+                className="w-full border-0 border-b border-border bg-transparent py-2 text-[14px] text-foreground outline-none transition-colors duration-150 focus:border-foreground"
+              />
+            </div>
+
             <div className="mb-[18px]">
               <label
                 htmlFor="username"

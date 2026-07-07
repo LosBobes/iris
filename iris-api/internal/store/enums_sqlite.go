@@ -39,10 +39,15 @@ func (s *SQLiteStore) EnumValues(ctx context.Context) ([]domain.EnumValue, error
 }
 
 func (s *SQLiteStore) listCustomEnumValues(ctx context.Context) ([]domain.EnumValue, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT id, field, value, label, sort_order, created_at, updated_at
-		 FROM enum_values ORDER BY field, sort_order, label`,
+		 FROM enum_values WHERE tenant_id = ? ORDER BY field, sort_order, label`,
+		tenantID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list enum values: %w", err)
@@ -81,6 +86,10 @@ func (s *SQLiteStore) CreateEnumValue(
 	if err := validateEnumValueInput(input); err != nil {
 		return nil, err
 	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	id, err := newEnumID()
 	if err != nil {
@@ -90,9 +99,9 @@ func (s *SQLiteStore) CreateEnumValue(
 
 	_, err = s.db.ExecContext(
 		ctx,
-		`INSERT INTO enum_values(id, field, value, label, sort_order, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id, string(input.Field), input.Value, input.Label, input.SortOrder, now, now,
+		`INSERT INTO enum_values(id, tenant_id, field, value, label, sort_order, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, tenantID, string(input.Field), input.Value, input.Label, input.SortOrder, now, now,
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
@@ -119,13 +128,18 @@ func (s *SQLiteStore) UpdateEnumValue(
 	input domain.EnumValueInput,
 ) (*domain.EnumValue, error) {
 	input = normalizeEnumValueInput(input)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var field domain.EnumField
 	var createdAt string
-	err := s.db.QueryRowContext(
+	err = s.db.QueryRowContext(
 		ctx,
-		`SELECT field, created_at FROM enum_values WHERE id = ?`,
+		`SELECT field, created_at FROM enum_values WHERE id = ? AND tenant_id = ?`,
 		id,
+		tenantID,
 	).Scan(&field, &createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -147,8 +161,8 @@ func (s *SQLiteStore) UpdateEnumValue(
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err = s.db.ExecContext(
 		ctx,
-		`UPDATE enum_values SET value = ?, label = ?, sort_order = ?, updated_at = ? WHERE id = ?`,
-		candidate.Value, candidate.Label, candidate.SortOrder, now, id,
+		`UPDATE enum_values SET value = ?, label = ?, sort_order = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`,
+		candidate.Value, candidate.Label, candidate.SortOrder, now, id, tenantID,
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
@@ -170,7 +184,11 @@ func (s *SQLiteStore) UpdateEnumValue(
 
 // DeleteEnumValue removes a custom value by id.
 func (s *SQLiteStore) DeleteEnumValue(ctx context.Context, id string) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM enum_values WHERE id = ?`, id); err != nil {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM enum_values WHERE id = ? AND tenant_id = ?`, id, tenantID); err != nil {
 		return fmt.Errorf("delete enum value: %w", err)
 	}
 	return nil

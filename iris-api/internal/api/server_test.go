@@ -27,7 +27,7 @@ func TestLoginEndpoints(t *testing.T) {
 	}{
 		{
 			name:       "login success",
-			body:       `{"username":"admin","password":"admin123"}`,
+			body:       `{"orgSlug":"demo","username":"admin","password":"admin123"}`,
 			wantStatus: http.StatusOK,
 			assertBody: func(t *testing.T, body []byte) {
 				t.Helper()
@@ -42,7 +42,7 @@ func TestLoginEndpoints(t *testing.T) {
 		},
 		{
 			name:       "login failure",
-			body:       `{"username":"wrong","password":"wrong"}`,
+			body:       `{"orgSlug":"demo","username":"wrong","password":"wrong"}`,
 			wantStatus: http.StatusOK,
 			assertBody: func(t *testing.T, body []byte) {
 				t.Helper()
@@ -50,7 +50,7 @@ func TestLoginEndpoints(t *testing.T) {
 				if err := json.Unmarshal(body, &response); err != nil {
 					t.Fatalf("decode response: %v", err)
 				}
-				if response.Success || response.Error != "Neispravno korisničko ime ili lozinka." {
+				if response.Success || response.Error != "Neispravna organizacija, korisničko ime ili lozinka." {
 					t.Fatalf("response = %#v, want failed auth with Serbian message", response)
 				}
 			},
@@ -628,7 +628,7 @@ func performRequestWithHeaders(
 		req.Header.Set(key, value)
 	}
 	if needsTestSession(path) {
-		user, err := server.store.AuthenticateUser(context.Background(), "admin", "admin123")
+		user, err := server.store.AuthenticateUser(context.Background(), store.DemoTenantID, "admin", "admin123")
 		if err != nil {
 			t.Fatalf("authenticate test user: %v", err)
 		}

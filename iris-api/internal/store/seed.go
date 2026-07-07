@@ -6,6 +6,13 @@ import (
 )
 
 func SeedDemoFromFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixtureDir string) error {
+	// Demo data lives in its own tenant so it never mixes with real orgs. Ensure
+	// the tenant exists and scope every write below to it.
+	if err := sqliteStore.EnsureTenant(ctx, DemoTenantID, DemoTenantSlug, DemoTenantName); err != nil {
+		return err
+	}
+	ctx = ContextWithTenant(ctx, DemoTenantID)
+
 	fixtures := NewFixtureStore(fixtureDir)
 
 	users, err := fixtures.Users(ctx)

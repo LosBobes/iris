@@ -32,6 +32,9 @@ describe('Login', () => {
 
     render(<Login onLoginSuccess={onLoginSuccess} />)
 
+    fireEvent.change(screen.getByLabelText('Organizacija'), {
+      target: { value: 'grafika-cobanovic' }
+    })
     fireEvent.change(screen.getByLabelText('Korisničko ime'), {
       target: { value: 'admin' }
     })
@@ -41,7 +44,11 @@ describe('Login', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Prijavite se' }))
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({ username: 'admin', password: 'admin123' })
+      expect(mockLogin).toHaveBeenCalledWith({
+        orgSlug: 'grafika-cobanovic',
+        username: 'admin',
+        password: 'admin123'
+      })
       expect(onLoginSuccess).toHaveBeenCalledWith(fakeUser)
     })
   })

@@ -50,6 +50,7 @@ export const sr = {
       'Sistem za vođenje radnih naloga u štampariji. Svaki posao je evidentiran.',
     versionLabel: 'Verzija',
     version: 'Verzija {{version}}',
+    organization: 'Organizacija',
     username: 'Korisničko ime',
     password: 'Lozinka',
     forgot: 'zaboravljena?',

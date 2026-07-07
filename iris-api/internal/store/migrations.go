@@ -294,9 +294,15 @@ WHERE contact_name IS NOT NULL AND TRIM(contact_name) <> '';
 // sqliteMigrations is the ordered list of schema versions. Each entry is applied
 // once, in order, and recorded in schema_migrations so existing databases pick
 // up later versions on the next startup.
+//
+// Most migrations are a plain SQL string applied inside one transaction. A few
+// need finer control (e.g. toggling PRAGMA foreign_keys, which is a no-op inside
+// a transaction) and supply an fn instead; the runner calls fn and records the
+// version but does not open a transaction for it.
 var sqliteMigrations = []struct {
 	version int
 	sql     string
+	fn      func(ctx context.Context, db *sql.DB) error
 }{
 	{version: 1, sql: initialSQLiteMigration},
 	{version: 2, sql: enumValuesMigration},
@@ -307,6 +313,7 @@ var sqliteMigrations = []struct {
 	{version: 7, sql: catalogCostHistoryMigration},
 	{version: 8, sql: workOrderCostReviewMigration},
 	{version: 9, sql: customerContactsMigration},
+	{version: 10, fn: tenantIsolationMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {
@@ -331,6 +338,19 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("check migration version %d: %w", migration.version, err)
 		}
 		if applied > 0 {
+			continue
+		}
+		if migration.fn != nil {
+			if err := migration.fn(ctx, db); err != nil {
+				return fmt.Errorf("run migration %d: %w", migration.version, err)
+			}
+			if _, err := db.ExecContext(
+				ctx,
+				`INSERT OR IGNORE INTO schema_migrations(version) VALUES (?)`,
+				migration.version,
+			); err != nil {
+				return fmt.Errorf("record migration %d: %w", migration.version, err)
+			}
 			continue
 		}
 		if err := applyMigration(ctx, db, migration.version, migration.sql); err != nil {
@@ -370,4 +390,185 @@ func applyMigration(ctx context.Context, db *sql.DB, version int, migrationSQL s
 		return fmt.Errorf("commit migration %d: %w", version, err)
 	}
 	return nil
+}
+
+// tenantIsolationMigration introduces multi-tenancy. It creates the tenants
+// table, seeds the production tenant (Grafika Čobanović), and rebuilds every
+// root table (users, customers, work_orders, catalog_items, enum_values,
+// app_settings) with a NOT NULL tenant_id and per-tenant uniqueness. Every
+// existing row is attributed to the production tenant so live data keeps working.
+//
+// Dropping the old table-wide UNIQUE constraints requires the standard SQLite
+// table rebuild, which must run with foreign keys disabled (a PRAGMA that is a
+// no-op inside a transaction). The store opens SQLite with a single connection,
+// so toggling the PRAGMA here is safe.
+func tenantIsolationMigration(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("disable foreign keys: %w", err)
+	}
+	// Always restore enforcement, even on an error path.
+	defer func() { _, _ = db.ExecContext(ctx, `PRAGMA foreign_keys = ON`) }()
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	statements := []string{
+		`CREATE TABLE tenants (
+			id TEXT PRIMARY KEY,
+			slug TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO tenants(id, slug, name) VALUES (
+			'` + ProductionTenantID + `', '` + ProductionTenantSlug + `', '` + ProductionTenantName + `'
+		)`,
+
+		// users: username was globally UNIQUE -> unique per tenant.
+		`CREATE TABLE users_new (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			username TEXT NOT NULL,
+			password_hash TEXT NOT NULL,
+			role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+			is_demo INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (tenant_id, username)
+		)`,
+		`INSERT INTO users_new (id, tenant_id, username, password_hash, role, is_demo, created_at, updated_at)
+			SELECT id, '` + ProductionTenantID + `', username, password_hash, role, is_demo, created_at, updated_at FROM users`,
+		`DROP TABLE users`,
+		`ALTER TABLE users_new RENAME TO users`,
+		`CREATE INDEX idx_users_tenant ON users(tenant_id)`,
+
+		// customers: no table-wide unique, but rebuilt for a NOT NULL tenant_id.
+		`CREATE TABLE customers_new (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			contact_name TEXT,
+			email TEXT,
+			phone TEXT,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			pib TEXT,
+			mb TEXT
+		)`,
+		`INSERT INTO customers_new (id, tenant_id, name, contact_name, email, phone, created_at, updated_at, pib, mb)
+			SELECT id, '` + ProductionTenantID + `', name, contact_name, email, phone, created_at, updated_at, pib, mb FROM customers`,
+		`DROP TABLE customers`,
+		`ALTER TABLE customers_new RENAME TO customers`,
+		`CREATE INDEX idx_customers_tenant ON customers(tenant_id)`,
+
+		// work_orders: order_number was globally UNIQUE -> unique per tenant.
+		`CREATE TABLE work_orders_new (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			order_number TEXT NOT NULL,
+			customer_id TEXT,
+			location_id TEXT,
+			client_name TEXT NOT NULL,
+			job_description TEXT NOT NULL,
+			issued_by TEXT NOT NULL,
+			assigned_to TEXT,
+			status TEXT NOT NULL,
+			issue_date TEXT NOT NULL,
+			due_date TEXT,
+			price REAL,
+			payload TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			needs_cost_review INTEGER NOT NULL DEFAULT 0,
+			UNIQUE (tenant_id, order_number)
+		)`,
+		`INSERT INTO work_orders_new (id, tenant_id, order_number, customer_id, location_id, client_name, job_description, issued_by, assigned_to, status, issue_date, due_date, price, payload, created_at, updated_at, needs_cost_review)
+			SELECT id, '` + ProductionTenantID + `', order_number, customer_id, location_id, client_name, job_description, issued_by, assigned_to, status, issue_date, due_date, price, payload, created_at, updated_at, needs_cost_review FROM work_orders`,
+		`DROP TABLE work_orders`,
+		`ALTER TABLE work_orders_new RENAME TO work_orders`,
+		`CREATE INDEX idx_work_orders_status ON work_orders(status)`,
+		`CREATE INDEX idx_work_orders_assigned_to ON work_orders(assigned_to)`,
+		`CREATE INDEX idx_work_orders_issue_date ON work_orders(issue_date)`,
+		`CREATE INDEX idx_work_orders_needs_cost_review ON work_orders(needs_cost_review)`,
+		`CREATE INDEX idx_work_orders_tenant ON work_orders(tenant_id)`,
+
+		// catalog_items: code was globally UNIQUE -> unique per tenant.
+		`CREATE TABLE catalog_items_new (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			code TEXT NOT NULL,
+			name TEXT NOT NULL,
+			kind TEXT NOT NULL CHECK (kind IN ('service', 'article')),
+			unit TEXT NOT NULL DEFAULT 'kom',
+			default_price REAL,
+			barcode TEXT,
+			tax_group TEXT,
+			description TEXT,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			purchase_price REAL,
+			sale_price REAL,
+			UNIQUE (tenant_id, code)
+		)`,
+		`INSERT INTO catalog_items_new (id, tenant_id, code, name, kind, unit, default_price, barcode, tax_group, description, is_active, created_at, updated_at, purchase_price, sale_price)
+			SELECT id, '` + ProductionTenantID + `', code, name, kind, unit, default_price, barcode, tax_group, description, is_active, created_at, updated_at, purchase_price, sale_price FROM catalog_items`,
+		`DROP TABLE catalog_items`,
+		`ALTER TABLE catalog_items_new RENAME TO catalog_items`,
+		`CREATE INDEX idx_catalog_items_kind ON catalog_items(kind)`,
+		`CREATE INDEX idx_catalog_items_name ON catalog_items(name COLLATE NOCASE)`,
+		`CREATE INDEX idx_catalog_items_tenant ON catalog_items(tenant_id)`,
+
+		// enum_values: UNIQUE(field, value) -> UNIQUE(tenant_id, field, value).
+		`CREATE TABLE enum_values_new (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			field TEXT NOT NULL,
+			value TEXT NOT NULL,
+			label TEXT NOT NULL,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (tenant_id, field, value)
+		)`,
+		`INSERT INTO enum_values_new (id, tenant_id, field, value, label, sort_order, created_at, updated_at)
+			SELECT id, '` + ProductionTenantID + `', field, value, label, sort_order, created_at, updated_at FROM enum_values`,
+		`DROP TABLE enum_values`,
+		`ALTER TABLE enum_values_new RENAME TO enum_values`,
+
+		// app_settings: PRIMARY KEY(key) -> PRIMARY KEY(tenant_id, key).
+		`CREATE TABLE app_settings_new (
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			key TEXT NOT NULL,
+			value TEXT NOT NULL,
+			PRIMARY KEY (tenant_id, key)
+		)`,
+		`INSERT INTO app_settings_new (tenant_id, key, value)
+			SELECT '` + ProductionTenantID + `', key, value FROM app_settings`,
+		`DROP TABLE app_settings`,
+		`ALTER TABLE app_settings_new RENAME TO app_settings`,
+	}
+
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("rebuild statement: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	// Confirm the rebuild left no dangling foreign keys before re-enabling them.
+	rows, err := db.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("foreign key check: %w", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return fmt.Errorf("foreign key check reported violations after tenant migration")
+	}
+	return rows.Err()
 }

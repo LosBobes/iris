@@ -39,8 +39,34 @@ func main() {
 		defer sqliteStore.Close()
 		must(store.SeedDemoFromFixtures(ctx, sqliteStore, *fixtureDir))
 		fmt.Println("Demo podaci su upisani u SQLite bazu.")
+	case "create-tenant":
+		cmd := flag.NewFlagSet("create-tenant", flag.ExitOnError)
+		slug := cmd.String("slug", "", "oznaka organizacije (za prijavu)")
+		name := cmd.String("name", "", "naziv organizacije")
+		id := cmd.String("id", "", "ID organizacije (opciono)")
+		adminUsername := cmd.String("admin-username", "", "korisničko ime prvog administratora")
+		adminPassword := cmd.String("admin-password", "", "lozinka prvog administratora")
+		_ = cmd.Parse(os.Args[2:])
+		if *slug == "" || *name == "" {
+			log.Fatal("koristite --slug i --name")
+		}
+		sqliteStore := mustOpen(ctx, dbPathFromEnv())
+		defer sqliteStore.Close()
+		if *id == "" {
+			*id = "tenant-" + strings.ToLower(strings.TrimSpace(*slug))
+		}
+		tenant, err := sqliteStore.CreateTenant(ctx, *id, *slug, *name)
+		must(err)
+		fmt.Printf("Organizacija %q (%s) je kreirana.\n", tenant.Name, tenant.Slug)
+		if *adminUsername != "" && *adminPassword != "" {
+			tenantCtx := store.ContextWithTenant(ctx, tenant.ID)
+			adminID := userID(tenant.Slug, *adminUsername)
+			must(sqliteStore.CreateUser(tenantCtx, adminID, *adminUsername, *adminPassword, domain.RoleAdmin, false))
+			fmt.Printf("Administrator %s je sačuvan.\n", *adminUsername)
+		}
 	case "create-user":
 		cmd := flag.NewFlagSet("create-user", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
 		id := cmd.String("id", "", "ID korisnika")
 		username := cmd.String("username", "", "korisničko ime")
 		password := cmd.String("password", "", "lozinka")
@@ -48,10 +74,11 @@ func main() {
 		_ = cmd.Parse(os.Args[2:])
 		sqliteStore := mustOpen(ctx, dbPathFromEnv())
 		defer sqliteStore.Close()
+		tenantCtx := mustTenantContext(ctx, sqliteStore, *tenantSlug)
 		if *id == "" {
-			*id = "user-" + strings.ToLower(strings.ReplaceAll(*username, ".", "-"))
+			*id = userID(strings.TrimSpace(*tenantSlug), *username)
 		}
-		must(sqliteStore.CreateUser(ctx, *id, *username, *password, domain.UserRole(*role), false))
+		must(sqliteStore.CreateUser(tenantCtx, *id, *username, *password, domain.UserRole(*role), false))
 		fmt.Printf("Korisnik %s je sačuvan.\n", *username)
 	case "backup":
 		cmd := flag.NewFlagSet("backup", flag.ExitOnError)
@@ -66,6 +93,7 @@ func main() {
 		fmt.Printf("Backup je sačuvan: %s\n", *out)
 	case "import-csv":
 		cmd := flag.NewFlagSet("import-csv", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
 		dir := cmd.String("dir", ".", "folder sa CSV fajlovima")
 		dryRun := cmd.Bool("dry-run", false, "samo proveri CSV podatke")
 		apply := cmd.Bool("apply", false, "upiši CSV podatke u bazu")
@@ -75,7 +103,13 @@ func main() {
 		}
 		sqliteStore := mustOpen(ctx, dbPathFromEnv())
 		defer sqliteStore.Close()
-		report, err := importCSV(ctx, sqliteStore, *dir, *apply)
+		// A dry-run only validates CSV shape and never touches the DB, so it does
+		// not need a tenant; --apply writes rows and requires one.
+		importCtx := ctx
+		if *apply {
+			importCtx = mustTenantContext(ctx, sqliteStore, *tenantSlug)
+		}
+		report, err := importCSV(importCtx, sqliteStore, *dir, *apply)
 		must(err)
 		fmt.Print(report)
 	default:
@@ -308,13 +342,37 @@ func must(err error) {
 	}
 }
 
+// userID builds a globally unique, human-readable account id namespaced by the
+// tenant slug, since users.id is a global primary key shared across tenants.
+func userID(tenantSlug, username string) string {
+	slug := strings.ToLower(strings.TrimSpace(tenantSlug))
+	name := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(username), ".", "-"))
+	return "user-" + slug + "-" + name
+}
+
+// mustTenantContext resolves an organization slug to a tenant-scoped context,
+// exiting with an error when the slug is empty or unknown. Used by the CLI
+// commands that write tenant-owned data.
+func mustTenantContext(ctx context.Context, sqliteStore *store.SQLiteStore, slug string) context.Context {
+	if strings.TrimSpace(slug) == "" {
+		log.Fatal("koristite --tenant <oznaka organizacije>")
+	}
+	tenant, err := sqliteStore.TenantBySlug(ctx, slug)
+	must(err)
+	if tenant == nil {
+		log.Fatalf("organizacija %q ne postoji", slug)
+	}
+	return store.ContextWithTenant(ctx, tenant.ID)
+}
+
 func usage() {
 	fmt.Println(`Korišćenje:
   irisctl migrate
   irisctl seed-demo [-fixtures testdata/fixtures]
-  irisctl create-user -username ime -password lozinka [-role admin|user] [-id user-id]
-  irisctl import-csv --dry-run --dir import/
-  irisctl import-csv --apply --dir import/
+  irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
+  irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
+  irisctl import-csv -tenant oznaka --dry-run --dir import/
+  irisctl import-csv -tenant oznaka --apply --dir import/
   irisctl backup [-out backups/iris.db]
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)

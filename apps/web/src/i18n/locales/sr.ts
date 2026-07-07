@@ -485,6 +485,7 @@ export const sr = {
   auth: {
     eyebrow: 'Prijava',
     welcome: 'Dobrodošli',
+    organization: 'Organizacija',
     username: 'Korisničko ime',
     password: 'Lozinka',
     forgot: 'zaboravljena?',

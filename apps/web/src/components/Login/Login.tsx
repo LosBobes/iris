@@ -8,28 +8,40 @@ interface LoginProps {
 
 const REMEMBER_DEVICE_KEY = "iris.rememberDevice";
 const REMEMBERED_USERNAME_KEY = "iris.rememberedUsername";
+const REMEMBERED_ORG_KEY = "iris.rememberedOrg";
 
-function readRememberedLogin(): { rememberDevice: boolean; username: string } {
+function readRememberedLogin(): {
+  rememberDevice: boolean;
+  username: string;
+  orgSlug: string;
+} {
   try {
     return {
       rememberDevice: localStorage.getItem(REMEMBER_DEVICE_KEY) === "true",
       username: localStorage.getItem(REMEMBERED_USERNAME_KEY) ?? "",
+      orgSlug: localStorage.getItem(REMEMBERED_ORG_KEY) ?? "",
     };
   } catch {
-    return { rememberDevice: false, username: "" };
+    return { rememberDevice: false, username: "", orgSlug: "" };
   }
 }
 
-function storeRememberedLogin(username: string, rememberDevice: boolean): void {
+function storeRememberedLogin(
+  username: string,
+  orgSlug: string,
+  rememberDevice: boolean,
+): void {
   try {
     if (rememberDevice) {
       localStorage.setItem(REMEMBER_DEVICE_KEY, "true");
       localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+      localStorage.setItem(REMEMBERED_ORG_KEY, orgSlug);
       return;
     }
 
     localStorage.removeItem(REMEMBER_DEVICE_KEY);
     localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+    localStorage.removeItem(REMEMBERED_ORG_KEY);
   } catch {
     // Login should not fail if browser storage is unavailable.
   }
@@ -37,6 +49,7 @@ function storeRememberedLogin(username: string, rememberDevice: boolean): void {
 
 export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
   const { t } = useTranslation();
+  const [orgSlug, setOrgSlug] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -53,6 +66,7 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
 
     setRememberDevice(rememberedLogin.rememberDevice);
     setUsername(rememberedLogin.username);
+    setOrgSlug(rememberedLogin.orgSlug);
 
     void window.api
       .getAppVersion()
@@ -79,10 +93,14 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
     setIsLoading(true);
 
     try {
-      const result = await window.api.login({ username, password });
+      const result = await window.api.login({
+        orgSlug: orgSlug.trim(),
+        username,
+        password,
+      });
 
       if (result.success && result.user) {
-        storeRememberedLogin(username, rememberDevice);
+        storeRememberedLogin(username, orgSlug.trim(), rememberDevice);
         onLoginSuccess(result.user);
       } else {
         setError(result.error ?? t("auth.loginError"));
@@ -158,6 +176,25 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
           </h1>
 
           <form onSubmit={handleSubmit} className="flex flex-col" noValidate>
+            <div className="mb-[18px]">
+              <label
+                htmlFor="org-slug"
+                className="mb-1.5 block text-[11px] text-[color:var(--iris-ink-soft)]"
+              >
+                {t("auth.organization")}
+              </label>
+              <input
+                id="org-slug"
+                type="text"
+                value={orgSlug}
+                onChange={(e) => setOrgSlug(e.target.value)}
+                autoComplete="organization"
+                required
+                disabled={isLoading}
+                className="w-full border-0 border-b border-border bg-transparent py-2 text-[14px] text-foreground outline-none transition-colors duration-150 focus:border-foreground"
+              />
+            </div>
+
             <div className="mb-[18px]">
               <label
                 htmlFor="username"

@@ -15,7 +15,7 @@ interface LoginResponse {
  * Registers all IPC handlers for the Login feature.
  *
  * Channel: 'auth:login'
- *   Receives: { username: string, password: string }
+ *   Receives: { orgSlug: string, username: string, password: string }
  *   Returns:  LoginResponse
  *
  * Call this once from main/index.ts inside app.whenReady().
@@ -25,7 +25,7 @@ export function registerLoginHandlers(): void {
     'auth:login',
     async (
       _event,
-      credentials: { username: string; password: string }
+      credentials: { orgSlug: string; username: string; password: string }
     ): Promise<LoginResponse> => {
       try {
         const client = createConfiguredIrisApiClient()

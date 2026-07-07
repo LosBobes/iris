@@ -730,8 +730,12 @@ components:
           example: ok
     LoginRequest:
       type: object
-      required: [username, password]
+      required: [orgSlug, username, password]
       properties:
+        orgSlug:
+          type: string
+          description: Organization (tenant) slug the account belongs to.
+          example: grafika-cobanovic
         username:
           type: string
           example: admin
@@ -746,7 +750,7 @@ components:
           type: boolean
         error:
           type: string
-          example: Neispravno korisničko ime ili lozinka.
+          example: Neispravna organizacija, korisničko ime ili lozinka.
         user:
           $ref: '#/components/schemas/User'
     User:

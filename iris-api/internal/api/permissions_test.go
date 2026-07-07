@@ -26,6 +26,11 @@ func newServerWithRoles(t *testing.T) (server *Server, adminToken, userToken str
 	}
 	t.Cleanup(func() { _ = sqliteStore.Close() })
 
+	if err := sqliteStore.EnsureTenant(ctx, store.DemoTenantID, store.DemoTenantSlug, store.DemoTenantName); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	ctx = store.ContextWithTenant(ctx, store.DemoTenantID)
+
 	if err := sqliteStore.CreateUser(ctx, "admin-1", "admin", "admin123", domain.RoleAdmin, false); err != nil {
 		t.Fatalf("create admin: %v", err)
 	}
@@ -40,7 +45,7 @@ func newServerWithRoles(t *testing.T) (server *Server, adminToken, userToken str
 func roleSessionToken(t *testing.T, s store.Store, username, password string) string {
 	t.Helper()
 	ctx := context.Background()
-	user, err := s.AuthenticateUser(ctx, username, password)
+	user, err := s.AuthenticateUser(ctx, store.DemoTenantID, username, password)
 	if err != nil || user == nil {
 		t.Fatalf("authenticate %s: user=%v err=%v", username, user, err)
 	}

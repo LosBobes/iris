@@ -55,6 +55,7 @@ declare global {
       getAppVersion: () => Promise<string>
       getBackendStatus: () => Promise<BackendStatus>
       login: (credentials: {
+        orgSlug: string
         username: string
         password: string
       }) => Promise<LoginResponse>

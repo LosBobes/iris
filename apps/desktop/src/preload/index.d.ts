@@ -33,6 +33,7 @@ declare global {
       getBackendStatus: () => Promise<BackendStatus>;
 
       login: (credentials: {
+        orgSlug: string;
         username: string;
         password: string;
       }) => Promise<LoginResponse>;

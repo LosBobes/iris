@@ -486,6 +486,7 @@ export const en: typeof sr = {
   auth: {
     eyebrow: 'Sign in',
     welcome: 'Welcome',
+    organization: 'Organization',
     username: 'Username',
     password: 'Password',
     forgot: 'forgot?',

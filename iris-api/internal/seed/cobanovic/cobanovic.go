@@ -56,6 +56,10 @@ type workOrder struct {
 // ~2657 client firms, ~3575 catalog items, and a few demo work orders. It also
 // creates the login accounts the shop signs in with. Upserts make it re-runnable.
 func Seed(ctx context.Context, sqliteStore *store.SQLiteStore, dir string) error {
+	// All Čobanović data belongs to the production tenant, which the tenant
+	// isolation migration already created. Scope every write below to it.
+	ctx = store.ContextWithTenant(ctx, store.ProductionTenantID)
+
 	path := filepath.Join(dir, seedFileName)
 
 	data, err := os.ReadFile(path)

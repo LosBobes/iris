@@ -40,7 +40,11 @@ interface IrisApiClientOptions {
 
 export interface IrisApiClient {
   getBackendStatus: () => Promise<BackendStatus>
-  login: (credentials: { username: string; password: string }) => Promise<LoginResponse>
+  login: (credentials: {
+    orgSlug: string
+    username: string
+    password: string
+  }) => Promise<LoginResponse>
   getWorkOrders: () => Promise<WorkOrder[]>
   getWorkOrderOperators: () => Promise<string[]>
   getWorkOrderById: (id: string) => Promise<WorkOrder | null>

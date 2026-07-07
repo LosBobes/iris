@@ -18,10 +18,12 @@ func (s *SQLiteStore) CatalogItems(
 	ctx context.Context,
 	query CatalogItemQuery,
 ) (CatalogItemListResult, error) {
-	var (
-		conditions []string
-		args       []any
-	)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return CatalogItemListResult{}, err
+	}
+	conditions := []string{"tenant_id = ?"}
+	args := []any{tenantID}
 	if query.Kind != "" {
 		conditions = append(conditions, "kind = ?")
 		args = append(args, string(query.Kind))
@@ -73,11 +75,16 @@ func (s *SQLiteStore) CatalogItems(
 
 // CatalogItemByID returns a single catalog item, or nil when no row matches.
 func (s *SQLiteStore) CatalogItemByID(ctx context.Context, id string) (*domain.CatalogItem, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at
-			FROM catalog_items WHERE id = ?`,
+			FROM catalog_items WHERE id = ? AND tenant_id = ?`,
 		id,
+		tenantID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("get catalog item: %w", err)
@@ -103,6 +110,10 @@ func (s *SQLiteStore) UpsertCatalogItem(
 	if err != nil {
 		return nil, err
 	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	today := time.Now().UTC().Format("2006-01-02")
@@ -113,10 +124,14 @@ func (s *SQLiteStore) UpsertCatalogItem(
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := ensureRowTenant(ctx, tx, "catalog_items", normalized.ID, tenantID); err != nil {
+		return nil, err
+	}
+
 	_, err = tx.ExecContext(
 		ctx,
-		`INSERT INTO catalog_items(id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO catalog_items(id, tenant_id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   code = excluded.code,
 		   name = excluded.name,
@@ -130,6 +145,7 @@ func (s *SQLiteStore) UpsertCatalogItem(
 		   is_active = excluded.is_active,
 		   updated_at = excluded.updated_at`,
 		normalized.ID,
+		tenantID,
 		normalized.Code,
 		normalized.Name,
 		string(normalized.Kind),
@@ -198,7 +214,11 @@ func foldDiacriticsSQL(column string) string {
 
 // DeleteCatalogItem removes a catalog item by id.
 func (s *SQLiteStore) DeleteCatalogItem(ctx context.Context, id string) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM catalog_items WHERE id = ?`, id); err != nil {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM catalog_items WHERE id = ? AND tenant_id = ?`, id, tenantID); err != nil {
 		return fmt.Errorf("delete catalog item: %w", err)
 	}
 	return nil

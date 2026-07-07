@@ -212,6 +212,18 @@ type User struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`
 	Role     UserRole `json:"role"`
+	// TenantID is the owning organization. It is populated server-side (from the
+	// session/authentication) and used to scope every data query; it is never
+	// exposed to clients.
+	TenantID string `json:"-"`
+}
+
+// Tenant is an organization (shop) whose data is isolated from every other
+// tenant. Users log in by first supplying their tenant's slug.
+type Tenant struct {
+	ID   string `json:"id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
 }
 
 // CreateUserInput is the payload an admin submits to add a user account.
@@ -461,6 +473,7 @@ type CreateWorkOrderInput struct {
 type UpdateWorkOrderInput map[string]json.RawMessage
 
 type LoginRequest struct {
+	OrgSlug  string `json:"orgSlug"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 }

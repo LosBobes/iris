@@ -17,6 +17,10 @@ const (
 // OrganizationSettings returns the shop-wide settings, falling back to defaults
 // when a row is missing (e.g. a pre-migration database).
 func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return domain.OrganizationSettings{}, err
+	}
 	settings := domain.OrganizationSettings{
 		FirmName:    domain.DefaultFirmName,
 		PDFSections: domain.DefaultPDFSections(),
@@ -24,7 +28,8 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT key, value FROM app_settings WHERE key IN (?, ?)`,
+		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?)`,
+		tenantID,
 		firmNameSettingKey,
 		pdfSectionsSettingKey,
 	)
@@ -94,10 +99,15 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 }
 
 func (s *SQLiteStore) upsertSetting(ctx context.Context, key, value string) error {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO app_settings(key, value) VALUES (?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		`INSERT INTO app_settings(tenant_id, key, value) VALUES (?, ?, ?)
+		 ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value`,
+		tenantID,
 		key,
 		value,
 	); err != nil {

@@ -122,13 +122,20 @@ func (s *SQLiteStore) catalogCostsAsOf(
 	if len(ids) == 0 {
 		return costs, nil
 	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	placeholders := make([]string, len(ids))
-	args := make([]any, 0, len(ids)+2)
+	args := make([]any, 0, len(ids)+3)
 	args = append(args, date, date)
 	for i, id := range ids {
 		placeholders[i] = "?"
 		args = append(args, id)
 	}
+	// Restrict to the tenant's own catalog items so a crafted work-order payload
+	// cannot pull another tenant's cost prices.
+	args = append(args, tenantID)
 
 	// Rank each item's records: those effective on/before the date first (latest
 	// of them), otherwise the earliest record as a fallback. rn = 1 is the pick.
@@ -144,6 +151,7 @@ func (s *SQLiteStore) catalogCostsAsOf(
 		          ) AS rn
 		     FROM catalog_item_price_history
 		    WHERE catalog_item_id IN (`+strings.Join(placeholders, ",")+`)
+		      AND catalog_item_id IN (SELECT id FROM catalog_items WHERE tenant_id = ?)
 		 ) WHERE rn = 1`,
 		args...,
 	)
@@ -170,13 +178,19 @@ func (s *SQLiteStore) CatalogItemCostHistory(
 	ctx context.Context,
 	catalogItemID string,
 ) ([]domain.CatalogItemCost, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT id, catalog_item_id, purchase_price, sale_price, effective_from, effective_to, created_at
 		   FROM catalog_item_price_history
 		  WHERE catalog_item_id = ?
+		    AND catalog_item_id IN (SELECT id FROM catalog_items WHERE tenant_id = ?)
 		  ORDER BY effective_from DESC`,
 		catalogItemID,
+		tenantID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list catalog cost history: %w", err)

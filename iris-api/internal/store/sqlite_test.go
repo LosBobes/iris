@@ -11,7 +11,7 @@ import (
 )
 
 func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	dbPath := filepath.Join(t.TempDir(), "iris.db")
 	sqliteStore := newSQLiteStoreForTest(t, ctx, dbPath)
 	if err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t)); err != nil {
@@ -45,7 +45,7 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 // (e.g. "wo-cob-1") with current-year order numbers; the next create must continue
 // the order-number sequence rather than restart at 0001 and hit the UNIQUE index.
 func TestSQLiteStoreCreateWorkOrderNumberAvoidsCollision(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
 
@@ -81,21 +81,21 @@ func TestSQLiteStoreCreateWorkOrderNumberAvoidsCollision(t *testing.T) {
 }
 
 func TestSQLiteStoreAuthSessionsAndBackup(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
 
 	if err := sqliteStore.CreateUser(ctx, "u-1", "admin", "sifra", domain.RoleAdmin, false); err != nil {
 		t.Fatalf("CreateUser() returned error: %v", err)
 	}
-	user, err := sqliteStore.AuthenticateUser(ctx, "admin", "sifra")
+	user, err := sqliteStore.AuthenticateUser(ctx, DemoTenantID, "admin", "sifra")
 	if err != nil {
 		t.Fatalf("AuthenticateUser() returned error: %v", err)
 	}
 	if user == nil || user.Role != domain.RoleAdmin {
 		t.Fatalf("user = %#v, want admin", user)
 	}
-	if wrong, err := sqliteStore.AuthenticateUser(ctx, "admin", "bad"); err != nil || wrong != nil {
+	if wrong, err := sqliteStore.AuthenticateUser(ctx, DemoTenantID, "admin", "bad"); err != nil || wrong != nil {
 		t.Fatalf("wrong auth = %#v, %v; want nil, nil", wrong, err)
 	}
 
@@ -117,7 +117,7 @@ func TestSQLiteStoreAuthSessionsAndBackup(t *testing.T) {
 }
 
 func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
 
@@ -155,7 +155,7 @@ func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
 }
 
 func TestOpenSQLiteCreatesParentDirectoryAndConfiguresConnection(t *testing.T) {
-	ctx := context.Background()
+	ctx := testTenantContext()
 	dbPath := filepath.Join(t.TempDir(), "nested", "data", "iris.db")
 	sqliteStore := newSQLiteStoreForTest(t, ctx, dbPath)
 	defer sqliteStore.Close()
@@ -191,5 +191,16 @@ func newSQLiteStoreForTest(t *testing.T, ctx context.Context, path string) *SQLi
 	if err != nil {
 		t.Fatalf("OpenSQLite() returned error: %v", err)
 	}
+	// Tests operate as the demo tenant; ensure it exists so tenant_id foreign keys
+	// and per-tenant scoping resolve (SeedDemoFromFixtures also writes to it).
+	if err := sqliteStore.EnsureTenant(ctx, DemoTenantID, DemoTenantSlug, DemoTenantName); err != nil {
+		t.Fatalf("EnsureTenant() returned error: %v", err)
+	}
 	return sqliteStore
+}
+
+// testTenantContext returns a context scoped to the demo tenant, which the
+// SQLite-backed store tests use for every tenant-scoped call.
+func testTenantContext() context.Context {
+	return ContextWithTenant(context.Background(), DemoTenantID)
 }

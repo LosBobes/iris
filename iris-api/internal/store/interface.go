@@ -55,7 +55,8 @@ type CustomerListResult struct {
 }
 
 type Store interface {
-	AuthenticateUser(ctx context.Context, username string, password string) (*domain.User, error)
+	TenantBySlug(ctx context.Context, slug string) (*domain.Tenant, error)
+	AuthenticateUser(ctx context.Context, tenantID string, username string, password string) (*domain.User, error)
 	CreateSession(ctx context.Context, userID string, expiresAt time.Time) (string, error)
 	UserBySessionToken(ctx context.Context, token string) (*domain.User, error)
 	DeleteSession(ctx context.Context, token string) error
@@ -70,6 +71,7 @@ type Store interface {
 
 	WorkOrders(ctx context.Context, query WorkOrderListQuery) (WorkOrderListResult, error)
 	WorkOrderByID(ctx context.Context, id string) (*domain.WorkOrder, error)
+	WorkOrderByPublicToken(ctx context.Context, token string) (*domain.WorkOrder, error)
 	CreateWorkOrder(ctx context.Context, input domain.CreateWorkOrderInput) (*domain.WorkOrder, error)
 	UpdateWorkOrder(ctx context.Context, id string, changes domain.UpdateWorkOrderInput) (*domain.WorkOrder, error)
 	DeleteWorkOrder(ctx context.Context, id string) (domain.DeleteWorkOrderResponse, error)
