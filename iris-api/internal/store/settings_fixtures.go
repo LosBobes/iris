@@ -36,10 +36,15 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 	if update.PDFSections != nil {
 		current.PDFSections = *update.PDFSections
 	}
+	if update.ProformaOnly != nil {
+		current.ProformaOnly = *update.ProformaOnly
+	}
 
 	s.firmName = current.FirmName
 	sections := current.PDFSections
 	s.pdfSections = &sections
+	proformaOnly := current.ProformaOnly
+	s.proformaOnly = &proformaOnly
 	return current, nil
 }
 
@@ -52,5 +57,9 @@ func (s *FixtureStore) organizationSettingsLocked() domain.OrganizationSettings 
 	if s.pdfSections != nil {
 		sections = *s.pdfSections
 	}
-	return domain.OrganizationSettings{FirmName: firmName, PDFSections: sections}
+	proformaOnly := domain.DefaultProformaOnly
+	if s.proformaOnly != nil {
+		proformaOnly = *s.proformaOnly
+	}
+	return domain.OrganizationSettings{FirmName: firmName, PDFSections: sections, ProformaOnly: proformaOnly}
 }

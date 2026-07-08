@@ -1122,7 +1122,7 @@ components:
           description: The issuer / executor signature lines.
     OrganizationSettings:
       type: object
-      required: [firmName, pdfSections]
+      required: [firmName, pdfSections, proformaOnly]
       properties:
         firmName:
           type: string
@@ -1130,6 +1130,11 @@ components:
           example: Grafika Čobanović
         pdfSections:
           $ref: '#/components/schemas/PDFSections'
+        proformaOnly:
+          type: boolean
+          description: >-
+            When true, the shop issues only proformas — invoices are not
+            offered.
     OrganizationSettingsUpdate:
       type: object
       description: >-
@@ -1141,6 +1146,11 @@ components:
           description: The shop's display name shown in the app branding.
         pdfSections:
           $ref: '#/components/schemas/PDFSections'
+        proformaOnly:
+          type: boolean
+          description: >-
+            When true, the shop issues only proformas — invoices are not
+            offered.
     CatalogItemInput:
       type: object
       required: [name, kind, unit]

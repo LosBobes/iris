@@ -128,6 +128,14 @@ export const en: typeof sr = {
         signaturesHint: 'The issuer and executor signature lines.',
       },
     },
+    proforma: {
+      title: 'Proformas',
+      hint: 'This shop issues only proformas (profaktura/predračun), never invoices.',
+      label: 'Proformas only',
+      labelHint: 'When on, the work order defaults to a proforma and hides invoice as an option.',
+      saveErrorPrefix: 'Error saving',
+      saveError: 'Error saving the proforma setting.',
+    },
     enums: {
       title: 'Enum values',
       hint: 'Add your own options for work-order dropdowns. Built-in values are locked.',
@@ -828,6 +836,7 @@ export const en: typeof sr = {
       dueDate: 'Due date',
       documentType: 'Document type',
       selectType: 'Select a type',
+      proformaOnlyHint: 'This shop issues only proformas.',
       deliveryMethod: 'Delivery method',
       selectMethod: 'Select a method',
       documentNumber: 'Document number',

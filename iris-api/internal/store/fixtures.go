@@ -53,6 +53,7 @@ type FixtureStore struct {
 	fixtureUsers     []domain.FixtureUser
 	firmName         string
 	pdfSections      *domain.PDFSections
+	proformaOnly     *bool
 	sessions         map[string]fixtureSession
 }
 

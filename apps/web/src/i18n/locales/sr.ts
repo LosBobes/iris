@@ -127,6 +127,14 @@ export const sr = {
         signaturesHint: 'Linije za potpis izdavaoca i izvršioca.',
       },
     },
+    proforma: {
+      title: 'Profakture',
+      hint: 'Ova radnja izdaje isključivo profakture (profaktura/predračun), nikada fakture.',
+      label: 'Samo profakture',
+      labelHint: 'Kad je uključeno, radni nalog podrazumeva profakturu i sakriva fakturu kao opciju.',
+      saveErrorPrefix: 'Greška pri čuvanju',
+      saveError: 'Greška pri čuvanju podešavanja profakture.',
+    },
     enums: {
       title: 'Vrednosti šifarnika',
       hint: 'Dodajte sopstvene opcije za padajuće liste radnih naloga. Ugrađene vrednosti su zaključane.',
@@ -827,6 +835,7 @@ export const sr = {
       dueDate: 'Rok završetka',
       documentType: 'Tip dokumenta',
       selectType: 'Izaberite tip',
+      proformaOnlyHint: 'Ova radnja izdaje samo profakture.',
       deliveryMethod: 'Način dostave',
       selectMethod: 'Izaberite način',
       documentNumber: 'Broj dokumenta',

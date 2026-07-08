@@ -22,10 +22,19 @@ export interface OrganizationSettings {
   firmName: string
   /** Work-order printout section toggles. */
   pdfSections: PDFSections
+  /**
+   * When true, this shop only ever issues proformas (profaktura/predračun) —
+   * never invoices (faktura). The work-order form defaults to and restricts
+   * the billing document type accordingly.
+   */
+  proformaOnly: boolean
 }
 
 /** Fallback firm name used before settings load or when the request fails. */
 export const DEFAULT_FIRM_NAME = 'Grafika Čobanović'
+
+/** Fallback used before settings load; this deployment issues only proformas. */
+export const DEFAULT_PROFORMA_ONLY = true
 
 /** All-enabled PDF sections, used before settings load or for an unconfigured shop. */
 export const DEFAULT_PDF_SECTIONS: PDFSections = {

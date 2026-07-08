@@ -30,6 +30,7 @@ import type { CatalogItem } from '@/types/catalog'
 import {
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
+  DEFAULT_PROFORMA_ONLY,
   type OrganizationSettings,
   type PDFSections,
 } from '@/types/settings'
@@ -391,6 +392,7 @@ let nextCatalogSequence = 4
 
 let firmName = DEFAULT_FIRM_NAME
 let pdfSections: PDFSections = { ...DEFAULT_PDF_SECTIONS }
+let proformaOnly = DEFAULT_PROFORMA_ONLY
 
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
   return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
@@ -748,7 +750,7 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName, pdfSections }
+      return { firmName, pdfSections, proformaOnly }
     },
 
     async updateSettings(
@@ -762,7 +764,10 @@ export function createFixtureApi(): Window['api'] {
       if (settings.pdfSections !== undefined) {
         pdfSections = { ...settings.pdfSections }
       }
-      return { firmName, pdfSections }
+      if (settings.proformaOnly !== undefined) {
+        proformaOnly = settings.proformaOnly
+      }
+      return { firmName, pdfSections, proformaOnly }
     },
 
     async getWorkOrders(query) {

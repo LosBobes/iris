@@ -168,6 +168,11 @@ type CatalogItemInput struct {
 // administrator changes it via the organization settings.
 const DefaultFirmName = "Grafika Čobanović"
 
+// DefaultProformaOnly reflects that this deployment (Grafika Čobanović) issues
+// only proformas (predračun/profaktura) and never invoices, until an
+// administrator changes it via the organization settings.
+const DefaultProformaOnly = true
+
 // PDFSections controls which sections of the work-order printout are rendered.
 // Every section defaults to true (see DefaultPDFSections) so an unconfigured shop
 // keeps the full sheet.
@@ -196,16 +201,18 @@ func DefaultPDFSections() PDFSections {
 // OrganizationSettings holds shop-wide branding/config an admin can edit: the
 // firm name shown in the app header and the work-order PDF section toggles.
 type OrganizationSettings struct {
-	FirmName    string      `json:"firmName"`
-	PDFSections PDFSections `json:"pdfSections"`
+	FirmName     string      `json:"firmName"`
+	PDFSections  PDFSections `json:"pdfSections"`
+	ProformaOnly bool        `json:"proformaOnly"`
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
 // Nil fields are left unchanged, so a firm-name-only save does not wipe the PDF
 // configuration and vice versa.
 type OrganizationSettingsUpdate struct {
-	FirmName    *string      `json:"firmName"`
-	PDFSections *PDFSections `json:"pdfSections"`
+	FirmName     *string      `json:"firmName"`
+	PDFSections  *PDFSections `json:"pdfSections"`
+	ProformaOnly *bool        `json:"proformaOnly"`
 }
 
 type User struct {

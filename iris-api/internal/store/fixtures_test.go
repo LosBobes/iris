@@ -340,6 +340,37 @@ func TestFixtureStoreRejectsInvalidUpdateField(t *testing.T) {
 	}
 }
 
+func TestFixtureStoreOrganizationSettingsProformaOnlyDefaultsAndRoundTrips(t *testing.T) {
+	store := NewFixtureStore(testutil.FixtureDir(t))
+	ctx := context.Background()
+
+	settings, err := store.OrganizationSettings(ctx)
+	if err != nil {
+		t.Fatalf("OrganizationSettings() returned error: %v", err)
+	}
+	if settings.ProformaOnly != domain.DefaultProformaOnly {
+		t.Fatalf("default proformaOnly = %v, want %v", settings.ProformaOnly, domain.DefaultProformaOnly)
+	}
+
+	disabled := false
+	updated, err := store.UpdateOrganizationSettings(ctx, domain.OrganizationSettingsUpdate{ProformaOnly: &disabled})
+	if err != nil {
+		t.Fatalf("UpdateOrganizationSettings(false) returned error: %v", err)
+	}
+	if updated.ProformaOnly {
+		t.Fatal("proformaOnly = true after setting false, want false")
+	}
+
+	enabled := true
+	reenabled, err := store.UpdateOrganizationSettings(ctx, domain.OrganizationSettingsUpdate{ProformaOnly: &enabled})
+	if err != nil {
+		t.Fatalf("UpdateOrganizationSettings(true) returned error: %v", err)
+	}
+	if !reenabled.ProformaOnly {
+		t.Fatal("proformaOnly = false after setting true, want true")
+	}
+}
+
 func TestFixtureStoreMissingFile(t *testing.T) {
 	tempDir := t.TempDir()
 	store := NewFixtureStore(tempDir)

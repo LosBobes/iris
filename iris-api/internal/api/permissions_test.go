@@ -225,6 +225,9 @@ func TestOrganizationSettings(t *testing.T) {
 	if settings.PDFSections != domain.DefaultPDFSections() {
 		t.Fatalf("default pdfSections = %+v, want all-enabled", settings.PDFSections)
 	}
+	if settings.ProformaOnly != domain.DefaultProformaOnly {
+		t.Fatalf("default proformaOnly = %v, want %v", settings.ProformaOnly, domain.DefaultProformaOnly)
+	}
 
 	if rec := roleRequest(t, server, userToken, http.MethodPut, "/settings", `{"firmName":"Hack"}`); rec.Code != http.StatusForbidden {
 		t.Fatalf("PUT /settings as user = %d, want %d", rec.Code, http.StatusForbidden)
@@ -257,6 +260,38 @@ func TestOrganizationSettings(t *testing.T) {
 	}
 	if !after.PDFSections.Billing || !after.PDFSections.Signatures {
 		t.Fatalf("pdfSections-only update wiped enabled sections: %+v", after.PDFSections)
+	}
+
+	// proformaOnly must round-trip through an update and back, and a
+	// pdfSections-only update above must not have disturbed it.
+	if !after.ProformaOnly {
+		t.Fatalf("proformaOnly after unrelated update = %v, want true (unchanged default)", after.ProformaOnly)
+	}
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings", `{"proformaOnly":false}`); rec.Code != http.StatusOK {
+		t.Fatalf("PUT proformaOnly=false as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+	disabledRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
+	var disabled domain.OrganizationSettings
+	if err := json.Unmarshal(disabledRec.Body.Bytes(), &disabled); err != nil {
+		t.Fatalf("decode disabled: %v", err)
+	}
+	if disabled.ProformaOnly {
+		t.Fatal("proformaOnly = true after setting false, want false")
+	}
+	if disabled.FirmName != "Grafika Novi Naziv" {
+		t.Fatalf("proformaOnly-only update wiped firmName: %q", disabled.FirmName)
+	}
+
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings", `{"proformaOnly":true}`); rec.Code != http.StatusOK {
+		t.Fatalf("PUT proformaOnly=true as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+	reenabledRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
+	var reenabled domain.OrganizationSettings
+	if err := json.Unmarshal(reenabledRec.Body.Bytes(), &reenabled); err != nil {
+		t.Fatalf("decode reenabled: %v", err)
+	}
+	if !reenabled.ProformaOnly {
+		t.Fatal("proformaOnly = false after setting true, want true")
 	}
 }
 

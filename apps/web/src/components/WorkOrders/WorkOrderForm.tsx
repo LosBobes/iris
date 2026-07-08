@@ -66,6 +66,7 @@ import {
 } from "@/shared/utils/work-orders";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { WorkOrderPdfPreview } from "@/components/WorkOrders/WorkOrderPdfPreview";
 
 interface WorkOrderFormProps {
@@ -490,6 +491,9 @@ export function WorkOrderForm({
   // does not unregister them), so an operator's edit never wipes admin data.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
+  // This shop may issue only proformas (never invoices); when so, new orders
+  // default to a proforma and the document-type select hides invoice.
+  const { proformaOnly } = useOrganization();
 
   const rawDefaultValues: WorkOrderFormValues =
     initialValues ??
@@ -531,7 +535,7 @@ export function WorkOrderForm({
           contactPerson: null,
           jobDescription: "",
           jobDetails: null,
-          billingDocumentType: null,
+          billingDocumentType: proformaOnly ? "proforma" : null,
           billingDocumentNumber: null,
           shipping: { ...EMPTY_SHIPPING },
           assignment: {
@@ -1901,40 +1905,61 @@ export function WorkOrderForm({
                     {t("workOrders.form.sectionDocument")}
                   </div>
                   <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    <FieldShell id="billingDocumentType" label={t("workOrders.form.documentType")}>
+                    <FieldShell
+                      id="billingDocumentType"
+                      label={t("workOrders.form.documentType")}
+                      hint={
+                        proformaOnly
+                          ? t("workOrders.form.proformaOnlyHint")
+                          : undefined
+                      }
+                    >
                       <Controller
                         name="billingDocumentType"
                         control={control}
-                        render={({ field }) => (
-                          <Select
-                            value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
-                            onValueChange={(v) => {
-                              const nextValue =
-                                v === WORK_ORDER_SELECT_NONE_VALUE
-                                  ? null
-                                  : (v as BillingDocumentType);
-                              field.onChange(nextValue);
-                            }}
-                          >
-                            <SelectTrigger
-                              id="billingDocumentType"
-                              aria-labelledby="billingDocumentType-label"
-                              className={underlineTrigger}
+                        render={({ field }) => {
+                          // This shop may issue only proformas: hide "invoice" from
+                          // the picklist, but never drop it if it's already the
+                          // value stored on an existing order.
+                          const documentTypeOptions = optionsFor(
+                            "billingDocumentType",
+                          ).filter(
+                            (option) =>
+                              !proformaOnly ||
+                              option.value !== "invoice" ||
+                              field.value === "invoice",
+                          );
+                          return (
+                            <Select
+                              value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
+                              onValueChange={(v) => {
+                                const nextValue =
+                                  v === WORK_ORDER_SELECT_NONE_VALUE
+                                    ? null
+                                    : (v as BillingDocumentType);
+                                field.onChange(nextValue);
+                              }}
                             >
-                              <SelectValue placeholder={t("workOrders.form.selectType")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
-                                Nije izabrano
-                              </SelectItem>
-                              {optionsFor("billingDocumentType").map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
+                              <SelectTrigger
+                                id="billingDocumentType"
+                                aria-labelledby="billingDocumentType-label"
+                                className={underlineTrigger}
+                              >
+                                <SelectValue placeholder={t("workOrders.form.selectType")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                                  Nije izabrano
                                 </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
+                                {documentTypeOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        }}
                       />
                     </FieldShell>
 

@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
 const (
-	firmNameSettingKey    = "firm_name"
-	pdfSectionsSettingKey = "pdf_sections"
+	firmNameSettingKey     = "firm_name"
+	pdfSectionsSettingKey  = "pdf_sections"
+	proformaOnlySettingKey = "proforma_only"
 )
 
 // OrganizationSettings returns the shop-wide settings, falling back to defaults
@@ -22,16 +24,18 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 		return domain.OrganizationSettings{}, err
 	}
 	settings := domain.OrganizationSettings{
-		FirmName:    domain.DefaultFirmName,
-		PDFSections: domain.DefaultPDFSections(),
+		FirmName:     domain.DefaultFirmName,
+		PDFSections:  domain.DefaultPDFSections(),
+		ProformaOnly: domain.DefaultProformaOnly,
 	}
 
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?)`,
+		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?)`,
 		tenantID,
 		firmNameSettingKey,
 		pdfSectionsSettingKey,
+		proformaOnlySettingKey,
 	)
 	if err != nil {
 		return domain.OrganizationSettings{}, fmt.Errorf("load organization settings: %w", err)
@@ -54,6 +58,8 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 			if err := json.Unmarshal([]byte(value), &sections); err == nil {
 				settings.PDFSections = sections
 			}
+		case proformaOnlySettingKey:
+			settings.ProformaOnly = value == "true"
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -83,6 +89,9 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 	if update.PDFSections != nil {
 		current.PDFSections = *update.PDFSections
 	}
+	if update.ProformaOnly != nil {
+		current.ProformaOnly = *update.ProformaOnly
+	}
 
 	sectionsJSON, err := json.Marshal(current.PDFSections)
 	if err != nil {
@@ -93,6 +102,9 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 		return domain.OrganizationSettings{}, err
 	}
 	if err := s.upsertSetting(ctx, pdfSectionsSettingKey, string(sectionsJSON)); err != nil {
+		return domain.OrganizationSettings{}, err
+	}
+	if err := s.upsertSetting(ctx, proformaOnlySettingKey, strconv.FormatBool(current.ProformaOnly)); err != nil {
 		return domain.OrganizationSettings{}, err
 	}
 	return current, nil

@@ -11,6 +11,7 @@ import { OrganizationContext } from "@/contexts/OrganizationContext";
 import {
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
+  DEFAULT_PROFORMA_ONLY,
   type PDFSections,
 } from "@/types/settings";
 import i18n from "@/i18n";
@@ -102,6 +103,7 @@ function App(): React.JSX.Element {
   const [firmName, setFirmName] = useState(DEFAULT_FIRM_NAME);
   const [pdfSections, setPdfSections] =
     useState<PDFSections>(DEFAULT_PDF_SECTIONS);
+  const [proformaOnly, setProformaOnly] = useState(DEFAULT_PROFORMA_ONLY);
 
   const checkBackendStatus = useCallback(async () => {
     startTransition(() => {
@@ -131,6 +133,8 @@ function App(): React.JSX.Element {
           const settings = await window.api.getSettings();
           if (settings?.firmName) setFirmName(settings.firmName);
           if (settings?.pdfSections) setPdfSections(settings.pdfSections);
+          if (typeof settings?.proformaOnly === "boolean")
+            setProformaOnly(settings.proformaOnly);
         } catch {
           // Keep the default firm name.
         }
@@ -190,7 +194,16 @@ function App(): React.JSX.Element {
                 <Login onLoginSuccess={handleLoginSuccess} />
               ) : (
                 <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections }}>
+                  <OrganizationContext.Provider
+                    value={{
+                      firmName,
+                      setFirmName,
+                      pdfSections,
+                      setPdfSections,
+                      proformaOnly,
+                      setProformaOnly,
+                    }}
+                  >
                   <TooltipProvider>
                     <Routes>
                       <Route path="/" element={<DashboardPage />} />
