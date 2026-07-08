@@ -317,6 +317,14 @@ export function resolveShippingAddress(
   return locations.find((location) => location.id === locationId)?.address ?? null;
 }
 
+export function resolveLocationAddress(
+  locationId: string | null,
+  locations: Location[],
+): string | null {
+  if (!locationId) return null;
+  return locations.find((location) => location.id === locationId)?.address ?? null;
+}
+
 function createDraftNote(visibility: WorkOrderNoteVisibility): WorkOrderFormValues["internalNotes"][number] {
   return {
     id: `${visibility}-draft`,
@@ -526,7 +534,6 @@ export function WorkOrderForm({
         if (active) setOperators(list);
       })
       .catch(() => {
-        /* non-fatal: the select falls back to the current value only */
       });
     return () => {
       active = false;
@@ -543,6 +550,14 @@ export function WorkOrderForm({
         : allLocations,
     [allLocations, selectedCustomerId],
   );
+  const selectedLocation = useMemo(
+    () =>
+      selectedLocationId
+        ? allLocations.find((location) => location.id === selectedLocationId) ?? null
+        : null,
+    [allLocations, selectedLocationId],
+  );
+  const selectedLocationAddress = resolveLocationAddress(selectedLocationId, allLocations);
 
   // The client and catalog lists are large, so both pickers search the server
   // (paginated) rather than loading every row. The picked customer is held in
@@ -575,6 +590,40 @@ export function WorkOrderForm({
       data: customer,
     }));
   }, []);
+
+  useEffect(() => {
+    if (!selectedCustomerId) return;
+    if (selectedCustomer?.id === selectedCustomerId && selectedCustomer.pib !== null) return;
+
+    let active = true;
+    window.api
+      .getCustomerById(selectedCustomerId)
+      .then((customer) => {
+        if (active) setSelectedCustomer(customer);
+      })
+      .catch(() => {
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCustomerId, selectedCustomer?.id, selectedCustomer?.pib]);
+
+  useEffect(() => {
+    if (!selectedCustomerId) return;
+    if (selectedLocationId && selectedLocation?.customerId === selectedCustomerId) return;
+
+    const firstLocation = filteredLocations[0];
+    if (firstLocation) {
+      setValue("locationId", firstLocation.id, { shouldDirty: true });
+    }
+  }, [
+    filteredLocations,
+    selectedCustomerId,
+    selectedLocation?.customerId,
+    selectedLocationId,
+    setValue,
+  ]);
 
   const searchCatalog = useCallback(async (term: string): Promise<ComboboxItem[]> => {
     const { items } = await window.api.getCatalogItems({ q: term, active: true, limit: 20 });
@@ -1040,6 +1089,40 @@ export function WorkOrderForm({
                   </div>
                 ))}
             </FieldShell>
+
+            {(selectedCustomer || selectedLocation) && (
+              <div className="col-span-full border border-[color:var(--iris-border-soft)] bg-background px-4 py-3">
+                <div className="mb-3 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.form.registryDetails")}
+                </div>
+                <div className="grid gap-3 text-[12px] sm:grid-cols-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.form.registryAddress")}
+                    </div>
+                    <div className="mt-0.5 text-foreground">
+                      {selectedLocationAddress ?? "-"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.form.registryPib")}
+                    </div>
+                    <div className="tnum mt-0.5 text-foreground">
+                      {selectedCustomer?.pib ?? "-"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.form.registryMb")}
+                    </div>
+                    <div className="tnum mt-0.5 text-foreground">
+                      {selectedCustomer?.mb ?? "-"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* A registry client supplies its own name/contact, so the
                 free-text fields would just duplicate it. Show them read-only
