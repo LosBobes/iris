@@ -50,7 +50,7 @@ func TestTenantIsolationMigrationBackfillsExistingData(t *testing.T) {
 		`INSERT INTO customers(id, name) VALUES ('c1', 'Postojeći klijent')`,
 		`INSERT INTO locations(id, customer_id, name) VALUES ('l1', 'c1', 'Magacin')`,
 		`INSERT INTO work_orders(id, order_number, client_name, job_description, issued_by, status, issue_date, payload, created_at, updated_at)
-		 VALUES ('1', 'RN-2024-0001', 'Klijent', 'Posao', 'admin', 'new', '2024-01-01', '{}', '2024-01-01', '2024-01-01')`,
+		 VALUES ('1', 'RN-2024-00001', 'Klijent', 'Posao', 'admin', 'new', '2024-01-01', '{}', '2024-01-01', '2024-01-01')`,
 		`INSERT INTO catalog_items(id, code, name, kind) VALUES ('cat1', 'SIF-1', 'Štampa', 'service')`,
 		`INSERT INTO enum_values(id, field, value, label) VALUES ('e1', 'status', 'x', 'X')`,
 	}
@@ -107,7 +107,7 @@ func TestTenantIsolationMigrationBackfillsExistingData(t *testing.T) {
 	reused := []string{
 		`INSERT INTO users(id, tenant_id, username, password_hash, role) VALUES ('u2', 'tenant-2', 'admin', 'hash', 'admin')`,
 		`INSERT INTO work_orders(id, tenant_id, order_number, client_name, job_description, issued_by, status, issue_date, payload, created_at, updated_at)
-		 VALUES ('2', 'tenant-2', 'RN-2024-0001', 'K', 'P', 'admin', 'new', '2024-01-01', '{}', '2024-01-01', '2024-01-01')`,
+		 VALUES ('2', 'tenant-2', 'RN-2024-00001', 'K', 'P', 'admin', 'new', '2024-01-01', '{}', '2024-01-01', '2024-01-01')`,
 		`INSERT INTO catalog_items(id, tenant_id, code, name, kind) VALUES ('cat2', 'tenant-2', 'SIF-1', 'Štampa', 'service')`,
 	}
 	for _, statement := range reused {

@@ -4,6 +4,7 @@ import {
   getInvoiceUnitOptions,
   getFirstWorkOrderFormErrorTarget,
   normalizeWorkOrderFormDefaultValues,
+  resolveLocationAddress,
   resolveShippingAddress,
 } from "./WorkOrderForm";
 import {
@@ -36,12 +37,13 @@ const duplicateValues: WorkOrderFormValues = {
   assignment: {
     assignedTo: null,
     priority: "normal",
-    scheduledDate: null,
   },
   price: 12000,
   note: null,
   issueDate: "2026-05-31",
+  proformaDueDate: null,
   dueDate: null,
+  issuedBy: "admin",
   executedBy: null,
   internalNotes: [],
   customerNotes: [],
@@ -232,5 +234,24 @@ describe("resolveShippingAddress", () => {
         locations,
       ),
     ).toBe("Druga adresa 4, Beograd");
+  });
+});
+
+describe("resolveLocationAddress", () => {
+  const locations = [
+    {
+      id: "loc-1",
+      customerId: "cust-1",
+      name: "Agencija",
+      address: "Kralja Petra 8, Nis",
+    },
+  ];
+
+  it("returns the selected registry location address", () => {
+    expect(resolveLocationAddress("loc-1", locations)).toBe("Kralja Petra 8, Nis");
+  });
+
+  it("returns null when no registry location is selected", () => {
+    expect(resolveLocationAddress(null, locations)).toBeNull();
   });
 });

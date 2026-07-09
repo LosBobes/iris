@@ -71,7 +71,7 @@ func TestPrintHelpers(t *testing.T) {
 	// 5. Job lines builder
 	baseOrder := domain.WorkOrder{
 		ID:             "rn-1",
-		OrderNumber:    "RN-2026-0001",
+		OrderNumber:    "RN-2026-00001",
 		ClientName:     "Profesionalni Upravnik",
 		JobDescription: "Vizit karte",
 		Price:          &p1450,
@@ -119,7 +119,7 @@ func TestPrintHelpers(t *testing.T) {
 func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 	order := domain.WorkOrder{
 		ID:             "rn-1",
-		OrderNumber:    "RN-2026-0001",
+		OrderNumber:    "RN-2026-00001",
 		ClientName:     "Profesionalni Upravnik",
 		JobDescription: "Vizit karte",
 	}
@@ -157,7 +157,7 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 	p1450 := 1450.0
 	baseOrder := domain.WorkOrder{
 		ID:             "rn-1",
-		OrderNumber:    "RN-2026-0001",
+		OrderNumber:    "RN-2026-00001",
 		ClientName:     "Profesionalni Upravnik",
 		JobDescription: "Vizit karte",
 		Price:          &p1450,

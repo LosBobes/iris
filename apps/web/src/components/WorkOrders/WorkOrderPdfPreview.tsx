@@ -50,6 +50,7 @@ function buildPreviewOrder(
     billingDocumentNumber: values.billingDocumentNumber,
     shipping: values.shipping,
     assignment: values.assignment,
+    issuedBy: values.issuedBy ?? base.issuedBy ?? "",
     executedBy: values.executedBy ?? base.executedBy ?? null,
     issueDate: values.issueDate,
     dueDate: values.dueDate,

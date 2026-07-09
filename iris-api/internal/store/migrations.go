@@ -291,6 +291,48 @@ FROM customers
 WHERE contact_name IS NOT NULL AND TRIM(contact_name) <> '';
 `
 
+// workOrderNumberReservationsMigration adds the reservation ledger backing
+// "reserve on open" order numbers. When an operator opens the create form the
+// server claims the next RN-<year>-<seq> here so concurrent operators each get a
+// distinct number before any work order is saved. Rows are consumed (deleted) on
+// create and reclaimed after expiry, so abandoned forms only ever leave a gap.
+const workOrderNumberReservationsMigration = `
+CREATE TABLE IF NOT EXISTS work_order_number_reservations (
+	tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+	order_number TEXT NOT NULL,
+	year INTEGER NOT NULL,
+	sequence INTEGER NOT NULL,
+	reserved_by TEXT NOT NULL,
+	reserved_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	PRIMARY KEY (tenant_id, order_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wo_number_reservations_active
+	ON work_order_number_reservations(tenant_id, year, expires_at);
+`
+
+// workOrderEditLocksMigration adds the pessimistic edit-lock ledger. When an
+// operator opens the edit form the server records an exclusive lock here so a
+// second operator opening the same work order is shown a read-only view naming
+// the holder. Locks are refreshed by client heartbeats and auto-expire (their row
+// is ignored past expires_at and pruned on the next acquire) so a closed tab never
+// strands a work order. One lock per work order, hence the (tenant_id, work_order_id)
+// primary key.
+const workOrderEditLocksMigration = `
+CREATE TABLE IF NOT EXISTS work_order_edit_locks (
+	tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+	work_order_id TEXT NOT NULL,
+	locked_by TEXT NOT NULL,
+	locked_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	PRIMARY KEY (tenant_id, work_order_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wo_edit_locks_active
+	ON work_order_edit_locks(tenant_id, expires_at);
+`
+
 // sqliteMigrations is the ordered list of schema versions. Each entry is applied
 // once, in order, and recorded in schema_migrations so existing databases pick
 // up later versions on the next startup.
@@ -314,6 +356,8 @@ var sqliteMigrations = []struct {
 	{version: 8, sql: workOrderCostReviewMigration},
 	{version: 9, sql: customerContactsMigration},
 	{version: 10, fn: tenantIsolationMigration},
+	{version: 11, sql: workOrderNumberReservationsMigration},
+	{version: 12, sql: workOrderEditLocksMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

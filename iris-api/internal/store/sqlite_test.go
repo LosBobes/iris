@@ -35,7 +35,7 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WorkOrderByID() returned error: %v", err)
 	}
-	if workOrder == nil || workOrder.OrderNumber != "RN-2024-0001" {
+	if workOrder == nil || workOrder.OrderNumber != "RN-2024-00001" {
 		t.Fatalf("workOrder = %#v, want persisted fixture order", workOrder)
 	}
 }
@@ -77,6 +77,157 @@ func TestSQLiteStoreCreateWorkOrderNumberAvoidsCollision(t *testing.T) {
 	}
 	if want := formatOrderNumber(year, 2); created.OrderNumber != want {
 		t.Fatalf("OrderNumber = %q, want %q", created.OrderNumber, want)
+	}
+}
+
+// TestSQLiteStoreReserveOrderNumber covers the "reserve on open" flow: distinct
+// numbers for concurrent operators, fresh creates skipping live reservations, and
+// consuming a reserved number at create time.
+func TestSQLiteStoreReserveOrderNumber(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	year := time.Now().UTC().Year()
+	issueDate := time.Now().UTC().Format("2006-01-02")
+
+	a, err := sqliteStore.ReserveOrderNumber(ctx, "admin")
+	if err != nil {
+		t.Fatalf("ReserveOrderNumber() a: %v", err)
+	}
+	if want := formatOrderNumber(year, 1); a.OrderNumber != want {
+		t.Fatalf("first reservation = %q, want %q", a.OrderNumber, want)
+	}
+
+	// A concurrent second reservation must not repeat the first live number.
+	b, err := sqliteStore.ReserveOrderNumber(ctx, "admin")
+	if err != nil {
+		t.Fatalf("ReserveOrderNumber() b: %v", err)
+	}
+	if want := formatOrderNumber(year, 2); b.OrderNumber != want {
+		t.Fatalf("second reservation = %q, want %q", b.OrderNumber, want)
+	}
+
+	// A create without a reserved number must skip past both live reservations.
+	fresh, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName: "Fresh", JobDescription: "job", IssuedBy: "admin", IssueDate: issueDate,
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() fresh: %v", err)
+	}
+	if want := formatOrderNumber(year, 3); fresh.OrderNumber != want {
+		t.Fatalf("fresh order number = %q, want %q", fresh.OrderNumber, want)
+	}
+
+	// Creating with reservation b's number consumes it and keeps that exact number.
+	reserved, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		OrderNumber: &b.OrderNumber,
+		ClientName:  "Reserved", JobDescription: "job", IssuedBy: "admin", IssueDate: issueDate,
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() reserved: %v", err)
+	}
+	if reserved.OrderNumber != b.OrderNumber {
+		t.Fatalf("reserved order number = %q, want %q", reserved.OrderNumber, b.OrderNumber)
+	}
+
+	// Reservation a is still outstanding and b is consumed; the next reservation
+	// must clear the highest committed number (0003), not reuse a's 0001.
+	c, err := sqliteStore.ReserveOrderNumber(ctx, "admin")
+	if err != nil {
+		t.Fatalf("ReserveOrderNumber() c: %v", err)
+	}
+	if want := formatOrderNumber(year, 4); c.OrderNumber != want {
+		t.Fatalf("third reservation = %q, want %q", c.OrderNumber, want)
+	}
+}
+
+// TestSQLiteStoreReleaseOrderNumber verifies a released reservation is reclaimed
+// immediately instead of leaving a gap until it would have expired.
+func TestSQLiteStoreReleaseOrderNumber(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	year := time.Now().UTC().Year()
+
+	a, err := sqliteStore.ReserveOrderNumber(ctx, "admin")
+	if err != nil {
+		t.Fatalf("ReserveOrderNumber() a: %v", err)
+	}
+	if want := formatOrderNumber(year, 1); a.OrderNumber != want {
+		t.Fatalf("first reservation = %q, want %q", a.OrderNumber, want)
+	}
+
+	if err := sqliteStore.ReleaseOrderNumber(ctx, a.OrderNumber); err != nil {
+		t.Fatalf("ReleaseOrderNumber() returned error: %v", err)
+	}
+
+	// The released number is free again, so the next reservation reuses it.
+	b, err := sqliteStore.ReserveOrderNumber(ctx, "admin")
+	if err != nil {
+		t.Fatalf("ReserveOrderNumber() b: %v", err)
+	}
+	if b.OrderNumber != a.OrderNumber {
+		t.Fatalf("reservation after release = %q, want reclaimed %q", b.OrderNumber, a.OrderNumber)
+	}
+
+	// Releasing an unknown number is a no-op.
+	if err := sqliteStore.ReleaseOrderNumber(ctx, formatOrderNumber(year, 999)); err != nil {
+		t.Fatalf("ReleaseOrderNumber() unknown: %v", err)
+	}
+}
+
+// TestSQLiteStoreEditLock covers the pessimistic edit lock: a second operator is
+// refused while the first holds it, the holder can refresh, and releasing frees it.
+func TestSQLiteStoreEditLock(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	lock, acquired, err := sqliteStore.AcquireEditLock(ctx, "wo-1", "marko")
+	if err != nil {
+		t.Fatalf("AcquireEditLock() marko: %v", err)
+	}
+	if !acquired || lock.LockedBy != "marko" || lock.ExpiresAt == "" {
+		t.Fatalf("lock = %#v, acquired = %v, want marko holding with expiry", lock, acquired)
+	}
+
+	// A different operator is refused and told who holds it.
+	held, acquired, err := sqliteStore.AcquireEditLock(ctx, "wo-1", "ana")
+	if err != nil {
+		t.Fatalf("AcquireEditLock() ana: %v", err)
+	}
+	if acquired {
+		t.Fatalf("ana acquired = true, want refused while marko holds the lock")
+	}
+	if held.LockedBy != "marko" {
+		t.Fatalf("held.LockedBy = %q, want marko", held.LockedBy)
+	}
+
+	// The holder refreshing (heartbeat) keeps the lock and its original lockedAt.
+	refreshed, acquired, err := sqliteStore.AcquireEditLock(ctx, "wo-1", "marko")
+	if err != nil {
+		t.Fatalf("AcquireEditLock() marko refresh: %v", err)
+	}
+	if !acquired || refreshed.LockedAt != lock.LockedAt {
+		t.Fatalf("refresh = %#v, acquired = %v, want same lockedAt %q held", refreshed, acquired, lock.LockedAt)
+	}
+
+	// A stale operator can't steal the lock by releasing it.
+	if err := sqliteStore.ReleaseEditLock(ctx, "wo-1", "ana"); err != nil {
+		t.Fatalf("ReleaseEditLock() ana: %v", err)
+	}
+	if _, acquired, _ := sqliteStore.AcquireEditLock(ctx, "wo-1", "ana"); acquired {
+		t.Fatalf("ana acquired after no-op release, want marko still holding")
+	}
+
+	// The holder releasing frees the lock for the next operator.
+	if err := sqliteStore.ReleaseEditLock(ctx, "wo-1", "marko"); err != nil {
+		t.Fatalf("ReleaseEditLock() marko: %v", err)
+	}
+	if _, acquired, err := sqliteStore.AcquireEditLock(ctx, "wo-1", "ana"); err != nil || !acquired {
+		t.Fatalf("ana acquire after release = %v, %v; want acquired", acquired, err)
 	}
 }
 
@@ -129,7 +280,7 @@ func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
 		t.Fatal("Customers().Items = nil, want empty slice")
 	}
 
-	locations, err := sqliteStore.Locations(ctx)
+	locations, err := sqliteStore.Locations(ctx, "")
 	if err != nil {
 		t.Fatalf("Locations() returned error: %v", err)
 	}

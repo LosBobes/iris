@@ -66,7 +66,7 @@ vi.mock("@/components/WorkOrders/DeleteWorkOrderDialog", () => ({
 
 const sampleOrder: WorkOrder = {
   id: "order-1",
-  orderNumber: "RN-2026-0001",
+  orderNumber: "RN-2026-00001",
   clientName: "Demo Klijent",
   contactPerson: null,
   jobDescription: "Stampa flajera",
@@ -85,6 +85,7 @@ const sampleOrder: WorkOrder = {
   issuedBy: "admin",
   executedBy: null,
   issueDate: "2026-04-07",
+  proformaDueDate: null,
   dueDate: null,
   isCompleted: false,
   status: "active",
@@ -154,7 +155,7 @@ describe("WorkOrdersPage", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: /obrisi rn-2026-0001/i }),
+      screen.getByRole("button", { name: /obrisi rn-2026-00001/i }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Potvrdi brisanje" }));
 
@@ -165,7 +166,7 @@ describe("WorkOrdersPage", () => {
 
     expect(mockRefreshOrders).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
-    expect(screen.getByText("Potvrda za RN-2026-0001")).toBeInTheDocument();
+    expect(screen.getByText("Potvrda za RN-2026-00001")).toBeInTheDocument();
   });
 
   it("shows an error toast and skips refresh when toggle update returns null", async () => {
@@ -182,7 +183,7 @@ describe("WorkOrdersPage", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: /promeni status rn-2026-0001/i }),
+      screen.getByRole("button", { name: /promeni status rn-2026-00001/i }),
     );
 
     await waitFor(() => {

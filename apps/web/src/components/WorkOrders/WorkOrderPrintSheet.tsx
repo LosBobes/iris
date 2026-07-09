@@ -190,8 +190,7 @@ export function WorkOrderPrintSheet({
   const billingRows = getPrintBillingRows(order.billingDocumentType);
   const noteLines = buildPrintNoteLines(order);
   const shippingAddress = resolvePrintShippingAddress(order, locations);
-  const plannedDate =
-    order.dueDate ?? order.assignment.scheduledDate ?? order.completionDate;
+  const plannedDate = order.dueDate ?? order.completionDate;
   const completed = order.isCompleted || order.status === "invoiced";
 
   return (

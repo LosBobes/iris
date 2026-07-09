@@ -225,6 +225,15 @@ func TestOrganizationSettings(t *testing.T) {
 	if settings.PDFSections != domain.DefaultPDFSections() {
 		t.Fatalf("default pdfSections = %+v, want all-enabled", settings.PDFSections)
 	}
+	if settings.BillingDefaults != domain.DefaultBillingDefaults() {
+		t.Fatalf("default billingDefaults = %+v, want proforma/no-override", settings.BillingDefaults)
+	}
+	if settings.PriorityDefaults != domain.DefaultPriorityDefaults() {
+		t.Fatalf("default priorityDefaults = %+v, want normal/no-override", settings.PriorityDefaults)
+	}
+	if settings.ShowShippingOptions {
+		t.Fatalf("default showShippingOptions = true, want false")
+	}
 
 	if rec := roleRequest(t, server, userToken, http.MethodPut, "/settings", `{"firmName":"Hack"}`); rec.Code != http.StatusForbidden {
 		t.Fatalf("PUT /settings as user = %d, want %d", rec.Code, http.StatusForbidden)
@@ -244,6 +253,20 @@ func TestOrganizationSettings(t *testing.T) {
 		t.Fatalf("PUT pdfSections as admin = %d, want %d", rec.Code, http.StatusOK)
 	}
 
+	// An unknown document type is rejected.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"billingDefaults":{"documentType":"bogus","allowOverride":true}}`,
+	); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("PUT invalid billingDefaults = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+
+	// A billingDefaults-only update must persist and must not wipe the firm name.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"billingDefaults":{"documentType":"invoice","allowOverride":true}}`,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("PUT billingDefaults as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+
 	afterRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
 	var after domain.OrganizationSettings
 	if err := json.Unmarshal(afterRec.Body.Bytes(), &after); err != nil {
@@ -251,6 +274,52 @@ func TestOrganizationSettings(t *testing.T) {
 	}
 	if after.FirmName != "Grafika Novi Naziv" {
 		t.Fatalf("persisted firmName = %q, want %q", after.FirmName, "Grafika Novi Naziv")
+	}
+	if after.BillingDefaults.DocumentType != domain.BillingDocumentTypeInvoice || !after.BillingDefaults.AllowOverride {
+		t.Fatalf("billingDefaults not persisted: %+v", after.BillingDefaults)
+	}
+
+	// An unknown priority is rejected.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"priorityDefaults":{"priority":"bogus","allowOverride":true}}`,
+	); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("PUT invalid priorityDefaults = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+
+	// A priorityDefaults-only update must persist and must not wipe the firm name.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"priorityDefaults":{"priority":"high","allowOverride":true}}`,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("PUT priorityDefaults as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+	priorityRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
+	var afterPriority domain.OrganizationSettings
+	if err := json.Unmarshal(priorityRec.Body.Bytes(), &afterPriority); err != nil {
+		t.Fatalf("decode after priority: %v", err)
+	}
+	if afterPriority.PriorityDefaults.Priority != domain.WorkOrderPriorityHigh || !afterPriority.PriorityDefaults.AllowOverride {
+		t.Fatalf("priorityDefaults not persisted: %+v", afterPriority.PriorityDefaults)
+	}
+	if afterPriority.FirmName != "Grafika Novi Naziv" {
+		t.Fatalf("priorityDefaults update wiped firmName: %q", afterPriority.FirmName)
+	}
+
+	// A showShippingOptions-only update must persist and must not wipe the firm name.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"showShippingOptions":true}`,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("PUT showShippingOptions as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+	finalRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
+	var final domain.OrganizationSettings
+	if err := json.Unmarshal(finalRec.Body.Bytes(), &final); err != nil {
+		t.Fatalf("decode final: %v", err)
+	}
+	if !final.ShowShippingOptions {
+		t.Fatalf("showShippingOptions not persisted: %+v", final)
+	}
+	if final.FirmName != "Grafika Novi Naziv" {
+		t.Fatalf("showShippingOptions update wiped firmName: %q", final.FirmName)
 	}
 	if after.PDFSections.Delivery || after.PDFSections.ShippingAddress {
 		t.Fatalf("pdfSections not persisted: %+v", after.PDFSections)

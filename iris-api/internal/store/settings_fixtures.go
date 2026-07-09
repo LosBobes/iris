@@ -36,10 +36,33 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 	if update.PDFSections != nil {
 		current.PDFSections = *update.PDFSections
 	}
+	if update.BillingDefaults != nil {
+		defaults, err := normalizeBillingDefaults(*update.BillingDefaults)
+		if err != nil {
+			return domain.OrganizationSettings{}, err
+		}
+		current.BillingDefaults = defaults
+	}
+	if update.PriorityDefaults != nil {
+		defaults, err := normalizePriorityDefaults(*update.PriorityDefaults)
+		if err != nil {
+			return domain.OrganizationSettings{}, err
+		}
+		current.PriorityDefaults = defaults
+	}
+	if update.ShowShippingOptions != nil {
+		current.ShowShippingOptions = *update.ShowShippingOptions
+	}
 
 	s.firmName = current.FirmName
 	sections := current.PDFSections
 	s.pdfSections = &sections
+	billingDefaults := current.BillingDefaults
+	s.billingDefaults = &billingDefaults
+	priorityDefaults := current.PriorityDefaults
+	s.priorityDefaults = &priorityDefaults
+	showShippingOptions := current.ShowShippingOptions
+	s.showShippingOptions = &showShippingOptions
 	return current, nil
 }
 
@@ -52,5 +75,23 @@ func (s *FixtureStore) organizationSettingsLocked() domain.OrganizationSettings 
 	if s.pdfSections != nil {
 		sections = *s.pdfSections
 	}
-	return domain.OrganizationSettings{FirmName: firmName, PDFSections: sections}
+	billingDefaults := domain.DefaultBillingDefaults()
+	if s.billingDefaults != nil {
+		billingDefaults = *s.billingDefaults
+	}
+	priorityDefaults := domain.DefaultPriorityDefaults()
+	if s.priorityDefaults != nil {
+		priorityDefaults = *s.priorityDefaults
+	}
+	showShippingOptions := false
+	if s.showShippingOptions != nil {
+		showShippingOptions = *s.showShippingOptions
+	}
+	return domain.OrganizationSettings{
+		FirmName:            firmName,
+		PDFSections:         sections,
+		BillingDefaults:     billingDefaults,
+		PriorityDefaults:    priorityDefaults,
+		ShowShippingOptions: showShippingOptions,
+	}
 }

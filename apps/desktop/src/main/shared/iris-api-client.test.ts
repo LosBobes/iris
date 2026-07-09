@@ -34,6 +34,7 @@ const sampleCreateInput: CreateWorkOrderInput = {
   },
   issuedBy: 'admin',
   issueDate: '2026-04-25',
+  proformaDueDate: null,
   dueDate: null,
   price: null,
   note: null,

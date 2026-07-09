@@ -222,6 +222,25 @@ func buildPrintJobLines(order domain.WorkOrder) []string {
 		}
 	}
 
+	// Itemized services/goods, listed above the price total. Each renders as
+	// "DESCRIPTION — QTY UNIT" (unit omitted when absent).
+	for _, item := range order.InvoiceDraft.LineItems {
+		desc := uppercaseString(item.Description)
+		if desc == "" {
+			continue
+		}
+		unit := uppercaseString(string(item.Unit))
+		itemLine := desc
+		if item.Quantity > 0 {
+			if unit != "" {
+				itemLine = fmt.Sprintf("%s — %d %s", desc, item.Quantity, unit)
+			} else {
+				itemLine = fmt.Sprintf("%s — %d", desc, item.Quantity)
+			}
+		}
+		lines = append(lines, itemLine)
+	}
+
 	price := formatPrintPrice(order.Price)
 	if price != "" {
 		lines = append(lines, "CENA: "+price)
@@ -707,9 +726,6 @@ func ResolvePrintShippingAddress(order domain.WorkOrder, locationAddress *string
 
 func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sections domain.PDFSections) (string, error) {
 	plannedDate := order.DueDate
-	if plannedDate == nil {
-		plannedDate = order.Assignment.ScheduledDate
-	}
 	if plannedDate == nil {
 		plannedDate = order.CompletionDate
 	}

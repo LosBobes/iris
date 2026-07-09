@@ -137,7 +137,7 @@ export function getWorkOrderCustomerNextStep(status: WorkOrderStatus): string {
 export function buildWorkOrderCustomerNotice(
   order: Pick<WorkOrder, "orderNumber" | "status" | "dueDate" | "assignment">,
 ): string {
-  const customerDueDate = order.dueDate ?? order.assignment.scheduledDate;
+  const customerDueDate = order.dueDate;
 
   return [
     `${i18n.t("workOrders.notice.workOrder")} ${order.orderNumber}`,

@@ -78,7 +78,7 @@ function dateToLocalTimestamp(date: string): number {
 }
 
 function getAttentionDueDate(order: WorkOrder): string | null {
-  return order.dueDate ?? order.assignment.scheduledDate
+  return order.dueDate
 }
 
 function totalSignalCount(counts: AttentionSignalCounts): number {

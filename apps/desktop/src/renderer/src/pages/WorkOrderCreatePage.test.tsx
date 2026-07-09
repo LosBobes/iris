@@ -6,7 +6,7 @@ import type { WorkOrder } from '@/types/work-order'
 
 const duplicateSource: WorkOrder = {
   id: '42',
-  orderNumber: 'RN-2025-0042',
+  orderNumber: 'RN-2025-00042',
   clientName: 'Demo Klijent',
   contactPerson: 'Milica',
   jobDescription: 'Štampa kataloga',
@@ -31,6 +31,7 @@ const duplicateSource: WorkOrder = {
   issuedBy: 'admin',
   executedBy: 'pera',
   issueDate: '2025-04-07',
+  proformaDueDate: null,
   dueDate: '2025-04-14',
   isCompleted: true,
   status: 'completed',
@@ -66,6 +67,18 @@ function renderPageWithDuplicateState(): void {
 }
 
 describe('WorkOrderCreatePage', () => {
+  beforeEach(() => {
+    // The page reserves an order number on mount; keep the promise pending so the
+    // header stays in its "reserving" state and no state update escapes the test.
+    vi.stubGlobal('api', {
+      reserveWorkOrderNumber: () => new Promise(() => {}),
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('keeps duplicate prefill in create mode', () => {
     renderPageWithDuplicateState()
 
@@ -79,7 +92,8 @@ describe('WorkOrderCreatePage', () => {
     expect(screen.getByLabelText('Opis *')).toHaveValue(
       duplicateSource.jobDescription
     )
-    // DatePicker renders a button showing the formatted date, not an input
-    expect(screen.getByText('7. april 2025.')).toBeInTheDocument()
+    // The issue date is implied from the creation date and is no longer an
+    // editable field, so the duplicated order's issue date is not shown.
+    expect(screen.queryByText('7. april 2025.')).not.toBeInTheDocument()
   })
 })

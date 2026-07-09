@@ -7,6 +7,7 @@ shop's legacy FoxPro/dBASE system) lives in this one folder:
 | --- | --- | --- |
 | `cobanovic.go` | yes | Seeding connector — `Seed(ctx, store, dir)`. Carries **no data**. |
 | `import.py` | yes | Offline importer: legacy `.dbf` export → `data/seed.json`. |
+| `catalog-kind-review.csv` | yes | Manually reviewed `code,kind,name` article/service split; overrides the heuristic per code. |
 | `README.md` | yes | This file. |
 | `data/` | **no** (git-ignored) | The actual data — `data/seed.json`, large derived data. |
 
@@ -19,7 +20,8 @@ Only `data/` is uncommitted; a fresh clone regenerates it from the legacy export
 | Key | Source | Notes |
 | --- | --- | --- |
 | `customers` | `MdDob.dbf` | ~2657 partner firms. PIB/MB carried only when they pass Serbian validation (never fabricated). |
-| `catalogItems` | `MdArt.dbf` | ~3575 articles + services; `kind` from the `USLUGA` flag. |
+| `locations` | `MdDob.dbf` | One "Sedište" location per firm carrying its address (`ULICA`/`ULICAPLUS` + `PTT`/`MESTO`). Customer has no address field, so the address lives here. Firms with no address in the export get no location (~2634 of 2657). |
+| `catalogItems` | `MdArt.dbf` | ~3575 articles + services. `kind` comes from the reviewed `catalog-kind-review.csv` when the code is listed there (the whole current catalog is, split 528 `article` / 3047 `service`); codes not in the file fall back to the `catalog_kind()` name heuristic (work verb like *štampa/gravura/izrada* → `service`; promo-brand tokens and resale-goods nouns → `article`), since the legacy `USLUGA` flag alone mislabels bought-in goods as services. |
 | `workOrders` | `OT*.dbf` | Small best-effort demo set (the source has no client linkage), showing catalog-linked and ad-hoc line items. |
 
 ## Regenerate + seed

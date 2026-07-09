@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { openWorkOrderPdf, printWorkOrder } from "./WorkOrderDetailPage";
 import type { WorkOrder } from "@/types/work-order";
 
-const sampleOrder = { id: "wo-42", orderNumber: "RN-2026-0042" } as unknown as WorkOrder;
+const sampleOrder = { id: "wo-42", orderNumber: "RN-2026-00042" } as unknown as WorkOrder;
 
 describe("work-order document actions", () => {
   afterEach(() => {

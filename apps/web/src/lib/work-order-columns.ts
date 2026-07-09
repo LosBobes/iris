@@ -42,7 +42,7 @@ export const WORK_ORDER_COLUMNS: WorkOrderColumnMeta[] = [
   { key: "assigned", labelKey: "workOrders.columns.assigned", sortField: "assignment.assignedTo", width: "120px" },
   { key: "priority", labelKey: "workOrders.columns.priority", sortField: "assignment.priority", width: "90px" },
   { key: "billing", labelKey: "workOrders.columns.billing", sortField: "billingDocumentType", width: "130px" },
-  { key: "schedule", labelKey: "workOrders.columns.schedule", sortField: "assignment.scheduledDate", width: "110px" },
+  { key: "schedule", labelKey: "workOrders.columns.schedule", sortField: "dueDate", width: "110px" },
   { key: "price", labelKey: "workOrders.columns.price", sortField: "price", width: "110px", align: "right" },
   { key: "status", labelKey: "workOrders.columns.status", sortField: "status", width: "130px" },
 ];
@@ -64,8 +64,8 @@ const ALL_COLUMN_KEY_SET = new Set<WorkOrderColumnKey>(ALL_COLUMN_KEYS);
 
 /** Lowercased strings a column contributes to the free-text search haystack.
  *  Enum-backed fields contribute raw value + Serbian label; price contributes
- *  raw + formatted; the schedule column contributes every date (issue, due,
- *  scheduled) in both ISO and DD.MM.YYYY notation. */
+ *  raw + formatted; the schedule column contributes every date (issue, due)
+ *  in both ISO and DD.MM.YYYY notation. */
 export function getColumnSearchValues(
   order: WorkOrder,
   key: WorkOrderColumnKey,
@@ -90,11 +90,9 @@ export function getColumnSearchValues(
         getWorkOrderBillingDocumentLabel(order.billingDocumentType),
       ];
     case "schedule":
-      return [
-        order.issueDate,
-        order.dueDate,
-        order.assignment.scheduledDate,
-      ].flatMap((date) => (date ? [date, formatWorkOrderDate(date)] : []));
+      return [order.issueDate, order.dueDate].flatMap((date) =>
+        date ? [date, formatWorkOrderDate(date)] : [],
+      );
     case "price":
       return order.price !== null
         ? [String(order.price), formatWorkOrderPrice(order.price)]

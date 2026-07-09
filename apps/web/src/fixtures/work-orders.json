@@ -1,7 +1,7 @@
 [
   {
     "id": "1",
-    "orderNumber": "RN-2024-0001",
+    "orderNumber": "RN-2024-00001",
     "clientName": "Firma Doo",
     "jobDescription": "Štampa vizitkardi 500 kom",
     "billingDocumentType": "invoice",
@@ -19,7 +19,7 @@
   },
   {
     "id": "2",
-    "orderNumber": "RN-2024-0002",
+    "orderNumber": "RN-2024-00002",
     "clientName": "Kompanija AB",
     "jobDescription": "Izrada kataloga proizvoda A4",
     "billingDocumentType": "proforma",
@@ -37,7 +37,7 @@
   },
   {
     "id": "3",
-    "orderNumber": "RN-2024-0003",
+    "orderNumber": "RN-2024-00003",
     "clientName": "Studio XYZ",
     "jobDescription": "Štampa plakata B1 format",
     "billingDocumentType": "cashCollection",
@@ -55,7 +55,7 @@
   },
   {
     "id": "4",
-    "orderNumber": "RN-2024-0004",
+    "orderNumber": "RN-2024-00004",
     "clientName": "Agencija Pro",
     "jobDescription": "Štampa flajera A5 1000 kom",
     "billingDocumentType": "invoice",
@@ -73,7 +73,7 @@
   },
   {
     "id": "5",
-    "orderNumber": "RN-2024-0005",
+    "orderNumber": "RN-2024-00005",
     "clientName": "TehnoServis",
     "jobDescription": "Izrada reklamnog banera 3x1m",
     "billingDocumentType": "invoice",
@@ -91,7 +91,7 @@
   },
   {
     "id": "6",
-    "orderNumber": "RN-2024-0006",
+    "orderNumber": "RN-2024-00006",
     "clientName": "Firma Doo",
     "jobDescription": "Štampa memoranduma i koverata",
     "billingDocumentType": "proforma",
@@ -109,7 +109,7 @@
   },
   {
     "id": "7",
-    "orderNumber": "RN-2024-0007",
+    "orderNumber": "RN-2024-00007",
     "clientName": "EkoGrad",
     "jobDescription": "Štampa nalepnica za proizvode",
     "billingDocumentType": "cashCollection",
@@ -127,7 +127,7 @@
   },
   {
     "id": "8",
-    "orderNumber": "RN-2024-0008",
+    "orderNumber": "RN-2024-00008",
     "clientName": "MediaPlus",
     "jobDescription": "Izrada brošura A4 trifold",
     "billingDocumentType": "invoice",
@@ -145,7 +145,7 @@
   },
   {
     "id": "9",
-    "orderNumber": "RN-2024-0009",
+    "orderNumber": "RN-2024-00009",
     "clientName": "InfraGroup",
     "jobDescription": "Štampa godišnjeg izveštaja 200 str",
     "billingDocumentType": "proforma",
@@ -163,7 +163,7 @@
   },
   {
     "id": "10",
-    "orderNumber": "RN-2024-0010",
+    "orderNumber": "RN-2024-00010",
     "clientName": "Kompanija AB",
     "jobDescription": "Štampa promotivnih majica 100 kom",
     "billingDocumentType": "invoice",
@@ -181,7 +181,7 @@
   },
   {
     "id": "11",
-    "orderNumber": "RN-2024-0011",
+    "orderNumber": "RN-2024-00011",
     "clientName": "SportCenter",
     "jobDescription": "Štampa pozivnica za sportski događaj",
     "billingDocumentType": "invoice",
@@ -199,7 +199,7 @@
   },
   {
     "id": "12",
-    "orderNumber": "RN-2024-0012",
+    "orderNumber": "RN-2024-00012",
     "clientName": "Agencija Pro",
     "jobDescription": "Štampa kalendara zidnih A3",
     "billingDocumentType": "cashCollection",
@@ -217,7 +217,7 @@
   },
   {
     "id": "13",
-    "orderNumber": "RN-2025-0001",
+    "orderNumber": "RN-2025-00001",
     "clientName": "BioLab Doo",
     "jobDescription": "Štampa etiketa za laboratoriju",
     "billingDocumentType": "invoice",
@@ -235,7 +235,7 @@
   },
   {
     "id": "14",
-    "orderNumber": "RN-2025-0002",
+    "orderNumber": "RN-2025-00002",
     "clientName": "Firma Doo",
     "jobDescription": "Štampa prezentacija i fascikli",
     "billingDocumentType": "proforma",
@@ -253,7 +253,7 @@
   },
   {
     "id": "15",
-    "orderNumber": "RN-2025-0003",
+    "orderNumber": "RN-2025-00003",
     "clientName": "TehnoServis",
     "jobDescription": "Štampa uputstava za upotrebu",
     "billingDocumentType": "invoice",
@@ -271,7 +271,7 @@
   },
   {
     "id": "16",
-    "orderNumber": "RN-2025-0004",
+    "orderNumber": "RN-2025-00004",
     "clientName": "MediaPlus",
     "jobDescription": "Štampa reklamnih roll-up banera",
     "billingDocumentType": "invoice",
@@ -289,7 +289,7 @@
   },
   {
     "id": "17",
-    "orderNumber": "RN-2025-0005",
+    "orderNumber": "RN-2025-00005",
     "clientName": "EkoGrad",
     "jobDescription": "Štampa eko kesa sa logom",
     "billingDocumentType": "cashCollection",
@@ -307,7 +307,7 @@
   },
   {
     "id": "18",
-    "orderNumber": "RN-2025-0006",
+    "orderNumber": "RN-2025-00006",
     "clientName": "InfraGroup",
     "jobDescription": "Štampa tehničke dokumentacije",
     "billingDocumentType": "invoice",
@@ -325,7 +325,7 @@
   },
   {
     "id": "19",
-    "orderNumber": "RN-2025-0007",
+    "orderNumber": "RN-2025-00007",
     "clientName": "Kompanija AB",
     "jobDescription": "Izrada promotivnog materijala za sajam",
     "billingDocumentType": "proforma",
@@ -343,7 +343,7 @@
   },
   {
     "id": "20",
-    "orderNumber": "RN-2025-0008",
+    "orderNumber": "RN-2025-00008",
     "clientName": "SportCenter",
     "jobDescription": "Štampa diploma i sertifikata",
     "billingDocumentType": "invoice",
@@ -361,7 +361,7 @@
   },
   {
     "id": "21",
-    "orderNumber": "RN-2025-0009",
+    "orderNumber": "RN-2025-00009",
     "clientName": "BioLab Doo",
     "jobDescription": "Štampa ambalaže za farmaceutske proizvode",
     "billingDocumentType": "invoice",
@@ -379,7 +379,7 @@
   },
   {
     "id": "22",
-    "orderNumber": "RN-2025-0010",
+    "orderNumber": "RN-2025-00010",
     "clientName": "Agencija Pro",
     "jobDescription": "Štampa letaka za promociju",
     "billingDocumentType": "cashCollection",
@@ -397,7 +397,7 @@
   },
   {
     "id": "23",
-    "orderNumber": "RN-2025-0011",
+    "orderNumber": "RN-2025-00011",
     "clientName": "Firma Doo",
     "jobDescription": "Štampa korporativnih poklona",
     "billingDocumentType": "proforma",
@@ -415,7 +415,7 @@
   },
   {
     "id": "24",
-    "orderNumber": "RN-2025-0012",
+    "orderNumber": "RN-2025-00012",
     "clientName": "Studio XYZ",
     "jobDescription": "Štampa umetničkih reprodukcija",
     "billingDocumentType": "invoice",
@@ -433,7 +433,7 @@
   },
   {
     "id": "25",
-    "orderNumber": "RN-2025-0013",
+    "orderNumber": "RN-2025-00013",
     "clientName": "TehnoServis",
     "jobDescription": "Štampa servisnih naloga",
     "billingDocumentType": "invoice",
@@ -451,7 +451,7 @@
   },
   {
     "id": "26",
-    "orderNumber": "RN-2026-0001",
+    "orderNumber": "RN-2026-00001",
     "clientName": "Firma Doo",
     "customerId": "cust-1",
     "locationId": "loc-1",
@@ -472,7 +472,7 @@
   },
   {
     "id": "27",
-    "orderNumber": "RN-2026-0002",
+    "orderNumber": "RN-2026-00002",
     "clientName": "Kompanija AB",
     "customerId": "cust-2",
     "locationId": "loc-2",
@@ -493,7 +493,7 @@
   },
   {
     "id": "28",
-    "orderNumber": "RN-2026-0003",
+    "orderNumber": "RN-2026-00003",
     "clientName": "TehnoServis",
     "customerId": "cust-5",
     "locationId": "loc-5",
@@ -514,7 +514,7 @@
   },
   {
     "id": "29",
-    "orderNumber": "RN-2026-0004",
+    "orderNumber": "RN-2026-00004",
     "clientName": "Agencija Pro",
     "customerId": "cust-4",
     "locationId": "loc-4",
@@ -535,7 +535,7 @@
   },
   {
     "id": "30",
-    "orderNumber": "RN-2026-0005",
+    "orderNumber": "RN-2026-00005",
     "clientName": "Firma Doo",
     "customerId": "cust-1",
     "locationId": "loc-1",
@@ -556,7 +556,7 @@
   },
   {
     "id": "31",
-    "orderNumber": "RN-2026-0006",
+    "orderNumber": "RN-2026-00006",
     "clientName": "Studio XYZ",
     "jobDescription": "Plakati B1 za izložbu",
     "billingDocumentType": "cashCollection",
@@ -575,7 +575,7 @@
   },
   {
     "id": "32",
-    "orderNumber": "RN-2026-0007",
+    "orderNumber": "RN-2026-00007",
     "clientName": "Kompanija AB",
     "customerId": "cust-2",
     "locationId": "loc-2",
@@ -596,7 +596,7 @@
   },
   {
     "id": "33",
-    "orderNumber": "RN-2026-0008",
+    "orderNumber": "RN-2026-00008",
     "clientName": "EkoGrad",
     "jobDescription": "Eko kese sa logom 2000 kom",
     "billingDocumentType": "cashCollection",
@@ -615,7 +615,7 @@
   },
   {
     "id": "34",
-    "orderNumber": "RN-2026-0009",
+    "orderNumber": "RN-2026-00009",
     "clientName": "SportCenter",
     "jobDescription": "Diplome i sertifikati za turnir",
     "billingDocumentType": "invoice",
@@ -634,7 +634,7 @@
   },
   {
     "id": "35",
-    "orderNumber": "RN-2026-0010",
+    "orderNumber": "RN-2026-00010",
     "clientName": "BioLab Doo",
     "jobDescription": "Etikete za laboratoriju — čeka odobrenje dizajna",
     "billingDocumentType": "invoice",
@@ -653,7 +653,7 @@
   },
   {
     "id": "36",
-    "orderNumber": "RN-2026-0011",
+    "orderNumber": "RN-2026-00011",
     "clientName": "MediaPlus",
     "jobDescription": "Roll-up baneri — čeka se finalni tekst",
     "billingDocumentType": "invoice",
@@ -672,7 +672,7 @@
   },
   {
     "id": "37",
-    "orderNumber": "RN-2026-0012",
+    "orderNumber": "RN-2026-00012",
     "clientName": "InfraGroup",
     "jobDescription": "Tehnička dokumentacija — čeka se papir 120g",
     "billingDocumentType": "invoice",
@@ -691,7 +691,7 @@
   },
   {
     "id": "38",
-    "orderNumber": "RN-2026-0013",
+    "orderNumber": "RN-2026-00013",
     "clientName": "TehnoServis",
     "customerId": "cust-5",
     "locationId": "loc-5",
@@ -712,7 +712,7 @@
   },
   {
     "id": "39",
-    "orderNumber": "RN-2026-0014",
+    "orderNumber": "RN-2026-00014",
     "clientName": "Studio XYZ",
     "jobDescription": "Umetničke reprodukcije A2 — još nije dodeljeno",
     "billingDocumentType": "invoice",
@@ -731,7 +731,7 @@
   },
   {
     "id": "40",
-    "orderNumber": "RN-2026-0015",
+    "orderNumber": "RN-2026-00015",
     "clientName": "Agencija Pro",
     "customerId": "cust-4",
     "locationId": "loc-4",

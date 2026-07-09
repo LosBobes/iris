@@ -36,7 +36,6 @@ function makeOrder(overrides: Partial<WorkOrder>): WorkOrder {
     assignment: {
       assignedTo: "ana",
       priority: "normal",
-      scheduledDate: null,
     },
     issueDate: "2026-06-01",
     dueDate: null,
@@ -174,17 +173,17 @@ describe("work order filter query params", () => {
       makeOrder({
         id: "a",
         orderNumber: "RN-a",
-        assignment: { assignedTo: "ana", priority: "normal", scheduledDate: null },
+        assignment: { assignedTo: "ana", priority: "normal" },
       }),
       makeOrder({
         id: "b",
         orderNumber: "RN-b",
-        assignment: { assignedTo: "marko", priority: "normal", scheduledDate: null },
+        assignment: { assignedTo: "marko", priority: "normal" },
       }),
       makeOrder({
         id: "u",
         orderNumber: "RN-u",
-        assignment: { assignedTo: null, priority: "normal", scheduledDate: null },
+        assignment: { assignedTo: null, priority: "normal" },
       }),
     ];
 
@@ -243,12 +242,12 @@ describe("work order filter query params", () => {
       makeOrder({
         id: "op",
         orderNumber: "RN-op",
-        assignment: { assignedTo: "marko.petrovic", priority: "normal", scheduledDate: null },
+        assignment: { assignedTo: "marko.petrovic", priority: "normal" },
       }),
       makeOrder({
         id: "prio",
         orderNumber: "RN-prio",
-        assignment: { assignedTo: "ana", priority: "urgent", scheduledDate: null },
+        assignment: { assignedTo: "ana", priority: "urgent" },
       }),
       makeOrder({ id: "doc", orderNumber: "RN-doc", billingDocumentType: "proforma" }),
       makeOrder({ id: "price", orderNumber: "RN-price", price: 67000 }),
@@ -277,16 +276,10 @@ describe("work order filter query params", () => {
     expect(run("67.000")).toEqual(["RN-price"]); // formatted price (sr-Latn)
   });
 
-  it("matches search across issue, due and scheduled dates", () => {
+  it("matches search across issue and due dates", () => {
     const orders = [
       makeOrder({ id: "issue", orderNumber: "RN-issue", issueDate: "2026-06-01" }),
       makeOrder({ id: "due", orderNumber: "RN-due", issueDate: "2025-01-15", dueDate: "2026-09-30" }),
-      makeOrder({
-        id: "sched",
-        orderNumber: "RN-sched",
-        issueDate: "2024-03-20",
-        assignment: { assignedTo: "ana", priority: "normal", scheduledDate: "2026-12-25" },
-      }),
     ];
 
     const baseFilters = {
@@ -308,7 +301,6 @@ describe("work order filter query params", () => {
     expect(run("01.06.2026")).toEqual(["RN-issue"]); // formatted issue date
     expect(run("2026-09-30")).toEqual(["RN-due"]); // ISO due date
     expect(run("30.09.2026")).toEqual(["RN-due"]); // formatted due date
-    expect(run("25.12.2026")).toEqual(["RN-sched"]); // formatted scheduled date
   });
 
   it("scopes free-text search to visible columns", () => {

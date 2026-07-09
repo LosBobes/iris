@@ -24,7 +24,7 @@ const ship = (method: WorkOrder['shipping']['deliveryMethod']): WorkOrder['shipp
 
 const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   id: '0',
-  orderNumber: 'RN-2025-0000',
+  orderNumber: 'RN-2025-00000',
   clientName: 'Test Company',
   contactPerson: null,
   jobDescription: 'Test job',
@@ -35,6 +35,7 @@ const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   issuedBy: 'operator.a',
   executedBy: null,
   issueDate: '2025-01-15',
+  proformaDueDate: null,
   dueDate: null,
   isCompleted: true,
   status: 'completed',

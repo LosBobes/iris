@@ -136,6 +136,14 @@ paths:
       tags: [Customers]
       summary: Return normalized customer locations
       operationId: listLocations
+      parameters:
+        - name: customerId
+          in: query
+          description: >-
+            When set, only the locations belonging to this customer are
+            returned. Omit to return every location for the tenant.
+          schema:
+            type: string
       responses:
         '200':
           description: Customer location records
@@ -690,6 +698,89 @@ paths:
             text/html:
               schema:
                 type: string
+  /work-orders/reserve-number:
+    post:
+      tags: [Work Orders]
+      summary: Reserve the next order number for a new work order
+      description: >-
+        Atomically claims the next RN-<year>-<seq> order number and records the
+        reservation, so it can be shown in the create-form header before the work
+        order is saved. Concurrent callers each receive a distinct number. Pass the
+        returned orderNumber back in the create request to consume the reservation;
+        an abandoned reservation is reclaimed after it expires, leaving only a gap.
+      operationId: reserveOrderNumber
+      responses:
+        '200':
+          description: The reserved order number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservedOrderNumber'
+  /work-orders/release-number:
+    post:
+      tags: [Work Orders]
+      summary: Release a reserved order number
+      description: >-
+        Frees a previously reserved order number when the operator cancels the
+        create form, so the number is reclaimed immediately instead of waiting for
+        the reservation to expire. Releasing an unknown or already-consumed number
+        succeeds as a no-op, so clients can fire-and-forget on form teardown.
+      operationId: releaseOrderNumber
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderNumber]
+              properties:
+                orderNumber:
+                  type: string
+                  description: The reserved order number to release.
+      responses:
+        '204':
+          description: The reservation was released (or did not exist).
+  /work-orders/{id}/edit-lock:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Work Orders]
+      summary: Acquire or refresh the edit lock on a work order
+      description: >-
+        Claims an exclusive edit lock so only one operator edits a work order at a
+        time. The editing client calls this on open and periodically as a heartbeat
+        to extend the lock; the lock auto-expires shortly after heartbeats stop
+        (e.g. a closed tab). Returns 200 with the caller's lock when acquired or
+        refreshed, and 409 with the current holder when another operator is editing.
+      operationId: acquireEditLock
+      responses:
+        '200':
+          description: The caller now holds the edit lock.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditLock'
+        '409':
+          description: Another operator is currently editing this work order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditLock'
+    delete:
+      tags: [Work Orders]
+      summary: Release the edit lock on a work order
+      description: >-
+        Frees the caller's edit lock on save, cancel, or close. It is a no-op when
+        the caller no longer holds the lock (e.g. it already expired and was taken
+        by someone else).
+      operationId: releaseEditLock
+      responses:
+        '204':
+          description: The lock was released (or the caller did not hold it).
   /public/work-orders/{token}:
     parameters:
       - name: token
@@ -914,16 +1005,13 @@ components:
           type: [string, 'null']
     Assignment:
       type: object
-      required: [assignedTo, priority, scheduledDate]
+      required: [assignedTo, priority]
       properties:
         assignedTo:
           type: [string, 'null']
         priority:
           type: string
           enum: [low, normal, high, urgent]
-        scheduledDate:
-          type: [string, 'null']
-          format: date
     WorkOrderNote:
       type: object
       required: [id, visibility, author, body, createdAt]
@@ -1120,9 +1208,42 @@ components:
         signatures:
           type: boolean
           description: The issuer / executor signature lines.
+    BillingDefaults:
+      type: object
+      description: >-
+        Controls the work-order document type (tip dokumenta): the value new
+        orders start with and whether it may be changed per order. Defaults to
+        proforma, not overridable, for an unconfigured shop.
+      required: [documentType, allowOverride]
+      properties:
+        documentType:
+          type: string
+          enum: [invoice, cashCollection, proforma]
+          description: The document type new work orders start with.
+        allowOverride:
+          type: boolean
+          description: >-
+            When false, clients hide the document-type picker and always use
+            documentType.
+    PriorityDefaults:
+      type: object
+      description: >-
+        Controls the work-order priority (prioritet): the value new orders start
+        with and whether it may be changed per order. Defaults to normal, not
+        overridable, for an unconfigured shop.
+      required: [priority, allowOverride]
+      properties:
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+          description: The priority new work orders start with.
+        allowOverride:
+          type: boolean
+          description: >-
+            When false, clients hide the priority picker and always use priority.
     OrganizationSettings:
       type: object
-      required: [firmName, pdfSections]
+      required: [firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions]
       properties:
         firmName:
           type: string
@@ -1130,6 +1251,16 @@ components:
           example: Grafika Čobanović
         pdfSections:
           $ref: '#/components/schemas/PDFSections'
+        billingDefaults:
+          $ref: '#/components/schemas/BillingDefaults'
+        priorityDefaults:
+          $ref: '#/components/schemas/PriorityDefaults'
+        showShippingOptions:
+          type: boolean
+          description: >-
+            Whether the work-order form exposes the extra shipping/handling
+            fields (drives-out, wait-for-payment, packaging, labeling, fragile,
+            signature, insurance). Off by default.
     OrganizationSettingsUpdate:
       type: object
       description: >-
@@ -1141,6 +1272,13 @@ components:
           description: The shop's display name shown in the app branding.
         pdfSections:
           $ref: '#/components/schemas/PDFSections'
+        billingDefaults:
+          $ref: '#/components/schemas/BillingDefaults'
+        priorityDefaults:
+          $ref: '#/components/schemas/PriorityDefaults'
+        showShippingOptions:
+          type: boolean
+          description: Whether the work-order form exposes extra shipping/handling fields.
     CatalogItemInput:
       type: object
       required: [name, kind, unit]
@@ -1189,14 +1327,14 @@ components:
     WorkOrder:
       type: object
       required:
-        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
+        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, proformaDueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
         id:
           type: string
           example: '42'
         orderNumber:
           type: string
-          example: RN-2025-0042
+          example: RN-2025-00042
         customerId:
           type: [string, 'null']
         locationId:
@@ -1235,9 +1373,15 @@ components:
           type: string
           format: date
           example: '2025-04-07'
+        proformaDueDate:
+          type: [string, 'null']
+          format: date
+          description: Deadline to issue the proforma invoice (predračun).
+          example: '2025-04-10'
         dueDate:
           type: [string, 'null']
           format: date
+          description: Deadline to finish the job.
           example: '2025-04-14'
         isCompleted:
           type: boolean
@@ -1348,8 +1492,14 @@ components:
     CreateWorkOrderInput:
       type: object
       required:
-        [customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, assignment, issuedBy, issueDate, dueDate, price, note, internalNotes, customerNotes, attachments, materialUsage, timeEntries, invoiceDraft, communication]
+        [customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, assignment, issuedBy, issueDate, proformaDueDate, dueDate, price, note, internalNotes, customerNotes, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
+        orderNumber:
+          type: [string, 'null']
+          description: >-
+            Optional order number previously returned by reserveOrderNumber and
+            shown in the create-form header. Consumed when its reservation still
+            stands; otherwise a fresh number is allocated.
         customerId:
           type: [string, 'null']
         locationId:
@@ -1375,8 +1525,14 @@ components:
           $ref: '#/components/schemas/Assignment'
         issuedBy:
           type: string
+        executedBy:
+          type: [string, 'null']
+          description: Operator who takes over/executes the job. Optional; defaults to null.
         issueDate:
           type: string
+          format: date
+        proformaDueDate:
+          type: [string, 'null']
           format: date
         dueDate:
           type: [string, 'null']
@@ -1442,6 +1598,9 @@ components:
           type: [string, 'null']
         issueDate:
           type: string
+          format: date
+        proformaDueDate:
+          type: [string, 'null']
           format: date
         dueDate:
           type: [string, 'null']
@@ -1513,6 +1672,36 @@ components:
         signedAt:
           type: [string, 'null']
           format: date-time
+    ReservedOrderNumber:
+      type: object
+      required: [orderNumber, expiresAt]
+      properties:
+        orderNumber:
+          type: string
+          example: RN-2026-00042
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the reservation lapses and its number may be reclaimed.
+    EditLock:
+      type: object
+      required: [workOrderId, lockedBy, lockedAt]
+      properties:
+        workOrderId:
+          type: string
+        lockedBy:
+          type: string
+          description: Username of the operator holding the lock.
+        lockedAt:
+          type: string
+          format: date-time
+          description: When the current holder first acquired the lock.
+        expiresAt:
+          type: string
+          format: date-time
+          description: >-
+            When the lock auto-expires without a heartbeat. Present on the 200
+            response for the holder; omitted on the 409 holder-identity response.
     DeleteWorkOrderResponse:
       type: object
       required: [success]

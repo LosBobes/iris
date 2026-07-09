@@ -400,22 +400,25 @@ func (s *SQLiteStore) CustomerByID(ctx context.Context, id string) (*domain.Cust
 	return &loaded[0], nil
 }
 
-func (s *SQLiteStore) Locations(ctx context.Context) ([]domain.Location, error) {
+func (s *SQLiteStore) Locations(ctx context.Context, customerID string) ([]domain.Location, error) {
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// locations has no tenant_id of its own; it is scoped through its parent
-	// customer, which does.
-	rows, err := s.db.QueryContext(
-		ctx,
-		`SELECT locations.id, locations.customer_id, locations.name, locations.address
+	// customer, which does. An optional customerID narrows the result to a
+	// single firm so the work-order form can lazy-load only what it needs.
+	query := `SELECT locations.id, locations.customer_id, locations.name, locations.address
 		 FROM locations
 		 JOIN customers ON customers.id = locations.customer_id
-		 WHERE customers.tenant_id = ?
-		 ORDER BY locations.name COLLATE NOCASE`,
-		tenantID,
-	)
+		 WHERE customers.tenant_id = ?`
+	args := []any{tenantID}
+	if customerID != "" {
+		query += ` AND locations.customer_id = ?`
+		args = append(args, customerID)
+	}
+	query += ` ORDER BY locations.name COLLATE NOCASE`
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list locations: %w", err)
 	}
@@ -785,11 +788,11 @@ func (s *SQLiteStore) CreateWorkOrder(
 		return nil, err
 	}
 	nowTime := time.Now().UTC()
-	orderNumber, err := nextOrderNumber(ctx, tx, tenantID, nowTime.Year())
+	now := nowTime.Format(time.RFC3339)
+	orderNumber, err := resolveOrderNumber(ctx, tx, tenantID, nowTime.Year(), now, input.OrderNumber)
 	if err != nil {
 		return nil, err
 	}
-	now := nowTime.Format(time.RFC3339)
 	workOrder := domain.WorkOrder{
 		ID:                    strconv.Itoa(sequence),
 		OrderNumber:           orderNumber,
@@ -803,9 +806,10 @@ func (s *SQLiteStore) CreateWorkOrder(
 		BillingDocumentNumber: input.BillingDocumentNumber,
 		Shipping:              input.Shipping,
 		IssuedBy:              input.IssuedBy,
-		ExecutedBy:            nil,
+		ExecutedBy:            input.ExecutedBy,
 		Assignment:            normalizeAssignment(input.Assignment),
 		IssueDate:             input.IssueDate,
+		ProformaDueDate:       input.ProformaDueDate,
 		DueDate:               input.DueDate,
 		IsCompleted:           false,
 		Status:                domain.WorkOrderStatusNew,
@@ -919,9 +923,9 @@ func (s *SQLiteStore) DeleteWorkOrder(
 	return domain.DeleteWorkOrderResponse{Success: true}, nil
 }
 
-// Operators returns the usernames of registered operator users (role "user"),
-// sorted. This is the assignable-operator list backing the work-order operator
-// selects; admins are excluded since the field tracks who does the work.
+// Operators returns the usernames of all registered users (operators and
+// admins), sorted. This is the assignable-user list backing the work-order
+// operator selects; admins are included so they can be assigned work too.
 func (s *SQLiteStore) Operators(ctx context.Context) ([]string, error) {
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
@@ -929,9 +933,10 @@ func (s *SQLiteStore) Operators(ctx context.Context) ([]string, error) {
 	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT username FROM users WHERE tenant_id = ? AND role = ? ORDER BY username COLLATE NOCASE`,
+		`SELECT username FROM users WHERE tenant_id = ? AND role IN (?, ?) ORDER BY username COLLATE NOCASE`,
 		tenantID,
 		string(domain.RoleUser),
+		string(domain.RoleAdmin),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list operators: %w", err)
@@ -1113,22 +1118,36 @@ func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
 	return int(next.Int64), nil
 }
 
-// nextOrderNumber returns the next free RN-<year>-<seq> order number by scanning
-// the highest sequence already issued for that year. It reads order numbers
-// directly rather than deriving from the id sequence, so it stays correct even
-// when work-order ids are non-numeric (e.g. seeded "wo-cob-1"). Must run inside
-// the same write transaction as the insert so concurrent creates can't collide.
-func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year int) (string, error) {
+// nextOrderNumber returns the next free RN-<year>-<seq> order number for the year.
+// It takes the highest sequence across both committed work orders and still-active
+// (unexpired) reservations, so a number handed out to another operator's open
+// create form is never allocated twice. It reads order numbers directly rather
+// than deriving from the id sequence, so it stays correct even when work-order ids
+// are non-numeric (e.g. seeded "wo-cob-1"). Must run inside the same write
+// transaction as the insert so concurrent creates/reservations can't collide.
+//
+// now must be an RFC3339 UTC timestamp; expired reservations are ignored so their
+// numbers are reclaimed and abandoned forms only ever leave a gap.
+func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year int, now string) (string, error) {
 	prefix := fmt.Sprintf("RN-%d-", year)
 	var next sql.NullInt64
 	if err := db.QueryRowContext(
 		ctx,
-		`SELECT COALESCE(MAX(CAST(substr(order_number, ?) AS INTEGER)), 0) + 1
-		 FROM work_orders
-		 WHERE tenant_id = ? AND order_number LIKE ?`,
+		`SELECT COALESCE(MAX(seq), 0) + 1 FROM (
+		   SELECT CAST(substr(order_number, ?) AS INTEGER) AS seq
+		     FROM work_orders
+		     WHERE tenant_id = ? AND order_number LIKE ?
+		   UNION ALL
+		   SELECT sequence AS seq
+		     FROM work_order_number_reservations
+		     WHERE tenant_id = ? AND year = ? AND expires_at > ?
+		 )`,
 		len(prefix)+1, // substr is 1-indexed: start just past the "RN-<year>-" prefix
 		tenantID,
 		prefix+"%",
+		tenantID,
+		year,
+		now,
 	).Scan(&next); err != nil {
 		return "", fmt.Errorf("next order number: %w", err)
 	}
@@ -1137,6 +1156,260 @@ func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year 
 		seq = int(next.Int64)
 	}
 	return formatOrderNumber(year, seq), nil
+}
+
+// reservationTTL bounds how long a reserved order number is counted as active.
+// It comfortably exceeds a normal form-fill session (matching the auth cookie
+// lifetime) so an operator's header number survives until they save; a genuinely
+// abandoned form is reclaimed after it lapses. The number is still honored at
+// save time even if the reservation has just expired, as long as no other order
+// has claimed it in the meantime.
+const reservationTTL = 12 * time.Hour
+
+// ReserveOrderNumber atomically claims the next order number and records it in the
+// reservation ledger so concurrent operators each see a distinct number in their
+// create-form header before any work order is saved.
+func (s *SQLiteStore) ReserveOrderNumber(ctx context.Context, reservedBy string) (domain.ReservedOrderNumber, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return domain.ReservedOrderNumber{}, err
+	}
+	reservedBy = strings.TrimSpace(reservedBy)
+	if reservedBy == "" {
+		return domain.ReservedOrderNumber{}, newValidationError(invalidWorkOrderMessage)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.ReservedOrderNumber{}, fmt.Errorf("begin reserve order number: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	nowTime := time.Now().UTC()
+	now := nowTime.Format(time.RFC3339)
+	year := nowTime.Year()
+
+	// Prune lapsed reservations so their numbers are reclaimed before allocating.
+	if _, err := tx.ExecContext(
+		ctx,
+		`DELETE FROM work_order_number_reservations WHERE tenant_id = ? AND expires_at <= ?`,
+		tenantID, now,
+	); err != nil {
+		return domain.ReservedOrderNumber{}, fmt.Errorf("prune reservations: %w", err)
+	}
+
+	orderNumber, err := nextOrderNumber(ctx, tx, tenantID, year, now)
+	if err != nil {
+		return domain.ReservedOrderNumber{}, err
+	}
+	sequence, _ := orderNumberSequence(orderNumber, year)
+	expiresAt := nowTime.Add(reservationTTL).Format(time.RFC3339)
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO work_order_number_reservations(
+		   tenant_id, order_number, year, sequence, reserved_by, reserved_at, expires_at
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		tenantID, orderNumber, year, sequence, reservedBy, now, expiresAt,
+	); err != nil {
+		return domain.ReservedOrderNumber{}, fmt.Errorf("insert reservation: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.ReservedOrderNumber{}, fmt.Errorf("commit reserve order number: %w", err)
+	}
+	return domain.ReservedOrderNumber{OrderNumber: orderNumber, ExpiresAt: expiresAt}, nil
+}
+
+// ReleaseOrderNumber drops a still-active reservation so its number is reclaimed
+// immediately when an operator cancels the create form. It is scoped to the
+// tenant and is a no-op when the number was never reserved or has already been
+// consumed by a committed work order.
+func (s *SQLiteStore) ReleaseOrderNumber(ctx context.Context, orderNumber string) error {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	orderNumber = strings.TrimSpace(orderNumber)
+	if orderNumber == "" {
+		return nil
+	}
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM work_order_number_reservations WHERE tenant_id = ? AND order_number = ?`,
+		tenantID, orderNumber,
+	); err != nil {
+		return fmt.Errorf("release order number: %w", err)
+	}
+	return nil
+}
+
+// editLockTTL bounds how long an edit lock survives without a heartbeat. It
+// comfortably exceeds the client's heartbeat interval so a normal active editor
+// keeps the lock refreshed, while a closed tab (no more heartbeats) releases the
+// work order shortly after.
+const editLockTTL = 2 * time.Minute
+
+// AcquireEditLock claims or refreshes the exclusive edit lock on a work order. It
+// runs in a single write transaction so concurrent openers can't both win: expired
+// locks are pruned first, then the lock is taken if free or already held by the
+// caller (extending its expiry), otherwise the current holder's lock is returned
+// with acquired=false so the caller renders a read-only view.
+func (s *SQLiteStore) AcquireEditLock(ctx context.Context, workOrderID, lockedBy string) (domain.EditLock, bool, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return domain.EditLock{}, false, err
+	}
+	workOrderID = strings.TrimSpace(workOrderID)
+	lockedBy = strings.TrimSpace(lockedBy)
+	if workOrderID == "" || lockedBy == "" {
+		return domain.EditLock{}, false, newValidationError(invalidWorkOrderMessage)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.EditLock{}, false, fmt.Errorf("begin acquire edit lock: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	nowTime := time.Now().UTC()
+	now := nowTime.Format(time.RFC3339)
+
+	// Prune lapsed locks so an abandoned tab never blocks a work order.
+	if _, err := tx.ExecContext(
+		ctx,
+		`DELETE FROM work_order_edit_locks WHERE tenant_id = ? AND expires_at <= ?`,
+		tenantID, now,
+	); err != nil {
+		return domain.EditLock{}, false, fmt.Errorf("prune edit locks: %w", err)
+	}
+
+	var holder string
+	var lockedAt string
+	err = tx.QueryRowContext(
+		ctx,
+		`SELECT locked_by, locked_at FROM work_order_edit_locks
+		   WHERE tenant_id = ? AND work_order_id = ?`,
+		tenantID, workOrderID,
+	).Scan(&holder, &lockedAt)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return domain.EditLock{}, false, fmt.Errorf("read edit lock: %w", err)
+	}
+	if err == nil && holder != lockedBy {
+		// Someone else holds an unexpired lock: report them, don't take it.
+		return domain.EditLock{
+			WorkOrderID: workOrderID,
+			LockedBy:    holder,
+			LockedAt:    lockedAt,
+			ExpiresAt:   "", // expiry is internal; the holder identity is what the caller needs
+		}, false, tx.Commit()
+	}
+
+	expiresAt := nowTime.Add(editLockTTL).Format(time.RFC3339)
+	if errors.Is(err, sql.ErrNoRows) {
+		lockedAt = now
+	}
+	if _, err := tx.ExecContext(
+		ctx,
+		`INSERT INTO work_order_edit_locks(tenant_id, work_order_id, locked_by, locked_at, expires_at)
+		   VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(tenant_id, work_order_id) DO UPDATE SET
+		   locked_by = excluded.locked_by,
+		   expires_at = excluded.expires_at`,
+		tenantID, workOrderID, lockedBy, lockedAt, expiresAt,
+	); err != nil {
+		return domain.EditLock{}, false, fmt.Errorf("upsert edit lock: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.EditLock{}, false, fmt.Errorf("commit acquire edit lock: %w", err)
+	}
+	return domain.EditLock{
+		WorkOrderID: workOrderID,
+		LockedBy:    lockedBy,
+		LockedAt:    lockedAt,
+		ExpiresAt:   expiresAt,
+	}, true, nil
+}
+
+// ReleaseEditLock frees the caller's edit lock. The lockedBy predicate ensures a
+// stale client can't delete a lock that a new holder has since acquired.
+func (s *SQLiteStore) ReleaseEditLock(ctx context.Context, workOrderID, lockedBy string) error {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	workOrderID = strings.TrimSpace(workOrderID)
+	lockedBy = strings.TrimSpace(lockedBy)
+	if workOrderID == "" || lockedBy == "" {
+		return nil
+	}
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM work_order_edit_locks
+		   WHERE tenant_id = ? AND work_order_id = ? AND locked_by = ?`,
+		tenantID, workOrderID, lockedBy,
+	); err != nil {
+		return fmt.Errorf("release edit lock: %w", err)
+	}
+	return nil
+}
+
+// resolveOrderNumber decides the final order number for a create. A requested
+// number (previously reserved and shown in the form header) is honored when its
+// reservation still exists and no committed order has claimed it since; the
+// reservation row is then consumed. Otherwise a fresh number is allocated.
+func resolveOrderNumber(
+	ctx context.Context,
+	db sqlExecutor,
+	tenantID string,
+	year int,
+	now string,
+	requested *string,
+) (string, error) {
+	if requested != nil {
+		candidate := strings.TrimSpace(*requested)
+		if candidate != "" {
+			honored, err := reservationHonored(ctx, db, tenantID, candidate)
+			if err != nil {
+				return "", err
+			}
+			if honored {
+				if _, err := db.ExecContext(
+					ctx,
+					`DELETE FROM work_order_number_reservations WHERE tenant_id = ? AND order_number = ?`,
+					tenantID, candidate,
+				); err != nil {
+					return "", fmt.Errorf("consume reservation: %w", err)
+				}
+				return candidate, nil
+			}
+		}
+	}
+	return nextOrderNumber(ctx, db, tenantID, year, now)
+}
+
+// reservationHonored reports whether a reserved order number can still be used:
+// it must have a reservation row for this tenant and must not already be taken by
+// a committed work order (which happens if a lapsed reservation was reclaimed).
+func reservationHonored(ctx context.Context, db sqlExecutor, tenantID, orderNumber string) (bool, error) {
+	var reserved int
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM work_order_number_reservations WHERE tenant_id = ? AND order_number = ?`,
+		tenantID, orderNumber,
+	).Scan(&reserved); err != nil {
+		return false, fmt.Errorf("check reservation: %w", err)
+	}
+	if reserved == 0 {
+		return false, nil
+	}
+	var taken int
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM work_orders WHERE tenant_id = ? AND order_number = ?`,
+		tenantID, orderNumber,
+	).Scan(&taken); err != nil {
+		return false, fmt.Errorf("check order number taken: %w", err)
+	}
+	return taken == 0, nil
 }
 
 func buildWorkOrderWhere(tenantID string, query WorkOrderListQuery) (string, []any) {

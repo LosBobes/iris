@@ -2,6 +2,8 @@ import { ipcMain } from "electron";
 import type {
   WorkOrder,
   CreateWorkOrderInput,
+  EditLockResult,
+  ReservedOrderNumber,
   UpdateWorkOrderInput,
 } from "../../../model/work-order";
 import {
@@ -37,6 +39,50 @@ export function registerWorkOrderHandlers(): void {
         return await createConfiguredIrisApiClient().getWorkOrderById(id);
       } catch (error) {
         throw toRendererError(error, "Greška pri učitavanju radnog naloga.");
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "workorders:reserveNumber",
+    async (): Promise<ReservedOrderNumber> => {
+      try {
+        return await createConfiguredIrisApiClient().reserveWorkOrderNumber();
+      } catch (error) {
+        throw toRendererError(error, "Greška pri rezervaciji broja naloga.");
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "workorders:releaseNumber",
+    async (_event, { orderNumber }: { orderNumber: string }): Promise<void> => {
+      try {
+        await createConfiguredIrisApiClient().releaseWorkOrderNumber(orderNumber);
+      } catch (error) {
+        throw toRendererError(error, "Greška pri oslobađanju broja naloga.");
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "workorders:acquireEditLock",
+    async (_event, { id }: { id: string }): Promise<EditLockResult> => {
+      try {
+        return await createConfiguredIrisApiClient().acquireWorkOrderEditLock(id);
+      } catch (error) {
+        throw toRendererError(error, "Greška pri zaključavanju naloga za izmenu.");
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "workorders:releaseEditLock",
+    async (_event, { id }: { id: string }): Promise<void> => {
+      try {
+        await createConfiguredIrisApiClient().releaseWorkOrderEditLock(id);
+      } catch (error) {
+        throw toRendererError(error, "Greška pri otključavanju naloga.");
       }
     },
   );

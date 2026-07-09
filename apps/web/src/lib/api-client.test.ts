@@ -33,7 +33,6 @@ const baseInput: CreateWorkOrderInput = {
   assignment: {
     assignedTo: 'ana.jovic',
     priority: 'high',
-    scheduledDate: '2026-05-26',
   },
   issuedBy: 'admin',
   issueDate: '2026-05-25',
@@ -135,7 +134,7 @@ describe('createHttpApi', () => {
       response({
         ...baseInput,
         id: '26',
-        orderNumber: 'RN-2026-0026',
+        orderNumber: 'RN-2026-00026',
         status: 'new',
         isCompleted: false,
         executedBy: null,

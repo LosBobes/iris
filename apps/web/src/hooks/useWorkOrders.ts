@@ -24,7 +24,7 @@ export type SortField =
   | "jobDescription"
   | "assignment.assignedTo"
   | "assignment.priority"
-  | "assignment.scheduledDate"
+  | "dueDate"
   | "billingDocumentType"
   | "shipping.deliveryMethod"
   | "price"
@@ -230,7 +230,7 @@ export function filterWorkOrdersForList(
     )
       return false;
     if (filters.queue !== "all") {
-      const dueDate = order.dueDate ?? order.assignment.scheduledDate;
+      const dueDate = order.dueDate;
       if (filters.queue === "unassigned" && order.assignment.assignedTo) {
         return false;
       }
@@ -331,9 +331,9 @@ export function useWorkOrders(): UseWorkOrdersResult {
           aVal = a.assignment.priority;
           bVal = b.assignment.priority;
           break;
-        case "assignment.scheduledDate":
-          aVal = a.assignment.scheduledDate;
-          bVal = b.assignment.scheduledDate;
+        case "dueDate":
+          aVal = a.dueDate;
+          bVal = b.dueDate;
           break;
         case "price":
           aVal = a.price;

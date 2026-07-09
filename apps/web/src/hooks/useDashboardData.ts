@@ -117,8 +117,7 @@ export function useDashboardData() {
   const operatorQueue = useMemo(() => {
     const today = getLocalIsoDate()
     const me = currentUser.username
-    const dueDateOf = (order: WorkOrder): string | null =>
-      order.dueDate ?? order.assignment.scheduledDate
+    const dueDateOf = (order: WorkOrder): string | null => order.dueDate
     const mineOpen = allOrders.filter(
       (order) => order.assignment.assignedTo === me && !order.isCompleted,
     )
@@ -139,9 +138,9 @@ export function useDashboardData() {
   const queueSummary = useMemo(() => {
     const today = getLocalIsoDate()
     return {
-      today: allOrders.filter((order) => (order.dueDate ?? order.assignment.scheduledDate) === today).length,
+      today: allOrders.filter((order) => order.dueDate === today).length,
       overdue: allOrders.filter((order) => {
-        const dueDate = order.dueDate ?? order.assignment.scheduledDate
+        const dueDate = order.dueDate
         return Boolean(dueDate && dueDate < today && !order.isCompleted)
       }).length,
       unassigned: allOrders.filter((order) => !order.assignment.assignedTo).length,

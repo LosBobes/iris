@@ -15,7 +15,6 @@ import { downloadWorkOrdersCsv } from "@/lib/work-orders/csv-export";
 import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
-  getLocalIsoDate,
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type { WorkOrder } from "@/types/work-order";
@@ -76,14 +75,12 @@ function WorkOrdersPage(): React.JSX.Element {
 
       const newStatus = getPrimaryWorkOrderTransition(order.status);
       if (!newStatus) return;
-      const now = getLocalIsoDate();
-      const isCompleting = newStatus === "completed" || newStatus === "invoiced";
 
       try {
+        // The store derives isCompleted and the completion date from the status
+        // transition, so send only the status and let the backend own the date.
         const updated = await window.api.updateWorkOrder(order.id, {
           status: newStatus,
-          isCompleted: isCompleting,
-          completionDate: isCompleting ? now : null,
         });
         if (!updated) {
           toast.error(t("workOrders.toast.notFound"));

@@ -35,6 +35,11 @@ interface WorkOrderFormProps {
   initialValues?: WorkOrderFormValues;
   onSubmit: (values: WorkOrderFormValues) => Promise<void>;
   onCancel: () => void;
+  /**
+   * When true every field and button is disabled (via a disabled fieldset), for
+   * showing a work order another operator is currently editing. Defaults to false.
+   */
+  readOnly?: boolean;
 }
 
 interface FormSectionProps {
@@ -101,6 +106,7 @@ export function WorkOrderForm({
   initialValues,
   onSubmit,
   onCancel,
+  readOnly = false,
 }: WorkOrderFormProps): React.JSX.Element {
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
@@ -128,7 +134,9 @@ export function WorkOrderForm({
           contactPerson: null,
           jobDescription: "",
           jobDetails: null,
-          billingDocumentType: null,
+          // New orders default to a proforma (predračun); see the document-type
+          // policy the web settings expose shop-wide.
+          billingDocumentType: "proforma",
           billingDocumentNumber: null,
           shipping: {
             deliveryMethod: null,
@@ -141,6 +149,9 @@ export function WorkOrderForm({
           },
           price: null,
           note: null,
+          // Issue date is implied from the creation date: the order is created
+          // right after this form is submitted, so today is the issue date.
+          // Not shown as an editable field.
           issueDate: getLocalIsoDate(),
           dueDate: null,
           executedBy: null,
@@ -160,8 +171,6 @@ export function WorkOrderForm({
   const deliveryMethod = watch("shipping.deliveryMethod");
   const showShippingAddress =
     deliveryMethod !== null && deliveryMethod !== "pickup";
-
-  const [showJobDetails, setShowJobDetails] = useState(!!defaultValues.jobDetails);
 
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
@@ -185,6 +194,9 @@ export function WorkOrderForm({
       onSubmit={handleSubmit(handleFormSubmit)}
       className="grid grid-cols-[minmax(0,1fr)_320px] gap-0"
     >
+      {/* A disabled fieldset natively disables every nested control, giving a
+          read-only view when another operator holds the edit lock. */}
+      <fieldset disabled={readOnly} className="contents">
       <div className="pr-10">
         {isEdit && initialData && (
           <div className="mb-8 flex flex-wrap gap-x-10 gap-y-4 border border-[color:var(--iris-border-soft)] bg-card px-6 py-4 text-[12px]">
@@ -262,84 +274,6 @@ export function WorkOrderForm({
                 {...register("jobDescription")}
               />
             </FieldShell>
-
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowJobDetails(!showJobDetails)}
-                aria-expanded={showJobDetails}
-                className="iris-focusable iris-press bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
-              >
-                {showJobDetails
-                  ? t("workOrders.form.jobDetailsHide")
-                  : t("workOrders.form.jobDetailsShow")}
-              </button>
-            </div>
-
-            {showJobDetails && (
-              <div
-                className="grid grid-cols-2 gap-6"
-                style={{
-                  animation:
-                    "iris-fade-up 320ms var(--iris-ease-out) both",
-                }}
-              >
-                <FieldShell id="jobDetails.productCode" label={t("workOrders.form.productCode")}>
-                  <input
-                    id="jobDetails.productCode"
-                    className={underlineInput}
-                    {...register("jobDetails.productCode", {
-                      setValueAs: (v: string) => (v === "" ? null : v),
-                    })}
-                  />
-                </FieldShell>
-                <FieldShell
-                  id="jobDetails.paperWeightGsm"
-                  label={t("workOrders.form.paperWeight")}
-                >
-                  <input
-                    id="jobDetails.paperWeightGsm"
-                    type="number"
-                    className={`${underlineInput} tnum`}
-                    {...register("jobDetails.paperWeightGsm", {
-                      setValueAs: (v: string) => (v === "" ? null : Number(v)),
-                    })}
-                  />
-                </FieldShell>
-                <FieldShell id="jobDetails.dimensions" label={t("workOrders.form.dimensions")}>
-                  <input
-                    id="jobDetails.dimensions"
-                    className={underlineInput}
-                    {...register("jobDetails.dimensions", {
-                      setValueAs: (v: string) => (v === "" ? null : v),
-                    })}
-                  />
-                </FieldShell>
-                <FieldShell id="jobDetails.quantity" label={t("workOrders.form.quantity")}>
-                  <input
-                    id="jobDetails.quantity"
-                    type="number"
-                    className={`${underlineInput} tnum`}
-                    {...register("jobDetails.quantity", {
-                      setValueAs: (v: string) => (v === "" ? null : Number(v)),
-                    })}
-                  />
-                </FieldShell>
-                <FieldShell
-                  id="jobDetails.finishingNote"
-                  label={t("workOrders.form.finishingNote")}
-                  full
-                >
-                  <input
-                    id="jobDetails.finishingNote"
-                    className={underlineInput}
-                    {...register("jobDetails.finishingNote", {
-                      setValueAs: (v: string) => (v === "" ? null : v),
-                    })}
-                  />
-                </FieldShell>
-              </div>
-            )}
           </div>
         </FormSection>
 
@@ -421,26 +355,6 @@ export function WorkOrderForm({
                 {...register("billingDocumentNumber", {
                   setValueAs: (v: string) => (v === "" ? null : v),
                 })}
-              />
-            </FieldShell>
-
-            <FieldShell
-              id="issueDate"
-              label={t("workOrders.form.issueDate")}
-              error={errors.issueDate?.message}
-            >
-              <Controller
-                name="issueDate"
-                control={control}
-                render={({ field }) => (
-                  <DatePicker
-                    id="issueDate"
-                    value={field.value}
-                    onChange={(v) => field.onChange(v ?? "")}
-                    placeholder={t("workOrders.form.issueDatePlaceholder")}
-                    disabled={submitting}
-                  />
-                )}
               />
             </FieldShell>
 
@@ -585,6 +499,7 @@ export function WorkOrderForm({
           </button>
         </div>
       </aside>
+      </fieldset>
     </form>
   );
 }

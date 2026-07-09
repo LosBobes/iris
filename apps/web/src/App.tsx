@@ -9,9 +9,14 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
 import {
+  DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
+  DEFAULT_PRIORITY_DEFAULTS,
+  DEFAULT_SHOW_SHIPPING_OPTIONS,
+  type BillingDefaults,
   type PDFSections,
+  type PriorityDefaults,
 } from "@/types/settings";
 import i18n from "@/i18n";
 
@@ -102,6 +107,15 @@ function App(): React.JSX.Element {
   const [firmName, setFirmName] = useState(DEFAULT_FIRM_NAME);
   const [pdfSections, setPdfSections] =
     useState<PDFSections>(DEFAULT_PDF_SECTIONS);
+  const [billingDefaults, setBillingDefaults] = useState<BillingDefaults>(
+    DEFAULT_BILLING_DEFAULTS,
+  );
+  const [priorityDefaults, setPriorityDefaults] = useState<PriorityDefaults>(
+    DEFAULT_PRIORITY_DEFAULTS,
+  );
+  const [showShippingOptions, setShowShippingOptions] = useState(
+    DEFAULT_SHOW_SHIPPING_OPTIONS,
+  );
 
   const checkBackendStatus = useCallback(async () => {
     startTransition(() => {
@@ -131,6 +145,12 @@ function App(): React.JSX.Element {
           const settings = await window.api.getSettings();
           if (settings?.firmName) setFirmName(settings.firmName);
           if (settings?.pdfSections) setPdfSections(settings.pdfSections);
+          if (settings?.billingDefaults)
+            setBillingDefaults(settings.billingDefaults);
+          if (settings?.priorityDefaults)
+            setPriorityDefaults(settings.priorityDefaults);
+          if (typeof settings?.showShippingOptions === "boolean")
+            setShowShippingOptions(settings.showShippingOptions);
         } catch {
           // Keep the default firm name.
         }
@@ -190,7 +210,7 @@ function App(): React.JSX.Element {
                 <Login onLoginSuccess={handleLoginSuccess} />
               ) : (
                 <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections }}>
+                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, showShippingOptions, setShowShippingOptions }}>
                   <TooltipProvider>
                     <Routes>
                       <Route path="/" element={<DashboardPage />} />

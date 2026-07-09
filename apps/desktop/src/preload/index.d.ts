@@ -48,6 +48,18 @@ declare global {
         id: string,
       ) => Promise<import("../renderer/src/types/work-order").WorkOrder | null>;
 
+      reserveWorkOrderNumber: () => Promise<
+        import("../renderer/src/types/work-order").ReservedOrderNumber
+      >;
+
+      releaseWorkOrderNumber: (orderNumber: string) => Promise<void>;
+
+      acquireWorkOrderEditLock: (
+        id: string,
+      ) => Promise<import("../renderer/src/types/work-order").EditLockResult>;
+
+      releaseWorkOrderEditLock: (id: string) => Promise<void>;
+
       createWorkOrder: (
         input: import("../renderer/src/types/work-order").CreateWorkOrderInput,
       ) => Promise<import("../renderer/src/types/work-order").WorkOrder>;

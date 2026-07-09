@@ -104,7 +104,11 @@ func (s *Server) Routes() http.Handler {
 		protected.Get("/work-orders/{id}", s.handleWorkOrderByID)
 		protected.Get("/work-orders/{id}/report", s.handleWorkOrderReport)
 		protected.Post("/work-orders/preview", s.handleWorkOrderPreview)
+		protected.Post("/work-orders/reserve-number", s.handleReserveOrderNumber)
+		protected.Post("/work-orders/release-number", s.handleReleaseOrderNumber)
 		protected.Post("/work-orders", s.handleCreateWorkOrder)
+		protected.Post("/work-orders/{id}/edit-lock", s.handleAcquireEditLock)
+		protected.Delete("/work-orders/{id}/edit-lock", s.handleReleaseEditLock)
 		protected.Patch("/work-orders/{id}", s.handleUpdateWorkOrder)
 		protected.Delete("/work-orders/{id}", s.requireAdmin(s.handleDeleteWorkOrder))
 		protected.Get("/enum-values", s.handleEnumValues)
@@ -352,7 +356,10 @@ func (s *Server) handleCustomers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLocations(w http.ResponseWriter, r *http.Request) {
-	locations, err := s.store.Locations(r.Context())
+	// An optional customerId narrows to a single firm's locations so the
+	// work-order form can lazy-load per selected client instead of pulling the
+	// whole tenant's location list on every page load.
+	locations, err := s.store.Locations(r.Context(), r.URL.Query().Get("customerId"))
 	if err != nil {
 		writeServerError(w, err)
 		return
@@ -525,6 +532,85 @@ func (s *Server) handleWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, workOrder)
 }
 
+// handleReserveOrderNumber atomically claims the next order number for the caller
+// so it can be shown in the create-form header before the work order is saved.
+func (s *Server) handleReserveOrderNumber(w http.ResponseWriter, r *http.Request) {
+	reservedBy := ""
+	if user := currentUser(r); user != nil {
+		reservedBy = user.Username
+	}
+
+	reserved, err := s.store.ReserveOrderNumber(r.Context(), reservedBy)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, reserved)
+}
+
+// handleReleaseOrderNumber frees a reserved order number when the operator
+// cancels the create form, so the number is reclaimed immediately instead of
+// lingering until its reservation expires. Releasing an unknown/consumed number
+// succeeds as a no-op so the client can fire-and-forget on form teardown.
+func (s *Server) handleReleaseOrderNumber(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		OrderNumber string `json:"orderNumber"`
+	}
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+
+	if err := s.store.ReleaseOrderNumber(r.Context(), req.OrderNumber); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleAcquireEditLock claims or refreshes the caller's exclusive edit lock on a
+// work order. It returns 200 with the caller's lock when acquired (or refreshed
+// by a heartbeat) and 409 with the current holder's identity when another
+// operator is already editing, so the client can render a read-only view.
+func (s *Server) handleAcquireEditLock(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	if user == nil {
+		writeValidationError(w, "Prijava je istekla.")
+		return
+	}
+
+	lock, acquired, err := s.store.AcquireEditLock(r.Context(), chi.URLParam(r, "id"), user.Username)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	if !acquired {
+		writeJSON(w, http.StatusConflict, lock)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, lock)
+}
+
+// handleReleaseEditLock frees the caller's edit lock on save/cancel/close. It is
+// a no-op when the caller no longer holds the lock.
+func (s *Server) handleReleaseEditLock(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	if user == nil {
+		writeValidationError(w, "Prijava je istekla.")
+		return
+	}
+
+	if err := s.store.ReleaseEditLock(r.Context(), chi.URLParam(r, "id"), user.Username); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // handleCreateWorkOrder creates a new in-memory work order backed by the shared fixtures.
 func (s *Server) handleCreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	var req domain.CreateWorkOrderInput
@@ -594,7 +680,7 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 
 	var locationAddress *string
 	if workOrder.LocationID != nil {
-		locations, locErr := s.store.Locations(r.Context())
+		locations, locErr := s.store.Locations(r.Context(), "")
 		if locErr != nil {
 			writeServerError(w, locErr)
 			return
@@ -643,7 +729,7 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 
 	var locationAddress *string
 	if order.LocationID != nil {
-		locations, err := s.store.Locations(r.Context())
+		locations, err := s.store.Locations(r.Context(), "")
 		if err != nil {
 			writeServerError(w, err)
 			return

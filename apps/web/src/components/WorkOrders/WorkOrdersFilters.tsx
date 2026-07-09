@@ -21,6 +21,7 @@ import {
   type WorkOrdersFiltersState,
 } from "@/hooks/useWorkOrders";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { Search, X, ChevronDown, Check, Columns3, Bookmark, Trash2 } from "lucide-react";
 import {
   addSavedView,
@@ -484,7 +485,12 @@ export function WorkOrdersFilters({
 }: WorkOrdersFiltersProps): React.JSX.Element {
   const { t } = useTranslation();
   const { isVisible } = useColumnVisibility();
+  const { billingDefaults } = useOrganization();
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // When the shop pins the document type (override off), every order shares the
+  // same type, so the "Svi tipovi" filter would only ever match all or none.
+  const showBillingFilter = billingDefaults.allowOverride;
 
   // Option lists with i18n labels; "all" sentinels reuse the per-filter
   // "all…" copy, the rest reuse the shared status/billing/delivery labels.
@@ -619,7 +625,7 @@ export function WorkOrdersFilters({
         </FilterPill>
       )}
 
-      {isVisible("billing") && (
+      {showBillingFilter && isVisible("billing") && (
         <FilterPill
           label={billingLabel}
           isActive={filters.billingDocumentType !== "all"}

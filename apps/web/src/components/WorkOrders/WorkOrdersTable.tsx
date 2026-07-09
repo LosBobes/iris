@@ -90,11 +90,7 @@ function renderColumnCell(
     case "schedule":
       return {
         className: "px-4 text-[color:var(--iris-ink-soft)]",
-        content: order.assignment.scheduledDate
-          ? formatWorkOrderDate(order.assignment.scheduledDate)
-          : order.dueDate
-            ? formatWorkOrderDate(order.dueDate)
-            : "-",
+        content: order.dueDate ? formatWorkOrderDate(order.dueDate) : "-",
       };
     case "price":
       return {

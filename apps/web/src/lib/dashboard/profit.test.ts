@@ -49,7 +49,7 @@ function order(overrides: Partial<WorkOrder>, lineItems: InvoiceLineItem[]): Wor
     },
     issuedBy: 'ana',
     executedBy: null,
-    assignment: { assignedTo: 'marko', priority: 'normal', scheduledDate: null },
+    assignment: { assignedTo: 'marko', priority: 'normal' },
     issueDate: '2026-05-20',
     dueDate: null,
     isCompleted: false,
