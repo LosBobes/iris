@@ -33,7 +33,7 @@ function exportCellValue(order: WorkOrder, key: WorkOrderColumnKey): string {
         ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
         : "";
     case "schedule": {
-      const date = order.assignment.scheduledDate ?? order.dueDate;
+      const date = order.dueDate;
       return date ? formatWorkOrderDate(date) : "";
     }
     case "price":

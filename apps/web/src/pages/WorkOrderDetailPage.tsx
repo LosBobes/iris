@@ -156,13 +156,14 @@ function WorkOrderDetailPage(): React.JSX.Element {
     if (!order) return;
     const newStatus = getPrimaryWorkOrderTransition(order.status);
     if (!newStatus) return;
-    const isCompleting = newStatus === "completed" || newStatus === "invoiced";
-    const now = getLocalIsoDate();
     try {
+      // The server derives isCompleted and stamps the completion date from the
+      // status transition (set on the move into "completed", preserved through
+      // "invoiced", cleared if the order leaves the done state). Sending those
+      // fields from the client would race the server's own update, so we send
+      // only the status and let the backend own the completion date.
       const updated = await window.api.updateWorkOrder(order.id, {
         status: newStatus,
-        isCompleted: isCompleting,
-        completionDate: isCompleting ? now : null,
       });
       if (!updated) {
         toast.error(t("workOrders.toast.notFound"));
@@ -485,23 +486,38 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
   const { t } = useTranslation();
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
+  // Mirrors the fields the creation form now collects: who issued vs. who
+  // executed the order (the form split these), the three key dates
+  // (issue / proforma-due / deadline), the completion date once done, and the
+  // billing/delivery details.
   const metaCells: Array<[string, string]> = [
+    [t("workOrders.detail.issuedBy"), order.issuedBy || t("workOrders.detail.unassigned")],
+    [
+      t("workOrders.detail.executedBy"),
+      order.executedBy || t("workOrders.detail.unassigned"),
+    ],
+    [t("workOrders.detail.issueDate"), formatWorkOrderDate(order.issueDate)],
+    [
+      t("workOrders.detail.proformaDueDate"),
+      order.proformaDueDate ? formatWorkOrderDate(order.proformaDueDate) : "-",
+    ],
+    [t("workOrders.notice.dueDate"), order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],
+    [
+      t("workOrders.detail.completionDate"),
+      order.completionDate ? formatWorkOrderDate(order.completionDate) : "-",
+    ],
     [
       t("workOrders.detail.documentType"),
       order.billingDocumentType
         ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
         : "-",
     ],
-    [t("workOrders.detail.operator"), order.assignment.assignedTo ?? t("workOrders.detail.unassigned")],
-    [t("workOrders.detail.planned"), order.assignment.scheduledDate ? formatWorkOrderDate(order.assignment.scheduledDate) : "-"],
-    [t("workOrders.detail.issueDate"), formatWorkOrderDate(order.issueDate)],
     [
       t("workOrders.detail.delivery"),
       order.shipping.deliveryMethod
         ? getWorkOrderDeliveryLabel(order.shipping.deliveryMethod)
         : "-",
     ],
-    [t("workOrders.notice.dueDate"), order.dueDate ? formatWorkOrderDate(order.dueDate) : "-"],
     [
       t("workOrders.detail.documentNumber"),
       order.billingDocumentNumber ? order.billingDocumentNumber : "-",
@@ -712,32 +728,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             </tbody>
           </table>
 
-          <div className="mt-8 grid grid-cols-2 gap-6">
-            <InfoList
-              title={t("workOrders.detail.material")}
-              empty={t("workOrders.detail.materialEmpty")}
-              rows={order.materialUsage.map((item) => [
-                item.name,
-                `${item.quantity} ${item.unit}`,
-              ])}
-            />
-            <InfoList
-              title={t("workOrders.detail.time")}
-              empty={t("workOrders.detail.timeEmpty")}
-              rows={order.timeEntries.map((entry) => [
-                entry.operator,
-                `${entry.minutes} min`,
-              ])}
-            />
-            <InfoList
-              title={t("workOrders.detail.attachments")}
-              empty={t("workOrders.detail.attachmentsEmpty")}
-              rows={order.attachments.map((attachment) => [
-                attachment.fileName,
-                attachment.url ? "otvori" : attachment.fileType,
-              ])}
-            />
-            {isAdmin && (
+          {/* Material usage, time entries, and attachments are not captured by
+              the order form, so those (always-empty) sections were dropped. The
+              invoice-draft summary stays for admins. */}
+          {isAdmin && (
+            <div className="mt-8 grid grid-cols-2 gap-6">
               <InfoList
                 title={t("workOrders.detail.invoice")}
                 empty={t("workOrders.detail.invoiceEmpty")}
@@ -747,8 +742,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   [t("workOrders.detail.paid"), order.invoiceDraft.paidAt ? formatWorkOrderDate(order.invoiceDraft.paidAt) : "-"],
                 ]}
               />
-            )}
-          </div>
+            </div>
+          )}
 
           {isAdmin && order.price !== null && (
             <div className="mt-4 flex justify-end">
@@ -788,7 +783,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
 
 function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Element {
   const { t } = useTranslation();
-  const customerDueDate = order.dueDate ?? order.assignment.scheduledDate;
+  const customerDueDate = order.dueDate;
   const isOverdue = Boolean(
     customerDueDate && customerDueDate < getLocalIsoDate() && !order.isCompleted,
   );
@@ -833,26 +828,40 @@ function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Elemen
             {getWorkOrderStatusLabel(order.status)}
           </div>
         </div>
-        <div
-          className={`border px-3.5 py-3 ${
-            isOverdue
-              ? "border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10"
-              : "border-[color:var(--iris-border-soft)]"
-          }`}
-        >
-          <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
-            {t("workOrders.notice.dueDate")}
+        {order.isCompleted && order.completionDate ? (
+          // Once the order is done, the completion date is the headline fact —
+          // it replaces the (now moot) deadline card, highlighted in the done
+          // color.
+          <div className="border border-[color:var(--iris-status-done)] bg-[color:var(--iris-status-done)]/10 px-3.5 py-3">
+            <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+              {t("workOrders.detail.completionDate")}
+            </div>
+            <div className="tnum mt-1.5 text-[13px] text-[color:var(--iris-status-done)]">
+              {formatWorkOrderDate(order.completionDate)}
+            </div>
           </div>
+        ) : (
           <div
-            className={`tnum mt-1.5 text-[13px] ${
+            className={`border px-3.5 py-3 ${
               isOverdue
-                ? "text-[color:var(--iris-status-cancelled)]"
-                : "text-foreground"
+                ? "border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10"
+                : "border-[color:var(--iris-border-soft)]"
             }`}
           >
-            {customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}
+            <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+              {t("workOrders.notice.dueDate")}
+            </div>
+            <div
+              className={`tnum mt-1.5 text-[13px] ${
+                isOverdue
+                  ? "text-[color:var(--iris-status-cancelled)]"
+                  : "text-foreground"
+              }`}
+            >
+              {customerDueDate ? formatWorkOrderDate(customerDueDate) : "-"}
+            </div>
           </div>
-        </div>
+        )}
         <div className="border border-[color:var(--iris-border-soft)] px-3.5 py-3">
           <div className="text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
             {t("workOrders.detail.orderNumber")}

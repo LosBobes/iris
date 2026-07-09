@@ -35,7 +35,7 @@ func SeedDemoFromFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixture
 		}
 	}
 
-	locations, err := fixtures.Locations(ctx)
+	locations, err := fixtures.Locations(ctx, "")
 	if err != nil {
 		return err
 	}

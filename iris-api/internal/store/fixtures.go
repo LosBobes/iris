@@ -47,17 +47,38 @@ type FixtureStore struct {
 	catalogItems     []domain.CatalogItem
 	nextEnumSequence int
 	nextSequence     int
+	reservations     []fixtureReservation
+	editLocks        map[string]fixtureEditLock
 	loaded           bool
 	referencesLoaded bool
 	usersLoaded      bool
 	fixtureUsers     []domain.FixtureUser
-	firmName         string
-	pdfSections      *domain.PDFSections
-	sessions         map[string]fixtureSession
+	firmName            string
+	pdfSections         *domain.PDFSections
+	billingDefaults     *domain.BillingDefaults
+	priorityDefaults    *domain.PriorityDefaults
+	showShippingOptions *bool
+	sessions            map[string]fixtureSession
 }
 
 type fixtureSession struct {
 	userID    string
+	expiresAt time.Time
+}
+
+// fixtureReservation mirrors the SQLite reservation ledger in memory so the
+// fixture store (tests, seed-demo, web fixtures mode) hands out the same
+// "reserve on open" order numbers.
+type fixtureReservation struct {
+	orderNumber string
+	year        int
+	sequence    int
+	expiresAt   time.Time
+}
+
+type fixtureEditLock struct {
+	lockedBy  string
+	lockedAt  time.Time
 	expiresAt time.Time
 }
 
@@ -247,14 +268,23 @@ func (s *FixtureStore) CustomerByID(_ context.Context, id string) (*domain.Custo
 }
 
 // Locations reads normalized customer location fixture data.
-func (s *FixtureStore) Locations(_ context.Context) ([]domain.Location, error) {
+func (s *FixtureStore) Locations(_ context.Context, customerID string) ([]domain.Location, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if err := s.ensureReferenceDataLoaded(); err != nil {
 		return nil, err
 	}
-	return cloneLocations(s.locations), nil
+	if customerID == "" {
+		return cloneLocations(s.locations), nil
+	}
+	filtered := make([]domain.Location, 0)
+	for _, location := range s.locations {
+		if location.CustomerID == customerID {
+			filtered = append(filtered, location)
+		}
+	}
+	return cloneLocations(filtered), nil
 }
 
 func (s *FixtureStore) UpsertCustomer(
@@ -436,7 +466,7 @@ func (s *FixtureStore) CreateWorkOrder(
 	sequence := s.nextSequence
 	s.nextSequence++
 	now := time.Now().UTC()
-	orderNumber := nextOrderNumberFromList(s.workOrders, now.Year())
+	orderNumber := s.resolveOrderNumberLocked(now.Year(), now, input.OrderNumber)
 	createdAt := now.Format(time.RFC3339)
 	newOrder := domain.WorkOrder{
 		ID:                    strconv.Itoa(sequence),
@@ -451,9 +481,10 @@ func (s *FixtureStore) CreateWorkOrder(
 		BillingDocumentNumber: input.BillingDocumentNumber,
 		Shipping:              input.Shipping,
 		IssuedBy:              input.IssuedBy,
-		ExecutedBy:            nil,
+		ExecutedBy:            input.ExecutedBy,
 		Assignment:            normalizeAssignment(input.Assignment),
 		IssueDate:             input.IssueDate,
+		ProformaDueDate:       input.ProformaDueDate,
 		DueDate:               input.DueDate,
 		IsCompleted:           false,
 		Status:                domain.WorkOrderStatusNew,
@@ -573,7 +604,7 @@ func (s *FixtureStore) Operators(_ context.Context) ([]string, error) {
 
 	operators := make([]string, 0, len(s.fixtureUsers))
 	for _, user := range s.fixtureUsers {
-		if user.Role == domain.RoleUser {
+		if user.Role == domain.RoleUser || user.Role == domain.RoleAdmin {
 			operators = append(operators, user.Username)
 		}
 	}
@@ -905,7 +936,7 @@ func nextSequenceStart(workOrders []domain.WorkOrder) int {
 // non-numeric (e.g. a seeded "wo-cob-1"). Deriving them from the id sequence is
 // what caused duplicate order numbers when the id wasn't a dense integer.
 func formatOrderNumber(year, sequence int) string {
-	return fmt.Sprintf("RN-%d-%04d", year, sequence)
+	return fmt.Sprintf("RN-%d-%05d", year, sequence)
 }
 
 // orderNumberSequence extracts the trailing sequence from an RN-<year>-<seq>
@@ -922,16 +953,191 @@ func orderNumberSequence(orderNumber string, year int) (int, bool) {
 	return seq, true
 }
 
-// nextOrderNumberFromList returns the next free order number for year by scanning
-// existing order numbers, so it never collides regardless of the id scheme.
-func nextOrderNumberFromList(workOrders []domain.WorkOrder, year int) string {
+// ReserveOrderNumber atomically claims the next order number and records it in
+// the in-memory ledger so concurrent operators each see a distinct number in
+// their create-form header before any work order is saved.
+func (s *FixtureStore) ReserveOrderNumber(_ context.Context, reservedBy string) (domain.ReservedOrderNumber, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.ensureWorkOrdersLoaded(); err != nil {
+		return domain.ReservedOrderNumber{}, err
+	}
+	if strings.TrimSpace(reservedBy) == "" {
+		return domain.ReservedOrderNumber{}, newValidationError(invalidWorkOrderMessage)
+	}
+
+	now := time.Now().UTC()
+	s.pruneReservationsLocked(now)
+	year := now.Year()
+	orderNumber := s.nextOrderNumberLocked(year, now)
+	sequence, _ := orderNumberSequence(orderNumber, year)
+	expiresAt := now.Add(reservationTTL)
+	s.reservations = append(s.reservations, fixtureReservation{
+		orderNumber: orderNumber,
+		year:        year,
+		sequence:    sequence,
+		expiresAt:   expiresAt,
+	})
+	return domain.ReservedOrderNumber{
+		OrderNumber: orderNumber,
+		ExpiresAt:   expiresAt.Format(time.RFC3339),
+	}, nil
+}
+
+// ReleaseOrderNumber drops a still-active reservation so its number is reclaimed
+// immediately when an operator cancels the create form. Unknown numbers are a
+// no-op.
+func (s *FixtureStore) ReleaseOrderNumber(_ context.Context, orderNumber string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	orderNumber = strings.TrimSpace(orderNumber)
+	if orderNumber == "" {
+		return nil
+	}
+	kept := s.reservations[:0]
+	for _, reservation := range s.reservations {
+		if reservation.orderNumber != orderNumber {
+			kept = append(kept, reservation)
+		}
+	}
+	s.reservations = kept
+	return nil
+}
+
+// AcquireEditLock claims or refreshes the exclusive edit lock on a work order,
+// mirroring the SQLite store: expired locks are pruned, the lock is taken when
+// free or already held by the caller, otherwise the current holder is reported
+// with acquired=false.
+func (s *FixtureStore) AcquireEditLock(_ context.Context, workOrderID, lockedBy string) (domain.EditLock, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	workOrderID = strings.TrimSpace(workOrderID)
+	lockedBy = strings.TrimSpace(lockedBy)
+	if workOrderID == "" || lockedBy == "" {
+		return domain.EditLock{}, false, newValidationError(invalidWorkOrderMessage)
+	}
+	if s.editLocks == nil {
+		s.editLocks = make(map[string]fixtureEditLock)
+	}
+	now := time.Now().UTC()
+	existing, ok := s.editLocks[workOrderID]
+	if ok && !existing.expiresAt.After(now) {
+		ok = false // expired: treat as free
+	}
+	if ok && existing.lockedBy != lockedBy {
+		return domain.EditLock{
+			WorkOrderID: workOrderID,
+			LockedBy:    existing.lockedBy,
+			LockedAt:    existing.lockedAt.Format(time.RFC3339),
+		}, false, nil
+	}
+	lockedAt := now
+	if ok {
+		lockedAt = existing.lockedAt
+	}
+	expiresAt := now.Add(editLockTTL)
+	s.editLocks[workOrderID] = fixtureEditLock{
+		lockedBy:  lockedBy,
+		lockedAt:  lockedAt,
+		expiresAt: expiresAt,
+	}
+	return domain.EditLock{
+		WorkOrderID: workOrderID,
+		LockedBy:    lockedBy,
+		LockedAt:    lockedAt.Format(time.RFC3339),
+		ExpiresAt:   expiresAt.Format(time.RFC3339),
+	}, true, nil
+}
+
+// ReleaseEditLock frees the caller's edit lock, leaving a lock a new holder has
+// since taken untouched.
+func (s *FixtureStore) ReleaseEditLock(_ context.Context, workOrderID, lockedBy string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	workOrderID = strings.TrimSpace(workOrderID)
+	lockedBy = strings.TrimSpace(lockedBy)
+	if workOrderID == "" || lockedBy == "" {
+		return nil
+	}
+	if existing, ok := s.editLocks[workOrderID]; ok && existing.lockedBy == lockedBy {
+		delete(s.editLocks, workOrderID)
+	}
+	return nil
+}
+
+// nextOrderNumberLocked returns the next free order number for year, taking the
+// max sequence across committed work orders and still-active reservations so a
+// number handed to another open form is never allocated twice.
+func (s *FixtureStore) nextOrderNumberLocked(year int, now time.Time) string {
 	maxSeq := 0
-	for _, workOrder := range workOrders {
+	for _, workOrder := range s.workOrders {
 		if seq, ok := orderNumberSequence(workOrder.OrderNumber, year); ok && seq > maxSeq {
 			maxSeq = seq
 		}
 	}
+	for _, reservation := range s.reservations {
+		if reservation.year == year && reservation.expiresAt.After(now) && reservation.sequence > maxSeq {
+			maxSeq = reservation.sequence
+		}
+	}
 	return formatOrderNumber(year, maxSeq+1)
+}
+
+// resolveOrderNumberLocked honors a requested (reserved) number when its
+// reservation still stands and no committed order has claimed it, consuming the
+// reservation; otherwise it allocates a fresh number.
+func (s *FixtureStore) resolveOrderNumberLocked(year int, now time.Time, requested *string) string {
+	if requested != nil {
+		candidate := strings.TrimSpace(*requested)
+		if candidate != "" && s.reservationHonoredLocked(candidate) {
+			s.removeReservationLocked(candidate)
+			return candidate
+		}
+	}
+	return s.nextOrderNumberLocked(year, now)
+}
+
+func (s *FixtureStore) reservationHonoredLocked(orderNumber string) bool {
+	reserved := false
+	for _, reservation := range s.reservations {
+		if reservation.orderNumber == orderNumber {
+			reserved = true
+			break
+		}
+	}
+	if !reserved {
+		return false
+	}
+	for _, workOrder := range s.workOrders {
+		if workOrder.OrderNumber == orderNumber {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *FixtureStore) removeReservationLocked(orderNumber string) {
+	kept := s.reservations[:0]
+	for _, reservation := range s.reservations {
+		if reservation.orderNumber != orderNumber {
+			kept = append(kept, reservation)
+		}
+	}
+	s.reservations = kept
+}
+
+func (s *FixtureStore) pruneReservationsLocked(now time.Time) {
+	kept := s.reservations[:0]
+	for _, reservation := range s.reservations {
+		if reservation.expiresAt.After(now) {
+			kept = append(kept, reservation)
+		}
+	}
+	s.reservations = kept
 }
 
 func idSequence(id string) int {
@@ -1000,9 +1206,6 @@ func normalizeAssignmentWithFallback(value domain.Assignment, workOrder domain.W
 			assignedTo := workOrder.IssuedBy
 			normalized.AssignedTo = &assignedTo
 		}
-	}
-	if normalized.ScheduledDate == nil {
-		normalized.ScheduledDate = clonePtrString(workOrder.DueDate)
 	}
 	return normalized
 }
@@ -1308,6 +1511,12 @@ func applyWorkOrderChanges(
 				return domain.WorkOrder{}, err
 			}
 			updated.IssueDate = value
+		case "proformaDueDate":
+			var value *string
+			if err := decodeField(raw, &value); err != nil {
+				return domain.WorkOrder{}, err
+			}
+			updated.ProformaDueDate = value
 		case "dueDate":
 			var value *string
 			if err := decodeField(raw, &value); err != nil {
@@ -1437,6 +1646,7 @@ func applyWorkOrderChanges(
 		Assignment:            updated.Assignment,
 		IssuedBy:              validationIssuedBy,
 		IssueDate:             updated.IssueDate,
+		ProformaDueDate:       updated.ProformaDueDate,
 		DueDate:               updated.DueDate,
 		Price:                 updated.Price,
 		Note:                  updated.Note,
@@ -1756,10 +1966,10 @@ func appendWorkOrderChangeEvents(current, updated *domain.WorkOrder) {
 	add("Broj dokumenta", diffOptionalString(current.BillingDocumentNumber), diffOptionalString(updated.BillingDocumentNumber))
 	add("Operater", diffOptionalString(current.Assignment.AssignedTo), diffOptionalString(updated.Assignment.AssignedTo))
 	add("Prioritet", workOrderPriorityLabel(current.Assignment.Priority), workOrderPriorityLabel(updated.Assignment.Priority))
-	add("Planirani datum", diffDate(current.Assignment.ScheduledDate), diffDate(updated.Assignment.ScheduledDate))
 	add("Način dostave", deliveryMethodLabel(current.Shipping.DeliveryMethod), deliveryMethodLabel(updated.Shipping.DeliveryMethod))
 	add("Datum izdavanja", diffDate(&current.IssueDate), diffDate(&updated.IssueDate))
-	add("Rok", diffDate(current.DueDate), diffDate(updated.DueDate))
+	add("Rok izdavanja predračuna", diffDate(current.ProformaDueDate), diffDate(updated.ProformaDueDate))
+	add("Rok završetka posla", diffDate(current.DueDate), diffDate(updated.DueDate))
 	add("Cena", diffPrice(current.Price), diffPrice(updated.Price))
 	add("Napomena", diffOptionalString(current.Note), diffOptionalString(updated.Note))
 
@@ -1917,6 +2127,7 @@ func deepCopyWorkOrder(workOrder domain.WorkOrder) domain.WorkOrder {
 	cloned.BillingDocumentNumber = clonePtrString(workOrder.BillingDocumentNumber)
 	cloned.Shipping = cloneShipping(workOrder.Shipping)
 	cloned.ExecutedBy = clonePtrString(workOrder.ExecutedBy)
+	cloned.ProformaDueDate = clonePtrString(workOrder.ProformaDueDate)
 	cloned.DueDate = clonePtrString(workOrder.DueDate)
 	cloned.Price = clonePtrFloat64(workOrder.Price)
 	cloned.Note = clonePtrString(workOrder.Note)

@@ -104,7 +104,8 @@ func TestWorkOrderReadEndpoints(t *testing.T) {
 			t.Fatalf("decode response: %v", err)
 		}
 
-		want := []string{"ana.jovic", "jelena.markovic", "marko.petrovic", "stefan.nikolic"}
+		// Admins are assignable too, so "admin" is included (sorted first).
+		want := []string{"admin", "ana.jovic", "jelena.markovic", "marko.petrovic", "stefan.nikolic"}
 		if len(operators) != len(want) {
 			t.Fatalf("len(operators) = %d, want %d", len(operators), len(want))
 		}
@@ -125,8 +126,8 @@ func TestWorkOrderReadEndpoints(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &workOrder); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if workOrder.OrderNumber != "RN-2024-0001" {
-			t.Fatalf("OrderNumber = %q, want %q", workOrder.OrderNumber, "RN-2024-0001")
+		if workOrder.OrderNumber != "RN-2024-00001" {
+			t.Fatalf("OrderNumber = %q, want %q", workOrder.OrderNumber, "RN-2024-00001")
 		}
 	})
 
@@ -170,6 +171,37 @@ func TestCustomerLocationEndpoints(t *testing.T) {
 		}
 		if locations[0].CustomerID == "" {
 			t.Fatalf("locations[0] = %#v, want customer linkage", locations[0])
+		}
+	})
+
+	t.Run("list locations filtered by customerId", func(t *testing.T) {
+		server := newTestServer(t)
+
+		all := performRequest(t, server, http.MethodGet, "/locations", "")
+		var allLocations []domain.Location
+		if err := json.Unmarshal(all.Body.Bytes(), &allLocations); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(allLocations) == 0 {
+			t.Fatal("len(allLocations) = 0, want fixture-backed locations")
+		}
+		customerID := allLocations[0].CustomerID
+
+		filtered := performRequest(t, server, http.MethodGet, "/locations?customerId="+customerID, "")
+		if filtered.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", filtered.Code, http.StatusOK)
+		}
+		var filteredLocations []domain.Location
+		if err := json.Unmarshal(filtered.Body.Bytes(), &filteredLocations); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if len(filteredLocations) == 0 {
+			t.Fatal("len(filteredLocations) = 0, want the customer's locations")
+		}
+		for _, location := range filteredLocations {
+			if location.CustomerID != customerID {
+				t.Fatalf("location.CustomerID = %q, want %q", location.CustomerID, customerID)
+			}
 		}
 	})
 
@@ -398,6 +430,113 @@ func TestCreateWorkOrderEndpoint(t *testing.T) {
 	}
 	if len(workOrders.Items) != 44 || workOrders.Total != 44 {
 		t.Fatalf("workOrders = %#v, want 44 after create", workOrders)
+	}
+}
+
+func TestReserveOrderNumberEndpoint(t *testing.T) {
+	server := newTestServer(t)
+
+	first := performRequest(t, server, http.MethodPost, "/work-orders/reserve-number", "")
+	if first.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", first.Code, http.StatusOK, first.Body.String())
+	}
+	var reservedA domain.ReservedOrderNumber
+	if err := json.Unmarshal(first.Body.Bytes(), &reservedA); err != nil {
+		t.Fatalf("decode reservation: %v", err)
+	}
+	if !strings.HasPrefix(reservedA.OrderNumber, "RN-") || reservedA.ExpiresAt == "" {
+		t.Fatalf("reservedA = %#v, want RN- number and expiry", reservedA)
+	}
+
+	// A second reservation (a concurrent operator) must get a distinct number.
+	second := performRequest(t, server, http.MethodPost, "/work-orders/reserve-number", "")
+	var reservedB domain.ReservedOrderNumber
+	if err := json.Unmarshal(second.Body.Bytes(), &reservedB); err != nil {
+		t.Fatalf("decode reservation: %v", err)
+	}
+	if reservedB.OrderNumber == reservedA.OrderNumber {
+		t.Fatalf("second reservation = %q, collided with first", reservedB.OrderNumber)
+	}
+
+	// Creating with the reserved number consumes it and keeps that exact number.
+	payload := `{"orderNumber":"` + reservedA.OrderNumber + `","clientName":"Novi klijent","contactPerson":null,"jobDescription":"Štampa","jobDetails":null,"billingDocumentType":null,"billingDocumentNumber":null,"shipping":{"deliveryMethod":null,"hasPackaging":false,"hasLabeling":false,"isFragile":false,"requiresSignature":false,"hasInsurance":false,"shippingAddress":null},"issuedBy":"admin","issueDate":"2026-04-25","dueDate":null,"price":null,"note":null}`
+	createResp := performRequest(t, server, http.MethodPost, "/work-orders", payload)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d (%s)", createResp.Code, http.StatusCreated, createResp.Body.String())
+	}
+	var created domain.WorkOrder
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created: %v", err)
+	}
+	if created.OrderNumber != reservedA.OrderNumber {
+		t.Fatalf("created OrderNumber = %q, want reserved %q", created.OrderNumber, reservedA.OrderNumber)
+	}
+}
+
+func TestReleaseOrderNumberEndpoint(t *testing.T) {
+	server := newTestServer(t)
+
+	reserveResp := performRequest(t, server, http.MethodPost, "/work-orders/reserve-number", "")
+	var reserved domain.ReservedOrderNumber
+	if err := json.Unmarshal(reserveResp.Body.Bytes(), &reserved); err != nil {
+		t.Fatalf("decode reservation: %v", err)
+	}
+
+	release := performRequest(t, server, http.MethodPost, "/work-orders/release-number",
+		`{"orderNumber":"`+reserved.OrderNumber+`"}`)
+	if release.Code != http.StatusNoContent {
+		t.Fatalf("release status = %d, want %d (%s)", release.Code, http.StatusNoContent, release.Body.String())
+	}
+
+	// After releasing, the next reservation reclaims the same number instead of
+	// leaving a gap.
+	reReserveResp := performRequest(t, server, http.MethodPost, "/work-orders/reserve-number", "")
+	var reReserved domain.ReservedOrderNumber
+	if err := json.Unmarshal(reReserveResp.Body.Bytes(), &reReserved); err != nil {
+		t.Fatalf("decode re-reservation: %v", err)
+	}
+	if reReserved.OrderNumber != reserved.OrderNumber {
+		t.Fatalf("re-reserved = %q, want reclaimed %q", reReserved.OrderNumber, reserved.OrderNumber)
+	}
+
+	// Releasing an unknown number is a no-op success.
+	noop := performRequest(t, server, http.MethodPost, "/work-orders/release-number",
+		`{"orderNumber":"RN-2099-00001"}`)
+	if noop.Code != http.StatusNoContent {
+		t.Fatalf("no-op release status = %d, want %d", noop.Code, http.StatusNoContent)
+	}
+}
+
+func TestEditLockEndpoint(t *testing.T) {
+	server := newTestServer(t)
+
+	acquire := performRequest(t, server, http.MethodPost, "/work-orders/1/edit-lock", "")
+	if acquire.Code != http.StatusOK {
+		t.Fatalf("acquire status = %d, want %d (%s)", acquire.Code, http.StatusOK, acquire.Body.String())
+	}
+	var lock domain.EditLock
+	if err := json.Unmarshal(acquire.Body.Bytes(), &lock); err != nil {
+		t.Fatalf("decode lock: %v", err)
+	}
+	if lock.LockedBy != "admin" || lock.WorkOrderID != "1" || lock.ExpiresAt == "" {
+		t.Fatalf("lock = %#v, want admin holding work order 1 with expiry", lock)
+	}
+
+	// The same operator re-acquiring (heartbeat) keeps holding the lock.
+	refresh := performRequest(t, server, http.MethodPost, "/work-orders/1/edit-lock", "")
+	if refresh.Code != http.StatusOK {
+		t.Fatalf("refresh status = %d, want %d (%s)", refresh.Code, http.StatusOK, refresh.Body.String())
+	}
+
+	release := performRequest(t, server, http.MethodDelete, "/work-orders/1/edit-lock", "")
+	if release.Code != http.StatusNoContent {
+		t.Fatalf("release status = %d, want %d (%s)", release.Code, http.StatusNoContent, release.Body.String())
+	}
+
+	// After release the lock is free to acquire again.
+	reacquire := performRequest(t, server, http.MethodPost, "/work-orders/1/edit-lock", "")
+	if reacquire.Code != http.StatusOK {
+		t.Fatalf("reacquire status = %d, want %d (%s)", reacquire.Code, http.StatusOK, reacquire.Body.String())
 	}
 }
 

@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
+import { useWorkOrderEditLock } from "@/hooks/useWorkOrderEditLock";
 import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
-  getLocalIsoDate,
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type {
-  Location,
   WorkOrder,
   WorkOrderNote,
 } from "@/types/work-order";
@@ -28,9 +27,9 @@ function WorkOrderEditPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
-  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { lockedBy, readOnly } = useWorkOrderEditLock(id);
 
   useEffect(() => {
     if (!id) return;
@@ -69,10 +68,6 @@ function WorkOrderEditPage(): React.JSX.Element {
     };
   }, [id, t]);
 
-  useEffect(() => {
-    void window.api.getLocations().then(setLocations);
-  }, []);
-
   const handleSubmit = useCallback(
     async (values: WorkOrderFormValues) => {
       if (!id || !order) return;
@@ -89,8 +84,10 @@ function WorkOrderEditPage(): React.JSX.Element {
           billingDocumentNumber: values.billingDocumentNumber,
           shipping: values.shipping,
           assignment: values.assignment,
+          issuedBy: values.issuedBy ?? undefined,
           executedBy: values.executedBy,
           issueDate: values.issueDate,
+          proformaDueDate: values.proformaDueDate,
           dueDate: values.dueDate,
           price: values.price,
           note: values.note,
@@ -119,14 +116,13 @@ function WorkOrderEditPage(): React.JSX.Element {
     if (!id || !order) return;
     const newStatus = getPrimaryWorkOrderTransition(order.status);
     if (!newStatus) return;
-    const now = getLocalIsoDate();
-    const isCompleting = newStatus === "completed" || newStatus === "invoiced";
 
     try {
+      // The server derives isCompleted and stamps/clears the completion date
+      // from the status transition, so we send only the status and let the
+      // backend own the completion date (avoids racing its own update).
       const updated = await window.api.updateWorkOrder(id, {
         status: newStatus,
-        isCompleted: isCompleting,
-        completionDate: isCompleting ? now : null,
       });
       if (!updated) {
         toast.error(t("workOrders.toast.notFound"));
@@ -151,28 +147,28 @@ function WorkOrderEditPage(): React.JSX.Element {
   return (
     <AppShell>
       <div className="space-y-8">
-        <div className="animate-iris-enter border-b border-border px-10 pt-7 pb-5">
+        <header className="animate-iris-enter border-b border-border px-10 pt-8 pb-7">
           <button
             type="button"
             onClick={() => navigate("/work-orders")}
-            className="iris-focusable iris-press group mb-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-soft)] hover:text-foreground"
+            className="iris-focusable iris-press group mb-6 inline-flex items-center gap-1.5 bg-transparent p-0 text-[11px] text-[color:var(--iris-ink-mute)] hover:text-foreground"
           >
-            <ArrowLeft className="h-3 w-3 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
+            <ArrowLeft className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
             {t("workOrders.create.back")}
           </button>
-          <div className="flex items-end justify-between">
+          <div className="flex items-end justify-between gap-4">
             <div>
-              <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+              <p className="text-[10px] font-medium uppercase tracking-[2px] text-[color:var(--iris-ink-mute)]">
                 {t("workOrders.edit.eyebrow")}
-              </div>
-              <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">
+              </p>
+              <h1 className="mt-2.5 text-[32px] font-normal leading-[1.08] tracking-[-0.5px] text-foreground">
                 {order ? t("workOrders.edit.title", { order: order.orderNumber }) : t("workOrders.edit.titleNew")}
               </h1>
-              <div className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
+              <p className="mt-2 text-[13px] text-[color:var(--iris-ink-soft)]">
                 {order?.clientName ?? t("workOrders.edit.subtitleFallback")}
-              </div>
+              </p>
             </div>
-            {order && canToggleWorkOrderCompletion(order.status) && (
+            {order && !readOnly && canToggleWorkOrderCompletion(order.status) && (
               <Button
                 variant={order.status === "completed" ? "outline" : "secondary"}
                 size="sm"
@@ -182,7 +178,7 @@ function WorkOrderEditPage(): React.JSX.Element {
               </Button>
             )}
           </div>
-        </div>
+        </header>
 
         {loading && (
           <div className="px-8">
@@ -206,11 +202,17 @@ function WorkOrderEditPage(): React.JSX.Element {
 
         {!loading && !error && order && (
           <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
+            {readOnly && (
+              <div className="mb-6 mr-10 flex items-center gap-2.5 border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+                <Lock className="h-4 w-4 shrink-0" />
+                <span>{t("workOrders.edit.locked", { user: lockedBy ?? "" })}</span>
+              </div>
+            )}
             <WorkOrderForm
               initialData={order}
-              locations={locations}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
+              readOnly={readOnly}
             />
           </div>
         )}

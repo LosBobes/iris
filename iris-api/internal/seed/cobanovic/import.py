@@ -24,11 +24,34 @@ Requires `dbfread` (pip install dbfread).
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 from dbfread import DBF
 
 ENCODING = "cp1250"
+
+# A manually reviewed catalog article/service split lives beside this script as a
+# committed CSV (code,kind,name). The legacy USLUGA flag and the name heuristic
+# below both misclassify a large share of the ~3.5k-row catalog, so every code in
+# this file overrides the heuristic with the human-reviewed kind. The heuristic
+# only decides codes not yet in the review file (e.g. rows added by a later
+# export). Regenerate/extend it with tools in this folder when the catalog grows.
+KIND_REVIEW_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "catalog-kind-review.csv")
+
+
+def load_kind_review() -> dict[str, str]:
+    """Load the reviewed code -> kind overrides. Missing file -> no overrides."""
+    if not os.path.exists(KIND_REVIEW_FILE):
+        return {}
+    review: dict[str, str] = {}
+    with open(KIND_REVIEW_FILE, encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            code = (row.get("code") or "").strip()
+            kind = (row.get("kind") or "").strip()
+            if code and kind in ("article", "service"):
+                review[code] = kind
+    return review
 
 
 # --- Serbian identifier validation (mirrors iris-api/internal/domain/validation.go) ---
@@ -109,6 +132,28 @@ def parse_price(value) -> float:
         return 0.0
 
 
+def compose_address(r) -> str | None:
+    """Build a single-line address from the MdDob address columns.
+
+    Legacy layout: ULICA is the street + number, ULICAPLUS an occasional overflow
+    line (the DOS field is width-limited, so a long street spills into it), PTT
+    the postal code, and MESTO the town. When PTT is set MESTO is the bare town
+    ("Novi Beograd"); when PTT is blank the postal code is folded into MESTO
+    ("11080 Zemun"). We join them as "<street>, <postal> <town>", dropping any
+    part the record leaves blank, and return None when there is nothing at all.
+    """
+    street = clean(r.get("ULICA"))
+    plus = clean(r.get("ULICAPLUS"))
+    if plus:
+        # ULICAPLUS continues a truncated ULICA, so join with a space.
+        street = (street + " " + plus).strip()
+    ptt = clean(r.get("PTT"))
+    mesto = clean(r.get("MESTO"))
+    city = (ptt + " " + mesto).strip() if ptt else mesto
+    parts = [p for p in (street, city) if p]
+    return ", ".join(parts) or None
+
+
 def write_seed_file(path: str, seed: dict) -> None:
     out_dir = os.path.dirname(path)
     if out_dir:
@@ -122,9 +167,16 @@ def write_seed_file(path: str, seed: dict) -> None:
 
 
 def convert_customers(src: str):
-    """MdDob -> customers. Keep every named firm; carry PIB/MB only when they
-    pass Serbian validation so the seed never trips the API validators."""
+    """MdDob -> (customers, locations). Keep every named firm; carry PIB/MB only
+    when they pass Serbian validation so the seed never trips the API validators.
+
+    Customer has no address field of its own, so the firm's registered address
+    becomes a single "Sediste" location per customer (Location.address is where
+    the work-order registry panel reads it from). Firms whose legacy record has
+    no address at all get no location rather than an empty one.
+    """
     customers = []
+    locations = []
     seen = set()
     for r in table(src, "MdDob"):
         name = clean_name(r.get("NAZIV"))
@@ -138,8 +190,6 @@ def convert_customers(src: str):
         # Phone/contact: legacy KONTAKT + TEL are inconsistent; prefer KONTAKT.
         contact = opt(r.get("KONTAKT"))
         phone = opt(r.get("TEL"))
-        # Place + street feed the contact name only loosely; keep them out of the
-        # normalized customer (Iris has no address field on Customer).
         customers.append(
             {
                 "id": f"cust-{sifra}",
@@ -151,8 +201,20 @@ def convert_customers(src: str):
                 "mb": mb if valid_mb(mb) else None,
             }
         )
+
+        address = compose_address(r)
+        if address:
+            locations.append(
+                {
+                    "id": f"loc-{sifra}",
+                    "customerId": f"cust-{sifra}",
+                    "name": "Sedište",
+                    "address": address,
+                }
+            )
     customers.sort(key=lambda c: c["name"].lower())
-    return customers
+    locations.sort(key=lambda location: location["id"])
+    return customers, locations
 
 
 UNIT_MAP = {
@@ -175,8 +237,52 @@ def normalize_unit(raw: str) -> str:
     return UNIT_MAP.get(unit, unit or "kom")
 
 
+# --- Catalog kind classifier -----------------------------------------------
+# The legacy USLUGA flag is unreliable: it marks almost the whole catalog as a
+# service, including bought-in promo goods. We refine the split by name. A work
+# verb ("štampa", "gravura", "izrada"...) always wins -> service, even when a
+# product noun is present ("Majice sa štampom" is the printing service, not the
+# shirt). Otherwise a promo-brand token, a resale-goods noun, or the legacy
+# USLUGA=article flag marks the row an article (bought-in / stocked merchandise).
+_SERVICE_MARKERS = (
+    "štamp", "uslug", "izrad", "gravur", "gravir", "urezivan", "brendir",
+    "rebrendir", "priprem", "dizajn", "koričen", "ukoričen", "plastifik",
+    "laminac", "laminir", "sečenj", "kaširan", "montaž", "reparac", "servis",
+    "presvlačen", "numerac", "numeric", "obrad", "kater", "perforac", "biforma",
+    "savijan", "heftan", "spiral", "tampon", "sito",
+)
+_GOODS_NOUNS = (
+    "upaljač", "olovk", "privez", "rokovnik", "notes", "torb", "kesa", "ranac",
+    "tašn", "novčanik", "futrola", "šolj", "krigla", "čaša", "usb", "power bank",
+    "powerbank", "kišobran", "kačket", "kapa", "majic", "magnet", "bedž",
+    "značk", "narukvic", "eva pena", "flomaster", "bojic", "sveska", "termos",
+    "ceger", "vrećic", "kaiš", "ogledalc", "pločic", "čokolad", "bombon",
+    "otvarač", "skalpel", "name tag",
+)
+
+
+def _is_brand_token(name: str) -> bool:
+    """ALLCAPS first token (>=3 letters) — the promo-supplier brand pattern
+    ('ASTANA upaljač', 'FLORIDA torba')."""
+    tokens = name.split()
+    return bool(tokens) and tokens[0].isalpha() and tokens[0].isupper() and len(tokens[0]) >= 3
+
+
+def catalog_kind(name: str, usluga_flag) -> str:
+    lowered = name.lower()
+    if any(marker in lowered for marker in _SERVICE_MARKERS):
+        return "service"
+    legacy_article = not usluga_flag  # USLUGA truthy == legacy service
+    if _is_brand_token(name) or any(noun in lowered for noun in _GOODS_NOUNS) or legacy_article:
+        return "article"
+    return "service"
+
+
 def convert_catalog(src: str):
-    """MdArt -> catalog items. USLUGA flags services vs articles."""
+    """MdArt -> catalog items. `kind` comes from the reviewed override file when
+    the code is present there, else it is refined by name via catalog_kind()
+    rather than trusting the unreliable legacy USLUGA flag alone."""
+    kind_review = load_kind_review()
     items = []
     seen = set()
     for r in table(src, "MdArt"):
@@ -185,6 +291,8 @@ def convert_catalog(src: str):
         if not name or not sifra or sifra in seen:
             continue
         seen.add(sifra)
+
+        kind = kind_review.get(sifra) or catalog_kind(name, r.get("USLUGA"))
 
         sale = parse_price(r.get("PRODCEN"))
         # Cost/purchase price: nabavna cena for articles, cena rada for services.
@@ -200,7 +308,7 @@ def convert_catalog(src: str):
                 "id": f"cat-{sifra}",
                 "code": sifra,
                 "name": name,
-                "kind": "service" if r.get("USLUGA") else "article",
+                "kind": kind,
                 "unit": normalize_unit(r.get("JMERE")),
                 "purchasePrice": purchase if purchase > 0 else None,
                 "salePrice": sale if sale > 0 else None,
@@ -323,12 +431,13 @@ def main() -> None:
     args = parser.parse_args()
 
     print("Converting Čobanović export:")
-    customers = convert_customers(args.src)
+    customers, locations = convert_customers(args.src)
     catalog = convert_catalog(args.src)
     work_orders = convert_work_orders(args.src, customers, catalog)
 
     seed = {
         "customers": customers,
+        "locations": locations,
         "catalogItems": catalog,
         "workOrders": work_orders,
     }
@@ -339,6 +448,7 @@ def main() -> None:
     print(
         f"Done -> {args.out}\n"
         f"  {len(customers)} customers ({with_pib} with valid PIB), "
+        f"{len(locations)} locations with address, "
         f"{len(catalog)} catalog items ({services} services), "
         f"{len(work_orders)} demo work orders."
     )

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
+import { useWorkOrderEditLock } from "@/hooks/useWorkOrderEditLock";
 import {
   canToggleWorkOrderCompletion,
   getLocalIsoDate,
@@ -20,6 +21,7 @@ function WorkOrderEditPage(): React.JSX.Element {
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { lockedBy, readOnly } = useWorkOrderEditLock(id);
 
   useEffect(() => {
     if (!id) return;
@@ -147,7 +149,7 @@ function WorkOrderEditPage(): React.JSX.Element {
                 {order?.clientName ?? t("workOrders.edit.subtitleFallback")}
               </div>
             </div>
-            {order && canToggleWorkOrderCompletion(order.status) && (
+            {order && !readOnly && canToggleWorkOrderCompletion(order.status) && (
               <Button
                 variant={order.status === "completed" ? "outline" : "secondary"}
                 size="sm"
@@ -183,10 +185,17 @@ function WorkOrderEditPage(): React.JSX.Element {
 
         {!loading && !error && order && (
           <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
+            {readOnly && (
+              <div className="mb-6 mr-10 flex items-center gap-2.5 border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+                <Lock className="h-4 w-4 shrink-0" />
+                <span>{t("workOrders.edit.locked", { user: lockedBy ?? "" })}</span>
+              </div>
+            )}
             <WorkOrderForm
               initialData={order}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
+              readOnly={readOnly}
             />
           </div>
         )}

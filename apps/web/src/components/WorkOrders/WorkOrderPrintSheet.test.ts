@@ -22,7 +22,7 @@ const baseShipping: WorkOrder["shipping"] = {
 
 const baseOrder: WorkOrder = {
   id: "rn-1",
-  orderNumber: "RN-2026-0001",
+  orderNumber: "RN-2026-00001",
   customerId: null,
   locationId: null,
   clientName: "Profesionalni Upravnik",
@@ -37,7 +37,6 @@ const baseOrder: WorkOrder = {
   assignment: {
     assignedTo: null,
     priority: "normal",
-    scheduledDate: null,
   },
   issueDate: "2026-03-19",
   dueDate: "2026-03-25",

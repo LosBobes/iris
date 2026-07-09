@@ -76,11 +76,10 @@ describe('work-order lifecycle transitions', () => {
       buildWorkOrderCustomerNotice({
         orderNumber: 'RN-42',
         status: 'inProgress',
-        dueDate: null,
+        dueDate: '2026-06-03',
         assignment: {
           assignedTo: 'ana',
           priority: 'normal',
-          scheduledDate: '2026-06-03',
         },
       }),
     ).toBe(

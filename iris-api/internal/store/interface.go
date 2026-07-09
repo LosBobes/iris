@@ -63,7 +63,9 @@ type Store interface {
 
 	Customers(ctx context.Context, query CustomerQuery) (CustomerListResult, error)
 	CustomerByID(ctx context.Context, id string) (*domain.Customer, error)
-	Locations(ctx context.Context) ([]domain.Location, error)
+	// Locations returns customer locations for the tenant. When customerID is
+	// non-empty, only that customer's locations are returned; empty returns all.
+	Locations(ctx context.Context, customerID string) ([]domain.Location, error)
 	UpsertCustomer(ctx context.Context, customer domain.Customer) (*domain.Customer, error)
 	UpsertLocation(ctx context.Context, location domain.Location) (*domain.Location, error)
 	DeleteCustomer(ctx context.Context, id string) error
@@ -72,6 +74,21 @@ type Store interface {
 	WorkOrders(ctx context.Context, query WorkOrderListQuery) (WorkOrderListResult, error)
 	WorkOrderByID(ctx context.Context, id string) (*domain.WorkOrder, error)
 	WorkOrderByPublicToken(ctx context.Context, token string) (*domain.WorkOrder, error)
+	ReserveOrderNumber(ctx context.Context, reservedBy string) (domain.ReservedOrderNumber, error)
+	// ReleaseOrderNumber drops a still-active reservation so its number is
+	// reclaimed immediately when an operator cancels the create form instead of
+	// waiting for the reservation to expire. Releasing an unknown/already-consumed
+	// number is a no-op.
+	ReleaseOrderNumber(ctx context.Context, orderNumber string) error
+	// AcquireEditLock claims or refreshes the exclusive edit lock on a work order
+	// for lockedBy. It returns (lock, true) when the caller holds the lock (freshly
+	// acquired or heartbeat-refreshed) and (holderLock, false) when another operator
+	// currently holds an unexpired lock.
+	AcquireEditLock(ctx context.Context, workOrderID, lockedBy string) (domain.EditLock, bool, error)
+	// ReleaseEditLock frees the caller's edit lock on a work order. It only removes
+	// the lock when lockedBy still holds it, so a stale caller can't drop the lock a
+	// new holder has since taken. Releasing a lock you don't hold is a no-op.
+	ReleaseEditLock(ctx context.Context, workOrderID, lockedBy string) error
 	CreateWorkOrder(ctx context.Context, input domain.CreateWorkOrderInput) (*domain.WorkOrder, error)
 	UpdateWorkOrder(ctx context.Context, id string, changes domain.UpdateWorkOrderInput) (*domain.WorkOrder, error)
 	DeleteWorkOrder(ctx context.Context, id string) (domain.DeleteWorkOrderResponse, error)

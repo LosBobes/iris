@@ -8,7 +8,7 @@ const mockGetWorkOrderById = vi.fn();
 
 const sampleOrder: WorkOrder = {
   id: "order-1",
-  orderNumber: "RN-2026-0001",
+  orderNumber: "RN-2026-00001",
   clientName: "Demo Klijent",
   contactPerson: null,
   jobDescription: "Stampa flajera",
@@ -27,6 +27,7 @@ const sampleOrder: WorkOrder = {
   issuedBy: "admin",
   executedBy: null,
   issueDate: "2026-04-07",
+  proformaDueDate: null,
   dueDate: null,
   isCompleted: false,
   status: "active",

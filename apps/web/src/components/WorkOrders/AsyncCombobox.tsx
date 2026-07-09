@@ -15,6 +15,9 @@ interface AsyncComboboxProps {
   emptyText?: string;
   /** Optional first row that clears the selection (e.g. "Novi klijent"). */
   clearLabel?: string;
+  /** Called when the clear row is chosen, with the trimmed search term so the
+   * caller can keep a freely-typed value (e.g. a one-off client name). */
+  onClear?: (term: string) => void;
   /** When true, the trigger never shows a persistent selection (use for an
    * "add" picker that keeps adding items rather than holding one value). */
   resetAfterSelect?: boolean;
@@ -36,6 +39,7 @@ export function AsyncCombobox({
   searchPlaceholder = "Pretraga...",
   emptyText = "Nema rezultata.",
   clearLabel,
+  onClear,
   resetAfterSelect = false,
   triggerId,
   triggerClassName,
@@ -118,7 +122,11 @@ export function AsyncCombobox({
           {clearLabel && (
             <button
               type="button"
-              onClick={() => choose(null)}
+              onClick={() => {
+                const typed = term.trim();
+                choose(null);
+                onClear?.(typed);
+              }}
               className="iris-focusable flex w-full items-center px-3 py-2 text-left text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-[color:var(--iris-accent)]/10"
             >
               {clearLabel}

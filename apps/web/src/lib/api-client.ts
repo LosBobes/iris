@@ -3,10 +3,12 @@ import type {
   CreateWorkOrderInput,
   CustomerListQuery,
   CustomerListResult,
+  EditLock,
   EnumValue,
   EnumValueInput,
   Location,
   PublicWorkOrderStatus,
+  ReservedOrderNumber,
   UpdateWorkOrderInput,
   WorkOrder,
   WorkOrderListQuery,
@@ -174,8 +176,11 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
       return readJSON<{ success: boolean }>(response)
     },
 
-    async getLocations() {
-      const response = await fetchImpl(url('/locations'), credentialedRequest())
+    async getLocations(customerId?: string) {
+      const path = customerId
+        ? `/locations?customerId=${encodeURIComponent(customerId)}`
+        : '/locations'
+      const response = await fetchImpl(url(path), credentialedRequest())
       return readArray(await readJSON<Location[] | null>(response))
     },
 
@@ -317,6 +322,36 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
       const response = await fetchImpl(url(`/work-orders/${encodeURIComponent(id)}`), credentialedRequest())
       if (response.status === 404) return null
       return readJSON<WorkOrder>(response)
+    },
+
+    async reserveWorkOrderNumber() {
+      const response = await fetchImpl(url('/work-orders/reserve-number'), jsonRequest('POST', {}))
+      return readJSON<ReservedOrderNumber>(response)
+    },
+
+    async releaseWorkOrderNumber(orderNumber: string) {
+      await fetchImpl(url('/work-orders/release-number'), jsonRequest('POST', { orderNumber }))
+    },
+
+    async acquireWorkOrderEditLock(id: string) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(id)}/edit-lock`),
+        jsonRequest('POST', {}),
+      )
+      // 200 = we hold the lock; 409 = someone else is editing. Both carry an
+      // EditLock body describing the holder, so 409 is a normal outcome here
+      // rather than an error (readJSON would throw on the non-2xx status).
+      if (response.status === 409) {
+        return { acquired: false, lock: (await response.json()) as EditLock }
+      }
+      return { acquired: true, lock: await readJSON<EditLock>(response) }
+    },
+
+    async releaseWorkOrderEditLock(id: string) {
+      await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(id)}/edit-lock`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
     },
 
     async createWorkOrder(input: CreateWorkOrderInput) {

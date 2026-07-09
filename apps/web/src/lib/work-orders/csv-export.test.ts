@@ -26,7 +26,7 @@ function makeOrder(overrides: Partial<WorkOrder>): WorkOrder {
     },
     issuedBy: "ana",
     executedBy: null,
-    assignment: { assignedTo: "ana", priority: "normal", scheduledDate: null },
+    assignment: { assignedTo: "ana", priority: "normal" },
     issueDate: "2026-06-01",
     dueDate: null,
     isCompleted: false,

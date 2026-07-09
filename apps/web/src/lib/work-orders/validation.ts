@@ -48,7 +48,6 @@ const shippingSchema = z.object({
 const assignmentSchema = z.object({
   assignedTo: emptyToNullString,
   priority: priorityEnum,
-  scheduledDate: emptyToNullString,
 })
 
 const noteSchema = z.object({
@@ -136,7 +135,9 @@ export const workOrderFormSchema = z
     price: z.number().min(0, { message: i18n.t('validation.priceNegative') }).nullable(),
     note: emptyToNullString,
     issueDate: z.string().min(1, { message: i18n.t('validation.issueDateRequired') }),
+    proformaDueDate: emptyToNullString,
     dueDate: emptyToNullString,
+    issuedBy: emptyToNullString,
     executedBy: emptyToNullString,
     internalNotes: z.array(noteSchema),
     customerNotes: z.array(noteSchema),

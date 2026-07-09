@@ -36,7 +36,7 @@ describe('registerWorkOrderHandlers', () => {
   })
 
   it('maps the getById IPC handler to the configured API client', async () => {
-    mockGetWorkOrderById.mockResolvedValueOnce({ id: '42', orderNumber: 'RN-2026-0042' })
+    mockGetWorkOrderById.mockResolvedValueOnce({ id: '42', orderNumber: 'RN-2026-00042' })
 
     registerWorkOrderHandlers()
 
@@ -53,7 +53,7 @@ describe('registerWorkOrderHandlers', () => {
 
     await expect(handler({}, { id: '42' })).resolves.toEqual({
       id: '42',
-      orderNumber: 'RN-2026-0042',
+      orderNumber: 'RN-2026-00042',
     })
     expect(mockGetWorkOrderById).toHaveBeenCalledWith('42')
   })

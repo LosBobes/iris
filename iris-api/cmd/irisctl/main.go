@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
+	"github.com/LosBobes/iris/iris-api/internal/seed/cobanovic"
 	"github.com/LosBobes/iris/iris-api/internal/store"
 )
 
@@ -39,6 +40,14 @@ func main() {
 		defer sqliteStore.Close()
 		must(store.SeedDemoFromFixtures(ctx, sqliteStore, *fixtureDir))
 		fmt.Println("Demo podaci su upisani u SQLite bazu.")
+	case "seed-cobanovic":
+		cmd := flag.NewFlagSet("seed-cobanovic", flag.ExitOnError)
+		dir := cmd.String("dir", cobanovic.DefaultDataDir, "putanja do generisanog Čobanović seed skupa")
+		_ = cmd.Parse(os.Args[2:])
+		sqliteStore := mustOpen(ctx, dbPathFromEnv())
+		defer sqliteStore.Close()
+		must(cobanovic.Seed(ctx, sqliteStore, *dir))
+		fmt.Println("Čobanović podaci su upisani u SQLite bazu.")
 	case "create-tenant":
 		cmd := flag.NewFlagSet("create-tenant", flag.ExitOnError)
 		slug := cmd.String("slug", "", "oznaka organizacije (za prijavu)")
@@ -369,6 +378,7 @@ func usage() {
 	fmt.Println(`Korišćenje:
   irisctl migrate
   irisctl seed-demo [-fixtures testdata/fixtures]
+  irisctl seed-cobanovic [-dir internal/seed/cobanovic/data]
   irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
   irisctl import-csv -tenant oznaka --dry-run --dir import/

@@ -193,19 +193,72 @@ func DefaultPDFSections() PDFSections {
 	}
 }
 
+// DefaultBillingDocumentType is the document type (tip dokumenta) new work
+// orders start with until an administrator changes it in the settings.
+const DefaultBillingDocumentType = BillingDocumentTypeProforma
+
+// BillingDefaults controls the work-order document type (tip dokumenta): the
+// value new orders start with, and whether it may be changed per order. When
+// AllowOverride is false the clients hide the picker and always use DocumentType.
+type BillingDefaults struct {
+	DocumentType  BillingDocumentType `json:"documentType"`
+	AllowOverride bool                `json:"allowOverride"`
+}
+
+// DefaultBillingDefaults returns the configuration used when a shop has not
+// customized its document-type behavior: proforma, not overridable.
+func DefaultBillingDefaults() BillingDefaults {
+	return BillingDefaults{
+		DocumentType:  DefaultBillingDocumentType,
+		AllowOverride: false,
+	}
+}
+
+// DefaultWorkOrderPriority is the priority (prioritet) new work orders start
+// with until an administrator changes it in the settings.
+const DefaultWorkOrderPriority = WorkOrderPriorityNormal
+
+// PriorityDefaults controls the work-order priority (prioritet): the value new
+// orders start with, and whether it may be changed per order. When AllowOverride
+// is false the clients hide the picker and always use Priority.
+type PriorityDefaults struct {
+	Priority      WorkOrderPriority `json:"priority"`
+	AllowOverride bool              `json:"allowOverride"`
+}
+
+// DefaultPriorityDefaults returns the configuration used when a shop has not
+// customized its priority behavior: normal, not overridable.
+func DefaultPriorityDefaults() PriorityDefaults {
+	return PriorityDefaults{
+		Priority:      DefaultWorkOrderPriority,
+		AllowOverride: false,
+	}
+}
+
 // OrganizationSettings holds shop-wide branding/config an admin can edit: the
-// firm name shown in the app header and the work-order PDF section toggles.
+// firm name shown in the app header, the work-order PDF section toggles, the
+// default document type and priority for new work orders, and whether the
+// work-order form exposes the extra shipping/handling options.
 type OrganizationSettings struct {
-	FirmName    string      `json:"firmName"`
-	PDFSections PDFSections `json:"pdfSections"`
+	FirmName         string           `json:"firmName"`
+	PDFSections      PDFSections      `json:"pdfSections"`
+	BillingDefaults  BillingDefaults  `json:"billingDefaults"`
+	PriorityDefaults PriorityDefaults `json:"priorityDefaults"`
+	// ShowShippingOptions toggles the work-order form's extra shipping/handling
+	// fields (drives-out, wait-for-payment, packaging, labeling, fragile,
+	// signature, insurance). Off by default so the form stays compact.
+	ShowShippingOptions bool `json:"showShippingOptions"`
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
 // Nil fields are left unchanged, so a firm-name-only save does not wipe the PDF
 // configuration and vice versa.
 type OrganizationSettingsUpdate struct {
-	FirmName    *string      `json:"firmName"`
-	PDFSections *PDFSections `json:"pdfSections"`
+	FirmName            *string           `json:"firmName"`
+	PDFSections         *PDFSections      `json:"pdfSections"`
+	BillingDefaults     *BillingDefaults  `json:"billingDefaults"`
+	PriorityDefaults    *PriorityDefaults `json:"priorityDefaults"`
+	ShowShippingOptions *bool             `json:"showShippingOptions"`
 }
 
 type User struct {
@@ -315,9 +368,8 @@ type Location struct {
 }
 
 type Assignment struct {
-	AssignedTo    *string           `json:"assignedTo"`
-	Priority      WorkOrderPriority `json:"priority"`
-	ScheduledDate *string           `json:"scheduledDate"`
+	AssignedTo *string           `json:"assignedTo"`
+	Priority   WorkOrderPriority `json:"priority"`
 }
 
 type WorkOrderStatusHistory struct {
@@ -416,6 +468,9 @@ type WorkOrder struct {
 	ExecutedBy            *string              `json:"executedBy"`
 	Assignment            Assignment           `json:"assignment"`
 	IssueDate             string               `json:"issueDate"`
+	// ProformaDueDate is the deadline to issue the proforma invoice (predračun);
+	// DueDate is the deadline to finish the job.
+	ProformaDueDate       *string              `json:"proformaDueDate"`
 	DueDate               *string              `json:"dueDate"`
 	IsCompleted           bool                 `json:"isCompleted"`
 	Status                WorkOrderStatus      `json:"status"`
@@ -446,6 +501,10 @@ type WorkOrder struct {
 }
 
 type CreateWorkOrderInput struct {
+	// OrderNumber, when set, is a number previously handed out by
+	// ReserveOrderNumber and shown in the create-form header. The store consumes
+	// it if the reservation is still valid, otherwise it allocates a fresh one.
+	OrderNumber           *string               `json:"orderNumber"`
 	CustomerID            *string               `json:"customerId"`
 	LocationID            *string               `json:"locationId"`
 	ClientName            string                `json:"clientName"`
@@ -457,7 +516,9 @@ type CreateWorkOrderInput struct {
 	Shipping              Shipping              `json:"shipping"`
 	Assignment            Assignment            `json:"assignment"`
 	IssuedBy              string                `json:"issuedBy"`
+	ExecutedBy            *string               `json:"executedBy"`
 	IssueDate             string                `json:"issueDate"`
+	ProformaDueDate       *string               `json:"proformaDueDate"`
 	DueDate               *string               `json:"dueDate"`
 	Price                 *float64              `json:"price"`
 	Note                  *string               `json:"note"`
@@ -482,6 +543,24 @@ type LoginResponse struct {
 	Success bool   `json:"success"`
 	Error   string `json:"error,omitempty"`
 	User    *User  `json:"user,omitempty"`
+}
+
+// ReservedOrderNumber is the response for reserving the next order number before
+// a work order is created, so the operator can see it in the create-form header.
+type ReservedOrderNumber struct {
+	OrderNumber string `json:"orderNumber"`
+	ExpiresAt   string `json:"expiresAt"`
+}
+
+// EditLock represents an exclusive editing claim on a work order so only one
+// operator edits it at a time. LockedBy is the holder's username. A lock
+// auto-expires at ExpiresAt if the holder stops sending heartbeats (e.g. their
+// tab was closed).
+type EditLock struct {
+	WorkOrderID string `json:"workOrderId"`
+	LockedBy    string `json:"lockedBy"`
+	LockedAt    string `json:"lockedAt"`
+	ExpiresAt   string `json:"expiresAt"`
 }
 
 type DeleteWorkOrderResponse struct {

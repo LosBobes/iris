@@ -36,7 +36,6 @@ function makeOrder(overrides: Partial<WorkOrder>): WorkOrder {
     assignment: {
       assignedTo: "marko",
       priority: "normal",
-      scheduledDate: null,
     },
     issueDate: "2026-05-20",
     dueDate: null,
@@ -92,7 +91,7 @@ describe("dashboard attention aggregations", () => {
     ).toContain("dueThisWeek");
     expect(
       getWorkOrderAttentionSignals(
-        makeOrder({ assignment: { assignedTo: null, priority: "normal", scheduledDate: null } }),
+        makeOrder({ assignment: { assignedTo: null, priority: "normal" } }),
         today,
       ),
     ).toContain("unassigned");
@@ -167,7 +166,7 @@ describe("dashboard attention aggregations", () => {
       [
         makeOrder({
           id: "2",
-          assignment: { assignedTo: null, priority: "normal", scheduledDate: null },
+          assignment: { assignedTo: null, priority: "normal" },
         }),
         makeOrder({ id: "3", dueDate: "2026-06-02" }),
       ],

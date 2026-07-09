@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/testutil"
@@ -78,7 +79,8 @@ func TestFixtureStoreOperatorsSortedUnique(t *testing.T) {
 		t.Fatalf("Operators() returned error: %v", err)
 	}
 
-	want := []string{"ana.jovic", "jelena.markovic", "marko.petrovic", "stefan.nikolic"}
+	// Admins are assignable too, so "admin" is included (sorted first).
+	want := []string{"admin", "ana.jovic", "jelena.markovic", "marko.petrovic", "stefan.nikolic"}
 	if len(operators) != len(want) {
 		t.Fatalf("Operators() length = %d, want %d", len(operators), len(want))
 	}
@@ -101,7 +103,7 @@ func TestFixtureStoreCustomersAndLocations(t *testing.T) {
 		t.Fatal("Customers().Items length = 0, want fixture-backed customers")
 	}
 
-	locations, err := store.Locations(context.Background())
+	locations, err := store.Locations(context.Background(), "")
 	if err != nil {
 		t.Fatalf("Locations() returned error: %v", err)
 	}
@@ -123,8 +125,8 @@ func TestFixtureStoreWorkOrderByID(t *testing.T) {
 	if workOrder == nil {
 		t.Fatal("WorkOrderByID() = nil, want non-nil")
 	}
-	if workOrder.OrderNumber != "RN-2024-0001" {
-		t.Fatalf("OrderNumber = %q, want %q", workOrder.OrderNumber, "RN-2024-0001")
+	if workOrder.OrderNumber != "RN-2024-00001" {
+		t.Fatalf("OrderNumber = %q, want %q", workOrder.OrderNumber, "RN-2024-00001")
 	}
 
 	missing, err := store.WorkOrderByID(context.Background(), "missing")
@@ -251,6 +253,62 @@ func TestFixtureStoreCreateUpdateDeleteWorkOrder(t *testing.T) {
 	}
 	if missingDelete.Message != "Radni nalog nije pronađen." {
 		t.Fatalf("DeleteWorkOrder(missing).Message = %q, want not-found message", missingDelete.Message)
+	}
+}
+
+// The clients advance status by sending only {"status": ...} and rely on the
+// store to own the completion date: stamp it on the move into "completed",
+// preserve it through "invoiced", and clear it if the order leaves the done
+// state. This guards that contract.
+func TestFixtureStoreStampsCompletionDateFromStatus(t *testing.T) {
+	store := NewFixtureStore(testutil.FixtureDir(t))
+	ctx := context.Background()
+
+	created, err := store.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Klijent",
+		JobDescription: "Štampa",
+		Shipping:       domain.Shipping{},
+		IssuedBy:       "admin",
+		IssueDate:      "2026-04-25",
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() returned error: %v", err)
+	}
+	if created.CompletionDate != nil {
+		t.Fatalf("new order CompletionDate = %v, want nil", created.CompletionDate)
+	}
+
+	today := time.Now().UTC().Format("2006-01-02")
+
+	// Walk the valid status graph up to "completed".
+	for _, status := range []string{"assigned", "inProgress", "completed"} {
+		if _, err := store.UpdateWorkOrder(ctx, created.ID, domain.UpdateWorkOrderInput{
+			"status": json.RawMessage(`"` + status + `"`),
+		}); err != nil {
+			t.Fatalf("UpdateWorkOrder(%s) returned error: %v", status, err)
+		}
+	}
+	completed, err := store.WorkOrderByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("WorkOrderByID(completed) returned error: %v", err)
+	}
+	if !completed.IsCompleted {
+		t.Fatal("completed.IsCompleted = false, want true")
+	}
+	if completed.CompletionDate == nil || *completed.CompletionDate != today {
+		t.Fatalf("completed.CompletionDate = %v, want %q", completed.CompletionDate, today)
+	}
+
+	// Moving on to "invoiced" must keep the original completion date, not
+	// re-stamp it.
+	invoiced, err := store.UpdateWorkOrder(ctx, completed.ID, domain.UpdateWorkOrderInput{
+		"status": json.RawMessage(`"invoiced"`),
+	})
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder(invoiced) returned error: %v", err)
+	}
+	if invoiced.CompletionDate == nil || *invoiced.CompletionDate != today {
+		t.Fatalf("invoiced.CompletionDate = %v, want preserved %q", invoiced.CompletionDate, today)
 	}
 }
 

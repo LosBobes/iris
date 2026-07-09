@@ -28,6 +28,22 @@ const api = {
   getWorkOrderById: (id: string) =>
     ipcRenderer.invoke("workorders:getById", { id }),
 
+  // Reserve the next order number so it can be shown while creating the order.
+  reserveWorkOrderNumber: () =>
+    ipcRenderer.invoke("workorders:reserveNumber"),
+
+  // Release a reserved order number when the create form is canceled.
+  releaseWorkOrderNumber: (orderNumber: string) =>
+    ipcRenderer.invoke("workorders:releaseNumber", { orderNumber }),
+
+  // Acquire/refresh the exclusive edit lock on a work order (heartbeat).
+  acquireWorkOrderEditLock: (id: string) =>
+    ipcRenderer.invoke("workorders:acquireEditLock", { id }),
+
+  // Release the caller's edit lock on save/cancel/close.
+  releaseWorkOrderEditLock: (id: string) =>
+    ipcRenderer.invoke("workorders:releaseEditLock", { id }),
+
   // Create a new work order.
   createWorkOrder: (input: CreateWorkOrderInput) =>
     ipcRenderer.invoke("workorders:create", input),

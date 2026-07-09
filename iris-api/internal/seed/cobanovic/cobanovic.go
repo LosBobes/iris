@@ -28,6 +28,7 @@ const seedFileName = "seed.json"
 // seedData is the shape of data/seed.json produced by import.py.
 type seedData struct {
 	Customers    []domain.Customer    `json:"customers"`
+	Locations    []domain.Location    `json:"locations"`
 	CatalogItems []domain.CatalogItem `json:"catalogItems"`
 	WorkOrders   []workOrder          `json:"workOrders"`
 }
@@ -88,6 +89,13 @@ func Seed(ctx context.Context, sqliteStore *store.SQLiteStore, dir string) error
 	for _, customer := range seed.Customers {
 		if _, err := sqliteStore.UpsertCustomer(ctx, customer); err != nil {
 			return fmt.Errorf("seed customer %s: %w", customer.ID, err)
+		}
+	}
+	// Locations reference their parent customer, so they must be upserted after
+	// the customers above (UpsertLocation rejects an unknown/other-tenant client).
+	for _, location := range seed.Locations {
+		if _, err := sqliteStore.UpsertLocation(ctx, location); err != nil {
+			return fmt.Errorf("seed location %s: %w", location.ID, err)
 		}
 	}
 	for _, item := range seed.CatalogItems {

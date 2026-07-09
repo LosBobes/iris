@@ -1,5 +1,8 @@
 import type {
   CreateWorkOrderInput,
+  EditLock,
+  EditLockResult,
+  ReservedOrderNumber,
   UpdateWorkOrderInput,
   WorkOrder,
 } from '../../../model/work-order'
@@ -48,6 +51,10 @@ export interface IrisApiClient {
   getWorkOrders: () => Promise<WorkOrder[]>
   getWorkOrderOperators: () => Promise<string[]>
   getWorkOrderById: (id: string) => Promise<WorkOrder | null>
+  reserveWorkOrderNumber: () => Promise<ReservedOrderNumber>
+  releaseWorkOrderNumber: (orderNumber: string) => Promise<void>
+  acquireWorkOrderEditLock: (id: string) => Promise<EditLockResult>
+  releaseWorkOrderEditLock: (id: string) => Promise<void>
   createWorkOrder: (input: CreateWorkOrderInput) => Promise<WorkOrder>
   updateWorkOrder: (
     id: string,
@@ -267,6 +274,47 @@ export function createIrisApiClient({
 
     async getWorkOrderById(id: string): Promise<WorkOrder | null> {
       return requestJsonOrNull<WorkOrder>(`/work-orders/${encodeURIComponent(id)}`)
+    },
+
+    async reserveWorkOrderNumber(): Promise<ReservedOrderNumber> {
+      return requestJson<ReservedOrderNumber>('/work-orders/reserve-number', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+    },
+
+    async releaseWorkOrderNumber(orderNumber: string): Promise<void> {
+      await requestJson<null>('/work-orders/release-number', {
+        method: 'POST',
+        body: JSON.stringify({ orderNumber }),
+      })
+    },
+
+    async acquireWorkOrderEditLock(id: string): Promise<EditLockResult> {
+      // 200 = we hold the lock; 409 = another operator is editing. Both carry an
+      // EditLock body, so 409 is a normal outcome rather than an error here.
+      const response = await performRequest(
+        `/work-orders/${encodeURIComponent(id)}/edit-lock`,
+        { method: 'POST', body: JSON.stringify({}) },
+      )
+      const payload = await readJsonPayload(response)
+      if (response.status === 409) {
+        return { acquired: false, lock: payload as EditLock }
+      }
+      if (!response.ok) {
+        throw new IrisApiError(
+          getHttpErrorMessage(response.status, payload),
+          'http',
+          response.status,
+        )
+      }
+      return { acquired: true, lock: payload as EditLock }
+    },
+
+    async releaseWorkOrderEditLock(id: string): Promise<void> {
+      await requestJson<null>(`/work-orders/${encodeURIComponent(id)}/edit-lock`, {
+        method: 'DELETE',
+      })
     },
 
     async createWorkOrder(input: CreateWorkOrderInput): Promise<WorkOrder> {

@@ -28,10 +28,15 @@ import type {
 } from '@/types/work-order'
 import type { CatalogItem } from '@/types/catalog'
 import {
+  DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
+  DEFAULT_PRIORITY_DEFAULTS,
+  DEFAULT_SHOW_SHIPPING_OPTIONS,
+  type BillingDefaults,
   type OrganizationSettings,
   type PDFSections,
+  type PriorityDefaults,
 } from '@/types/settings'
 
 interface FixtureUser extends AuthenticatedUser {
@@ -179,7 +184,6 @@ function normalizeAssignment(
       normalizeNullableString(raw.executedBy) ??
       raw.issuedBy,
     priority: assignment?.priority ?? 'normal',
-    scheduledDate: normalizeNullableString(assignment?.scheduledDate ?? raw.dueDate),
   }
 }
 
@@ -278,6 +282,7 @@ function normalizeWorkOrder(raw: FixtureWorkOrder): WorkOrder {
     executedBy: normalizeNullableString(raw.executedBy),
     assignment: normalizeAssignment(raw.assignment, raw),
     issueDate: raw.issueDate,
+    proformaDueDate: normalizeNullableString(raw.proformaDueDate),
     dueDate: normalizeNullableString(raw.dueDate),
     isCompleted: status === 'completed' || status === 'invoiced',
     status,
@@ -309,8 +314,73 @@ let nextSequence =
     return Number.isFinite(value) ? Math.max(max, value) : max
   }, 0) + 1
 
-function generateOrderNumber(sequence: number): string {
-  return `RN-${new Date().getUTCFullYear()}-${String(sequence).padStart(4, '0')}`
+// Order-number reservation ledger, mirroring the backend "reserve on open" flow
+// so concurrent create forms in fixtures mode each see a distinct RN number.
+interface FixtureOrderNumberReservation {
+  orderNumber: string
+  year: number
+  sequence: number
+  expiresAt: number
+}
+
+const ORDER_NUMBER_RESERVATION_TTL_MS = 12 * 60 * 60 * 1000
+let orderNumberReservations: FixtureOrderNumberReservation[] = []
+
+function orderNumberSequenceFor(orderNumber: string, year: number): number | null {
+  const prefix = `RN-${year}-`
+  if (!orderNumber.startsWith(prefix)) return null
+  const sequence = Number.parseInt(orderNumber.slice(prefix.length), 10)
+  return Number.isFinite(sequence) ? sequence : null
+}
+
+function formatOrderNumber(year: number, sequence: number): string {
+  return `RN-${year}-${String(sequence).padStart(5, '0')}`
+}
+
+function nextOrderNumberForYear(year: number, now: number): string {
+  let maxSequence = 0
+  for (const order of workOrders) {
+    const sequence = orderNumberSequenceFor(order.orderNumber, year)
+    if (sequence !== null && sequence > maxSequence) maxSequence = sequence
+  }
+  for (const reservation of orderNumberReservations) {
+    if (reservation.year === year && reservation.expiresAt > now && reservation.sequence > maxSequence) {
+      maxSequence = reservation.sequence
+    }
+  }
+  return formatOrderNumber(year, maxSequence + 1)
+}
+
+function pruneOrderNumberReservations(now: number): void {
+  orderNumberReservations = orderNumberReservations.filter((reservation) => reservation.expiresAt > now)
+}
+
+// Edit locks for fixtures mode mirror the server's pessimistic lock: one holder
+// per work order, auto-expiring shortly after heartbeats stop.
+const EDIT_LOCK_TTL_MS = 2 * 60 * 1000
+interface FixtureEditLock {
+  lockedBy: string
+  lockedAt: number
+  expiresAt: number
+}
+const editLocks = new Map<string, FixtureEditLock>()
+
+function resolveOrderNumber(
+  requested: string | null | undefined,
+  year: number,
+  now: number,
+): string {
+  if (requested) {
+    const reserved = orderNumberReservations.some((reservation) => reservation.orderNumber === requested)
+    const taken = workOrders.some((order) => order.orderNumber === requested)
+    if (reserved && !taken) {
+      orderNumberReservations = orderNumberReservations.filter(
+        (reservation) => reservation.orderNumber !== requested,
+      )
+      return requested
+    }
+  }
+  return nextOrderNumberForYear(year, now)
 }
 
 // Built-in (locked) picklist values, mirrored from the backend defaults.
@@ -391,6 +461,9 @@ let nextCatalogSequence = 4
 
 let firmName = DEFAULT_FIRM_NAME
 let pdfSections: PDFSections = { ...DEFAULT_PDF_SECTIONS }
+let billingDefaults: BillingDefaults = { ...DEFAULT_BILLING_DEFAULTS }
+let priorityDefaults: PriorityDefaults = { ...DEFAULT_PRIORITY_DEFAULTS }
+let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
 
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
   return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
@@ -601,8 +674,11 @@ export function createFixtureApi(): Window['api'] {
       return { success: true }
     },
 
-    async getLocations() {
-      return cloneValue(locations)
+    async getLocations(customerId?: string) {
+      const scoped = customerId
+        ? locations.filter((location) => location.customerId === customerId)
+        : locations
+      return cloneValue(scoped)
     },
 
     async upsertLocation(location) {
@@ -748,7 +824,7 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName, pdfSections }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions }
     },
 
     async updateSettings(
@@ -762,7 +838,16 @@ export function createFixtureApi(): Window['api'] {
       if (settings.pdfSections !== undefined) {
         pdfSections = { ...settings.pdfSections }
       }
-      return { firmName, pdfSections }
+      if (settings.billingDefaults !== undefined) {
+        billingDefaults = { ...settings.billingDefaults }
+      }
+      if (settings.priorityDefaults !== undefined) {
+        priorityDefaults = { ...settings.priorityDefaults }
+      }
+      if (settings.showShippingOptions !== undefined) {
+        showShippingOptions = settings.showShippingOptions
+      }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions }
     },
 
     async getWorkOrders(query) {
@@ -783,6 +868,49 @@ export function createFixtureApi(): Window['api'] {
       return order ? cloneValue(order) : null
     },
 
+    async reserveWorkOrderNumber() {
+      const now = Date.now()
+      pruneOrderNumberReservations(now)
+      const year = new Date().getUTCFullYear()
+      const orderNumber = nextOrderNumberForYear(year, now)
+      const sequence = orderNumberSequenceFor(orderNumber, year) ?? 1
+      const expiresAt = now + ORDER_NUMBER_RESERVATION_TTL_MS
+      orderNumberReservations = [
+        ...orderNumberReservations,
+        { orderNumber, year, sequence, expiresAt },
+      ]
+      return { orderNumber, expiresAt: new Date(expiresAt).toISOString() }
+    },
+
+    async releaseWorkOrderNumber(orderNumber) {
+      orderNumberReservations = orderNumberReservations.filter(
+        (reservation) => reservation.orderNumber !== orderNumber,
+      )
+    },
+
+    async acquireWorkOrderEditLock(id) {
+      // Fixtures mode is single-user dev, so there is no competing operator; the
+      // caller always wins and simply refreshes the lock's expiry.
+      const now = Date.now()
+      const existing = editLocks.get(id)
+      const lockedAt = existing && existing.expiresAt > now ? existing.lockedAt : now
+      const expiresAt = now + EDIT_LOCK_TTL_MS
+      editLocks.set(id, { lockedBy: 'demo', lockedAt, expiresAt })
+      return {
+        acquired: true,
+        lock: {
+          workOrderId: id,
+          lockedBy: 'demo',
+          lockedAt: new Date(lockedAt).toISOString(),
+          expiresAt: new Date(expiresAt).toISOString(),
+        },
+      }
+    },
+
+    async releaseWorkOrderEditLock(id) {
+      editLocks.delete(id)
+    },
+
     async createWorkOrder(input) {
       const sequence = nextSequence
       nextSequence += 1
@@ -791,9 +919,9 @@ export function createFixtureApi(): Window['api'] {
       const order: WorkOrder = {
         ...input,
         id: String(sequence),
-        orderNumber: generateOrderNumber(sequence),
+        orderNumber: resolveOrderNumber(input.orderNumber, new Date().getUTCFullYear(), Date.now()),
         status: 'new',
-        executedBy: null,
+        executedBy: input.executedBy ?? null,
         isCompleted: false,
         createdAt: now,
         updatedAt: now,

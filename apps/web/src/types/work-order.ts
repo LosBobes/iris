@@ -140,7 +140,6 @@ export interface CustomerListResult {
 export interface Assignment {
   assignedTo: string | null
   priority: WorkOrderPriority
-  scheduledDate: string | null
 }
 
 export interface WorkOrderStatusHistory {
@@ -239,7 +238,9 @@ export interface WorkOrder {
   assignment: Assignment
   /** ISO-8601 date string (YYYY-MM-DD) */
   issueDate: string
-  /** ISO-8601 date string (YYYY-MM-DD), optional */
+  /** Deadline to issue the proforma invoice (predračun); YYYY-MM-DD or null */
+  proformaDueDate: string | null
+  /** Deadline to finish the job; YYYY-MM-DD or null */
   dueDate: string | null
   /** True when the order has been completed */
   isCompleted: boolean
@@ -276,7 +277,39 @@ export interface WorkOrder {
   communication: CustomerCommunication
 }
 
+export interface ReservedOrderNumber {
+  orderNumber: string
+  expiresAt: string
+}
+
+/**
+ * EditLock is an exclusive editing claim on a work order so only one operator
+ * edits it at a time. `lockedBy` is the holder's username. On the holder's own
+ * lock `expiresAt` is set; on a rejection describing another holder it is empty.
+ */
+export interface EditLock {
+  workOrderId: string
+  lockedBy: string
+  lockedAt: string
+  expiresAt: string
+}
+
+/**
+ * Result of acquiring/refreshing an edit lock. `acquired` is true when the caller
+ * holds the lock; when false, `lock` describes the operator currently editing.
+ */
+export interface EditLockResult {
+  acquired: boolean
+  lock: EditLock
+}
+
 export interface CreateWorkOrderInput {
+  /**
+   * Order number previously handed out by reserveWorkOrderNumber and shown in the
+   * create-form header. Consumed if its reservation still stands, otherwise the
+   * server allocates a fresh one.
+   */
+  orderNumber?: string | null
   customerId: string | null
   locationId: string | null
   clientName: string
@@ -288,7 +321,9 @@ export interface CreateWorkOrderInput {
   shipping: Shipping
   assignment: Assignment
   issuedBy: string
+  executedBy?: string | null
   issueDate: string
+  proformaDueDate: string | null
   dueDate: string | null
   price: number | null
   note: string | null
@@ -315,6 +350,7 @@ export interface UpdateWorkOrderInput {
   issuedBy?: string
   executedBy?: string | null
   issueDate?: string
+  proformaDueDate?: string | null
   dueDate?: string | null
   isCompleted?: boolean
   status?: WorkOrderStatus
