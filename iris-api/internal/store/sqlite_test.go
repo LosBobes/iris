@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -302,6 +303,75 @@ func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
 	}
 	if operators == nil {
 		t.Fatal("Operators() = nil, want empty slice")
+	}
+}
+
+// TestSQLiteStoreWorkOrderCollectionsNeverNull guards the read path against
+// legacy JSON payloads that stored `null` for collection fields (nil slices
+// marshal to null). Such orders crash clients that read `.length` without a nil
+// guard, so WorkOrderByID/WorkOrders must coerce every collection to a non-nil
+// slice.
+func TestSQLiteStoreWorkOrderCollectionsNeverNull(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	// PutWorkOrder marshals the struct verbatim, so leaving the collection
+	// fields as nil slices persists them as JSON `null` — reproducing legacy data.
+	if err := sqliteStore.PutWorkOrder(ctx, domain.WorkOrder{
+		ID:             "wo-legacy",
+		OrderNumber:    "RN-2024-00099",
+		ClientName:     "Legacy Co",
+		JobDescription: "legacy order",
+		IssuedBy:       "admin",
+		IssueDate:      "2024-01-01",
+		Status:         domain.WorkOrderStatusNew,
+	}); err != nil {
+		t.Fatalf("PutWorkOrder() returned error: %v", err)
+	}
+
+	got, err := sqliteStore.WorkOrderByID(ctx, "wo-legacy")
+	if err != nil {
+		t.Fatalf("WorkOrderByID() returned error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("WorkOrderByID() = nil, want the persisted order")
+	}
+	for _, field := range []struct {
+		name  string
+		value any
+	}{
+		{"StatusHistory", got.StatusHistory},
+		{"InternalNotes", got.InternalNotes},
+		{"CustomerNotes", got.CustomerNotes},
+		{"Events", got.Events},
+		{"Attachments", got.Attachments},
+		{"MaterialUsage", got.MaterialUsage},
+		{"TimeEntries", got.TimeEntries},
+		{"InvoiceDraft.LineItems", got.InvoiceDraft.LineItems},
+	} {
+		if field.value == nil || reflect.ValueOf(field.value).IsNil() {
+			t.Fatalf("%s = nil, want non-nil empty slice", field.name)
+		}
+	}
+
+	list, err := sqliteStore.WorkOrders(ctx, WorkOrderListQuery{})
+	if err != nil {
+		t.Fatalf("WorkOrders() returned error: %v", err)
+	}
+	var listed *domain.WorkOrder
+	for i := range list.Items {
+		if list.Items[i].ID == "wo-legacy" {
+			listed = &list.Items[i]
+			break
+		}
+	}
+	if listed == nil {
+		t.Fatal("WorkOrders() did not include the legacy order")
+	}
+	if listed.Events == nil || listed.InternalNotes == nil || listed.CustomerNotes == nil {
+		t.Fatalf("WorkOrders() returned nil collection for legacy order: events=%v internalNotes=%v customerNotes=%v",
+			listed.Events, listed.InternalNotes, listed.CustomerNotes)
 	}
 }
 

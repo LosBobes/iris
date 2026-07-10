@@ -169,4 +169,72 @@ describe('createHttpApi', () => {
       'http://127.0.0.1:8080/work-orders/42/report',
     )
   })
+
+  it('coerces null work-order collections to empty arrays (legacy payloads)', async () => {
+    // Reproduces the WorkOrderDetailPage crash: a specific order stored with
+    // `null` for collection fields must not surface `null` to the component,
+    // which reads `.length` on events/internalNotes/customerNotes/lineItems.
+    const legacyOrder = {
+      id: 'wo-legacy',
+      orderNumber: 'RN-2024-00099',
+      customerId: null,
+      locationId: null,
+      clientName: 'Legacy Co',
+      contactPerson: null,
+      jobDescription: 'legacy order',
+      jobDetails: null,
+      billingDocumentType: null,
+      billingDocumentNumber: null,
+      shipping: {},
+      issuedBy: 'admin',
+      executedBy: null,
+      assignment: { assignedTo: null, priority: 'normal' },
+      issueDate: '2024-01-01',
+      proformaDueDate: null,
+      dueDate: null,
+      isCompleted: false,
+      status: 'new',
+      price: null,
+      note: null,
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      completionDate: null,
+      statusHistory: null,
+      internalNotes: null,
+      customerNotes: null,
+      events: null,
+      attachments: null,
+      materialUsage: null,
+      timeEntries: null,
+      invoiceDraft: { status: 'none', invoiceNumber: null, lineItems: null, paidAt: null },
+      communication: {
+        publicToken: 'tok-legacy',
+        notificationEmail: null,
+        emailNotificationsEnabled: false,
+        signedBy: null,
+        signedAt: null,
+      },
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(legacyOrder))
+      .mockResolvedValueOnce(response({ items: [legacyOrder], total: 1 }))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const single = await api.getWorkOrderById('wo-legacy')
+    expect(single).not.toBeNull()
+    expect(single?.events).toEqual([])
+    expect(single?.internalNotes).toEqual([])
+    expect(single?.customerNotes).toEqual([])
+    expect(single?.statusHistory).toEqual([])
+    expect(single?.attachments).toEqual([])
+    expect(single?.materialUsage).toEqual([])
+    expect(single?.timeEntries).toEqual([])
+    expect(single?.invoiceDraft.lineItems).toEqual([])
+
+    const list = await api.getWorkOrders()
+    expect(list.items[0].events).toEqual([])
+    expect(list.items[0].internalNotes).toEqual([])
+    expect(list.items[0].invoiceDraft.lineItems).toEqual([])
+  })
 })

@@ -59,10 +59,31 @@ function readArray<T>(value: T[] | null | undefined): T[] {
   return Array.isArray(value) ? value : []
 }
 
+// normalizeWorkOrder coerces any null collection fields back to empty arrays.
+// The API contract declares these as arrays, but legacy/nil-slice payloads can
+// surface as `null` (Go encodes a nil slice as null); without this guard the
+// detail page crashes reading `.length` on a specific work order.
+function normalizeWorkOrder(order: WorkOrder): WorkOrder {
+  return {
+    ...order,
+    statusHistory: readArray(order?.statusHistory),
+    internalNotes: readArray(order?.internalNotes),
+    customerNotes: readArray(order?.customerNotes),
+    events: readArray(order?.events),
+    attachments: readArray(order?.attachments),
+    materialUsage: readArray(order?.materialUsage),
+    timeEntries: readArray(order?.timeEntries),
+    invoiceDraft: {
+      ...order?.invoiceDraft,
+      lineItems: readArray(order?.invoiceDraft?.lineItems),
+    },
+  }
+}
+
 function normalizeWorkOrderListResult(value: WorkOrderListResult): WorkOrderListResult {
   return {
     ...value,
-    items: readArray(value.items),
+    items: readArray(value.items).map(normalizeWorkOrder),
     total: value.total ?? 0,
   }
 }
@@ -321,7 +342,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     async getWorkOrderById(id) {
       const response = await fetchImpl(url(`/work-orders/${encodeURIComponent(id)}`), credentialedRequest())
       if (response.status === 404) return null
-      return readJSON<WorkOrder>(response)
+      return normalizeWorkOrder(await readJSON<WorkOrder>(response))
     },
 
     async reserveWorkOrderNumber() {
@@ -356,7 +377,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async createWorkOrder(input: CreateWorkOrderInput) {
       const response = await fetchImpl(url('/work-orders'), jsonRequest('POST', input))
-      return readJSON<WorkOrder>(response)
+      return normalizeWorkOrder(await readJSON<WorkOrder>(response))
     },
 
     async updateWorkOrder(id: string, changes: UpdateWorkOrderInput) {
@@ -365,7 +386,7 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
         jsonRequest('PATCH', changes),
       )
       if (response.status === 404) return null
-      return readJSON<WorkOrder>(response)
+      return normalizeWorkOrder(await readJSON<WorkOrder>(response))
     },
 
     async deleteWorkOrder(id: string) {

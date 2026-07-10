@@ -740,13 +740,35 @@ func (s *SQLiteStore) WorkOrderByID(ctx context.Context, id string) (*domain.Wor
 }
 
 func normalizeStoredWorkOrder(workOrder domain.WorkOrder) domain.WorkOrder {
+	// Work orders are persisted as a JSON payload. A nil slice marshals to
+	// `null`, which violates the OpenAPI contract (these are required arrays)
+	// and crashes clients that read `.length` without a nil guard. Legacy
+	// payloads — e.g. orders created before a collection existed or with the
+	// field omitted — can store `null`, so the read path must coerce every
+	// collection back to a non-nil empty slice before returning.
+	workOrder.StatusHistory = nilToEmpty(workOrder.StatusHistory)
+	workOrder.InternalNotes = nilToEmpty(workOrder.InternalNotes)
+	workOrder.CustomerNotes = nilToEmpty(workOrder.CustomerNotes)
+	workOrder.Events = nilToEmpty(workOrder.Events)
+	workOrder.Attachments = nilToEmpty(workOrder.Attachments)
 	workOrder.MaterialUsage = normalizeMaterialUsage(workOrder.MaterialUsage)
+	workOrder.TimeEntries = nilToEmpty(workOrder.TimeEntries)
 	workOrder.InvoiceDraft = normalizeInvoiceDraft(
 		workOrder.InvoiceDraft,
 		workOrder.JobDescription,
 		workOrder.Price,
 	)
 	return workOrder
+}
+
+// nilToEmpty returns a non-nil empty slice in place of a nil one so the JSON
+// encoding emits `[]` rather than `null`. Existing non-nil slices pass through
+// unchanged.
+func nilToEmpty[T any](slice []T) []T {
+	if slice == nil {
+		return []T{}
+	}
+	return slice
 }
 
 func (s *SQLiteStore) CreateWorkOrder(
