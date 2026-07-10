@@ -8,7 +8,7 @@ Cobanovic.
 | Aspect | Desktop Client | Web Client | Backend API |
 | --- | --- | --- | --- |
 | Path | `apps/desktop` | `apps/web` | `iris-api` |
-| Runtime | Electron 39 / electron-vite 5 | Vite | Go 1.25+ |
+| Runtime | Electron 39 / electron-vite 5 | Vite | Go 1.26 |
 | UI | React 19 / TypeScript 5.9 | React 19 / TypeScript 5.9 | OpenAPI v3 contract |
 | Styling | Tailwind CSS 4 | Tailwind CSS 4 | N/A |
 | Data access | IPC to `IrisApiClient` | HTTP or fixture adapter | SQLite or fixture store |
@@ -67,23 +67,34 @@ Cobanovic.
 
 ### Backend API
 
-- `cmd/server` selects SQLite when `IRIS_DB_PATH` is set.
-- Empty `IRIS_DB_PATH` uses `testdata/fixtures` outside production.
+- `cmd/server` is SQLite-backed at `DATABASE_PATH` (`IRIS_DB_PATH` is a legacy
+  fallback). Fixtures are for tests and `seed-demo`, not the runtime.
 - Production requires persistent storage and a session secret.
-- `cmd/irisctl` owns migrations, demo seeding, CSV import, user creation, and
-  backup operations.
+- **Multi-tenant:** login takes `{ orgSlug, username, password }`; the tenant is
+  resolved by slug and attached to the request context, and all store queries
+  filter by `tenant_id`.
+- `cmd/irisctl` owns migrations, demo seeding, tenant/user creation, CSV import,
+  and backup operations (`create-user` / `import-csv --apply` need `-tenant`).
 
 ## Domain Snapshot
 
-Work orders use an expanded operational schema:
+Every row is scoped to a **tenant** (organization). Work orders use an expanded
+operational schema:
 
 - normalized `Customer` and `Location`
-- assignment with operator, priority, and scheduled date
+- assignment with operator (`assignedTo`) and priority (no `scheduledDate`)
+- `dueDate` (finish deadline) and `proformaDueDate` (proforma-issue deadline);
+  `executedBy` records the operator who did the work
 - canonical statuses: `new`, `assigned`, `inProgress`, `completed`,
   `cancelled`, `invoiced`
 - separate internal and customer notes
 - materials, time entries, attachments, events, and invoice draft fields
 - public communication token for external status lookup
+- per-order **edit lock** and pre-save **order-number reservation**
+
+Shop-wide behavior is tuned through **organization settings** (`GET`/`PUT
+/settings`): firm name, PDF sections, billing/priority defaults, and a
+shipping-options toggle.
 
 Keep TypeScript types, Go structs, OpenAPI schemas, fixture data, and tests in
 sync when any domain field changes.
@@ -127,4 +138,4 @@ go test ./...
 - `iris-api/README.md`: backend endpoint, configuration, CLI, and smoke-check
   reference.
 
-*Last verified against the checked-in repository state on 2026-06-01.*
+*Last verified against the checked-in repository state on 2026-07-10.*

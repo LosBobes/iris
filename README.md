@@ -2,7 +2,7 @@
 
 Iris is a full-stack operations workspace for **Stamparija Cobanovic**, a print-shop environment. It covers the complete work-order lifecycle — from intake through invoicing — alongside customer master data, dashboard analytics, and a public order-tracking portal for customers.
 
-The repository is a **monorepo** comprising three deployable surfaces that share one Go REST API and one SQLite database.
+The repository is a **monorepo** comprising three deployable surfaces that share one Go REST API and one SQLite database. The system is **multi-tenant**: all data is isolated per organization ("tenant"), and users sign in with an organization slug alongside their username and password.
 
 ---
 
@@ -33,11 +33,13 @@ Iris manages the day-to-day operations of a commercial print shop:
 
 | Domain | Capabilities |
 |--------|-------------|
-| **Work Orders** | Full lifecycle management (`new → assigned → inProgress → completed → invoiced`), operator assignment, priority, materials, time entries, notes, invoice drafts, PDF rendering |
+| **Work Orders** | Full lifecycle management (`new → assigned → inProgress → completed → invoiced`), operator assignment, priority, materials, time entries, notes, invoice drafts, PDF rendering, order-number reservation, and a per-order edit lock |
 | **Customers & Locations** | Normalized master data with location sub-entities |
 | **Dashboard** | Revenue charts, status aggregations, queue summaries |
 | **Public Tracking** | Token-based, unauthenticated status lookup for customers |
-| **Admin Operations** | User management, database migrations, CSV import, backup via the `irisctl` CLI |
+| **Organization Settings** | Admin-configurable, shop-wide defaults: firm name, PDF sections, billing/priority defaults, and a shipping-options toggle |
+| **Multi-Tenancy** | Every record is scoped to an isolated tenant (organization); login requires the organization slug |
+| **Admin Operations** | Tenant/user management, database migrations, CSV import, backup via the `irisctl` CLI |
 
 ### Architecture at a Glance
 
@@ -65,7 +67,7 @@ The web client and the desktop renderer share the same `window.api` call contrac
 
 | Dependency | Minimum Version | Purpose |
 |-----------|----------------|---------|
-| **Go** | 1.22 | Backend API and CLI |
+| **Go** | 1.26 | Backend API and CLI |
 | **Node.js** | 20 LTS | Web and desktop clients |
 | **npm** | 10 | Package management |
 | **Docker & Docker Compose** | 24 / v2 | Production-like deployment |
@@ -150,7 +152,7 @@ curl http://localhost:8080/healthz
 # → {"status":"ok"}
 ```
 
-Default demo credentials: **`admin` / `admin123`**
+Default demo credentials — organization **`demo`**, username **`admin`**, password **`admin123`** (`seed-demo` creates the `demo` tenant and this account).
 
 ---
 
@@ -176,7 +178,7 @@ VITE_IRIS_API_MODE=fixtures npm run dev
 
 #### Logging in (HTTP mode)
 
-Navigate to `http://localhost:5173`, enter `admin` / `admin123`, and you will be directed to the dashboard.
+Navigate to `http://localhost:5173`, enter organization `demo`, username `admin`, password `admin123`, and you will be directed to the dashboard. The organization slug is remembered in the browser for subsequent logins.
 
 #### Public order tracking
 
@@ -234,17 +236,24 @@ cd iris-api
 # Run all pending schema migrations
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 
-# Populate the database with representative demo data
+# Populate the database with representative demo data (creates the `demo` tenant)
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
 
-# Import customer/work-order data from a CSV file
-DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --file data.csv
+# Create a new tenant (organization), optionally with a first admin user
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-tenant \
+  -slug grafika-cobanovic -name "Grafika Čobanović" \
+  -admin-username admin -admin-password '<secret>'
 
-# Create a new application user
-DATABASE_PATH=./data/iris.db go run ./cmd/irisctl users add --username ops1 --role user
+# Create a user within a tenant (the -tenant slug is required)
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user \
+  -tenant grafika-cobanovic -username ops1 -password '<secret>' -role user
+
+# Import customer/work-order data from a CSV directory (`--apply` requires -tenant)
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports
 
 # Back up the SQLite database file
-DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup --dest ./backups/
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup -out ./backups/iris.db
 ```
 
 ---
@@ -274,7 +283,7 @@ iris/
 ├── iris-api/                       # Go REST API
 │   ├── cmd/
 │   │   ├── server/                 #   HTTP server entry point
-│   │   └── irisctl/                #   Admin CLI (migrate, seed, users, backup)
+│   │   └── irisctl/                #   Admin CLI (migrate, seed, create-tenant, users, backup)
 │   ├── internal/
 │   │   ├── api/                    #   chi routes, middleware, handlers, tests
 │   │   ├── domain/                 #   Go request/response structs (OpenAPI contract)
@@ -290,7 +299,7 @@ iris/
 │   ├── DOMAIN_GLOSSARY.md          #   Serbian UI ↔ English code term mapping
 │   ├── CONTRIBUTING.md
 │   ├── PROJECT_CONTEXT.md
-│   └── DEPLOYMENT.md
+│   └── deployment-hetzner.md       #   Hetzner shared-host deployment guide
 │
 ├── .github/
 │   ├── copilot-instructions.md     # AI contributor guidance
@@ -372,7 +381,7 @@ cd apps/desktop && npx tsc --noEmit
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Accepted and temporary architectural decisions |
 | [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) | Serbian UI vocabulary mapped to English code and API tokens |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development rules, verification commands, and commit expectations |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deployment and Docker configuration |
+| [docs/deployment-hetzner.md](docs/deployment-hetzner.md) | Hetzner shared-host production deployment guide |
 | [iris-api/README.md](iris-api/README.md) | Backend configuration, CLI reference, and endpoint index |
 | [apps/web/README.md](apps/web/README.md) | Web client runtime modes and build instructions |
 | [apps/desktop/README.md](apps/desktop/README.md) | Electron setup, data flow, and packaging |
@@ -388,4 +397,4 @@ Specialized Copilot and agent profiles live under `.github/`:
 
 ---
 
-*Last verified against repository state on 2026-06-13.*
+*Last verified against repository state on 2026-07-10.*

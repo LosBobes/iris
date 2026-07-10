@@ -42,6 +42,7 @@ npm run build
 
 Seeded demo login:
 
+- organization: `demo`
 - username: `admin`
 - password: `admin123`
 

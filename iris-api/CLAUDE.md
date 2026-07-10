@@ -20,7 +20,7 @@ note in older docs is stale; fixtures are for tests and `seed-demo`).
 | Path | Role |
 | --- | --- |
 | `cmd/server/` | HTTP server wiring |
-| `cmd/irisctl/` | CLI: migrate, seed-demo, import-csv, create-user, backup |
+| `cmd/irisctl/` | CLI: migrate, seed-demo, create-tenant, import-csv, create-user, backup |
 | `internal/api/` | chi router, auth middleware, handlers (thin) |
 | `internal/domain/` | Go structs — contract with OpenAPI |
 | `internal/store/` | SQLite store, migrations, seed; fixture store for tests |
@@ -48,8 +48,18 @@ out required web/desktop follow-up rather than leaving drift.
 
 ## Auth & data rules
 
-- `POST /auth/login` issues an HTTP-only `iris_session` cookie (12h default).
-  Protected routes use `requireAuth`; admin-only deletes use `requireAdmin`.
+- `POST /auth/login` takes `{ orgSlug, username, password }`, resolves the tenant
+  via `TenantBySlug`, authenticates within it, then issues an HTTP-only
+  `iris_session` cookie (12h default). Unknown org and bad credentials return the
+  **same** generic Serbian error. Protected routes use `requireAuth`; admin-only
+  routes use `requireAdmin`.
+- **Multi-tenancy:** `requireAuth` attaches the tenant to the request context
+  (`store.ContextWithTenant(ctx, user.TenantID)`); every store method reads it via
+  `tenantFromContext` and filters by `tenant_id`, returning `ErrNoTenant` if it is
+  missing (fail-loud). `locations` are scoped through their parent customer. New
+  root tables must carry a `tenant_id` FK and per-tenant uniqueness (see migration
+  v10 `tenantIsolationMigration`). `irisctl create-user` / `import-csv --apply`
+  require `-tenant <slug>`.
 - User-facing auth messages that mirror client behavior stay in Serbian. Code,
   comments, tests, internal docs: English.
 - Production (`IRIS_ENV=production`) requires an explicit DB path + session secret

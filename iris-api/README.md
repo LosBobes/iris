@@ -11,9 +11,13 @@ by the desktop and web clients.
 - Persistence: SQLite at `DATABASE_PATH`; local development defaults to
   `./data/iris.db`.
 - Test persistence: fixture-backed store under `testdata/fixtures`.
+- Multi-tenancy: every row is scoped to a tenant (organization). `POST /auth/login`
+  takes `{ orgSlug, username, password }`, resolves the tenant by slug, and
+  authenticates within it. `requireAuth` attaches the tenant to the request context
+  (`store.ContextWithTenant`), and every store query filters by `tenant_id`.
 - Sessions: HTTP-only `iris_session` cookie created by `POST /auth/login`.
-- Operations CLI: `cmd/irisctl` for migrations, demo seeding, CSV import,
-  user creation, and database backup.
+- Operations CLI: `cmd/irisctl` for migrations, demo seeding, tenant/user creation,
+  CSV import, and database backup.
 
 ## API Surface
 
@@ -31,10 +35,11 @@ Session endpoints:
 Authenticated endpoints:
 
 - `GET /customers`
+- `GET /customers/{id}`
 - `POST /customers`
 - `PUT /customers/{id}`
 - `DELETE /customers/{id}` admin only
-- `GET /locations`
+- `GET /locations` (optional `?customerId=` filter)
 - `POST /locations`
 - `PUT /locations/{id}`
 - `DELETE /locations/{id}` admin only
@@ -42,9 +47,20 @@ Authenticated endpoints:
 - `GET /work-orders/operators`
 - `GET /work-orders/{id}`
 - `GET /work-orders/{id}/report`
+- `POST /work-orders/preview`
+- `POST /work-orders/reserve-number` · `POST /work-orders/release-number`
 - `POST /work-orders`
+- `POST /work-orders/{id}/edit-lock` · `DELETE /work-orders/{id}/edit-lock`
 - `PATCH /work-orders/{id}`
 - `DELETE /work-orders/{id}` admin only
+- `GET /enum-values`
+- `POST /enum-values` · `PUT /enum-values/{id}` · `DELETE /enum-values/{id}` admin only
+- `GET /catalog-items` · `GET /catalog-items/{id}`
+- `GET /catalog-items/{id}/cost-history` admin only
+- `POST /catalog-items` · `PUT /catalog-items/{id}` · `DELETE /catalog-items/{id}` admin only
+- `GET /settings`
+- `PUT /settings` admin only
+- `GET /users` · `POST /users` · `PUT /users/{id}` · `DELETE /users/{id}` admin only
 
 ## Directory Map
 
@@ -92,11 +108,15 @@ DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
 Operational commands:
 
 ```bash
-DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user -username milica -password '<secret>' -role admin
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-tenant -slug grafika-cobanovic -name "Grafika Čobanović" -admin-username milica -admin-password '<secret>'
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user -tenant grafika-cobanovic -username milica -password '<secret>' -role admin
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
-DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply --dir ./imports
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup -out ./backups/iris.db
 ```
+
+`create-user` requires `-tenant <slug>`; `import-csv --apply` writes rows and also
+requires `-tenant <slug>` (a `--dry-run` only validates CSV shape).
 
 Verification:
 
@@ -150,7 +170,7 @@ docker compose run --rm --entrypoint irisctl iris-api seed-demo
 For a non-demo user, run:
 
 ```bash
-docker compose run --rm --entrypoint irisctl iris-api create-user -username milica -password '<secret>' -role admin
+docker compose run --rm --entrypoint irisctl iris-api create-user -tenant demo -username milica -password '<secret>' -role admin
 ```
 
 SQLite migrations run idempotently on startup before the API begins serving.
@@ -164,7 +184,7 @@ curl -i http://localhost:8080/healthz
 curl -i -c /tmp/iris.cookies \
   -X POST http://localhost:8080/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"orgSlug":"demo","username":"admin","password":"admin123"}'
 
 curl -b /tmp/iris.cookies http://localhost:8080/work-orders
 curl -b /tmp/iris.cookies http://localhost:8080/work-orders/operators

@@ -30,6 +30,13 @@ vars and must not be committed.
 - Domain types in `src/types/work-order.ts` — a contract-sync point with
   `iris-api/openapi.yaml` and `apps/desktop/model/`. See the contract-sync rule in
   the root [CLAUDE.md](../../CLAUDE.md).
+- Shop-wide **organization settings** (`src/types/settings.ts`) flow through
+  `src/contexts/OrganizationContext.ts` (firm name, PDF sections, billing/priority
+  defaults, shipping-options toggle). Gate dependent form fields/columns/filters on
+  them — use the `add-settings-flag` skill.
+- The work-order form takes a per-order **edit lock** via `useWorkOrderEditLock`
+  (heartbeat every 30 s, fails open; form goes read-only only when another operator
+  holds it). Login requires an **organization slug** alongside username + password.
 - Dashboard analytics: clients fetch raw work orders and aggregate client-side in
   `src/lib/dashboard/aggregations.ts` (pure, unit-tested) — not computed on the
   server.

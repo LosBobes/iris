@@ -23,7 +23,7 @@ Related references:
 ## Prerequisites
 
 - Node.js 18+ and npm for frontend work.
-- Go 1.25+ for backend work.
+- Go 1.26+ for backend work.
 - Desktop environment capable of running Electron for desktop-client work.
 
 ## Local Runtime Commands

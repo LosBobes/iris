@@ -61,8 +61,19 @@ fixture-backed at runtime; fixtures are for tests/`seed-demo`).
 - `internal/store/`: SQLite store, migrations, seed; fixture store for tests.
 - Endpoint change → update `openapi.yaml`, `internal/api/server.go`,
   `internal/api/server_test.go` together. Run `go mod tidy` on dep changes.
-- Auth: `POST /auth/login` issues HTTP-only `iris_session` cookie; `requireAuth` /
+- Auth: `POST /auth/login` takes `{ orgSlug, username, password }`, resolves the
+  tenant by slug, and issues an HTTP-only `iris_session` cookie; `requireAuth` /
   `requireAdmin` guard protected and destructive routes.
+- **Multi-tenant:** every row is scoped to a tenant. `requireAuth` puts the tenant
+  in context (`store.ContextWithTenant`); store methods filter by `tenant_id` via
+  `tenantFromContext` (missing tenant → `ErrNoTenant`). New root tables need a
+  `tenant_id` FK + per-tenant uniqueness. `irisctl create-tenant` provisions orgs;
+  `create-user` / `import-csv --apply` need `-tenant <slug>`.
+- **Org settings:** `GET`/`PUT /settings` back the admin Settings page, stored in
+  the key/value `app_settings` table (no migration to add a key; missing row →
+  coded default). Keep `OrganizationSettings` synced across openapi, domain types,
+  `apps/web/src/types/settings.ts`, and `apps/desktop/model/settings.ts`; use the
+  `add-settings-flag` skill.
 
 ```bash
 # from iris-api/
@@ -132,4 +143,4 @@ npm run typecheck && npm test && npm run lint && npm run build
   orders + dashboard.
 - API normalizes legacy statuses (`draft`/`active`).
 - No automated CI beyond a manual Copilot setup workflow — run per-surface checks
-  yourself. Demo seed creds (non-prod): `admin` / `admin123`.
+  yourself. Demo seed creds (non-prod): org `demo`, `admin` / `admin123`.
