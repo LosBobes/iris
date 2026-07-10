@@ -235,10 +235,17 @@ func DefaultPriorityDefaults() PriorityDefaults {
 	}
 }
 
+// DefaultAllowMultipleLocations is the shop default for whether firms may have
+// more than one location. Off by default: a firm's single location is presented
+// as part of the firm itself (the multi-location UI is hidden). The persisted
+// data model is unchanged either way — this only drives the client presentation.
+const DefaultAllowMultipleLocations = false
+
 // OrganizationSettings holds shop-wide branding/config an admin can edit: the
 // firm name shown in the app header, the work-order PDF section toggles, the
-// default document type and priority for new work orders, and whether the
-// work-order form exposes the extra shipping/handling options.
+// default document type and priority for new work orders, whether the
+// work-order form exposes the extra shipping/handling options, and whether firms
+// may have multiple locations.
 type OrganizationSettings struct {
 	FirmName         string           `json:"firmName"`
 	PDFSections      PDFSections      `json:"pdfSections"`
@@ -248,17 +255,23 @@ type OrganizationSettings struct {
 	// fields (drives-out, wait-for-payment, packaging, labeling, fragile,
 	// signature, insurance). Off by default so the form stays compact.
 	ShowShippingOptions bool `json:"showShippingOptions"`
+	// AllowMultipleLocations toggles the multi-location UI. When false, a firm's
+	// location is shown as part of the firm (single address, no location picker);
+	// when true, firms can manage several locations. Off by default. Purely
+	// presentational — the backend keeps locations as separate rows regardless.
+	AllowMultipleLocations bool `json:"allowMultipleLocations"`
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
 // Nil fields are left unchanged, so a firm-name-only save does not wipe the PDF
 // configuration and vice versa.
 type OrganizationSettingsUpdate struct {
-	FirmName            *string           `json:"firmName"`
-	PDFSections         *PDFSections      `json:"pdfSections"`
-	BillingDefaults     *BillingDefaults  `json:"billingDefaults"`
-	PriorityDefaults    *PriorityDefaults `json:"priorityDefaults"`
-	ShowShippingOptions *bool             `json:"showShippingOptions"`
+	FirmName               *string           `json:"firmName"`
+	PDFSections            *PDFSections      `json:"pdfSections"`
+	BillingDefaults        *BillingDefaults  `json:"billingDefaults"`
+	PriorityDefaults       *PriorityDefaults `json:"priorityDefaults"`
+	ShowShippingOptions    *bool             `json:"showShippingOptions"`
+	AllowMultipleLocations *bool             `json:"allowMultipleLocations"`
 }
 
 type User struct {

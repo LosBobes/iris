@@ -234,6 +234,9 @@ func TestOrganizationSettings(t *testing.T) {
 	if settings.ShowShippingOptions {
 		t.Fatalf("default showShippingOptions = true, want false")
 	}
+	if settings.AllowMultipleLocations {
+		t.Fatalf("default allowMultipleLocations = true, want false")
+	}
 
 	if rec := roleRequest(t, server, userToken, http.MethodPut, "/settings", `{"firmName":"Hack"}`); rec.Code != http.StatusForbidden {
 		t.Fatalf("PUT /settings as user = %d, want %d", rec.Code, http.StatusForbidden)
@@ -320,6 +323,24 @@ func TestOrganizationSettings(t *testing.T) {
 	}
 	if final.FirmName != "Grafika Novi Naziv" {
 		t.Fatalf("showShippingOptions update wiped firmName: %q", final.FirmName)
+	}
+
+	// An allowMultipleLocations-only update must persist and must not wipe the firm name.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"allowMultipleLocations":true}`,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("PUT allowMultipleLocations as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+	locationsRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
+	var afterLocations domain.OrganizationSettings
+	if err := json.Unmarshal(locationsRec.Body.Bytes(), &afterLocations); err != nil {
+		t.Fatalf("decode after locations: %v", err)
+	}
+	if !afterLocations.AllowMultipleLocations {
+		t.Fatalf("allowMultipleLocations not persisted: %+v", afterLocations)
+	}
+	if afterLocations.FirmName != "Grafika Novi Naziv" {
+		t.Fatalf("allowMultipleLocations update wiped firmName: %q", afterLocations.FirmName)
 	}
 	if after.PDFSections.Delivery || after.PDFSections.ShippingAddress {
 		t.Fatalf("pdfSections not persisted: %+v", after.PDFSections)

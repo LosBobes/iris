@@ -50,6 +50,12 @@ export interface OrganizationSettings {
    * Off by default. Configured via the web settings UI.
    */
   showShippingOptions: boolean;
+  /**
+   * Whether firms may have multiple locations. When false, a firm's location is
+   * presented as part of the firm. Off by default. Configured via the web
+   * settings UI (the desktop app has no organization settings toggles).
+   */
+  allowMultipleLocations: boolean;
 }
 
 /** Fallback firm name used before settings load or when the request fails. */
@@ -79,3 +85,9 @@ export const DEFAULT_PRIORITY_DEFAULTS: PriorityDefaults = {
 
 /** Extra shipping/handling fields are hidden by default. */
 export const DEFAULT_SHOW_SHIPPING_OPTIONS = false;
+
+/**
+ * Multiple locations per firm are disabled by default: a firm's location is
+ * shown as part of the firm itself.
+ */
+export const DEFAULT_ALLOW_MULTIPLE_LOCATIONS = false;

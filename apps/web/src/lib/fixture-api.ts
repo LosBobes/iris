@@ -28,6 +28,7 @@ import type {
 } from '@/types/work-order'
 import type { CatalogItem } from '@/types/catalog'
 import {
+  DEFAULT_ALLOW_MULTIPLE_LOCATIONS,
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
@@ -464,6 +465,7 @@ let pdfSections: PDFSections = { ...DEFAULT_PDF_SECTIONS }
 let billingDefaults: BillingDefaults = { ...DEFAULT_BILLING_DEFAULTS }
 let priorityDefaults: PriorityDefaults = { ...DEFAULT_PRIORITY_DEFAULTS }
 let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
+let allowMultipleLocations = DEFAULT_ALLOW_MULTIPLE_LOCATIONS
 
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
   return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
@@ -824,7 +826,7 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions, allowMultipleLocations }
     },
 
     async updateSettings(
@@ -847,7 +849,10 @@ export function createFixtureApi(): Window['api'] {
       if (settings.showShippingOptions !== undefined) {
         showShippingOptions = settings.showShippingOptions
       }
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions }
+      if (settings.allowMultipleLocations !== undefined) {
+        allowMultipleLocations = settings.allowMultipleLocations
+      }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions, allowMultipleLocations }
     },
 
     async getWorkOrders(query) {

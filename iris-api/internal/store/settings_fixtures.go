@@ -53,6 +53,9 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 	if update.ShowShippingOptions != nil {
 		current.ShowShippingOptions = *update.ShowShippingOptions
 	}
+	if update.AllowMultipleLocations != nil {
+		current.AllowMultipleLocations = *update.AllowMultipleLocations
+	}
 
 	s.firmName = current.FirmName
 	sections := current.PDFSections
@@ -63,6 +66,8 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 	s.priorityDefaults = &priorityDefaults
 	showShippingOptions := current.ShowShippingOptions
 	s.showShippingOptions = &showShippingOptions
+	allowMultipleLocations := current.AllowMultipleLocations
+	s.allowMultipleLocations = &allowMultipleLocations
 	return current, nil
 }
 
@@ -87,11 +92,16 @@ func (s *FixtureStore) organizationSettingsLocked() domain.OrganizationSettings 
 	if s.showShippingOptions != nil {
 		showShippingOptions = *s.showShippingOptions
 	}
+	allowMultipleLocations := domain.DefaultAllowMultipleLocations
+	if s.allowMultipleLocations != nil {
+		allowMultipleLocations = *s.allowMultipleLocations
+	}
 	return domain.OrganizationSettings{
-		FirmName:            firmName,
-		PDFSections:         sections,
-		BillingDefaults:     billingDefaults,
-		PriorityDefaults:    priorityDefaults,
-		ShowShippingOptions: showShippingOptions,
+		FirmName:               firmName,
+		PDFSections:            sections,
+		BillingDefaults:        billingDefaults,
+		PriorityDefaults:       priorityDefaults,
+		ShowShippingOptions:    showShippingOptions,
+		AllowMultipleLocations: allowMultipleLocations,
 	}
 }
