@@ -741,6 +741,7 @@ export const sr = {
       createError: 'Greška pri kreiranju radnog naloga',
       updated: 'Radni nalog {{order}} je ažuriran',
       updateError: 'Greška pri ažuriranju radnog naloga',
+      draftRecovered: 'Vraćen je nesačuvani nalog od pre osvežavanja stranice',
     },
     create: {
       back: 'Nazad na naloge',

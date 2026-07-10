@@ -58,6 +58,12 @@ interface WorkOrderFormProps {
   onSubmit: (values: WorkOrderFormValues) => Promise<void>;
   onCancel: () => void;
   /**
+   * Called with the current form values on mount and on every subsequent change.
+   * The create page uses this to cache an in-progress draft so a browser refresh
+   * doesn't lose the work being entered. Omitted for the edit form.
+   */
+  onValuesChange?: (values: WorkOrderFormValues) => void;
+  /**
    * When true every field and button is disabled (via a disabled fieldset), for
    * showing a work order another operator is currently editing. Defaults to false.
    */
@@ -415,6 +421,7 @@ export function WorkOrderForm({
   initialValues,
   onSubmit,
   onCancel,
+  onValuesChange,
   readOnly = false,
 }: WorkOrderFormProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -518,11 +525,24 @@ export function WorkOrderForm({
     control,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<WorkOrderFormValues>({
     resolver: zodResolver(workOrderFormSchema),
     defaultValues,
   });
+
+  // Mirror the live form values out to the caller so the create page can cache an
+  // in-progress draft. Emit once on mount (so a draft exists before any edit) and
+  // then on every change. Skipped in read-only mode and when no consumer is wired.
+  useEffect(() => {
+    if (!onValuesChange || readOnly) return;
+    onValuesChange(getValues());
+    const subscription = watch((values) => {
+      onValuesChange(values as WorkOrderFormValues);
+    });
+    return () => subscription.unsubscribe();
+  }, [onValuesChange, readOnly, watch, getValues]);
   const {
     fields: invoiceLineItemFields,
     append: appendInvoiceLineItem,
