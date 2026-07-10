@@ -32,10 +32,25 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "▶ Rebuilding containers..."
+            echo "▶ Building images..."
             # Secrets (IRIS_SESSION_SECRET etc.) live in the box's .env file
             # next to docker-compose.prod.yml; compose reads them automatically.
-            docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
+            # Build first, while the current containers keep serving — this keeps
+            # downtime to the brief recreate window below, not the whole build.
+            docker compose -f docker-compose.prod.yml build
+
+            echo "▶ Recreating containers..."
+            # Tear the stack down before bringing it back up. A plain
+            # `up --build --remove-orphans` recreates in place, and an
+            # interrupted recreate can leave a temporarily-renamed
+            # `<hash>_iris-backend-1` container behind, which then conflicts on
+            # every subsequent deploy ("container name is already in use").
+            # `down` removes the project's containers (including that leftover)
+            # for a clean slate. The named volume iris_sqlite_data is NOT
+            # touched by `down` (only `down -v` would), so the SQLite DB
+            # survives.
+            docker compose -f docker-compose.prod.yml down --remove-orphans
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             echo "▶ Pruning old images..."
             docker image prune -f
