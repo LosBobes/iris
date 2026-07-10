@@ -20,9 +20,15 @@ are stale. Configure the API base via `apps/desktop/.env`
 - The renderer calls only `window.api`; do not add direct HTTP `fetch()` from the
   renderer. The preload bridge is the only renderer↔Electron boundary — never
   bypass it.
-- Shared domain types: `model/` (e.g. `model/work-order.ts`, a contract-sync
-  point — see root [CLAUDE.md](../../CLAUDE.md)). Renderer-only types:
-  `src/renderer/src/types/`.
+- Shared domain types: `model/` (e.g. `model/work-order.ts`, `model/settings.ts`,
+  both contract-sync points — see root [CLAUDE.md](../../CLAUDE.md)). Renderer-only
+  types: `src/renderer/src/types/`. The desktop mirrors `OrganizationSettings`
+  types for contract-sync, but the settings **toggles are web-only** — desktop has
+  no `OrganizationContext`.
+- Login requires an **organization slug** (tenant) alongside username + password.
+  Work-order editing uses a per-order **edit lock** via the
+  `workorders:acquireEditLock` / `workorders:releaseEditLock` IPC handlers and the
+  `useWorkOrderEditLock` hook (heartbeat 30 s, fails open).
 
 ## Adding/changing an IPC handler — all 4 steps together
 

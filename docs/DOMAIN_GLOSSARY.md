@@ -12,7 +12,8 @@ This glossary maps the business, operational, and database terms used across the
 | **Desktop Client** | `apps/desktop` | n/a | Electron application wrapping React + Tailwind, deployed on physical shop terminals. |
 | **Web Client** | `apps/web` | n/a | Lightweight React application for remote management and public order lookup. |
 | **Backend API** | `iris-api` | n/a | Go REST API serving as the single source of truth for workspace operations. |
-| **Admin** | `role: 'admin'` | `Administrator` | Staff role authorized to access performance charts and billing configurations. |
+| **Tenant / Organization** | `Tenant` | `Organizacija` | An isolated organization (shop). Every row is scoped to a tenant; users log in with the tenant's **org slug** (`orgSlug`). Seeded production tenant: `grafika-cobanovic` (Grafika Čobanović); demo tenant: `demo`. |
+| **Admin** | `role: 'admin'` | `Administrator` | Staff role authorized to access performance charts, organization settings, and billing configurations. |
 | **Operator** | `role: 'user'` | `Operater` | Standard staff role focused on order execution, tracking time, and updating status. |
 
 ---
@@ -23,9 +24,8 @@ This glossary maps the business, operational, and database terms used across the
 | --- | --- | --- | --- |
 | **Customer** | `Customer` | `Klijent` | Centralized corporate or retail client profile containing base contact metadata. |
 | **Location** | `Location` | `Lokacija / Adresa` | Shipping addresses registered under a client's profile. |
-| **Assignment** | `Assignment` | `Zaduženje` | Operational dispatch details indicating operator, priority level, and calendar date. |
+| **Assignment** | `Assignment` | `Zaduženje` | Operational dispatch details indicating operator (`assignedTo`) and priority level. |
 | **Priority** | `priority` | `Prioritet` | Operational urgency scale: `low` (nizak), `normal` (normalan), `high` (visok), `urgent` (hitno). |
-| **Scheduled Date** | `scheduledDate` | `Planirani datum` | Target date when physical production is scheduled to begin. |
 
 ---
 
@@ -34,13 +34,16 @@ This glossary maps the business, operational, and database terms used across the
 | English Term | Code Token | Serbian UI Label | Meaning & Context |
 | --- | --- | --- | --- |
 | **Work Order** | `WorkOrder` | `Radni nalog` | The central execution record in the print shop. |
-| **Order Number** | `orderNumber` | `Broj naloga` | Unique alphanumeric order reference (e.g., `RN-2025-0042`). |
+| **Order Number** | `orderNumber` | `Broj naloga` | Unique per-tenant order reference `RN-<year>-<seq>` with a 5-digit sequence (e.g., `RN-2025-00042`). Can be pre-reserved before save (see reservation endpoints). |
 | **Job Description** | `jobDescription` | `Opis posla` | Summary of print work requested (e.g., "Štampa vizit karti"). |
 | **Product Code** | `productCode` | `Šifra proizvoda` | Inventory or catalog system code representing paper/product style. |
 | **Paper Weight** | `paperWeightGsm` | `Gramatura (g/m²)` | Weight/thickness of the paper stocks used in production. |
 | **Dimensions** | `dimensions` | `Dimenzije` | Physical format dimensions (e.g., `A4`, `85x55 mm`). |
 | **Quantity** | `quantity` | `Količina` | Count of units or impressions to produce. |
 | **Finishing Note** | `finishingNote` | `Dorada` | Post-press finishing commands (e.g., plastifikacija, sečenje, savijanje). |
+| **Due Date** | `dueDate` | `Rok završetka posla` | Deadline to finish the job; drives the "Kasni" / "Danas dospeva" signals. |
+| **Proforma Due Date** | `proformaDueDate` | `Rok izdavanja predračuna` | Deadline to issue the proforma invoice (predračun); distinct from `dueDate`. |
+| **Executor** | `executedBy` | `Izvršilac` | Operator recorded as having carried out the work. |
 
 ---
 
@@ -88,9 +91,30 @@ Work orders progress sequentially through a defined lifecycle. Transitions are s
 
 ---
 
+## Organization Settings (shop-wide, admin-configurable)
+
+Stored per tenant in the key/value `app_settings` table and exposed via
+`GET`/`PUT /settings`. A missing key falls back to a coded default, so adding a
+setting needs no migration.
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **Firm Name** | `firmName` | `Naziv firme` | Shop name printed on documents. |
+| **PDF Sections** | `pdfSections` | `Sekcije PDF-a` | Which sections appear on the work-order printout. |
+| **Billing Defaults** | `billingDefaults` | `Podrazumevani obračun` | Default `documentType` for new orders + `allowOverride` (whether operators may change it). Default `proforma`, not overridable. |
+| **Priority Defaults** | `priorityDefaults` | `Podrazumevani prioritet` | Default `priority` for new orders + `allowOverride`. Default `normal`, not overridable. |
+| **Show Shipping Options** | `showShippingOptions` | `Prikaži opcije otpreme` | Toggles the extra shipping/handling fields on the work-order form. Off by default. |
+
+## Concurrency & Reservation
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **Edit Lock** | `EditLock` | `Zaključavanje izmena` | Exclusive, heartbeat-kept, auto-expiring per-order edit lock (TTL 2 min; 30 s heartbeat). Another holder makes the form read-only; the client fails open on error. |
+| **Reserved Order Number** | `ReservedOrderNumber` | `Rezervisani broj naloga` | Order number pre-reserved before save (12 h TTL) so the create form can show the next `RN-<year>-<seq>`. |
+
 ## Important Modeling & Schema Rules
 
 1. **Strict Note Separation**: To preserve confidentiality, **Internal Notes** (`internalNotes`) and **Customer Notes** (`customerNotes`) must never occupy the same database tables or client structures. Internal notes are structurally excluded from public status APIs.
 2. **Unified Schema Alignment**: The fields, types, and validation rules specified in this glossary map directly to the OpenAPI specification contract (`iris-api/openapi.yaml`), Go domain types (`iris-api/internal/domain/types.go`), and React models. Keep all layers aligned when introducing domain alterations.
 
-*Last verified against the checked-in repository state on 2026-05-31.*
+*Last verified against the checked-in repository state on 2026-07-10.*

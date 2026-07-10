@@ -1,15 +1,22 @@
 # Iris - Repository Map
 
-Onboarding snapshot for senior engineers. **Last verified:** 2026-06-03.
+Onboarding snapshot for senior engineers. **Last verified:** 2026-07-10.
 
 ## 1. What this app does
 
 **Iris** is the operations workspace for **Stamparija Cobanovic** (a print shop). It manages:
 
-- **Work orders** - lifecycle from `new` through `invoiced`, with assignment, materials, notes, events, and invoice drafts
+- **Work orders** - lifecycle from `new` through `invoiced`, with assignment, materials, notes, events, invoice drafts, order-number reservation, and a per-order edit lock
 - **Customers and locations** - normalized master data (web client; API-backed)
 - **Dashboard** - revenue/status charts and queue summaries (aggregated client-side)
 - **Public tracking** - token-based status lookup at `/public/work-orders/:token` (web only)
+- **Organization settings** - admin-configurable, shop-wide defaults (firm name, PDF sections, billing/priority defaults, shipping-options toggle)
+
+The system is **multi-tenant**: every row is scoped to a **tenant** (an isolated
+organization / shop). Users log in with an **organization slug** plus username +
+password; all data access is filtered by the tenant resolved from the session.
+See [§4a](#4a-multi-tenancy). The seeded production tenant is `grafika-cobanovic`
+(Grafika Čobanović); the demo tenant is `demo`.
 
 Three deployable surfaces share one **Go REST API** and **SQLite** database:
 
@@ -25,7 +32,7 @@ Three deployable surfaces share one **Go REST API** and **SQLite** database:
 
 | Layer | Stack |
 | --- | --- |
-| **Backend** | Go **1.25**, `chi` router, `modernc.org/sqlite`, `golang.org/x/crypto` |
+| **Backend** | Go **1.26**, `chi` router, `modernc.org/sqlite`, `golang.org/x/crypto` |
 | **Web** | **Vite 8**, **React 19**, **TypeScript ~6**, **Tailwind CSS 4**, Vitest, ESLint |
 | **Desktop** | **Electron 39**, **electron-vite 5**, React 19, TS 5.9, Tailwind 4, Vitest, electron-builder |
 | **Package managers** | **npm** per frontend app (`package-lock.json` in `apps/web`, `apps/desktop`); **Go modules** in `iris-api/` |
@@ -57,7 +64,7 @@ iris/
 │           └── types/             TypeScript domain types
 ├── iris-api/
 │   ├── cmd/server/                HTTP server wiring
-│   ├── cmd/irisctl/             migrate, seed-demo, import-csv, users, backup
+│   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup
 │   ├── internal/api/            Routes, auth middleware, handlers
 │   ├── internal/domain/         Go structs (contract with OpenAPI)
 │   ├── internal/store/          SQLite + fixture store (tests)
@@ -69,7 +76,7 @@ iris/
 └── docker-compose.yml             Local API + SQLite volume
 ```
 
-**Contract sync points** (change together): `iris-api/openapi.yaml`, `iris-api/internal/domain/types.go`, `apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`, fixtures, and tests.
+**Contract sync points** (change together): `iris-api/openapi.yaml`, `iris-api/internal/domain/types.go`, `apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`, fixtures, and tests. Shared **settings** shapes live in `apps/web/src/types/settings.ts` ↔ `apps/desktop/model/settings.ts` and mirror the `OrganizationSettings` schema.
 
 ---
 
@@ -104,9 +111,30 @@ IRIS_API_BASE_URL (.env or config)
 
 ### Auth
 
-- `POST /auth/login` → HTTP-only **`iris_session`** cookie (12h default)
-- Protected routes use `requireAuth`; admin-only deletes use `requireAdmin`
+- `POST /auth/login` takes **`{ orgSlug, username, password }`** → resolves the
+  tenant by slug, authenticates the user within it, then issues an HTTP-only
+  **`iris_session`** cookie (12h default). Unknown org and bad credentials return
+  the **same** generic Serbian error, so the form never reveals which orgs exist.
+- Protected routes use `requireAuth`; admin-only routes use `requireAdmin`
 - No OAuth / SSO - username/password in SQLite
+
+### 4a. Multi-tenancy
+
+- A **tenant** is an isolated organization/shop. Domain `Tenant{ ID, Slug, Name }`
+  (`internal/domain/types.go`); `User.TenantID` is server-side only (`json:"-"`).
+- Migration **v10** (`tenantIsolationMigration` in `internal/store/migrations.go`)
+  adds a `tenants` table and a `NOT NULL tenant_id` FK to `users`, `customers`,
+  `work_orders`, `catalog_items`, `enum_values`, and `app_settings`; existing rows
+  are attributed to the seeded **production** tenant. Uniqueness became per-tenant
+  (`UNIQUE(tenant_id, username)`, `(tenant_id, order_number)`, `(tenant_id, code)`,
+  `(tenant_id, field, value)`, and `app_settings` PK `(tenant_id, key)`).
+  `locations` has no `tenant_id` — it is scoped through its parent customer.
+- The tenant flows **session → context → store**: `requireAuth` calls
+  `store.ContextWithTenant(ctx, user.TenantID)`; store methods read it via
+  `tenantFromContext` and filter every query by `tenant_id`. A method called with
+  no tenant in context returns `ErrNoTenant` (fail-loud, not a silent cross-tenant leak).
+- Manage tenants with `irisctl create-tenant`; `create-user` and `import-csv --apply`
+  now require `-tenant <slug>` (see §5).
 
 ### Dashboard analytics
 
@@ -116,6 +144,28 @@ IRIS_API_BASE_URL (.env or config)
 
 - Unauthenticated `GET /public/work-orders/{token}` - response strips internal fields
 
+### Work-order concurrency
+
+- **Edit lock** (`POST`/`DELETE /work-orders/{id}/edit-lock`, migration v12): one
+  operator holds an exclusive, auto-expiring lock (TTL 2 min). Clients heartbeat
+  every 30 s (`useWorkOrderEditLock`) and release on unmount. A busy order returns
+  **409** with the current holder's identity; the hook **fails open** (stays
+  editable on error) and only marks the form read-only when another operator holds it.
+- **Order-number reservation** (`POST /work-orders/reserve-number` /
+  `release-number`, migration v11, 12h TTL): the create form can show the next
+  `RN-<year>-<seq>` (5-digit) number before save.
+
+### Organization settings
+
+- `GET`/`PUT /settings` back the admin **Settings** page. Values are stored per
+  tenant in the key/value `app_settings` table (adding a key needs **no migration** -
+  a missing row falls back to a coded default). Current settings: `firmName`,
+  `pdfSections`, `billingDefaults { documentType, allowOverride }`,
+  `priorityDefaults { priority, allowOverride }`, and `showShippingOptions`.
+  `OrganizationSettingsUpdate` uses optional/pointer fields (nil = "leave unchanged").
+- Web surfaces them through `OrganizationContext`; desktop mirrors the **types only**
+  (the toggles are web-only). See the `add-settings-flag` skill.
+
 ---
 
 ## 5. Run, test, lint, build, deploy
@@ -123,7 +173,7 @@ IRIS_API_BASE_URL (.env or config)
 ### Prerequisites
 
 - **Node.js 18+** (Docker web build uses Node 24)
-- **Go 1.25+**
+- **Go 1.26+**
 - For desktop dev: OS that can run Electron
 
 ### Backend (`iris-api/`)
@@ -138,8 +188,9 @@ DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
 | Task | Command |
 | --- | --- |
 | Test | `go test ./...` |
-| CLI user | `go run ./cmd/irisctl create-user -username … -password … -role admin` |
-| CSV import | `go run ./cmd/irisctl import-csv --dry-run\|--apply --dir ./imports` |
+| Create tenant | `go run ./cmd/irisctl create-tenant -slug … -name … [-admin-username … -admin-password …]` |
+| CLI user | `go run ./cmd/irisctl create-user -tenant <slug> -username … -password … -role admin` |
+| CSV import | `go run ./cmd/irisctl import-csv --dry-run\|--apply [-tenant <slug>] --dir ./imports` (`--apply` needs `-tenant`) |
 | Backup | `go run ./cmd/irisctl backup -out ./backups/iris.db` |
 
 ### Web (`apps/web/`)
@@ -252,7 +303,7 @@ Demo seed credentials (non-production): `admin` / `admin123`.
 | **Dual frontend duplication** | Large parallel trees (`apps/web` vs `apps/desktop/renderer`) - components, dashboard libs, hooks. Changes often need two edits; no shared UI package. |
 | **Client-side authorization** | Admin dashboard gating is UI-only ([D-006](docs/DECISIONS.md) `temporary`). API enforces session + admin on destructive routes, but not all read paths may match product intent. |
 | **Feature parity** | Web has **customers** CRUD and **public tracking**; desktop routes stop at work orders + dashboard (no customer IPC surface). |
-| **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `.github/copilot-instructions.md` still describes desktop as fixture-backed - outdated vs `IrisApiClient`. |
+| **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `docs/ARCHITECTURE.md` / `docs/CONTRIBUTING.md` remain desktop-first and partly predate the SQLite API and multi-tenancy - trust `REPO_MAP.md`, `openapi.yaml`, and the Go/web source when they conflict. |
 | **Electron security** | `sandbox: false` in `BrowserWindow`; preload isolation is good, but not hardened to modern Electron defaults. |
 | **No monorepo CI** | Regressions rely on manual verification per package. |
 | **Legacy statuses** | API accepts/normalizes `draft` / `active` for old fixtures. |

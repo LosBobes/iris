@@ -1,7 +1,9 @@
 # Iris
 
 Operations workspace for **Stamparija Cobanovic** (a print shop): work-order
-lifecycle, customers/locations, dashboard reporting, and public tracking.
+lifecycle, customers/locations, dashboard reporting, public tracking, and
+admin-configurable organization settings. The system is **multi-tenant** — every
+row is scoped to a tenant (organization) and login requires an organization slug.
 
 Three deployable surfaces share **one Go REST API** and **one SQLite database**:
 
@@ -47,9 +49,14 @@ A domain/shape change (e.g. a `WorkOrder` field) must be applied together across
 5. `apps/desktop/model/work-order.ts`
 6. Fixtures and tests (`iris-api/testdata/fixtures/`, app fixtures)
 
-Use the `update-api-contract` skill for endpoint/contract changes. If a change
-only touches one surface, do not preemptively rewire the others — but never leave
-a shared shape inconsistent.
+Use the `update-api-contract` skill for endpoint/contract changes, and
+`sync-domain-contract` for a new shared domain field. **Organization settings**
+follow a parallel rule (`OrganizationSettings` in openapi + domain types ↔
+`apps/web/src/types/settings.ts` ↔ `apps/desktop/model/settings.ts`), but live in
+the key/value `app_settings` table and need **no migration** — use the
+`add-settings-flag` skill to add one and sweep every dependent UI surface. If a
+change only touches one surface, do not preemptively rewire the others — but never
+leave a shared shape inconsistent.
 
 ## Conventions (all surfaces)
 
@@ -90,4 +97,9 @@ relevant per-surface checks yourself before declaring work done.
 - Feature parity gap: web has customers CRUD + public tracking; desktop stops at
   work orders + dashboard.
 - API normalizes legacy statuses (`draft`/`active`) for old fixtures.
-- Demo seed credentials (non-production only): `admin` / `admin123`.
+- **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
+  are scoped by the tenant resolved from the session (`tenantFromContext`), and a
+  missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`
+  need `-tenant <slug>`; `create-tenant` provisions a new organization.
+- Demo seed credentials (non-production only): org `demo`, user `admin`,
+  password `admin123`.
