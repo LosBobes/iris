@@ -742,6 +742,7 @@ export const en: typeof sr = {
       createError: 'Error creating the work order',
       updated: 'Work order {{order}} updated',
       updateError: 'Error updating the work order',
+      draftRecovered: 'Restored your unsaved order from before the page reload',
     },
     create: {
       back: 'Back to orders',
