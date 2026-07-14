@@ -139,15 +139,12 @@ describe("WorkOrderPrintSheet helpers", () => {
       "9X5",
       "200KOM",
       "SAMO SE SEČE",
-      "CENA: 1.450 DINARA",
     ]);
   });
 
   it("falls back to the order description when structured details are absent", () => {
-    expect(buildPrintJobLines(baseOrder)).toEqual([
-      "VIZIT KARTE",
-      "CENA: 1.450 DINARA",
-    ]);
+    // The grand total is rendered separately (UKUPNA CENA), not in the job lines.
+    expect(buildPrintJobLines(baseOrder)).toEqual(["VIZIT KARTE"]);
   });
 
   it("falls back to the order description when structured details are empty", () => {
@@ -162,7 +159,71 @@ describe("WorkOrderPrintSheet helpers", () => {
           finishingNote: null,
         },
       }),
-    ).toEqual(["VIZIT KARTE", "CENA: 1.450 DINARA"]);
+    ).toEqual(["VIZIT KARTE"]);
+  });
+
+  it("renders each line item's price as DESC — QTY UNIT × UNITPRICE = LINETOTAL", () => {
+    expect(
+      buildPrintJobLines({
+        ...baseOrder,
+        invoiceDraft: {
+          ...baseOrder.invoiceDraft,
+          lineItems: [
+            {
+              id: "l1",
+              kind: "goods",
+              description: "Plakati A2",
+              quantity: 100,
+              unit: "kom",
+              unitPrice: 150,
+              unitCost: null,
+              catalogItemId: null,
+            },
+            {
+              id: "l2",
+              kind: "service",
+              description: "Kaširanje",
+              quantity: 100,
+              unit: "kom",
+              unitPrice: 0,
+              unitCost: null,
+              catalogItemId: null,
+            },
+          ],
+        },
+      }),
+    ).toEqual([
+      "VIZIT KARTE",
+      "PLAKATI A2 — 100 KOM × 150 = 15.000",
+      // Zero-priced line (or a money-stripped operator copy) falls back to qty only.
+      "KAŠIRANJE — 100 KOM",
+    ]);
+  });
+
+  it("drops per-line prices from the operator (money-hidden) printout", () => {
+    expect(
+      buildPrintJobLines(
+        {
+          ...baseOrder,
+          invoiceDraft: {
+            ...baseOrder.invoiceDraft,
+            lineItems: [
+              {
+                id: "l1",
+                kind: "goods",
+                description: "Plakati A2",
+                quantity: 100,
+                unit: "kom",
+                unitPrice: 150,
+                unitCost: null,
+                catalogItemId: null,
+              },
+            ],
+          },
+        },
+        false,
+      ),
+    ).toEqual(["VIZIT KARTE", "PLAKATI A2 — 100 KOM"]);
   });
 
   it("uses the selected location address when shipping address is missing", () => {

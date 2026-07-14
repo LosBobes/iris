@@ -24,6 +24,7 @@ type WorkOrderPrintData struct {
 	ClientName      string
 	IssueDate       string
 	JobLines        []string
+	TotalPrice      string
 	ContactPerson   string
 	DeliveryRows    []PrintCheckRow
 	PlannedDate     string
@@ -57,24 +58,29 @@ func uppercaseString(value string) string {
 	return strings.ToUpper(trimmed)
 }
 
-func formatPrintPrice(price *float64) string {
-	if price == nil {
-		return ""
-	}
-	p := *price
+// formatAmount renders a monetary amount with thousands dots and up to two
+// decimals, no currency suffix: 15000 -> "15.000", 15000.5 -> "15.000,5".
+func formatAmount(p float64) string {
 	intPart := int64(p)
 	fracPart := p - float64(intPart)
 	intStr := formatIntegerWithDots(intPart)
 
 	if fracPart < 0.01 {
-		return intStr + " DINARA"
+		return intStr
 	}
 
 	fracStr := fmt.Sprintf("%.2f", fracPart)
 	fracStr = strings.TrimPrefix(fracStr, "0.")
 	fracStr = strings.TrimSuffix(fracStr, "0")
 
-	return intStr + "," + fracStr + " DINARA"
+	return intStr + "," + fracStr
+}
+
+func formatPrintPrice(price *float64) string {
+	if price == nil {
+		return ""
+	}
+	return formatAmount(*price) + " DINARA"
 }
 
 func formatIntegerWithDots(n int64) string {
@@ -223,7 +229,10 @@ func buildPrintJobLines(order domain.WorkOrder) []string {
 	}
 
 	// Itemized services/goods, listed above the price total. Each renders as
-	// "DESCRIPTION — QTY UNIT" (unit omitted when absent).
+	// "DESCRIPTION — QTY UNIT × UNITPRICE = LINETOTAL" so every position shows
+	// what it costs (unit omitted when absent). Non-admin printouts have line
+	// prices stripped to 0, so they fall back to "DESCRIPTION — QTY UNIT" with
+	// no "× 0 = 0" money leak.
 	for _, item := range order.InvoiceDraft.LineItems {
 		desc := uppercaseString(item.Description)
 		if desc == "" {
@@ -232,20 +241,22 @@ func buildPrintJobLines(order domain.WorkOrder) []string {
 		unit := uppercaseString(string(item.Unit))
 		itemLine := desc
 		if item.Quantity > 0 {
+			qtyUnit := strconv.Itoa(item.Quantity)
 			if unit != "" {
-				itemLine = fmt.Sprintf("%s — %d %s", desc, item.Quantity, unit)
+				qtyUnit = fmt.Sprintf("%d %s", item.Quantity, unit)
+			}
+			if item.UnitPrice > 0 {
+				lineTotal := float64(item.Quantity) * item.UnitPrice
+				itemLine = fmt.Sprintf("%s — %s × %s = %s", desc, qtyUnit, formatAmount(item.UnitPrice), formatAmount(lineTotal))
 			} else {
-				itemLine = fmt.Sprintf("%s — %d", desc, item.Quantity)
+				itemLine = fmt.Sprintf("%s — %s", desc, qtyUnit)
 			}
 		}
 		lines = append(lines, itemLine)
 	}
 
-	price := formatPrintPrice(order.Price)
-	if price != "" {
-		lines = append(lines, "CENA: "+price)
-	}
-
+	// The grand total is rendered separately (pinned to the bottom of the job
+	// panel as "UKUPNA CENA"), not mixed in with the per-line entries here.
 	if len(lines) == 0 {
 		return []string{"OPIS POSLA NIJE UNET"}
 	}
@@ -324,6 +335,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
     }
 
     .work-order-print-title {
+      position: relative;
       margin: 0;
       flex: 0 0 auto;
       border-bottom: 2px solid #000;
@@ -332,6 +344,18 @@ const htmlTemplateStr = `<!DOCTYPE html>
       font-size: 32px;
       font-weight: 800;
       letter-spacing: 0;
+    }
+
+    .work-order-print-number {
+      position: absolute;
+      top: 0;
+      right: 0;
+      border: 1px solid #000;
+      padding: 1mm 2.5mm;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0;
+      white-space: nowrap;
     }
 
     .work-order-print-hero {
@@ -426,11 +450,24 @@ const htmlTemplateStr = `<!DOCTYPE html>
       overflow-wrap: anywhere;
     }
 
-    .work-order-print-contact {
+    .work-order-print-job-footer {
       margin-top: auto;
+    }
+
+    .work-order-print-contact {
       font-size: 25px;
       font-weight: 800;
       line-height: 1.1;
+      overflow-wrap: anywhere;
+    }
+
+    .work-order-print-total {
+      margin-top: 3mm;
+      border-top: 2px solid #000;
+      padding-top: 2mm;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: 0;
       overflow-wrap: anywhere;
     }
 
@@ -601,7 +638,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
 </head>
 <body>
   <section class="work-order-print-sheet">
-    <h1 class="work-order-print-title">RADNI NALOG</h1>
+    <h1 class="work-order-print-title">RADNI NALOG{{if .OrderNumber}}<span class="work-order-print-number">{{.OrderNumber}}</span>{{end}}</h1>
 
     <div class="work-order-print-hero{{if not .ShowDelivery}} work-order-print-hero-solo{{end}}">
       <div class="work-order-print-main-panel">
@@ -623,9 +660,14 @@ const htmlTemplateStr = `<!DOCTYPE html>
               <div>{{.}}</div>
             {{end}}
           </div>
-          {{if .ContactPerson}}
-            <div class="work-order-print-contact">{{.ContactPerson}}</div>
-          {{end}}
+          <div class="work-order-print-job-footer">
+            {{if .ContactPerson}}
+              <div class="work-order-print-contact">{{.ContactPerson}}</div>
+            {{end}}
+            {{if .TotalPrice}}
+              <div class="work-order-print-total">UKUPNA CENA: {{.TotalPrice}}</div>
+            {{end}}
+          </div>
         </div>
       </div>
 
@@ -742,6 +784,7 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sectio
 		ClientName:      uppercaseString(order.ClientName),
 		IssueDate:       formatOptionalDate(&order.IssueDate),
 		JobLines:        buildPrintJobLines(order),
+		TotalPrice:      formatPrintPrice(order.Price),
 		ContactPerson:   uppercaseLine(order.ContactPerson),
 		DeliveryRows:    getPrintDeliveryRows(order.Shipping),
 		PlannedDate:     formatOptionalDate(plannedDate),

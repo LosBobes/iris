@@ -19,13 +19,19 @@ function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
 function buildPreviewOrder(
   values: WorkOrderFormValues,
   initialData?: WorkOrder | null,
+  previewOrderNumber?: string | null,
 ): WorkOrder {
   const now = new Date().toISOString();
   const base: WorkOrder =
     initialData ??
     ({
       id: "preview",
-      orderNumber: i18n.t("workOrders.detail.previewOrderNumber"),
+      // On the create page an order number is reserved when the form opens; show
+      // it in the preview so the printout matches the final nalog. Fall back to a
+      // placeholder only while the reservation is still pending.
+      orderNumber:
+        previewOrderNumber?.trim() ||
+        i18n.t("workOrders.detail.previewOrderNumber"),
       issuedBy: "",
       executedBy: null,
       isCompleted: false,
@@ -156,6 +162,8 @@ export function WorkOrderPreviewPane({
 interface WorkOrderPdfPreviewProps {
   watch: UseFormWatch<WorkOrderFormValues>;
   initialData?: WorkOrder | null;
+  /** Order number reserved for a new order, shown in the preview header box. */
+  previewOrderNumber?: string | null;
 }
 
 /**
@@ -166,12 +174,13 @@ interface WorkOrderPdfPreviewProps {
 export function WorkOrderPdfPreview({
   watch,
   initialData,
+  previewOrderNumber,
 }: WorkOrderPdfPreviewProps): React.JSX.Element {
   // watch() (no args) re-renders this component on any form change.
   const values = watch();
   const order = useMemo(
-    () => buildPreviewOrder(values, initialData),
-    [values, initialData],
+    () => buildPreviewOrder(values, initialData, previewOrderNumber),
+    [values, initialData, previewOrderNumber],
   );
   return <WorkOrderPreviewPane order={order} />;
 }
