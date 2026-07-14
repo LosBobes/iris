@@ -86,13 +86,14 @@ func TestPrintHelpers(t *testing.T) {
 		FinishingNote:  ptr("Samo se seče"),
 	}
 
+	// The grand total is no longer part of the job lines; it renders separately
+	// as "UKUPNA CENA" pinned to the bottom of the job panel.
 	expectedDetailsLines := []string{
 		"VK",
 		"350G",
 		"9X5",
 		"200KOM",
 		"SAMO SE SEČE",
-		"CENA: 1.450 DINARA",
 	}
 	detailsLines := buildPrintJobLines(orderWithDetails)
 	if !reflect.DeepEqual(detailsLines, expectedDetailsLines) {
@@ -101,7 +102,6 @@ func TestPrintHelpers(t *testing.T) {
 
 	expectedFallbackLines := []string{
 		"VIZIT KARTE",
-		"CENA: 1.450 DINARA",
 	}
 	fallbackLines := buildPrintJobLines(baseOrder)
 	if !reflect.DeepEqual(fallbackLines, expectedFallbackLines) {
@@ -113,6 +113,23 @@ func TestPrintHelpers(t *testing.T) {
 	emptyDetailsLines := buildPrintJobLines(orderWithEmptyDetails)
 	if !reflect.DeepEqual(emptyDetailsLines, expectedFallbackLines) {
 		t.Errorf("expected empty job details to fall back to description, got %v", emptyDetailsLines)
+	}
+
+	// 6. Line items render each position's price: "DESC — QTY UNIT × UNITPRICE = LINETOTAL".
+	orderWithItems := baseOrder
+	orderWithItems.InvoiceDraft.LineItems = []domain.InvoiceLineItem{
+		{Description: "Plakati A2", Quantity: 100, Unit: "kom", UnitPrice: 150},
+		// Zero unit price (e.g. a non-admin stripped printout) falls back to qty only.
+		{Description: "Kaširanje", Quantity: 100, Unit: "kom", UnitPrice: 0},
+	}
+	expectedItemLines := []string{
+		"VIZIT KARTE",
+		"PLAKATI A2 — 100 KOM × 150 = 15.000",
+		"KAŠIRANJE — 100 KOM",
+	}
+	itemLines := buildPrintJobLines(orderWithItems)
+	if !reflect.DeepEqual(itemLines, expectedItemLines) {
+		t.Errorf("expected item job lines %v, got %v", expectedItemLines, itemLines)
 	}
 }
 
@@ -133,6 +150,10 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 			t.Errorf("full sheet missing %q", marker)
 		}
 	}
+	// The order number must be printed on the sheet (previously only in <title>).
+	if !strings.Contains(full, `work-order-print-number">RN-2026-00001<`) {
+		t.Errorf("full sheet missing printed order number")
+	}
 
 	none, err := RenderWorkOrderHTML(order, nil, domain.PDFSections{})
 	if err != nil {
@@ -150,6 +171,25 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 	// Hiding delivery collapses the hero to a single column.
 	if !strings.Contains(none, "work-order-print-hero-solo") {
 		t.Errorf("expected hero-solo class when delivery hidden")
+	}
+}
+
+func TestRenderWorkOrderHTMLTotalPrice(t *testing.T) {
+	price := 1450.0
+	order := domain.WorkOrder{
+		OrderNumber:    "RN-2026-00001",
+		ClientName:     "Profesionalni Upravnik",
+		JobDescription: "Vizit karte",
+		Price:          &price,
+	}
+
+	html, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	// The total is labelled "UKUPNA CENA" and separated from the line entries.
+	if !strings.Contains(html, `work-order-print-total">UKUPNA CENA: 1.450 DINARA<`) {
+		t.Errorf("expected labelled total price in rendered sheet")
 	}
 }
 

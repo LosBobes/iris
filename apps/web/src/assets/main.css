@@ -372,6 +372,7 @@
   }
 
   .work-order-print-title {
+    position: relative;
     margin: 0;
     flex: 0 0 auto;
     border-bottom: 2px solid #000;
@@ -380,6 +381,18 @@
     font-size: 32px;
     font-weight: 800;
     letter-spacing: 0;
+  }
+
+  .work-order-print-number {
+    position: absolute;
+    top: 0;
+    right: 0;
+    border: 1px solid #000;
+    padding: 1mm 2.5mm;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+    white-space: nowrap;
   }
 
   .work-order-print-hero {
@@ -475,11 +488,24 @@
     overflow-wrap: anywhere;
   }
 
-  .work-order-print-contact {
+  .work-order-print-job-footer {
     margin-top: auto;
+  }
+
+  .work-order-print-contact {
     font-size: 25px;
     font-weight: 800;
     line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-total {
+    margin-top: 3mm;
+    border-top: 2px solid #000;
+    padding-top: 2mm;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0;
     overflow-wrap: anywhere;
   }
 

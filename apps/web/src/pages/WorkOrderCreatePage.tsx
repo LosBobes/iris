@@ -252,6 +252,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             onValuesChange={handleValuesChange}
+            previewOrderNumber={reservedOrderNumber}
           />
         </div>
       </div>

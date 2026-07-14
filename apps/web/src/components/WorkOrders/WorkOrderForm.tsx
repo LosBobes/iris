@@ -68,6 +68,11 @@ interface WorkOrderFormProps {
    * showing a work order another operator is currently editing. Defaults to false.
    */
   readOnly?: boolean;
+  /**
+   * Order number reserved for a new order (create page). Surfaced in the PDF
+   * preview so it shows the real reserved number instead of a placeholder.
+   */
+  previewOrderNumber?: string | null;
 }
 
 interface FormSectionProps {
@@ -313,20 +318,6 @@ function getFirstErrorPath(
   return null;
 }
 
-function getFirstValidationMessage(value: unknown): string | undefined {
-  if (!value) return undefined;
-  if (hasValidationMessage(value)) return value.message as string;
-
-  if (typeof value === "object") {
-    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
-      const nestedMessage = getFirstValidationMessage(nestedValue);
-      if (nestedMessage) return nestedMessage;
-    }
-  }
-
-  return undefined;
-}
-
 export function getFirstWorkOrderFormErrorTarget(
   errors: FieldErrors<WorkOrderFormValues>,
 ): string | null {
@@ -423,6 +414,7 @@ export function WorkOrderForm({
   onCancel,
   onValuesChange,
   readOnly = false,
+  previewOrderNumber,
 }: WorkOrderFormProps): React.JSX.Element {
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
@@ -954,8 +946,6 @@ export function WorkOrderForm({
       return next;
     });
   };
-  const internalNoteError = getFirstValidationMessage(errors.internalNotes?.[0]);
-
   useEffect(() => {
     const nextAddress = resolveShippingAddress(
       shippingAddress,
@@ -2198,9 +2188,13 @@ export function WorkOrderForm({
         </FormSection>
         )}
 
-        <FormSection title={isAdmin ? t("workOrders.form.sectionFinanceNotes") : t("workOrders.form.sectionNotes")}>
-          <div className="grid grid-cols-2 gap-6">
-            {isAdmin && (
+        {/* Finance summary (admin only). The free-text Napomena and Interna
+            beleška fields were removed per client request. The order's note is
+            still preserved on edit (unregistered fields keep their initial
+            value) and shown on the detail page. */}
+        {isAdmin && (
+          <FormSection title={t("workOrders.form.sectionFinance")}>
+            <div className="grid grid-cols-2 gap-6">
               <FieldShell
                 id="price"
                 label={t("workOrders.form.price")}
@@ -2218,38 +2212,9 @@ export function WorkOrderForm({
                   {t("workOrders.form.priceAutoHint")}
                 </p>
               </FieldShell>
-            )}
-
-            <FieldShell id="note" label={t("workOrders.form.note")} full>
-              <textarea
-                id="note"
-                rows={3}
-                className={`w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground`}
-                placeholder={t("workOrders.form.notePlaceholder")}
-                {...register("note", {
-                  setValueAs: (v: string) => (v === "" ? null : v),
-                })}
-              />
-            </FieldShell>
-
-            {isAdmin && (
-              <FieldShell
-                id="internalNotes.0.body"
-                label={t("workOrders.form.internalNote")}
-                error={internalNoteError}
-                full
-              >
-                <textarea
-                  id="internalNotes.0.body"
-                  rows={3}
-                  className="w-full border border-border bg-card p-3 text-[12px] text-foreground outline-none focus:border-foreground"
-                  placeholder={t("workOrders.form.internalPlaceholder")}
-                  {...register("internalNotes.0.body")}
-                />
-              </FieldShell>
-            )}
-          </div>
-        </FormSection>
+            </div>
+          </FormSection>
+        )}
       </div>
 
       <aside className="bg-card p-8 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-border">
@@ -2271,7 +2236,11 @@ export function WorkOrderForm({
                   {t("workOrders.form.previewHide")}
                 </button>
               </div>
-              <WorkOrderPdfPreview watch={watch} initialData={initialData} />
+              <WorkOrderPdfPreview
+                watch={watch}
+                initialData={initialData}
+                previewOrderNumber={previewOrderNumber}
+              />
             </div>
           )
         ) : (

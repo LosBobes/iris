@@ -34,15 +34,18 @@ function uppercaseLine(value: string | null | undefined): string | null {
   return trimmed.toLocaleUpperCase("sr-Latn-RS");
 }
 
-function formatPrintPrice(price: number | null): string | null {
-  if (price === null) return null;
-
-  const value = new Intl.NumberFormat("sr-Latn-RS", {
+// Thousands-grouped amount with up to two decimals, no currency suffix:
+// 15000 -> "15.000". Used both for the grand total and per-line prices.
+function formatPrintAmount(value: number): string {
+  return new Intl.NumberFormat("sr-Latn-RS", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(price);
+  }).format(value);
+}
 
-  return i18n.t("workOrders.print.price", { value });
+function formatPrintPrice(price: number | null): string | null {
+  if (price === null) return null;
+  return i18n.t("workOrders.print.price", { value: formatPrintAmount(price) });
 }
 
 function formatOptionalDate(value: string | null | undefined): string {
@@ -144,12 +147,28 @@ export function buildPrintJobLines(order: WorkOrder, includePrice = true): strin
           Boolean(line),
         );
 
-  // Operators never see money: skip the price line on their printout. (The
-  // server-rendered PDF/HTML strips it too; this covers a browser Ctrl+P of the
-  // client-rendered sheet.)
-  const price = includePrice ? formatPrintPrice(order.price) : null;
-  if (price) lines.push(price);
+  // Itemized services/goods, each rendered as "DESC — QTY UNIT × UNITPRICE =
+  // LINETOTAL" so every position shows what it costs. Operators never see money,
+  // so their printout drops the price part and shows "DESC — QTY UNIT".
+  for (const item of order.invoiceDraft.lineItems) {
+    const desc = uppercaseLine(item.description);
+    if (!desc) continue;
+    const unit = uppercaseLine(item.unit);
+    let itemLine = desc;
+    if (item.quantity > 0) {
+      const qtyUnit = unit ? `${item.quantity} ${unit}` : `${item.quantity}`;
+      if (includePrice && item.unitPrice > 0) {
+        const lineTotal = item.quantity * item.unitPrice;
+        itemLine = `${desc} — ${qtyUnit} × ${formatPrintAmount(item.unitPrice)} = ${formatPrintAmount(lineTotal)}`;
+      } else {
+        itemLine = `${desc} — ${qtyUnit}`;
+      }
+    }
+    lines.push(itemLine);
+  }
 
+  // The grand total is rendered separately (as "UKUPNA CENA", pinned to the
+  // bottom of the job panel), not appended to the per-line entries here.
   return lines.length > 0
     ? lines
     : [i18n.t("workOrders.print.noDescription")];
@@ -185,7 +204,10 @@ export function WorkOrderPrintSheet({
   const { t } = useTranslation();
   const { currentUser } = useAuth();
   const { pdfSections } = useOrganization();
-  const jobLines = buildPrintJobLines(order, currentUser.role === "admin");
+  const isAdmin = currentUser.role === "admin";
+  const jobLines = buildPrintJobLines(order, isAdmin);
+  // Operators never see money: the total is omitted from their printout.
+  const totalPrice = isAdmin ? formatPrintPrice(order.price) : null;
   const deliveryRows = getPrintDeliveryRows(order.shipping);
   const billingRows = getPrintBillingRows(order.billingDocumentType);
   const noteLines = buildPrintNoteLines(order);
@@ -198,7 +220,12 @@ export function WorkOrderPrintSheet({
       aria-label={t("workOrders.print.ariaLabel", { order: order.orderNumber })}
       className="work-order-print-sheet"
     >
-      <h1 className="work-order-print-title">{t("workOrders.print.title")}</h1>
+      <h1 className="work-order-print-title">
+        {t("workOrders.print.title")}
+        {order.orderNumber && (
+          <span className="work-order-print-number">{order.orderNumber}</span>
+        )}
+      </h1>
 
       <div
         className={cn(
@@ -235,11 +262,16 @@ export function WorkOrderPrintSheet({
                 <div key={line}>{line}</div>
               ))}
             </div>
-            {order.contactPerson && (
-              <div className="work-order-print-contact">
-                {uppercaseLine(order.contactPerson)}
-              </div>
-            )}
+            <div className="work-order-print-job-footer">
+              {order.contactPerson && (
+                <div className="work-order-print-contact">
+                  {uppercaseLine(order.contactPerson)}
+                </div>
+              )}
+              {totalPrice && (
+                <div className="work-order-print-total">{totalPrice}</div>
+              )}
+            </div>
           </div>
         </div>
 
