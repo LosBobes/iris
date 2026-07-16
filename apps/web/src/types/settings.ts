@@ -56,6 +56,13 @@ export interface OrganizationSettings {
    * insurance). Off by default so the form stays compact.
    */
   showShippingOptions: boolean
+  /**
+   * Whether firms may have multiple locations. When false, a firm's location is
+   * presented as part of the firm (single address field, no location picker);
+   * when true, several locations can be managed. Off by default. Purely
+   * presentational — the backend keeps locations as separate rows regardless.
+   */
+  allowMultipleLocations: boolean
 }
 
 /** Fallback firm name used before settings load or when the request fails. */
@@ -85,3 +92,9 @@ export const DEFAULT_PRIORITY_DEFAULTS: PriorityDefaults = {
 
 /** Extra shipping/handling fields are hidden by default. */
 export const DEFAULT_SHOW_SHIPPING_OPTIONS = false
+
+/**
+ * Multiple locations per firm are disabled by default: a firm's location is
+ * shown as part of the firm itself.
+ */
+export const DEFAULT_ALLOW_MULTIPLE_LOCATIONS = false

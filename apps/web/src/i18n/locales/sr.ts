@@ -156,6 +156,15 @@ export const sr = {
       saveErrorPrefix: 'Greška pri čuvanju',
       saveError: 'Greška pri čuvanju podešavanja opcija isporuke.',
     },
+    locations: {
+      title: 'Lokacije firmi',
+      hint: 'Da li firme mogu da imaju više lokacija ili se lokacija prikazuje kao deo firme.',
+      allow: 'Dozvoli više lokacija po firmi',
+      allowHint: 'Kada je isključeno, lokacija se prikazuje kao deo firme (jedna adresa, bez izbora lokacije).',
+      saved: 'Podešavanja lokacija su sačuvana.',
+      saveErrorPrefix: 'Greška pri čuvanju',
+      saveError: 'Greška pri čuvanju podešavanja lokacija.',
+    },
     enums: {
       title: 'Vrednosti šifarnika',
       hint: 'Dodajte sopstvene opcije za padajuće liste radnih naloga. Ugrađene vrednosti su zaključane.',
@@ -417,6 +426,7 @@ export const sr = {
     editLocationHeader: 'Izmena lokacije',
     locName: 'Naziv *',
     locAddress: 'Adresa',
+    primaryLocationName: 'Sedište',
     saveLocation: 'Sačuvaj lokaciju',
     noLocations: 'Još nema lokacija za ovog klijenta.',
     editLocationAria: 'Izmeni lokaciju',

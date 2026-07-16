@@ -9,6 +9,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
 import {
+  DEFAULT_ALLOW_MULTIPLE_LOCATIONS,
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
@@ -116,6 +117,9 @@ function App(): React.JSX.Element {
   const [showShippingOptions, setShowShippingOptions] = useState(
     DEFAULT_SHOW_SHIPPING_OPTIONS,
   );
+  const [allowMultipleLocations, setAllowMultipleLocations] = useState(
+    DEFAULT_ALLOW_MULTIPLE_LOCATIONS,
+  );
 
   const checkBackendStatus = useCallback(async () => {
     startTransition(() => {
@@ -151,6 +155,8 @@ function App(): React.JSX.Element {
             setPriorityDefaults(settings.priorityDefaults);
           if (typeof settings?.showShippingOptions === "boolean")
             setShowShippingOptions(settings.showShippingOptions);
+          if (typeof settings?.allowMultipleLocations === "boolean")
+            setAllowMultipleLocations(settings.allowMultipleLocations);
         } catch {
           // Keep the default firm name.
         }
@@ -210,7 +216,7 @@ function App(): React.JSX.Element {
                 <Login onLoginSuccess={handleLoginSuccess} />
               ) : (
                 <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, showShippingOptions, setShowShippingOptions }}>
+                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, showShippingOptions, setShowShippingOptions, allowMultipleLocations, setAllowMultipleLocations }}>
                   <TooltipProvider>
                     <Routes>
                       <Route path="/" element={<DashboardPage />} />

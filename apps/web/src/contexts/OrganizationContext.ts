@@ -1,5 +1,6 @@
 import { createContext } from 'react'
 import {
+  DEFAULT_ALLOW_MULTIPLE_LOCATIONS,
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
@@ -31,6 +32,10 @@ export interface OrganizationContextValue {
   showShippingOptions: boolean
   /** Updates the in-memory shipping-options toggle after a successful save. */
   setShowShippingOptions: (showShippingOptions: boolean) => void
+  /** Whether firms may have multiple locations (else location shown as part of the firm). */
+  allowMultipleLocations: boolean
+  /** Updates the in-memory multiple-locations toggle after a successful save. */
+  setAllowMultipleLocations: (allowMultipleLocations: boolean) => void
 }
 
 export const OrganizationContext = createContext<OrganizationContextValue>({
@@ -44,4 +49,6 @@ export const OrganizationContext = createContext<OrganizationContextValue>({
   setPriorityDefaults: () => {},
   showShippingOptions: DEFAULT_SHOW_SHIPPING_OPTIONS,
   setShowShippingOptions: () => {},
+  allowMultipleLocations: DEFAULT_ALLOW_MULTIPLE_LOCATIONS,
+  setAllowMultipleLocations: () => {},
 })

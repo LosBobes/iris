@@ -15,6 +15,7 @@ import { PdfSectionsSettings } from "@/components/settings/PdfSectionsSettings";
 import { BillingDefaultsSettings } from "@/components/settings/BillingDefaultsSettings";
 import { PriorityDefaultsSettings } from "@/components/settings/PriorityDefaultsSettings";
 import { ShippingOptionsSettings } from "@/components/settings/ShippingOptionsSettings";
+import { LocationsSettings } from "@/components/settings/LocationsSettings";
 import { useOrganization } from "@/hooks/useOrganization";
 
 // Maps a font-scale option value to its i18n key suffix under settings.font.
@@ -244,6 +245,8 @@ export function SettingsPage(): React.JSX.Element {
           {isAdmin && <PriorityDefaultsSettings />}
 
           {isAdmin && <ShippingOptionsSettings />}
+
+          {isAdmin && <LocationsSettings />}
 
           {isAdmin && <PdfSectionsSettings />}
 

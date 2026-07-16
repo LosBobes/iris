@@ -157,6 +157,15 @@ export const en: typeof sr = {
       saveErrorPrefix: 'Error saving',
       saveError: 'Error saving the shipping options settings.',
     },
+    locations: {
+      title: 'Firm locations',
+      hint: 'Whether firms can have multiple locations or the location is shown as part of the firm.',
+      allow: 'Allow multiple locations per firm',
+      allowHint: 'When off, the location is shown as part of the firm (single address, no location picker).',
+      saved: 'Location settings saved.',
+      saveErrorPrefix: 'Error saving',
+      saveError: 'Error saving the location settings.',
+    },
     enums: {
       title: 'Enum values',
       hint: 'Add your own options for work-order dropdowns. Built-in values are locked.',
@@ -418,6 +427,7 @@ export const en: typeof sr = {
     editLocationHeader: 'Edit location',
     locName: 'Name *',
     locAddress: 'Address',
+    primaryLocationName: 'Head office',
     saveLocation: 'Save location',
     noLocations: 'No locations for this client yet.',
     editLocationAria: 'Edit location',

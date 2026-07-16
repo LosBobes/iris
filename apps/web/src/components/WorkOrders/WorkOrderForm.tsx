@@ -429,8 +429,12 @@ export function WorkOrderForm({
   // Shop-wide document-type policy: new orders start on the configured default
   // (proforma out of the box) and the picker only appears when overriding is on.
   // The extra shipping/handling fields are hidden unless the shop enables them.
-  const { billingDefaults, priorityDefaults, showShippingOptions } =
-    useOrganization();
+  const {
+    billingDefaults,
+    priorityDefaults,
+    showShippingOptions,
+    allowMultipleLocations,
+  } = useOrganization();
 
   const rawDefaultValues: WorkOrderFormValues =
     initialValues ??
@@ -1192,7 +1196,12 @@ export function WorkOrderForm({
               )}
             </FieldShell>
 
-            {selectedCustomerId && (
+            {/* The location picker and inline add-location only appear when the
+                shop allows multiple locations per firm. When disabled, the
+                firm's single location is treated as part of the firm — its
+                address still shows in the registry panel below — and the
+                selected location stays auto-set behind the scenes. */}
+            {allowMultipleLocations && selectedCustomerId && (
             <FieldShell id="locationId" label={t("workOrders.form.location")}>
               {/* A single location (typically the firm's "sedište") is
                   auto-selected and its address already shows in the registry
@@ -1316,7 +1325,7 @@ export function WorkOrderForm({
                       <div className="text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)]">
                         {t("workOrders.form.registryAddress")}
                       </div>
-                      {selectedLocation && locationEdit === null && (
+                      {allowMultipleLocations && selectedLocation && locationEdit === null && (
                         <button
                           type="button"
                           onClick={openLocationEdit}
@@ -1349,7 +1358,7 @@ export function WorkOrderForm({
                     </div>
                   </div>
                 </div>
-                {selectedLocation && locationEdit !== null && (
+                {allowMultipleLocations && selectedLocation && locationEdit !== null && (
                   <div className="mt-3 space-y-2 border border-border bg-card p-3">
                     <div className="flex items-center justify-between">
                       <span className="inline-flex items-center gap-1.5 text-[11px] text-[color:var(--iris-ink-soft)]">

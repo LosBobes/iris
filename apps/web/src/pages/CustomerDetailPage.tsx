@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import {
   blankToNull,
   emptyCustomer,
@@ -46,9 +47,16 @@ function CustomerDetailPage(): React.JSX.Element {
   const isNew = routeId === undefined || routeId === "new";
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
+  // When multiple locations per firm are disabled, the firm's single location is
+  // treated as part of the firm: we hide the locations manager and instead edit
+  // one inline "address" field backed by the firm's primary location row.
+  const { allowMultipleLocations } = useOrganization();
 
   const [customer, setCustomer] = useState<Customer>(emptyCustomer);
   const [locations, setLocations] = useState<Location[]>([]);
+  // Single-location mode: the address shown/edited inline on the firm, seeded
+  // from and persisted back to the firm's first location.
+  const [singleAddress, setSingleAddress] = useState("");
   const [loading, setLoading] = useState(!isNew);
   const [notFound, setNotFound] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,7 +76,9 @@ function CustomerDetailPage(): React.JSX.Element {
         return;
       }
       setCustomer(found);
-      setLocations(allLocations.filter((location) => location.customerId === routeId));
+      const own = allLocations.filter((location) => location.customerId === routeId);
+      setLocations(own);
+      setSingleAddress(own[0]?.address ?? "");
     } catch {
       toast.error(t("customerDetail.loadError"));
     } finally {
@@ -102,6 +112,34 @@ function CustomerDetailPage(): React.JSX.Element {
         mb: blankToNull(customer.mb),
       });
       const saved = await window.api.upsertCustomer(payload);
+      // In single-location mode the firm's address is edited inline, so persist
+      // it onto the firm's primary location (creating one if none exists yet).
+      // The multi-location UI is hidden; the data model stays unchanged.
+      if (!allowMultipleLocations) {
+        const trimmed = singleAddress.trim();
+        const primary = locations[0] ?? null;
+        if (primary) {
+          if ((primary.address ?? "") !== trimmed) {
+            const savedLocation = await window.api.upsertLocation({
+              ...primary,
+              address: trimmed || null,
+            });
+            setLocations((current) =>
+              current.map((location) =>
+                location.id === savedLocation.id ? savedLocation : location,
+              ),
+            );
+          }
+        } else if (trimmed !== "") {
+          const savedLocation = await window.api.upsertLocation({
+            id: slugId("loc", saved.id),
+            customerId: saved.id,
+            name: t("customerDetail.primaryLocationName"),
+            address: trimmed,
+          });
+          setLocations((current) => [...current, savedLocation]);
+        }
+      }
       toast.success(t("customerDetail.saved"));
       if (isNew) {
         navigate(`/customers/${encodeURIComponent(saved.id)}`, { replace: true });
@@ -113,7 +151,7 @@ function CustomerDetailPage(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [customer, isNew, navigate, t]);
+  }, [customer, isNew, navigate, t, allowMultipleLocations, singleAddress, locations]);
 
   const saveLocation = useCallback(async () => {
     if (!locationDraft) return;
@@ -217,27 +255,34 @@ function CustomerDetailPage(): React.JSX.Element {
 
         <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-8 px-5 pb-10 sm:px-8">
-            <DetailsForm value={customer} onChange={setCustomer} />
+            <DetailsForm
+              value={customer}
+              onChange={setCustomer}
+              showAddress={!allowMultipleLocations}
+              address={singleAddress}
+              onAddressChange={setSingleAddress}
+            />
 
-            {isNew ? (
-              <p className="border border-dashed border-border bg-background px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
-                {t("customerDetail.locationsAfterSave")}
-              </p>
-            ) : (
-              <LocationsSection
-                locations={locations}
-                draft={locationDraft}
-                isAdmin={isAdmin}
-                onAdd={() => setLocationDraft(emptyLocation(customer.id))}
-                onEdit={(location) => setLocationDraft(location)}
-                onCancel={() => setLocationDraft(null)}
-                onChangeDraft={setLocationDraft}
-                onSave={saveLocation}
-                onDelete={(location) =>
-                  setDeleteTarget({ kind: "location", id: location.id, name: location.name })
-                }
-              />
-            )}
+            {allowMultipleLocations &&
+              (isNew ? (
+                <p className="border border-dashed border-border bg-background px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
+                  {t("customerDetail.locationsAfterSave")}
+                </p>
+              ) : (
+                <LocationsSection
+                  locations={locations}
+                  draft={locationDraft}
+                  isAdmin={isAdmin}
+                  onAdd={() => setLocationDraft(emptyLocation(customer.id))}
+                  onEdit={(location) => setLocationDraft(location)}
+                  onCancel={() => setLocationDraft(null)}
+                  onChangeDraft={setLocationDraft}
+                  onSave={saveLocation}
+                  onDelete={(location) =>
+                    setDeleteTarget({ kind: "location", id: location.id, name: location.name })
+                  }
+                />
+              ))}
           </div>
 
           <aside className="border-t border-border bg-card p-6 lg:sticky lg:top-0 lg:self-start lg:border-l lg:border-t-0 lg:p-8">
@@ -255,7 +300,7 @@ function CustomerDetailPage(): React.JSX.Element {
                 <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.contacts")}</dt>
                 <dd className="tnum text-foreground">{customer.contacts.length}</dd>
               </div>
-              {!isNew && (
+              {!isNew && allowMultipleLocations && (
                 <div className="flex items-center justify-between">
                   <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.locations")}</dt>
                   <dd className="tnum text-foreground">{locations.length}</dd>
@@ -347,9 +392,16 @@ function SummaryRow({
 function DetailsForm({
   value,
   onChange,
+  showAddress,
+  address,
+  onAddressChange,
 }: {
   value: Customer;
   onChange: (value: Customer) => void;
+  /** In single-location mode, show the firm's address as an inline field. */
+  showAddress: boolean;
+  address: string;
+  onAddressChange: (address: string) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   return (
@@ -370,6 +422,13 @@ function DetailsForm({
             placeholder={t("customerDetail.mbPlaceholder")}
             onChange={(mb) => onChange({ ...value, mb })}
           />
+          {showAddress && (
+            <Field
+              label={t("customerDetail.locAddress")}
+              value={address}
+              onChange={onAddressChange}
+            />
+          )}
         </div>
       </section>
 
