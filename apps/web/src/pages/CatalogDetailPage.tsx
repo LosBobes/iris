@@ -25,6 +25,7 @@ import {
   toCatalogInput,
 } from "@/lib/catalog";
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
+import { cn } from "@/lib/utils";
 
 function CatalogDetailPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -183,7 +184,10 @@ function CatalogDetailPage(): React.JSX.Element {
               </div>
             </dl>
 
-            {isAdmin && (
+            {/* Admins get the full save/delete panel. Operators may save an
+                existing item (kind-only edit, enforced by the API); they can't
+                create or delete. */}
+            {(isAdmin || !isNew) && (
               <div className="mt-6 flex flex-col gap-2">
                 <button
                   type="button"
@@ -202,7 +206,7 @@ function CatalogDetailPage(): React.JSX.Element {
                 >
                   {t("workOrders.form.cancel")}
                 </button>
-                {!isNew && (
+                {isAdmin && !isNew && (
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(true)}
@@ -278,11 +282,12 @@ function DetailsForm({
           readOnly={readOnly}
           onChange={(name) => onChange({ ...value, name })}
         />
+        {/* Kind (vrsta) is the one field operators may edit; everything else on
+            this form stays admin-only (readOnly). */}
         <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
           {t("catalog.detail.kindField")}
           <select
             value={value.kind}
-            disabled={readOnly}
             onChange={(event) =>
               onChange({ ...value, kind: event.target.value as CatalogItemKind })
             }
@@ -334,26 +339,40 @@ function DetailsForm({
           readOnly={readOnly}
           onChange={(taxGroup) => onChange({ ...value, taxGroup })}
         />
-        <label className="flex items-end gap-2 pb-2 text-[11px] text-[color:var(--iris-ink-soft)]">
-          <input
-            type="checkbox"
-            checked={value.isActive}
-            disabled={readOnly}
-            onChange={(event) => onChange({ ...value, isActive: event.target.checked })}
-            className="h-4 w-4"
+        {readOnly ? (
+          <ReadOnlyValue
+            label={t("catalog.detail.activeField")}
+            value={value.isActive ? t("catalog.detail.active") : t("catalog.detail.inactive")}
           />
-          {t("catalog.detail.activeField")}
-        </label>
-        <label className="block text-[11px] text-[color:var(--iris-ink-soft)] sm:col-span-2">
-          {t("catalog.detail.descriptionField")}
-          <textarea
+        ) : (
+          <label className="flex items-end gap-2 pb-2 text-[11px] text-[color:var(--iris-ink-soft)]">
+            <input
+              type="checkbox"
+              checked={value.isActive}
+              onChange={(event) => onChange({ ...value, isActive: event.target.checked })}
+              className="h-4 w-4"
+            />
+            {t("catalog.detail.activeField")}
+          </label>
+        )}
+        {readOnly ? (
+          <ReadOnlyValue
+            label={t("catalog.detail.descriptionField")}
             value={value.description ?? ""}
-            readOnly={readOnly}
-            rows={3}
-            onChange={(event) => onChange({ ...value, description: event.target.value })}
-            className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground read-only:opacity-60"
+            wrapperClassName="sm:col-span-2"
+            valueClassName="whitespace-pre-wrap"
           />
-        </label>
+        ) : (
+          <label className="block text-[11px] text-[color:var(--iris-ink-soft)] sm:col-span-2">
+            {t("catalog.detail.descriptionField")}
+            <textarea
+              value={value.description ?? ""}
+              rows={3}
+              onChange={(event) => onChange({ ...value, description: event.target.value })}
+              className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+            />
+          </label>
+        )}
       </div>
     </section>
   );
@@ -388,6 +407,39 @@ function PriceInput({
   );
 }
 
+// ReadOnlyValue shows a field's value as plain static text, so operators can
+// read it without it looking like an editable input (only Vrsta is a control).
+function ReadOnlyValue({
+  label,
+  value,
+  wrapperClassName,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  wrapperClassName?: string;
+  valueClassName?: string;
+}): React.JSX.Element {
+  return (
+    <label
+      className={cn(
+        "block text-[11px] text-[color:var(--iris-ink-soft)]",
+        wrapperClassName,
+      )}
+    >
+      {label}
+      <div
+        className={cn(
+          "mt-1 block w-full py-2 text-[13px] text-foreground",
+          valueClassName,
+        )}
+      >
+        {value || "—"}
+      </div>
+    </label>
+  );
+}
+
 function Field({
   label,
   value,
@@ -401,15 +453,17 @@ function Field({
   readOnly?: boolean;
   onChange: (value: string) => void;
 }): React.JSX.Element {
+  if (readOnly) {
+    return <ReadOnlyValue label={label} value={value} />;
+  }
   return (
     <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
       {label}
       <input
         value={value}
         placeholder={placeholder}
-        readOnly={readOnly}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground read-only:opacity-60"
+        className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
       />
     </label>
   );
@@ -446,6 +500,16 @@ function UnitField({
 
   if (value && !options.some((option) => option.value === value)) {
     options.push({ value, label: value });
+  }
+
+  if (readOnly) {
+    const current = options.find((option) => option.value === value);
+    return (
+      <ReadOnlyValue
+        label={t("catalog.detail.unitField")}
+        value={current?.label ?? value}
+      />
+    );
   }
 
   return (
