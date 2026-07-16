@@ -9,7 +9,7 @@ import {
   type UseFormWatch,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Eye, EyeOff, Loader2, MapPin, Pencil, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, MapPin, Package, Pencil, Plus, Trash2, UserPlus, Wrench, X } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1501,6 +1501,7 @@ export function WorkOrderForm({
                     className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
                   >
                     <Plus className="h-3.5 w-3.5" />
+                    <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
                     {t("workOrders.form.specialService")}
                   </button>
                   <button
@@ -1509,6 +1510,7 @@ export function WorkOrderForm({
                     className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
                   >
                     <Plus className="h-3.5 w-3.5" />
+                    <Package className="h-3.5 w-3.5" aria-hidden="true" />
                     {t("workOrders.form.specialGoods")}
                   </button>
                 </div>
