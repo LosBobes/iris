@@ -119,7 +119,10 @@ func (s *Server) Routes() http.Handler {
 		protected.Get("/catalog-items/{id}", s.handleCatalogItemByID)
 		protected.Get("/catalog-items/{id}/cost-history", s.requireAdmin(s.handleCatalogItemCostHistory))
 		protected.Post("/catalog-items", s.requireAdmin(s.handleUpsertCatalogItem))
-		protected.Put("/catalog-items/{id}", s.requireAdmin(s.handleUpsertCatalogItem))
+		// Operators may update an existing item's kind (vrsta) only; the handler
+		// enforces that and rejects every other field change. Admins get the
+		// full upsert.
+		protected.Put("/catalog-items/{id}", s.handleUpsertCatalogItem)
 		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))

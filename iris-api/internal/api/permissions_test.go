@@ -396,3 +396,65 @@ func TestCostDataHiddenFromNonAdmin(t *testing.T) {
 		t.Errorf("non-admin line unitCost = %#v, want nil", userOrder.InvoiceDraft.LineItems)
 	}
 }
+
+// TestOperatorCanEditOnlyCatalogKind proves an operator may change a catalog
+// item's kind (vrsta) via PUT, that any other field in the payload is ignored
+// (name, code, prices, status preserved), and that operators cannot create
+// catalog items.
+func TestOperatorCanEditOnlyCatalogKind(t *testing.T) {
+	server, adminToken, userToken := newServerWithRoles(t)
+
+	// Admin creates an article with a name, code and both prices.
+	createItem := `{"code":"ART-1","name":"A tabla B1 format","kind":"article","unit":"kom","purchasePrice":120,"salePrice":300,"isActive":true}`
+	itemRec := roleRequest(t, server, adminToken, http.MethodPost, "/catalog-items", createItem)
+	if itemRec.Code != http.StatusCreated {
+		t.Fatalf("create catalog item = %d (%s)", itemRec.Code, itemRec.Body.String())
+	}
+	var item domain.CatalogItem
+	if err := json.Unmarshal(itemRec.Body.Bytes(), &item); err != nil {
+		t.Fatalf("decode item: %v", err)
+	}
+
+	// Operator PUTs a payload that flips the kind to "service" while also trying
+	// to rewrite the name, code, prices and status. Only the kind must stick.
+	operatorPayload := `{"code":"HACKED","name":"Izmenjeno","kind":"service","unit":"m","purchasePrice":1,"salePrice":2,"isActive":false}`
+	updateRec := roleRequest(t, server, userToken, http.MethodPut, "/catalog-items/"+item.ID, operatorPayload)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("operator update = %d (%s)", updateRec.Code, updateRec.Body.String())
+	}
+	var updated domain.CatalogItem
+	if err := json.Unmarshal(updateRec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode updated: %v", err)
+	}
+	if updated.Kind != domain.CatalogItemKindService {
+		t.Errorf("operator kind = %q, want service", updated.Kind)
+	}
+	if updated.Name != "A tabla B1 format" || updated.Code != "ART-1" || updated.Unit != "kom" || !updated.IsActive {
+		t.Errorf("operator changed a protected field: %#v", updated)
+	}
+	if updated.PurchasePrice != nil {
+		t.Errorf("operator response purchasePrice = %v, want nil (stripped)", *updated.PurchasePrice)
+	}
+
+	// Admin re-reads to confirm the prices survived intact on the server.
+	adminRec := roleRequest(t, server, adminToken, http.MethodGet, "/catalog-items/"+item.ID, "")
+	var stored domain.CatalogItem
+	if err := json.Unmarshal(adminRec.Body.Bytes(), &stored); err != nil {
+		t.Fatalf("decode stored: %v", err)
+	}
+	if stored.Kind != domain.CatalogItemKindService {
+		t.Errorf("stored kind = %q, want service", stored.Kind)
+	}
+	if stored.PurchasePrice == nil || *stored.PurchasePrice != 120 || stored.SalePrice == nil || *stored.SalePrice != 300 {
+		t.Errorf("stored prices = purchase %v / sale %v, want 120 / 300", stored.PurchasePrice, stored.SalePrice)
+	}
+	if stored.Name != "A tabla B1 format" || stored.Code != "ART-1" {
+		t.Errorf("stored identity changed: name %q code %q", stored.Name, stored.Code)
+	}
+
+	// Operators cannot create catalog items (POST stays admin-only).
+	createRec := roleRequest(t, server, userToken, http.MethodPost, "/catalog-items", createItem)
+	if createRec.Code != http.StatusForbidden {
+		t.Errorf("operator create = %d, want 403", createRec.Code)
+	}
+}

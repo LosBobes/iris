@@ -91,6 +91,17 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
+
+	// Operators may change only the kind (vrsta) of an existing item; every
+	// other field — name, code, unit, prices, barcode, tax group, status,
+	// description — stays admin-only. Rather than trust the incoming payload
+	// (which never carries cost and may omit fields), load the stored item and
+	// apply just the kind, so nothing else can be overwritten.
+	if !isAdmin(r) {
+		s.updateCatalogItemKind(w, r, input.Kind)
+		return
+	}
+
 	item := domain.CatalogItem{
 		Code:          input.Code,
 		Name:          input.Name,
@@ -116,6 +127,40 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, result)
+}
+
+// updateCatalogItemKind applies an operator's kind-only edit to an existing
+// catalog item. It rejects creates (operators can't add items) and invalid
+// kinds, and preserves every other stored field so a non-admin can never touch
+// price, name, or status.
+func (s *Server) updateCatalogItemKind(w http.ResponseWriter, r *http.Request, kind domain.CatalogItemKind) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Nemate dozvolu za ovu akciju."})
+		return
+	}
+	if kind != domain.CatalogItemKindService && kind != domain.CatalogItemKindArticle {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Neispravna vrsta stavke."})
+		return
+	}
+	existing, err := s.store.CatalogItemByID(r.Context(), id)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+	if existing == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Stavka kataloga nije pronađena."})
+		return
+	}
+	existing.Kind = kind
+	result, err := s.store.UpsertCatalogItem(r.Context(), *existing)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	// Operators never receive cost data.
+	stripCatalogCost(result)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleDeleteCatalogItem(w http.ResponseWriter, r *http.Request) {

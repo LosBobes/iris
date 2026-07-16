@@ -248,7 +248,11 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     put:
       tags: [Catalog]
-      summary: Update a catalog item (admin only)
+      summary: Update a catalog item
+      description: >
+        Admins update every field. Operators (non-admin) may change only the
+        item's kind (vrsta); all other fields in the payload are ignored and the
+        stored values are preserved. Operators cannot create items.
       operationId: updateCatalogItem
       parameters:
         - name: id
@@ -270,7 +274,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CatalogItem'
         '403':
-          description: Caller is not an administrator
+          description: Operator attempted to create a catalog item
           content:
             application/json:
               schema:

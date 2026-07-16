@@ -35,9 +35,10 @@ import {
   workOrderFormSchema,
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
-import type { CatalogItem } from "@/types/catalog";
+import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
 import { formatActionError, slugId } from "@/lib/customers";
 import { AsyncCombobox } from "@/components/WorkOrders/AsyncCombobox";
+import { CatalogPickerDialog } from "@/components/WorkOrders/CatalogPickerDialog";
 import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
 import {
   WORK_ORDER_SELECT_NONE_VALUE,
@@ -741,25 +742,6 @@ export function WorkOrderForm({
     setValue,
   ]);
 
-  const searchCatalog = useCallback(async (term: string): Promise<ComboboxItem[]> => {
-    const { items } = await window.api.getCatalogItems({ q: term, active: true, limit: 20 });
-    return items
-      // Drop items already on the order so the same one can't be picked twice.
-      .filter((item) => !usedCatalogItemIds.has(item.id))
-      .map((item) => ({
-        id: item.id,
-        label: item.name,
-        sublabel: [
-          item.kind === "article" ? "Artikal" : "Usluga",
-          item.code,
-          isAdmin && item.salePrice !== null ? `${item.salePrice} RSD` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        data: item,
-      }));
-  }, [isAdmin, usedCatalogItemIds]);
-
   const applyCustomerSelection = (item: ComboboxItem | null): void => {
     if (!item) {
       // "Novi klijent" — detach from the registry, keep any typed client name.
@@ -915,9 +897,12 @@ export function WorkOrderForm({
     }
   };
 
-  const handleAddCatalogLineItem = (item: ComboboxItem | null): void => {
-    if (!item) return;
-    const catalogItem = item.data as CatalogItem;
+  // Which catalog picker dialog is open (by kind), or null when both closed.
+  const [catalogPickerKind, setCatalogPickerKind] = useState<CatalogItemKind | null>(
+    null,
+  );
+
+  const handleAddCatalogLineItem = (catalogItem: CatalogItem): void => {
     // Guard against double-adding the same catalog item (the picker also hides
     // already-added ones, so this only trips on a stale selection).
     if (usedCatalogItemIds.has(catalogItem.id)) {
@@ -1495,6 +1480,24 @@ export function WorkOrderForm({
                   {t("workOrders.form.items")}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {/* Catalog pickers, mirroring the "Posebna" buttons: each opens
+                      a search dialog filtered to that kind. */}
+                  <button
+                    type="button"
+                    onClick={() => setCatalogPickerKind("service")}
+                    className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t("workOrders.form.catalogService")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogPickerKind("article")}
+                    className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t("workOrders.form.catalogArticle")}
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleAddInvoiceLineItem("service")}
@@ -1514,24 +1517,20 @@ export function WorkOrderForm({
                 </div>
               </div>
 
-              {/* Pick a service/article from the catalog to add it as a line. */}
-              <div className="mb-4">
-                <div className="mb-1 text-[11px] text-[color:var(--iris-ink-soft)]">
-                  {t("workOrders.form.addFromCatalog")}
-                </div>
-                <AsyncCombobox
-                  selectedLabel={null}
-                  resetAfterSelect
-                  onSearch={searchCatalog}
-                  onSelect={handleAddCatalogLineItem}
-                  placeholder={t("workOrders.form.searchCatalogPlaceholder")}
-                  searchPlaceholder={t("workOrders.form.searchCatalog")}
-                  emptyText={t("workOrders.form.noCatalog")}
-                />
-                <p className="mt-1 text-[11px] text-[color:var(--iris-ink-mute)]">
-                  {t("workOrders.form.catalogHint")}
-                </p>
-              </div>
+              <p className="mb-4 text-[11px] text-[color:var(--iris-ink-mute)]">
+                {t("workOrders.form.catalogHint")}
+              </p>
+
+              <CatalogPickerDialog
+                kind={catalogPickerKind ?? "service"}
+                open={catalogPickerKind !== null}
+                onOpenChange={(next) => {
+                  if (!next) setCatalogPickerKind(null);
+                }}
+                onSelect={handleAddCatalogLineItem}
+                excludeIds={usedCatalogItemIds}
+                isAdmin={isAdmin}
+              />
 
               {invoiceLineItemFields.length === 0 ? (
                 <div className="border border-dashed border-border bg-background px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
