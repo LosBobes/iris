@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
+import { startOfDay } from "date-fns";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import { DatePicker } from "@/components/ui/date-picker";
+import { PriceHistoryPanel } from "@/components/Catalog/PriceHistoryPanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +26,7 @@ import {
   formatCatalogPrice,
   kindLabel,
   toCatalogInput,
+  todayIso,
 } from "@/lib/catalog";
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
 import { cn } from "@/lib/utils";
@@ -41,6 +45,12 @@ function CatalogDetailPage(): React.JSX.Element {
   const [notFound, setNotFound] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Date a price change should take effect (defaults today; today or future only).
+  const [effectiveFrom, setEffectiveFrom] = useState<string>(todayIso());
+  // Bumped after each save so the read-only price-history panel reloads.
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  // Only existing items can schedule a future price; new items price immediately.
+  const canSchedulePrice = isAdmin && !isNew;
 
   const load = useCallback(async () => {
     if (isNew || !routeId) return;
@@ -70,7 +80,12 @@ function CatalogDetailPage(): React.JSX.Element {
     }
     setSaving(true);
     try {
-      const input = toCatalogInput(item);
+      // Only send an effective date when the admin can schedule a price change;
+      // new items and operator kind-edits take effect immediately (today).
+      const input = toCatalogInput(
+        item,
+        canSchedulePrice ? effectiveFrom : undefined,
+      );
       const saved = isNew
         ? await window.api.createCatalogItem(input)
         : await window.api.updateCatalogItem(item.id, input);
@@ -78,14 +93,18 @@ function CatalogDetailPage(): React.JSX.Element {
       if (isNew) {
         navigate(`/catalog/${encodeURIComponent(saved.id)}`, { replace: true });
       } else {
+        // The response reflects the price effective today; a scheduled future
+        // change lives in the history panel. Reset the date and reload history.
         setItem(saved);
+        setEffectiveFrom(todayIso());
+        setHistoryRefresh((token) => token + 1);
       }
     } catch (error) {
       toast.error(formatActionError(t("catalog.detail.saveError"), error));
     } finally {
       setSaving(false);
     }
-  }, [item, isNew, navigate, t]);
+  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom]);
 
   const handleDelete = useCallback(async () => {
     try {
@@ -152,7 +171,17 @@ function CatalogDetailPage(): React.JSX.Element {
 
         <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-8 px-5 pb-10 sm:px-8">
-            <DetailsForm value={item} readOnly={readOnly} onChange={setItem} />
+            <DetailsForm
+              value={item}
+              readOnly={readOnly}
+              onChange={setItem}
+              canSchedulePrice={canSchedulePrice}
+              effectiveFrom={effectiveFrom}
+              onEffectiveFromChange={setEffectiveFrom}
+            />
+            {canSchedulePrice && (
+              <PriceHistoryPanel itemId={item.id} refreshToken={historyRefresh} />
+            )}
           </div>
 
           <aside className="border-t border-border bg-card p-6 lg:sticky lg:top-0 lg:self-start lg:border-l lg:border-t-0 lg:p-8">
@@ -266,12 +295,19 @@ function DetailsForm({
   value,
   readOnly,
   onChange,
+  canSchedulePrice,
+  effectiveFrom,
+  onEffectiveFromChange,
 }: {
   value: CatalogItem;
   readOnly: boolean;
   onChange: (value: CatalogItem) => void;
+  canSchedulePrice: boolean;
+  effectiveFrom: string;
+  onEffectiveFromChange: (value: string) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const today = startOfDay(new Date());
   return (
     <section>
       <div className="mb-3 border-b border-border pb-2 text-[13px] font-medium">{t("catalog.detail.sectionData")}</div>
@@ -326,6 +362,22 @@ function DetailsForm({
             readOnly={readOnly}
             onChange={(salePrice) => onChange({ ...value, salePrice })}
           />
+        )}
+        {/* Effective date for a price change: today or future only. Existing
+            items only — a new item's price takes effect immediately on create. */}
+        {canSchedulePrice && (
+          <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
+            {t("catalog.detail.effectiveFromField")}
+            <DatePicker
+              value={effectiveFrom}
+              onChange={(next) => onEffectiveFromChange(next ?? "")}
+              fromDate={today}
+              className="mt-1 w-full"
+            />
+            <span className="mt-1 block text-[10px] text-[color:var(--iris-ink-mute)]">
+              {t("catalog.detail.effectiveFromHint")}
+            </span>
+          </label>
         )}
         <Field
           label={t("catalog.detail.barcode")}

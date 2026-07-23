@@ -82,10 +82,23 @@ func applyLineItemCosts(
 
 		var cost *float64
 		switch {
-		case isCatalog && mode == costModePreserve && existed:
+		case isCatalog && mode == costModePreserve && existed && prev != nil:
 			cost = prev // freeze: keep the cost captured at creation
 		case isCatalog:
-			cost = catalogCostPtr(costs, *line.CatalogItemID) // create / completion / new line
+			// Catalog price history is authoritative when it has a cost for the
+			// item. When it does not (no cost on record), an admin may fill the
+			// gap by entering a cost on the line; fall back to that, then to any
+			// previously captured value, else leave it for review. This keeps
+			// priced catalog lines untouched while making the "—" case editable.
+			cost = catalogCostPtr(costs, *line.CatalogItemID)
+			if cost == nil {
+				switch {
+				case line.UnitCost != nil:
+					cost = line.UnitCost
+				case existed:
+					cost = prev
+				}
+			}
 		case line.UnitCost != nil:
 			cost = line.UnitCost // ad-hoc with an explicit (admin-entered) cost
 		case existed:

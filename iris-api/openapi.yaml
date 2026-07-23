@@ -1313,6 +1313,14 @@ components:
           type: [string, 'null']
         isActive:
           type: boolean
+        effectiveFrom:
+          type: [string, 'null']
+          format: date
+          description: >-
+            Date (YYYY-MM-DD) a changed price takes effect. Optional; defaults to
+            today. Must be today or later — past dates are rejected. A future date
+            schedules the new price without changing the item's displayed current
+            price until that date arrives.
     CustomerCommunication:
       type: object
       required: [publicToken, notificationEmail, emailNotificationsEnabled, signedBy, signedAt]

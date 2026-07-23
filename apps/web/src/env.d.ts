@@ -18,6 +18,7 @@ import type {
 } from '@/types/work-order'
 import type {
   CatalogItem,
+  CatalogItemCost,
   CatalogItemInput,
   CatalogItemListResult,
   CatalogItemQuery,
@@ -76,6 +77,7 @@ declare global {
       deleteEnumValue: (id: string) => Promise<{ success: boolean }>
       getCatalogItems: (query?: CatalogItemQuery) => Promise<CatalogItemListResult>
       getCatalogItemById: (id: string) => Promise<CatalogItem | null>
+      getCatalogItemCostHistory: (id: string) => Promise<CatalogItemCost[]>
       createCatalogItem: (input: CatalogItemInput) => Promise<CatalogItem>
       updateCatalogItem: (id: string, input: CatalogItemInput) => Promise<CatalogItem>
       deleteCatalogItem: (id: string) => Promise<{ success: boolean }>

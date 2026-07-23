@@ -26,7 +26,7 @@ import type {
   WorkOrderStatus,
   WorkOrderStatusHistory,
 } from '@/types/work-order'
-import type { CatalogItem } from '@/types/catalog'
+import type { CatalogItem, CatalogItemCost } from '@/types/catalog'
 import {
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
@@ -498,6 +498,7 @@ function listFixtureWorkOrders(query: WorkOrderListQuery = {}): WorkOrderListRes
     if (query.assignedTo && order.assignment.assignedTo !== query.assignedTo) return false
     if (query.dateFrom && order.issueDate < query.dateFrom) return false
     if (query.dateTo && order.issueDate > query.dateTo) return false
+    if (query.needsCostReview && !order.needsCostReview) return false
     return true
   })
 
@@ -776,6 +777,24 @@ export function createFixtureApi(): Window['api'] {
     async getCatalogItemById(id) {
       const found = catalogItems.find((item) => item.id === id)
       return found ? cloneValue(found) : null
+    },
+
+    async getCatalogItemCostHistory(id) {
+      // The fixture store does not model historical price periods (a SQLite-only
+      // concern), so it reports the item's current price as a single open record.
+      const found = catalogItems.find((item) => item.id === id)
+      if (!found) return []
+      const now = new Date().toISOString()
+      const record: CatalogItemCost = {
+        id: `cph-${found.id}`,
+        catalogItemId: found.id,
+        purchasePrice: found.purchasePrice,
+        salePrice: found.salePrice,
+        effectiveFrom: (found.createdAt ?? now).slice(0, 10),
+        effectiveTo: null,
+        createdAt: found.createdAt ?? now,
+      }
+      return [record]
     },
 
     async createCatalogItem(input) {

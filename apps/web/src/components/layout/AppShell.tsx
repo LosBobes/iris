@@ -6,6 +6,7 @@ import {
   LogOut,
   LayoutDashboard,
   ClipboardList,
+  Coins,
   Users,
   Package,
   PanelLeft,
@@ -16,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useCostReviewCount } from "@/hooks/useCostReviewCount";
 import { useOrganization } from "@/hooks/useOrganization";
 import { IrisMark } from "@/components/brand/IrisMark";
 import {
@@ -67,11 +69,14 @@ interface NavItemDef {
   to: string;
   end?: boolean;
   icon: React.ComponentType<{ className?: string; size?: number }>;
+  /** When true, the item is only shown to admins. */
+  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItemDef[] = [
   { labelKey: "nav.dashboard", to: "/", end: true, icon: LayoutDashboard },
   { labelKey: "nav.workOrders", to: "/work-orders", icon: ClipboardList },
+  { labelKey: "nav.costReview", to: "/cost-review", icon: Coins, adminOnly: true },
   { labelKey: "nav.customers", to: "/customers", icon: Users },
   { labelKey: "nav.catalog", to: "/catalog", icon: Package },
 ];
@@ -85,11 +90,14 @@ function isActivePath(currentPath: string, item: NavItemDef): boolean {
   return currentPath === item.to || currentPath.startsWith(`${item.to}/`);
 }
 
-function getActiveNavItemIndex(currentPath: string): number {
-  return NAV_ITEMS.reduce((activeIndex, item, index) => {
+function getActiveNavItemIndex(
+  currentPath: string,
+  navItems: NavItemDef[],
+): number {
+  return navItems.reduce((activeIndex, item, index) => {
     if (!isActivePath(currentPath, item)) return activeIndex;
 
-    const activeItem = activeIndex >= 0 ? NAV_ITEMS[activeIndex] : null;
+    const activeItem = activeIndex >= 0 ? navItems[activeIndex] : null;
     return !activeItem || item.to.length > activeItem.to.length
       ? index
       : activeIndex;
@@ -101,7 +109,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const { currentUser, onLogout } = useAuth();
   const { firmName } = useOrganization();
   const location = useLocation();
-  const activeNavIndex = getActiveNavItemIndex(location.pathname);
+  const isAdmin = currentUser.role === "admin";
+  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const activeNavIndex = getActiveNavItemIndex(location.pathname, navItems);
+  const costReviewCount = useCostReviewCount(isAdmin);
   const isLg = useIsLg();
 
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -246,8 +257,9 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           className="mb-3 hidden border-t border-[color:var(--iris-border-soft)] lg:block"
         />
         <nav className="relative flex flex-col gap-0.5">
-          {NAV_ITEMS.map((item, idx) => {
+          {navItems.map((item, idx) => {
             const Icon = item.icon;
+            const badgeCount = item.to === "/cost-review" ? costReviewCount : 0;
             return (
               <SidebarTooltip key={item.to} label={t(item.labelKey)} enabled={isSidebarCollapsed}>
                 <NavLink
@@ -268,13 +280,35 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                     )
                   }
                 >
-                  <Icon size={16} className="shrink-0" />
+                  <span className="relative flex shrink-0">
+                    <Icon size={16} />
+                    {badgeCount > 0 && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[color:var(--iris-accent)] ring-2 ring-sidebar",
+                          isSidebarCollapsed ? "hidden lg:block" : "hidden",
+                        )}
+                      />
+                    )}
+                  </span>
                   <span className={cn(
                     "whitespace-nowrap transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
                     isSidebarCollapsed ? "lg:hidden" : "lg:inline"
                   )}>
                     {t(item.labelKey)}
                   </span>
+                  {badgeCount > 0 && (
+                    <span
+                      aria-label={t("nav.costReviewBadge", { count: badgeCount })}
+                      className={cn(
+                        "ml-auto inline-flex min-w-[18px] items-center justify-center rounded-full bg-[color:var(--iris-accent)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white",
+                        isSidebarCollapsed ? "lg:hidden" : "lg:inline-flex",
+                      )}
+                    >
+                      {badgeCount}
+                    </span>
+                  )}
                 </NavLink>
               </SidebarTooltip>
             );

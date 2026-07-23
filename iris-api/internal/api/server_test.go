@@ -810,6 +810,40 @@ func newTestServer(t *testing.T) *Server {
 	return NewServer(store.NewFixtureStore(testutil.FixtureDir(t)))
 }
 
+// TestCatalogItemEffectiveFromValidation covers the API-layer validation of the
+// optional price effective date. The future-dating behaviour itself is SQLite-only
+// and is exercised in the store package; the fixture-backed server here just
+// enforces the contract: past dates rejected, malformed dates rejected, today or
+// future accepted.
+func TestCatalogItemEffectiveFromValidation(t *testing.T) {
+	server := newTestServer(t)
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
+
+	cases := []struct {
+		name          string
+		code          string
+		effectiveFrom string
+		wantStatus    int
+	}{
+		{"past date rejected", "EFF-PAST", yesterday, http.StatusBadRequest},
+		{"malformed date rejected", "EFF-BAD", "23.07.2026", http.StatusBadRequest},
+		{"future date accepted", "EFF-FUTURE", tomorrow, http.StatusCreated},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := fmt.Sprintf(
+				`{"code":%q,"name":"Usluga","kind":"service","unit":"kom","purchasePrice":100,"salePrice":200,"isActive":true,"effectiveFrom":%q}`,
+				tc.code, tc.effectiveFrom,
+			)
+			r := performRequest(t, server, http.MethodPost, "/catalog-items", payload)
+			if r.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (%s)", r.Code, tc.wantStatus, r.Body.String())
+			}
+		})
+	}
+}
+
 func TestCatalogItemEndpoints(t *testing.T) {
 	server := newTestServer(t)
 

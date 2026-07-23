@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html/template"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
@@ -19,22 +19,35 @@ type PrintCheckRow struct {
 	Checked bool
 }
 
+// PrintItemRow is one "stavka" (line item) rendered as a table row: an
+// enumerated name plus the selling price, quantity, and line-total columns. The
+// numeric fields are pre-formatted and left empty when there is nothing to show
+// (zero price, or a money-hidden printout) so the table never prints a bogus "0".
+type PrintItemRow struct {
+	Name      string
+	UnitPrice string
+	Quantity  string
+	Total     string
+}
+
 type WorkOrderPrintData struct {
-	OrderNumber     string
-	ClientName      string
-	IssueDate       string
-	JobLines        []string
-	TotalPrice      string
-	ContactPerson   string
-	DeliveryRows    []PrintCheckRow
-	PlannedDate     string
-	BillingRows     []PrintCheckRow
-	NoteLines       []string
-	ShippingAddress string
-	Completed       bool
-	CompletionDate  string
-	IssuedBy        string
-	ExecutedBy      string
+	FirmName         string
+	OrderNumber      string
+	ClientName       string
+	ClientAddress    string
+	IssueDate        string
+	DescriptionLines []string
+	ItemRows         []PrintItemRow
+	TotalPrice       string
+	ContactPerson    string
+	DeliveryRows     []PrintCheckRow
+	PlannedDate      string
+	BillingRows      []PrintCheckRow
+	NoteLines        []string
+	ShippingAddress  string
+	Completed        bool
+	CompletionDate   string
+	ExecutedBy       string
 
 	// Section visibility, driven by the shop's PDF configuration.
 	ShowDelivery        bool
@@ -148,6 +161,19 @@ func getPrintDeliveryRows(shipping domain.Shipping) []PrintCheckRow {
 	return res
 }
 
+// resolveBillingDocumentType returns the document type (tip dokumenta) to tick on
+// the printout. When the shop does not allow per-order override, the type is
+// entirely shop-controlled, so the shop default is authoritative regardless of
+// what the order stored (this is what keeps legacy/imported orders in sync with
+// the configured default). When override is allowed, the order's own choice wins.
+func resolveBillingDocumentType(order domain.WorkOrder, defaults domain.BillingDefaults) *domain.BillingDocumentType {
+	if defaults.AllowOverride {
+		return order.BillingDocumentType
+	}
+	docType := defaults.DocumentType
+	return &docType
+}
+
 func getPrintBillingRows(billingDocType *domain.BillingDocumentType) []PrintCheckRow {
 	rows := []struct {
 		label  string
@@ -194,7 +220,12 @@ func jobDetailsHasContent(details *domain.JobDetails) bool {
 	return false
 }
 
-func buildPrintJobLines(order domain.WorkOrder) []string {
+// buildPrintDescriptionLines returns the "opis posla" (job description) lines
+// only: the structured job details when present, otherwise the free-text
+// description. Line items (stavke) are produced separately by
+// buildPrintItemLines so the two render in distinct panels. Falls back to a
+// placeholder when there is nothing to show.
+func buildPrintDescriptionLines(order domain.WorkOrder) []string {
 	var detailLines []string
 
 	if jobDetailsHasContent(order.JobDetails) {
@@ -218,49 +249,52 @@ func buildPrintJobLines(order domain.WorkOrder) []string {
 		}
 	}
 
-	var lines []string
 	if len(detailLines) > 0 {
-		lines = detailLines
-	} else {
-		desc := uppercaseString(order.JobDescription)
-		if desc != "" {
-			lines = []string{desc}
-		}
+		return detailLines
 	}
+	if desc := uppercaseString(order.JobDescription); desc != "" {
+		return []string{desc}
+	}
+	return []string{"OPIS POSLA NIJE UNET"}
+}
 
-	// Itemized services/goods, listed above the price total. Each renders as
-	// "DESCRIPTION — QTY UNIT × UNITPRICE = LINETOTAL" so every position shows
-	// what it costs (unit omitted when absent). Non-admin printouts have line
-	// prices stripped to 0, so they fall back to "DESCRIPTION — QTY UNIT" with
-	// no "× 0 = 0" money leak.
+// buildPrintItemRows returns the "stavke" (line items) as table rows: name plus
+// the selling price, quantity, and line-total columns. Non-admin printouts have
+// line prices stripped to 0 upstream, so the price and total columns come out
+// empty (no "0" money leak). The grand total is rendered separately (pinned to
+// the bottom of the job panel as "UKUPNA CENA"), not mixed in here.
+func buildPrintItemRows(order domain.WorkOrder) []PrintItemRow {
+	var rows []PrintItemRow
 	for _, item := range order.InvoiceDraft.LineItems {
-		desc := uppercaseString(item.Description)
-		if desc == "" {
+		name := uppercaseString(item.Description)
+		if name == "" {
 			continue
 		}
 		unit := uppercaseString(string(item.Unit))
-		itemLine := desc
+		quantity := ""
 		if item.Quantity > 0 {
-			qtyUnit := strconv.Itoa(item.Quantity)
 			if unit != "" {
-				qtyUnit = fmt.Sprintf("%d %s", item.Quantity, unit)
-			}
-			if item.UnitPrice > 0 {
-				lineTotal := float64(item.Quantity) * item.UnitPrice
-				itemLine = fmt.Sprintf("%s — %s × %s = %s", desc, qtyUnit, formatAmount(item.UnitPrice), formatAmount(lineTotal))
+				quantity = fmt.Sprintf("%d %s", item.Quantity, unit)
 			} else {
-				itemLine = fmt.Sprintf("%s — %s", desc, qtyUnit)
+				quantity = strconv.Itoa(item.Quantity)
 			}
 		}
-		lines = append(lines, itemLine)
+		unitPrice := ""
+		total := ""
+		if item.UnitPrice > 0 {
+			unitPrice = formatAmount(item.UnitPrice)
+			if item.Quantity > 0 {
+				total = formatAmount(float64(item.Quantity) * item.UnitPrice)
+			}
+		}
+		rows = append(rows, PrintItemRow{
+			Name:      name,
+			UnitPrice: unitPrice,
+			Quantity:  quantity,
+			Total:     total,
+		})
 	}
-
-	// The grand total is rendered separately (pinned to the bottom of the job
-	// panel as "UKUPNA CENA"), not mixed in with the per-line entries here.
-	if len(lines) == 0 {
-		return []string{"OPIS POSLA NIJE UNET"}
-	}
-	return lines
+	return rows
 }
 
 func buildPrintNoteLines(order domain.WorkOrder) []string {
@@ -292,7 +326,9 @@ const htmlTemplateStr = `<!DOCTYPE html>
   <style>
     @page {
       size: A4;
-      margin: 8mm;
+      /* Roomy top margin (white space above the title) and a small bottom margin
+         so the content sits lower on the page and reaches near the bottom. */
+      margin: 20mm 8mm 2mm;
     }
 
     html,
@@ -312,8 +348,8 @@ const htmlTemplateStr = `<!DOCTYPE html>
       flex-direction: column;
       box-sizing: border-box;
       width: 194mm;
-      height: 281mm;
-      max-height: 281mm;
+      height: 275mm;
+      max-height: 275mm;
       margin: 0 auto;
       overflow: hidden;
       page-break-after: avoid;
@@ -358,31 +394,29 @@ const htmlTemplateStr = `<!DOCTYPE html>
       white-space: nowrap;
     }
 
-    .work-order-print-hero {
-      display: grid;
-      grid-template-columns: 1fr 55mm;
+    /* The lower area of the nalog: a left stack (stavke, billing, notes) beside
+       the delivery checklist, which sits bottom-aligned in its right column. The
+       KLIJENT/dates row and OPIS POSLA render full width above this. */
+    .work-order-print-body {
+      display: flex;
+      align-items: stretch;
       flex: 1 1 auto;
       min-height: 0;
       border-bottom: 2px solid #000;
     }
 
-    .work-order-print-hero-solo {
-      grid-template-columns: 1fr;
-    }
-
-    .work-order-print-hero-solo .work-order-print-main-panel {
-      border-right: none;
-    }
-
-    .work-order-print-main-panel {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      border-right: 1px solid #000;
+    .work-order-print-left-stack {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
     }
 
     .work-order-print-top-grid {
       display: grid;
       grid-template-columns: 1fr 45mm;
+      flex: 0 0 auto;
       border-bottom: 1px solid #000;
     }
 
@@ -406,27 +440,39 @@ const htmlTemplateStr = `<!DOCTYPE html>
     }
 
     .work-order-print-client-name {
-      padding: 2mm 3mm 3mm;
+      padding: 2mm 3mm 0;
       font-size: 22px;
       font-weight: 800;
       line-height: 1.1;
       overflow-wrap: anywhere;
     }
 
-    .work-order-print-subline {
-      border-top: 1px solid #000;
-      padding: 1.5mm 3mm;
-      font-size: 11px;
+    .work-order-print-client-address {
+      padding: 0.5mm 3mm 3mm;
+      font-size: 12px;
       font-weight: 500;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
     }
 
     .work-order-print-issue-box {
       display: flex;
       flex-direction: column;
+    }
+
+    .work-order-print-issue-cell {
+      flex: 1 1 0;
+      display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 2mm;
+      gap: 1.5mm;
+      padding: 2mm 0;
       text-align: center;
+    }
+
+    .work-order-print-issue-cell + .work-order-print-issue-cell {
+      border-top: 1px solid #000;
     }
 
     .work-order-print-date {
@@ -435,12 +481,49 @@ const htmlTemplateStr = `<!DOCTYPE html>
       letter-spacing: 0;
     }
 
-    .work-order-print-job-box {
+    /* Opis posla renders full width above the two-column lower area. It sizes to
+       its content, capped by max-height; the auto-fit script shrinks the text to
+       fit that cap when the description is long. */
+    .work-order-print-job-description {
+      display: flex;
+      flex: 0 0 auto;
+      max-height: 48mm;
+      flex-direction: column;
+      overflow: hidden;
+      border-bottom: 2px solid #000;
+      padding: 2mm 4mm 3mm;
+    }
+
+    .work-order-print-description-lines {
+      font-size: 24px;
+      font-weight: 400;
+      line-height: 1.22;
+      overflow-wrap: anywhere;
+    }
+
+    .work-order-print-job-items {
       display: flex;
       flex: 1 1 auto;
       min-height: 0;
       flex-direction: column;
-      padding: 4mm 4mm 3mm;
+      padding: 2mm 4mm 3mm;
+    }
+
+    /* Panel corner labels: OPIS POSLA and STAVKE, both top-left, with a gap below
+       so the content does not crowd the label. */
+    .work-order-print-panel-header {
+      display: flex;
+      margin-bottom: 2.5mm;
+    }
+
+    .work-order-print-panel-header-left {
+      justify-content: flex-start;
+    }
+
+    .work-order-print-panel-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0;
     }
 
     .work-order-print-job-lines {
@@ -448,6 +531,67 @@ const htmlTemplateStr = `<!DOCTYPE html>
       font-weight: 400;
       line-height: 1.22;
       overflow-wrap: anywhere;
+    }
+
+    /* Stavke render as a table: an enumerated name column plus selling price,
+       quantity, and line-total columns. Fixed layout keeps the columns from
+       collapsing; collapsed borders keep the row separators aligned. */
+    .work-order-print-items-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .work-order-print-items-table th,
+    .work-order-print-items-table td {
+      padding: 1.8mm 0;
+      vertical-align: baseline;
+    }
+
+    /* Separators run between rows only (header underline + a rule above each
+       item), so the last item has no trailing line doubling with the total's
+       border. */
+    .work-order-print-items-table tbody td {
+      border-top: 1px solid #000;
+    }
+
+    /* Column header row: small labels so it does not eat the item rows' height. */
+    .work-order-print-items-table thead th {
+      padding-top: 0;
+      border-bottom: 1px solid #000;
+      font-size: 11px;
+      font-weight: 500;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .work-order-print-items-table thead th.work-order-print-col-name {
+      text-align: left;
+    }
+
+    /* The name column keeps the remaining width (no explicit width in a fixed
+       table = leftover space) and wraps long names. */
+    .work-order-print-col-name {
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    /* Numeric columns: fixed width, right-aligned, with a left gutter so figures
+       never touch the previous column. Scoped under the table so this padding
+       wins over the shared cell-padding shorthand above. */
+    .work-order-print-items-table .work-order-print-col-num {
+      width: 30mm;
+      padding-left: 3mm;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .work-order-print-item-number {
+      font-weight: 700;
+    }
+
+    .work-order-print-item-text {
+      padding-left: 1.5mm;
     }
 
     .work-order-print-job-footer {
@@ -471,11 +615,16 @@ const htmlTemplateStr = `<!DOCTYPE html>
       overflow-wrap: anywhere;
     }
 
+    /* The delivery checklist keeps its right-hand column but its rows are pinned
+       to the bottom of the column, leaving the freed space at the top. */
     .work-order-print-delivery-box {
       display: flex;
-      flex-direction: column;
+      flex: 0 0 55mm;
       min-height: 0;
-      padding-top: 2mm;
+      min-width: 0;
+      flex-direction: column;
+      justify-content: flex-end;
+      border-left: 1px solid #000;
     }
 
     .work-order-print-check-row {
@@ -504,34 +653,14 @@ const htmlTemplateStr = `<!DOCTYPE html>
       line-height: 1;
     }
 
-    .work-order-print-empty-field {
-      margin-top: auto;
-      border: 1px solid #000;
-      padding: 1.5mm 4mm;
-      font-size: 21px;
-      font-weight: 700;
-    }
-
-    .work-order-print-document-row {
-      display: grid;
-      grid-template-columns: 78mm 1fr;
-      flex: 0 0 auto;
-      min-height: 22mm;
-      border-bottom: 2px solid #000;
-    }
-
-    .work-order-print-planned-date {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-right: 1px solid #000;
-      font-size: 32px;
-      font-weight: 500;
-    }
-
     .work-order-print-billing-box {
       display: grid;
-      grid-template-columns: 50mm 1fr;
+      grid-template-columns: 50mm 55mm;
+      align-content: center;
+      justify-content: start;
+      flex: 0 0 auto;
+      min-height: 22mm;
+      border-top: 2px solid #000;
       padding: 2mm 2mm 2mm 5mm;
     }
 
@@ -561,7 +690,13 @@ const htmlTemplateStr = `<!DOCTYPE html>
       grid-template-columns: 78mm 1fr;
       flex: 0 0 auto;
       min-height: 26mm;
-      border-bottom: 2px solid #000;
+      border-top: 2px solid #000;
+    }
+
+    /* When the notes (napomena) box is hidden, the shipping address takes the
+       full row width instead of being pinned to the right-hand column. */
+    .work-order-print-notes-row-solo {
+      grid-template-columns: 1fr;
     }
 
     .work-order-print-note-box,
@@ -582,43 +717,17 @@ const htmlTemplateStr = `<!DOCTYPE html>
       overflow-wrap: anywhere;
     }
 
-    .work-order-print-completion-row {
-      display: grid;
-      grid-template-columns: 78mm 1fr;
-      align-items: center;
-      flex: 0 0 auto;
-      min-height: 10mm;
-      border-bottom: 2px solid #000;
-      font-size: 11px;
-    }
-
-    .work-order-print-completion-state,
-    .work-order-print-completion-date {
-      display: flex;
-      align-items: center;
-      gap: 5mm;
-      padding: 1.5mm 3mm;
-    }
-
-    .work-order-print-completion-date {
-      justify-content: flex-end;
-    }
-
-    .work-order-print-date-line {
-      min-width: 40mm;
-      border-bottom: 1px solid #000;
-      padding-bottom: 0.5mm;
-      text-align: right;
-      font-size: 21px;
-      font-weight: 500;
-    }
-
     .work-order-print-signatures {
       display: grid;
       grid-template-columns: 1fr 1fr;
       flex: 0 0 auto;
       gap: 24mm;
       padding: 3mm 3mm 0;
+    }
+
+    /* A single merged signatory field, pinned to the bottom-right column. */
+    .work-order-print-signatures > div {
+      grid-column: 2;
     }
 
     .work-order-print-align-right {
@@ -640,25 +749,64 @@ const htmlTemplateStr = `<!DOCTYPE html>
   <section class="work-order-print-sheet">
     <h1 class="work-order-print-title">RADNI NALOG{{if .OrderNumber}}<span class="work-order-print-number">{{.OrderNumber}}</span>{{end}}</h1>
 
-    <div class="work-order-print-hero{{if not .ShowDelivery}} work-order-print-hero-solo{{end}}">
-      <div class="work-order-print-main-panel">
-        <div class="work-order-print-top-grid">
-          <div class="work-order-print-client-box">
-            <div class="work-order-print-label">KLIJENT</div>
-            <div class="work-order-print-client-name">{{.ClientName}}</div>
-            <div class="work-order-print-subline">OPIS POSLA</div>
-          </div>
-          <div class="work-order-print-issue-box">
-            <div class="work-order-print-date">{{.IssueDate}}</div>
-            <div class="work-order-print-label">DATUM IZDAVANJA</div>
-          </div>
+    <!-- KLIJENT + dates and OPIS POSLA span the full sheet width, above the
+         two-column lower area (stavke/billing/notes beside the checklist). -->
+    <div class="work-order-print-top-grid">
+      <div class="work-order-print-client-box">
+        <div class="work-order-print-label">KLIJENT</div>
+        <div class="work-order-print-client-name">{{.ClientName}}</div>
+        {{if .ClientAddress}}<div class="work-order-print-client-address">{{.ClientAddress}}</div>{{end}}
+      </div>
+      <div class="work-order-print-issue-box">
+        <div class="work-order-print-issue-cell">
+          <div class="work-order-print-date">{{.IssueDate}}</div>
+          <div class="work-order-print-label">DATUM IZDAVANJA</div>
         </div>
+        <div class="work-order-print-issue-cell">
+          <div class="work-order-print-date">{{.PlannedDate}}</div>
+          <div class="work-order-print-label">ROK ZAVRŠETKA POSLA</div>
+        </div>
+      </div>
+    </div>
 
-        <div class="work-order-print-job-box">
+    <div class="work-order-print-job-description">
+      <div class="work-order-print-panel-header work-order-print-panel-header-left">
+        <span class="work-order-print-panel-label">OPIS POSLA</span>
+      </div>
+      <div class="work-order-print-description-lines">
+        {{range .DescriptionLines}}
+          <div>{{.}}</div>
+        {{end}}
+      </div>
+    </div>
+
+    <div class="work-order-print-body{{if not .ShowDelivery}} work-order-print-body-solo{{end}}">
+      <div class="work-order-print-left-stack">
+        <div class="work-order-print-job-items">
+          <div class="work-order-print-panel-header work-order-print-panel-header-left">
+            <span class="work-order-print-panel-label">STAVKE</span>
+          </div>
           <div class="work-order-print-job-lines">
-            {{range .JobLines}}
-              <div>{{.}}</div>
-            {{end}}
+            <table class="work-order-print-items-table">
+              <thead>
+                <tr>
+                  <th class="work-order-print-col-name">NAZIV</th>
+                  <th class="work-order-print-col-num">CENA</th>
+                  <th class="work-order-print-col-num">KOL.</th>
+                  <th class="work-order-print-col-num">UKUPNO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range $i, $row := .ItemRows}}
+                  <tr>
+                    <td class="work-order-print-col-name"><span class="work-order-print-item-number">{{inc $i}}.</span><span class="work-order-print-item-text">{{$row.Name}}</span></td>
+                    <td class="work-order-print-col-num">{{$row.UnitPrice}}</td>
+                    <td class="work-order-print-col-num">{{$row.Quantity}}</td>
+                    <td class="work-order-print-col-num">{{$row.Total}}</td>
+                  </tr>
+                {{end}}
+              </tbody>
+            </table>
           </div>
           <div class="work-order-print-job-footer">
             {{if .ContactPerson}}
@@ -669,6 +817,40 @@ const htmlTemplateStr = `<!DOCTYPE html>
             {{end}}
           </div>
         </div>
+
+        {{if .ShowBilling}}
+        <div class="work-order-print-billing-box">
+          {{range .BillingRows}}
+            <div class="work-order-print-billing-row">
+              <span>{{.Label}}</span>
+              <span class="work-order-print-mark">{{if .Checked}}X{{end}}</span>
+            </div>
+          {{end}}
+        </div>
+        {{end}}
+
+        {{if or .ShowNotes .ShowShippingAddress}}
+        <div class="work-order-print-notes-row{{if not .ShowNotes}} work-order-print-notes-row-solo{{end}}">
+          {{if .ShowNotes}}
+          <div class="work-order-print-note-box">
+            <div class="work-order-print-label">NAPOMENA</div>
+            <div class="work-order-print-note-lines">
+              {{range .NoteLines}}
+                <div>{{.}}</div>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+          {{if .ShowShippingAddress}}
+          <div class="work-order-print-address-box">
+            <div class="work-order-print-label">ADRESA ZA DOSTAVU:</div>
+            {{if .ShippingAddress}}
+              <div class="work-order-print-address">{{.ShippingAddress}}</div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+        {{end}}
       </div>
 
       {{if .ShowDelivery}}
@@ -679,94 +861,69 @@ const htmlTemplateStr = `<!DOCTYPE html>
             <span class="work-order-print-checkbox">{{if .Checked}}X{{end}}</span>
           </div>
         {{end}}
-        <div class="work-order-print-empty-field"></div>
       </div>
       {{end}}
     </div>
-
-    <div class="work-order-print-document-row">
-      <div class="work-order-print-planned-date">{{.PlannedDate}}</div>
-      {{if .ShowBilling}}
-      <div class="work-order-print-billing-box">
-        {{range .BillingRows}}
-          <div class="work-order-print-billing-row">
-            <span>{{.Label}}</span>
-            <span class="work-order-print-mark">{{if .Checked}}X{{end}}</span>
-          </div>
-        {{end}}
-      </div>
-      {{end}}
-    </div>
-
-    {{if or .ShowNotes .ShowShippingAddress}}
-    <div class="work-order-print-notes-row">
-      {{if .ShowNotes}}
-      <div class="work-order-print-note-box">
-        <div class="work-order-print-label">NAPOMENA</div>
-        <div class="work-order-print-note-lines">
-          {{range .NoteLines}}
-            <div>{{.}}</div>
-          {{end}}
-        </div>
-      </div>
-      {{end}}
-      {{if .ShowShippingAddress}}
-      <div class="work-order-print-address-box">
-        <div class="work-order-print-label">ADRESA ZA SLANJE:</div>
-        {{if .ShippingAddress}}
-          <div class="work-order-print-address">{{.ShippingAddress}}</div>
-        {{end}}
-      </div>
-      {{end}}
-    </div>
-    {{end}}
-
-    {{if .ShowCompletion}}
-    <div class="work-order-print-completion-row">
-      <div class="work-order-print-completion-state">
-        <span>RADNI NALOG ZAVRŠEN</span>
-        <span class="work-order-print-checkbox">{{if .Completed}}X{{end}}</span>
-      </div>
-      <div class="work-order-print-completion-date">
-        <span>DATUM IZVRŠENJA POSLA</span>
-        <span class="work-order-print-date-line">{{.CompletionDate}}</span>
-      </div>
-    </div>
-    {{end}}
 
     {{if .ShowSignatures}}
     <div class="work-order-print-signatures">
       <div>
-        <div class="work-order-print-label">RN IZDAO</div>
-        <div class="work-order-print-signature-value">{{.IssuedBy}}</div>
-      </div>
-      <div>
-        <div class="work-order-print-label work-order-print-align-right">IZVRŠILAC POSLA</div>
+        <div class="work-order-print-label work-order-print-align-right">IZDAO / IZVRŠILAC</div>
         <div class="work-order-print-signature-value">{{.ExecutedBy}}</div>
       </div>
     </div>
     {{end}}
   </section>
+  <script>
+    // Shrink the opis posla and stavke text until it fits its fixed-height panel.
+    // Runs synchronously before the load event so chromedp captures the fitted
+    // layout. Mirrors fitPanelFont in apps/web WorkOrderPrintSheet.tsx.
+    (function () {
+      var MIN = 9;
+      function fit(panelSelector, contentSelector) {
+        var panel = document.querySelector(panelSelector);
+        var content = panel && panel.querySelector(contentSelector);
+        if (!panel || !content) return;
+        content.style.fontSize = '';
+        var size = parseFloat(getComputedStyle(content).fontSize);
+        while (size > MIN && panel.scrollHeight > panel.clientHeight) {
+          size -= 0.5;
+          content.style.fontSize = size + 'px';
+        }
+      }
+      fit('.work-order-print-job-description', '.work-order-print-description-lines');
+      fit('.work-order-print-job-items', '.work-order-print-job-lines');
+      // Shrink any numeric stavke cell whose value is too wide for its fixed
+      // column, so large figures scale down instead of overflowing.
+      var cells = document.querySelectorAll('.work-order-print-job-lines .work-order-print-col-num');
+      for (var i = 0; i < cells.length; i++) {
+        var cell = cells[i];
+        cell.style.fontSize = '';
+        var cs = parseFloat(getComputedStyle(cell).fontSize);
+        while (cs > MIN && cell.scrollWidth > cell.clientWidth) {
+          cs -= 0.5;
+          cell.style.fontSize = cs + 'px';
+        }
+      }
+    })();
+  </script>
 </body>
 </html>`
 
-var parsedTemplate = template.Must(template.New("work_order").Parse(htmlTemplateStr))
+var parsedTemplate = template.Must(template.New("work_order").Funcs(template.FuncMap{
+	// inc renders a 1-based ordinal for enumerated stavke entries.
+	"inc": func(i int) int { return i + 1 },
+}).Parse(htmlTemplateStr))
 
-func ResolvePrintShippingAddress(order domain.WorkOrder, locationAddress *string) string {
-	if order.Shipping.ShippingAddress != nil {
-		if value := uppercaseLine(order.Shipping.ShippingAddress); value != "" {
-			return value
-		}
-	}
-	if locationAddress != nil {
-		if value := uppercaseLine(locationAddress); value != "" {
-			return value
-		}
-	}
-	return ""
+// ResolvePrintShippingAddress returns the order's explicit delivery address only.
+// It intentionally does not fall back to the client's location address: the
+// delivery address is meant to be a separate destination, and the client's own
+// address is shown at the top of the nalog (under the client name).
+func ResolvePrintShippingAddress(order domain.WorkOrder) string {
+	return uppercaseLine(order.Shipping.ShippingAddress)
 }
 
-func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sections domain.PDFSections) (string, error) {
+func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sections domain.PDFSections, firmName string, billingDefaults domain.BillingDefaults) (string, error) {
 	plannedDate := order.DueDate
 	if plannedDate == nil {
 		plannedDate = order.CompletionDate
@@ -780,21 +937,23 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sectio
 	}
 
 	data := WorkOrderPrintData{
-		OrderNumber:     order.OrderNumber,
-		ClientName:      uppercaseString(order.ClientName),
-		IssueDate:       formatOptionalDate(&order.IssueDate),
-		JobLines:        buildPrintJobLines(order),
-		TotalPrice:      formatPrintPrice(order.Price),
-		ContactPerson:   uppercaseLine(order.ContactPerson),
-		DeliveryRows:    getPrintDeliveryRows(order.Shipping),
-		PlannedDate:     formatOptionalDate(plannedDate),
-		BillingRows:     getPrintBillingRows(order.BillingDocumentType),
-		NoteLines:       buildPrintNoteLines(order),
-		ShippingAddress: ResolvePrintShippingAddress(order, locationAddress),
-		Completed:       completed,
-		CompletionDate:  formatOptionalDate(order.CompletionDate),
-		IssuedBy:        order.IssuedBy,
-		ExecutedBy:      execBy,
+		FirmName:         strings.TrimSpace(firmName),
+		OrderNumber:      order.OrderNumber,
+		ClientName:       uppercaseString(order.ClientName),
+		ClientAddress:    uppercaseLine(locationAddress),
+		IssueDate:        formatOptionalDate(&order.IssueDate),
+		DescriptionLines: buildPrintDescriptionLines(order),
+		ItemRows:         buildPrintItemRows(order),
+		TotalPrice:       formatPrintPrice(order.Price),
+		ContactPerson:    uppercaseLine(order.ContactPerson),
+		DeliveryRows:     getPrintDeliveryRows(order.Shipping),
+		PlannedDate:      formatOptionalDate(plannedDate),
+		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, billingDefaults)),
+		NoteLines:        buildPrintNoteLines(order),
+		ShippingAddress:  ResolvePrintShippingAddress(order),
+		Completed:        completed,
+		CompletionDate:   formatOptionalDate(order.CompletionDate),
+		ExecutedBy:       execBy,
 
 		ShowDelivery:        sections.Delivery,
 		ShowBilling:         sections.Billing,
@@ -811,8 +970,8 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sectio
 	return sb.String(), nil
 }
 
-func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAddress *string, sections domain.PDFSections) ([]byte, error) {
-	htmlContent, err := RenderWorkOrderHTML(order, locationAddress, sections)
+func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAddress *string, sections domain.PDFSections, firmName string, billingDefaults domain.BillingDefaults) ([]byte, error) {
+	htmlContent, err := RenderWorkOrderHTML(order, locationAddress, sections, firmName, billingDefaults)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render HTML template: %w", err)
 	}
@@ -844,10 +1003,10 @@ func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAdd
 			pdf, _, err = page.PrintToPDF().
 				WithPrintBackground(true).
 				WithPreferCSSPageSize(true).
-				WithPaperWidth(8.27).  // A4 Width in inches (210mm)
+				WithPaperWidth(8.27).   // A4 Width in inches (210mm)
 				WithPaperHeight(11.69). // A4 Height in inches (297mm)
-				WithMarginTop(0.315).    // 8mm
-				WithMarginBottom(0.315).
+				WithMarginTop(0.787).     // 20mm, white space above the title
+				WithMarginBottom(0.0787). // 2mm, so content reaches near the page bottom
 				WithMarginLeft(0.315).
 				WithMarginRight(0.315).
 				Do(ctx)

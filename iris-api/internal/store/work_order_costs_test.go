@@ -26,7 +26,7 @@ func mustUpsertCatalog(t *testing.T, ctx context.Context, s *SQLiteStore, id str
 		PurchasePrice: fptr(purchase),
 		SalePrice:     fptr(sale),
 		IsActive:      true,
-	})
+	}, "")
 	if err != nil {
 		t.Fatalf("UpsertCatalogItem(%s): %v", id, err)
 	}
@@ -173,11 +173,13 @@ func TestCatalogCostsAsOf(t *testing.T) {
 	s := costTestStore(t, ctx)
 	id := mustUpsertCatalog(t, ctx, s, "cat-c", 100, 250)
 
-	// Append two later historical periods directly (after today's creation row).
-	if err := recordCatalogCost(ctx, s.db, id, fptr(120), fptr(250), "2027-02-01"); err != nil {
+	// Append two later historical periods directly (after today's creation row),
+	// each applied as-of its own date (effectiveFrom == today), so they land as
+	// closed historical periods rather than pending future schedules.
+	if err := recordCatalogCost(ctx, s.db, id, fptr(120), fptr(250), "2027-02-01", "2027-02-01"); err != nil {
 		t.Fatalf("recordCatalogCost feb: %v", err)
 	}
-	if err := recordCatalogCost(ctx, s.db, id, fptr(150), fptr(250), "2027-04-01"); err != nil {
+	if err := recordCatalogCost(ctx, s.db, id, fptr(150), fptr(250), "2027-04-01", "2027-04-01"); err != nil {
 		t.Fatalf("recordCatalogCost apr: %v", err)
 	}
 
@@ -272,5 +274,125 @@ func TestAdHocCostReviewLifecycle(t *testing.T) {
 	}
 	if !hasEventKind(updated, eventKindCostCaptured) {
 		t.Fatal("expected cost_captured event")
+	}
+}
+
+// A catalog line whose catalog item has no cost on record behaves like an ad-hoc
+// line: it flags for review, and an admin can fill the cost directly on the line.
+// The gap-filled cost persists (freezes) and later edits must not wipe it.
+func TestCatalogLineMissingCostAdminGapFill(t *testing.T) {
+	ctx := testTenantContext()
+	s := costTestStore(t, ctx)
+
+	// Catalog item with a sale price but no purchase price (no cost on record).
+	item, err := s.UpsertCatalogItem(ctx, domain.CatalogItem{
+		ID:            "cat-nocost",
+		Code:          "cat-nocost",
+		Name:          "Usluga bez troška",
+		Kind:          domain.CatalogItemKindService,
+		Unit:          "kom",
+		PurchasePrice: nil,
+		SalePrice:     fptr(250),
+		IsActive:      true,
+	}, "")
+	if err != nil {
+		t.Fatalf("UpsertCatalogItem: %v", err)
+	}
+
+	today := time.Now().UTC().Format("2006-01-02")
+	created, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Klijent",
+		JobDescription: "Plakati",
+		IssuedBy:       "admin",
+		IssueDate:      today,
+		InvoiceDraft: domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{catalogLine("li-1", item.ID, 2, 250)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder: %v", err)
+	}
+	if !created.NeedsCostReview {
+		t.Fatal("catalog line with no catalog cost should need review")
+	}
+	if got := lineCost(created.InvoiceDraft.LineItems[0]); got != nil {
+		t.Fatalf("created unitCost = %v, want nil", got)
+	}
+
+	// Admin fills the cost on the catalog line; it must persist and clear review
+	// even though the catalog still has no cost of its own.
+	filledLine := catalogLine("li-1", item.ID, 2, 250)
+	filledLine.UnitCost = fptr(90)
+	updated, err := s.UpdateWorkOrder(ctx, created.ID, rawUpdate(t, map[string]any{
+		"invoiceDraft": domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{filledLine},
+		},
+	}))
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder (gap-fill): %v", err)
+	}
+	if updated.NeedsCostReview {
+		t.Fatal("review should clear after admin fills the catalog-line cost")
+	}
+	if got := lineCost(updated.InvoiceDraft.LineItems[0]); got == nil || *got != 90 {
+		t.Fatalf("filled unitCost = %v, want 90", got)
+	}
+	if updated.Profit == nil || *updated.Profit != 320 { // (250-90)*2
+		t.Fatalf("filled profit = %v, want 320", updated.Profit)
+	}
+	if !hasEventKind(updated, eventKindCostCaptured) {
+		t.Fatal("expected cost_captured event")
+	}
+
+	// A later unrelated edit must preserve the admin-entered cost (freeze).
+	edited, err := s.UpdateWorkOrder(ctx, created.ID, rawUpdate(t, map[string]any{
+		"clientName": "Klijent (izmenjen)",
+	}))
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder (later edit): %v", err)
+	}
+	if got := lineCost(edited.InvoiceDraft.LineItems[0]); got == nil || *got != 90 {
+		t.Fatalf("preserved unitCost = %v, want 90 (frozen)", got)
+	}
+}
+
+// A catalog line whose catalog item HAS a cost stays authoritative: an admin's
+// attempt to override it on the line is ignored in favor of the catalog cost.
+func TestCatalogLineWithCostIgnoresLineOverride(t *testing.T) {
+	ctx := testTenantContext()
+	s := costTestStore(t, ctx)
+	catID := mustUpsertCatalog(t, ctx, s, "cat-priced", 100, 250)
+
+	today := time.Now().UTC().Format("2006-01-02")
+	created, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Klijent",
+		JobDescription: "Plakati",
+		IssuedBy:       "admin",
+		IssueDate:      today,
+		InvoiceDraft: domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{catalogLine("li-1", catID, 2, 250)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder: %v", err)
+	}
+
+	// Try to override the catalog cost (100) with a line value (5); it must not win.
+	overrideLine := catalogLine("li-1", catID, 2, 250)
+	overrideLine.UnitCost = fptr(5)
+	updated, err := s.UpdateWorkOrder(ctx, created.ID, rawUpdate(t, map[string]any{
+		"invoiceDraft": domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{overrideLine},
+		},
+	}))
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder (override attempt): %v", err)
+	}
+	if got := lineCost(updated.InvoiceDraft.LineItems[0]); got == nil || *got != 100 {
+		t.Fatalf("unitCost = %v, want 100 (catalog authoritative)", got)
 	}
 }

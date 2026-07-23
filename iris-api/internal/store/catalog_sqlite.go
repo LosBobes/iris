@@ -70,7 +70,20 @@ func (s *SQLiteStore) CatalogItems(
 		}
 		items = append(items, item)
 	}
-	return CatalogItemListResult{Items: items, Total: total}, rows.Err()
+	if err := rows.Err(); err != nil {
+		return CatalogItemListResult{}, err
+	}
+	// Release the single SQLite connection before the as-of-today lookup issues
+	// its own query (SetMaxOpenConns(1) would otherwise self-deadlock).
+	if err := rows.Close(); err != nil {
+		return CatalogItemListResult{}, fmt.Errorf("list catalog items: %w", err)
+	}
+	// Show the price effective today (activates any scheduled future change on its
+	// date without a cron; keeps a not-yet-effective price hidden until then).
+	if err := s.applyAsOfPrices(ctx, items, time.Now().UTC().Format("2006-01-02")); err != nil {
+		return CatalogItemListResult{}, err
+	}
+	return CatalogItemListResult{Items: items, Total: total}, nil
 }
 
 // CatalogItemByID returns a single catalog item, or nil when no row matches.
@@ -97,7 +110,16 @@ func (s *SQLiteStore) CatalogItemByID(ctx context.Context, id string) (*domain.C
 	if err != nil {
 		return nil, err
 	}
-	return &item, nil
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("get catalog item: %w", err)
+	}
+	// Resolve the price effective today so a scheduled future change is hidden
+	// until its date and self-activates afterward (no cron).
+	items := []domain.CatalogItem{item}
+	if err := s.applyAsOfPrices(ctx, items, time.Now().UTC().Format("2006-01-02")); err != nil {
+		return nil, err
+	}
+	return &items[0], nil
 }
 
 // UpsertCatalogItem creates or replaces a catalog item. A blank ID generates a
@@ -105,6 +127,7 @@ func (s *SQLiteStore) CatalogItemByID(ctx context.Context, id string) (*domain.C
 func (s *SQLiteStore) UpsertCatalogItem(
 	ctx context.Context,
 	item domain.CatalogItem,
+	effectiveFrom string,
 ) (*domain.CatalogItem, error) {
 	normalized, err := normalizeCatalogItem(item)
 	if err != nil {
@@ -117,6 +140,9 @@ func (s *SQLiteStore) UpsertCatalogItem(
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	today := time.Now().UTC().Format("2006-01-02")
+	if effectiveFrom == "" {
+		effectiveFrom = today
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -166,14 +192,35 @@ func (s *SQLiteStore) UpsertCatalogItem(
 		return nil, fmt.Errorf("upsert catalog item: %w", err)
 	}
 
-	// Append an effective-dated cost record when the price changed (or seed the
+	// Append an effective-dated price record when the price changed (or seed the
 	// first record for a new item), so work orders can snapshot historical cost.
-	if err := recordCatalogCost(ctx, tx, normalized.ID, normalized.PurchasePrice, normalized.SalePrice, today); err != nil {
+	// A future effectiveFrom schedules the change without altering today's price.
+	if err := recordCatalogCost(ctx, tx, normalized.ID, normalized.PurchasePrice, normalized.SalePrice, effectiveFrom, today); err != nil {
 		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit upsert catalog item: %w", err)
+	}
+
+	// Resolve the price effective today from history and sync it back to the
+	// cached columns + response, so a future-dated change never bleeds the future
+	// price into the item's displayed "now" price. Runs after commit (the single
+	// SQLite connection is released) to avoid self-deadlock.
+	asOf, err := s.catalogPricesAsOf(ctx, []string{normalized.ID}, today)
+	if err != nil {
+		return nil, err
+	}
+	if effective, ok := asOf[normalized.ID]; ok {
+		if _, err := s.db.ExecContext(
+			ctx,
+			`UPDATE catalog_items SET purchase_price = ?, sale_price = ? WHERE id = ? AND tenant_id = ?`,
+			ptrFloatValue(effective.Purchase), ptrFloatValue(effective.Sale), normalized.ID, tenantID,
+		); err != nil {
+			return nil, fmt.Errorf("sync cached catalog price: %w", err)
+		}
+		normalized.PurchasePrice = effective.Purchase
+		normalized.SalePrice = effective.Sale
 	}
 
 	normalized.UpdatedAt = now

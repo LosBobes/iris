@@ -9,7 +9,7 @@ import {
   type UseFormWatch,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Eye, EyeOff, Loader2, MapPin, Pencil, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Eye, EyeOff, Loader2, MapPin, Package, Pencil, Plus, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -339,16 +339,16 @@ export function isEmptyJobDetails(
   );
 }
 
+// The delivery address ("adresa za dostavu") is entered by hand and kept
+// independent of the client's registry/location address: the client's own
+// address is shown separately at the top of the printed nalog, so the delivery
+// destination must not silently inherit it. Delivery-less methods clear it.
 export function resolveShippingAddress(
   currentAddress: string | null,
   deliveryMethod: DeliveryMethod | null,
-  locationId: string | null,
-  locations: Location[],
 ): string | null {
   if (deliveryMethod === null || deliveryMethod === "pickup") return null;
-  if (currentAddress && currentAddress.trim() !== "") return currentAddress;
-
-  return locations.find((location) => location.id === locationId)?.address ?? null;
+  return currentAddress && currentAddress.trim() !== "" ? currentAddress : null;
 }
 
 export function resolveLocationAddress(
@@ -420,10 +420,11 @@ export function WorkOrderForm({
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const isEdit = !!initialData;
-  // Regular operators get a severely reduced form: no money/pricing fields and
-  // none of the back-office billing/shipping/assignment detail. Admins keep the
-  // full form. Hidden fields keep their default/initial values (react-hook-form
-  // does not unregister them), so an operator's edit never wipes admin data.
+  // Regular operators get a reduced form: they may edit line items including the
+  // selling price, but not cost/margin or the back-office billing/shipping/
+  // assignment detail. Admins keep the full form. Hidden fields keep their
+  // default/initial values (react-hook-form does not unregister them), so an
+  // operator's edit never wipes admin data.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
   // Shop-wide document-type policy: new orders start on the configured default
@@ -932,23 +933,22 @@ export function WorkOrderForm({
     });
   };
   useEffect(() => {
-    const nextAddress = resolveShippingAddress(
-      shippingAddress,
-      deliveryMethod,
-      selectedLocationId,
-      allLocations,
-    );
+    const nextAddress = resolveShippingAddress(shippingAddress, deliveryMethod);
 
     if (nextAddress !== shippingAddress) {
       setValue("shipping.shippingAddress", nextAddress);
     }
-  }, [deliveryMethod, allLocations, selectedLocationId, setValue, shippingAddress]);
+  }, [deliveryMethod, setValue, shippingAddress]);
 
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
     try {
       await onSubmit({
         ...values,
+        // Issuer and executor are one consolidated field in the UI: mirror the
+        // chosen operator onto issuedBy, falling back to the existing issuedBy
+        // (e.g. the creating user) when no operator is picked.
+        issuedBy: values.executedBy || values.issuedBy,
         // The dedicated operator field was removed as redundant; the assignee is
         // whoever takes the order over (executedBy) or, failing that, who issued it.
         assignment: {
@@ -961,8 +961,6 @@ export function WorkOrderForm({
           shippingAddress: resolveShippingAddress(
             values.shipping.shippingAddress,
             values.shipping.deliveryMethod,
-            values.locationId,
-            allLocations,
           ),
         },
       });
@@ -1654,6 +1652,23 @@ export function WorkOrderForm({
                                 {t(`workOrders.lineKind.${selectedKind}`)}
                               </span>
                             )}
+                            {/* Origin badge: catalog-backed vs manually-entered
+                                (special) line, so the two are distinguishable at
+                                a glance. */}
+                            {isCatalogLine ? (
+                              <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-muted px-2 text-[10px] font-medium uppercase tracking-[0.4px] text-[color:var(--iris-ink-mute)]">
+                                <Package className="h-3 w-3" />
+                                {t("workOrders.form.catalogBadge")}
+                              </span>
+                            ) : (
+                              <span
+                                title={t("workOrders.form.specialBadgeHint")}
+                                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-dashed border-border px-2 text-[10px] font-medium uppercase tracking-[0.4px] text-[color:var(--iris-ink-soft)]"
+                              >
+                                <Sparkles className="h-3 w-3" />
+                                {t("workOrders.form.specialBadge")}
+                              </span>
+                            )}
                             {isEditingLine ? (
                               <input
                                 id={`invoiceDraft.lineItems.${index}.description`}
@@ -1786,9 +1801,10 @@ export function WorkOrderForm({
                               error={lineItemError?.unitPrice?.message}
                               className="w-24"
                             >
-                              {/* Everyone can see the price; only admins may edit
-                                  it, and only once the pen unlocks the line. */}
-                              {isAdmin && isEditingLine ? (
+                              {/* Everyone can see and edit the selling price, once
+                                  the pen unlocks the line. Cost/margin stay
+                                  admin-only. */}
+                              {isEditingLine ? (
                                 <input
                                   id={`invoiceDraft.lineItems.${index}.unitPrice`}
                                   type="number"
@@ -1812,22 +1828,24 @@ export function WorkOrderForm({
                             </LineField>
 
                             {isAdmin &&
-                              (invoiceLineItems[index]?.catalogItemId ? (
-                                // Catalog-line cost is captured server-side from
-                                // the item's price history; show it read-only.
+                              // A catalog line's cost is authoritative only when
+                              // the catalog has one on record (unitCost set); that
+                              // stays read-only. When it is missing (the "—" case)
+                              // the admin can fill it in, same as an ad-hoc line.
+                              (isCatalogLine &&
+                              invoiceLineItems[index]?.unitCost != null ? (
                                 <LineField
                                   htmlFor={`invoiceDraft.lineItems.${index}.unitCost`}
                                   label={t("workOrders.form.colCost")}
                                   className="w-24"
                                 >
                                   <div className="tnum py-1 text-[13px] text-[color:var(--iris-ink-mute)]">
-                                    {invoiceLineItems[index]?.unitCost != null
-                                      ? invoiceLineItems[index]!.unitCost
-                                      : "—"}
+                                    {invoiceLineItems[index]!.unitCost}
                                   </div>
                                 </LineField>
                               ) : (
-                                // Ad-hoc line: admin enters the cost; empty flags review.
+                                // Ad-hoc line, or catalog line with no captured
+                                // cost: admin enters the cost; empty flags review.
                                 <LineField
                                   htmlFor={`invoiceDraft.lineItems.${index}.unitCost`}
                                   label={t("workOrders.form.colCost")}
@@ -1921,11 +1939,11 @@ export function WorkOrderForm({
             </FieldShell>
 
             <div className="grid grid-cols-2 gap-6">
-              <FieldShell id="executedBy" label={t("workOrders.form.takesOver")}>
+              {/* Issuer and executor were consolidated into one operator field
+                  (the shop treats them as the same person); its value is mirrored
+                  onto issuedBy at submit time. */}
+              <FieldShell id="executedBy" label={t("workOrders.form.signatory")}>
                 {renderOperatorSelect("executedBy", "executedBy")}
-              </FieldShell>
-              <FieldShell id="issuedBy" label={t("workOrders.form.issuedBy")}>
-                {renderOperatorSelect("issuedBy", "issuedBy")}
               </FieldShell>
               <FieldShell id="shipping.deliveryMethod" label={t("workOrders.form.deliveryMethod")}>
                 <Controller
@@ -2057,6 +2075,24 @@ export function WorkOrderForm({
                     setValueAs: (v: string) => (v === "" ? null : v),
                   })}
                 />
+                {/* Fill the delivery address with the client firm's own
+                    (registry/location) address in one click. */}
+                {selectedLocationAddress && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setValue(
+                        "shipping.shippingAddress",
+                        selectedLocationAddress,
+                        { shouldDirty: true },
+                      )
+                    }
+                    className="iris-focusable iris-press mt-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
+                  >
+                    <MapPin className="h-3 w-3" />
+                    {t("workOrders.form.useClientFirmAddress")}
+                  </button>
+                )}
               </FieldShell>
             )}
 

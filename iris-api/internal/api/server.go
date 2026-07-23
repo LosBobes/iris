@@ -707,7 +707,7 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, locationAddress, settings.PDFSections)
+	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, locationAddress, settings.PDFSections, settings.FirmName, settings.BillingDefaults)
 	if err != nil {
 		writeServerError(w, err)
 		return
@@ -756,7 +756,7 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	html, err := reports.RenderWorkOrderHTML(order, locationAddress, settings.PDFSections)
+	html, err := reports.RenderWorkOrderHTML(order, locationAddress, settings.PDFSections, settings.FirmName, settings.BillingDefaults)
 	if err != nil {
 		writeServerError(w, err)
 		return

@@ -311,7 +311,9 @@
 @media print {
   @page {
     size: A4;
-    margin: 8mm;
+    /* Roomy top margin (white space above the title) and a small bottom margin
+       so the content sits lower on the page and reaches near the bottom. */
+    margin: 20mm 8mm 2mm;
   }
 
   html,
@@ -344,8 +346,8 @@
     flex-direction: column;
     box-sizing: border-box;
     width: 194mm;
-    height: 281mm;
-    max-height: 281mm;
+    height: 275mm;
+    max-height: 275mm;
     margin: 0 auto;
     overflow: hidden;
     page-break-after: avoid;
@@ -395,32 +397,29 @@
     white-space: nowrap;
   }
 
-  .work-order-print-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 55mm;
+  /* The lower area of the nalog: a left stack (stavke, billing, notes) beside
+     the delivery checklist, which sits bottom-aligned in its right column. The
+     KLIJENT/dates row and OPIS POSLA render full width above this. */
+  .work-order-print-body {
+    display: flex;
     align-items: stretch;
     flex: 1 1 auto;
     min-height: 0;
     border-bottom: 2px solid #000;
   }
 
-  .work-order-print-hero-solo {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .work-order-print-hero-solo .work-order-print-main-panel {
-    border-right: none;
-  }
-
-  .work-order-print-main-panel {
-    display: grid;
-    grid-template-rows: auto 1fr;
-    border-right: 1px solid #000;
+  .work-order-print-left-stack {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
   }
 
   .work-order-print-top-grid {
     display: grid;
     grid-template-columns: 1fr 45mm;
+    flex: 0 0 auto;
     border-bottom: 1px solid #000;
   }
 
@@ -444,27 +443,40 @@
   }
 
   .work-order-print-client-name {
-    padding: 2mm 3mm 3mm;
+    padding: 2mm 3mm 0;
     font-size: 22px;
     font-weight: 800;
     line-height: 1.1;
     overflow-wrap: anywhere;
   }
 
-  .work-order-print-subline {
-    border-top: 1px solid #000;
-    padding: 1.5mm 3mm;
-    font-size: 11px;
+  .work-order-print-client-address {
+    padding: 0.5mm 3mm 3mm;
+    font-size: 12px;
     font-weight: 500;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
   }
+
 
   .work-order-print-issue-box {
     display: flex;
     flex-direction: column;
+  }
+
+  .work-order-print-issue-cell {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2mm;
+    gap: 1.5mm;
+    padding: 2mm 0;
     text-align: center;
+  }
+
+  .work-order-print-issue-cell + .work-order-print-issue-cell {
+    border-top: 1px solid #000;
   }
 
   .work-order-print-date {
@@ -473,12 +485,49 @@
     letter-spacing: 0;
   }
 
-  .work-order-print-job-box {
+  /* Opis posla renders full width above the two-column lower area. It sizes to
+     its content, capped by max-height; the auto-fit script shrinks the text to
+     fit that cap when the description is long. */
+  .work-order-print-job-description {
+    display: flex;
+    flex: 0 0 auto;
+    max-height: 48mm;
+    flex-direction: column;
+    overflow: hidden;
+    border-bottom: 2px solid #000;
+    padding: 2mm 4mm 3mm;
+  }
+
+  .work-order-print-description-lines {
+    font-size: 24px;
+    font-weight: 400;
+    line-height: 1.22;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-job-items {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
     flex-direction: column;
-    padding: 4mm 4mm 3mm;
+    padding: 2mm 4mm 3mm;
+  }
+
+  /* Panel corner labels: OPIS POSLA and STAVKE, both top-left, with a gap below
+     so the content does not crowd the label. */
+  .work-order-print-panel-header {
+    display: flex;
+    margin-bottom: 2.5mm;
+  }
+
+  .work-order-print-panel-header-left {
+    justify-content: flex-start;
+  }
+
+  .work-order-print-panel-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
   }
 
   .work-order-print-job-lines {
@@ -486,6 +535,66 @@
     font-weight: 400;
     line-height: 1.22;
     overflow-wrap: anywhere;
+  }
+
+  /* Stavke render as a table: an enumerated name column plus selling price,
+     quantity, and line-total columns. Fixed layout keeps the columns from
+     collapsing; collapsed borders keep the row separators aligned. */
+  .work-order-print-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .work-order-print-items-table th,
+  .work-order-print-items-table td {
+    padding: 1.8mm 0;
+    vertical-align: baseline;
+  }
+
+  /* Separators run between rows only (header underline + a rule above each item),
+     so the last item has no trailing line doubling up with the total's border. */
+  .work-order-print-items-table tbody td {
+    border-top: 1px solid #000;
+  }
+
+  /* Column header row: small labels so it does not eat the item rows' height. */
+  .work-order-print-items-table thead th {
+    padding-top: 0;
+    border-bottom: 1px solid #000;
+    font-size: 11px;
+    font-weight: 500;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .work-order-print-items-table thead th.work-order-print-col-name {
+    text-align: left;
+  }
+
+  /* The name column keeps the remaining width (no explicit width in a fixed
+     table = leftover space) and wraps long names. */
+  .work-order-print-col-name {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  /* Numeric columns: fixed width, right-aligned, with a left gutter so figures
+     never touch the previous column. Scoped under the table so this padding wins
+     over the shared cell-padding shorthand above. */
+  .work-order-print-items-table .work-order-print-col-num {
+    width: 30mm;
+    padding-left: 3mm;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .work-order-print-item-number {
+    font-weight: 700;
+  }
+
+  .work-order-print-item-text {
+    padding-left: 1.5mm;
   }
 
   .work-order-print-job-footer {
@@ -509,14 +618,16 @@
     overflow-wrap: anywhere;
   }
 
+  /* The delivery checklist keeps its right-hand column but its rows are pinned
+     to the bottom of the column, leaving the freed space at the top. */
   .work-order-print-delivery-box {
     display: flex;
-    flex-direction: column;
-    align-self: stretch;
+    flex: 0 0 55mm;
     min-height: 0;
     min-width: 0;
-    border-right: 1px solid #000;
-    padding-top: 2mm;
+    flex-direction: column;
+    justify-content: flex-end;
+    border-left: 1px solid #000;
   }
 
   .work-order-print-check-row {
@@ -546,34 +657,14 @@
     line-height: 1;
   }
 
-  .work-order-print-empty-field {
-    margin-top: auto;
-    border: 1px solid #000;
-    padding: 1.5mm 4mm;
-    font-size: 21px;
-    font-weight: 700;
-  }
-
-  .work-order-print-document-row {
-    display: grid;
-    grid-template-columns: 78mm 1fr;
-    flex: 0 0 auto;
-    min-height: 22mm;
-    border-bottom: 2px solid #000;
-  }
-
-  .work-order-print-planned-date {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-right: 1px solid #000;
-    font-size: 32px;
-    font-weight: 500;
-  }
-
   .work-order-print-billing-box {
     display: grid;
-    grid-template-columns: 50mm 1fr;
+    grid-template-columns: 50mm 55mm;
+    align-content: center;
+    justify-content: start;
+    flex: 0 0 auto;
+    min-height: 22mm;
+    border-top: 2px solid #000;
     padding: 2mm 2mm 2mm 5mm;
   }
 
@@ -603,7 +694,13 @@
     grid-template-columns: 78mm 1fr;
     flex: 0 0 auto;
     min-height: 26mm;
-    border-bottom: 2px solid #000;
+    border-top: 2px solid #000;
+  }
+
+  /* When the notes (napomena) box is hidden, the shipping address takes the
+     full row width instead of being pinned to the right-hand column. */
+  .work-order-print-notes-row-solo {
+    grid-template-columns: 1fr;
   }
 
   .work-order-print-note-box,
@@ -624,43 +721,17 @@
     overflow-wrap: anywhere;
   }
 
-  .work-order-print-completion-row {
-    display: grid;
-    grid-template-columns: 78mm 1fr;
-    align-items: center;
-    flex: 0 0 auto;
-    min-height: 10mm;
-    border-bottom: 2px solid #000;
-    font-size: 11px;
-  }
-
-  .work-order-print-completion-state,
-  .work-order-print-completion-date {
-    display: flex;
-    align-items: center;
-    gap: 5mm;
-    padding: 1.5mm 3mm;
-  }
-
-  .work-order-print-completion-date {
-    justify-content: flex-end;
-  }
-
-  .work-order-print-date-line {
-    min-width: 40mm;
-    border-bottom: 1px solid #000;
-    padding-bottom: 0.5mm;
-    text-align: right;
-    font-size: 21px;
-    font-weight: 500;
-  }
-
   .work-order-print-signatures {
     display: grid;
     grid-template-columns: 1fr 1fr;
     flex: 0 0 auto;
     gap: 24mm;
     padding: 3mm 3mm 0;
+  }
+
+  /* A single merged signatory field, pinned to the bottom-right column. */
+  .work-order-print-signatures > div {
+    grid-column: 2;
   }
 
   .work-order-print-align-right {

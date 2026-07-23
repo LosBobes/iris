@@ -95,41 +95,102 @@ func TestPrintHelpers(t *testing.T) {
 		"200KOM",
 		"SAMO SE SEČE",
 	}
-	detailsLines := buildPrintJobLines(orderWithDetails)
+	detailsLines := buildPrintDescriptionLines(orderWithDetails)
 	if !reflect.DeepEqual(detailsLines, expectedDetailsLines) {
-		t.Errorf("expected job lines %v, got %v", expectedDetailsLines, detailsLines)
+		t.Errorf("expected description lines %v, got %v", expectedDetailsLines, detailsLines)
 	}
 
 	expectedFallbackLines := []string{
 		"VIZIT KARTE",
 	}
-	fallbackLines := buildPrintJobLines(baseOrder)
+	fallbackLines := buildPrintDescriptionLines(baseOrder)
 	if !reflect.DeepEqual(fallbackLines, expectedFallbackLines) {
-		t.Errorf("expected fallback job lines %v, got %v", expectedFallbackLines, fallbackLines)
+		t.Errorf("expected fallback description lines %v, got %v", expectedFallbackLines, fallbackLines)
 	}
 
 	orderWithEmptyDetails := baseOrder
 	orderWithEmptyDetails.JobDetails = &domain.JobDetails{}
-	emptyDetailsLines := buildPrintJobLines(orderWithEmptyDetails)
+	emptyDetailsLines := buildPrintDescriptionLines(orderWithEmptyDetails)
 	if !reflect.DeepEqual(emptyDetailsLines, expectedFallbackLines) {
 		t.Errorf("expected empty job details to fall back to description, got %v", emptyDetailsLines)
 	}
 
-	// 6. Line items render each position's price: "DESC — QTY UNIT × UNITPRICE = LINETOTAL".
+	// 6. Line items (stavke) render as table rows with name, unit price, quantity,
+	// and line-total columns. The description is not mixed in.
 	orderWithItems := baseOrder
 	orderWithItems.InvoiceDraft.LineItems = []domain.InvoiceLineItem{
 		{Description: "Plakati A2", Quantity: 100, Unit: "kom", UnitPrice: 150},
-		// Zero unit price (e.g. a non-admin stripped printout) falls back to qty only.
+		// Zero unit price (e.g. a non-admin stripped printout): price/total blank.
 		{Description: "Kaširanje", Quantity: 100, Unit: "kom", UnitPrice: 0},
 	}
-	expectedItemLines := []string{
-		"VIZIT KARTE",
-		"PLAKATI A2 — 100 KOM × 150 = 15.000",
-		"KAŠIRANJE — 100 KOM",
+	expectedItemRows := []PrintItemRow{
+		{Name: "PLAKATI A2", UnitPrice: "150", Quantity: "100 KOM", Total: "15.000"},
+		{Name: "KAŠIRANJE", UnitPrice: "", Quantity: "100 KOM", Total: ""},
 	}
-	itemLines := buildPrintJobLines(orderWithItems)
-	if !reflect.DeepEqual(itemLines, expectedItemLines) {
-		t.Errorf("expected item job lines %v, got %v", expectedItemLines, itemLines)
+	itemRows := buildPrintItemRows(orderWithItems)
+	if !reflect.DeepEqual(itemRows, expectedItemRows) {
+		t.Errorf("expected item rows %v, got %v", expectedItemRows, itemRows)
+	}
+
+	// With no line items, the stavke panel is empty (nil slice).
+	if got := buildPrintItemRows(baseOrder); len(got) != 0 {
+		t.Errorf("expected no item rows for an order without line items, got %v", got)
+	}
+}
+
+func TestResolveBillingDocumentType(t *testing.T) {
+	invoice := domain.BillingDocumentTypeInvoice
+	orderWithInvoice := domain.WorkOrder{BillingDocumentType: &invoice}
+	orderWithNoType := domain.WorkOrder{}
+
+	// Override allowed: the order's own choice wins, including "no type" (nil).
+	overridable := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeProforma, AllowOverride: true}
+	if got := resolveBillingDocumentType(orderWithInvoice, overridable); got == nil || *got != invoice {
+		t.Errorf("override allowed: expected order's invoice type, got %v", got)
+	}
+	if got := resolveBillingDocumentType(orderWithNoType, overridable); got != nil {
+		t.Errorf("override allowed: expected nil for order without a type, got %v", got)
+	}
+
+	// Override disabled: the shop default is authoritative, even when the order
+	// stored a different type or none at all (e.g. legacy/imported orders).
+	locked := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeProforma, AllowOverride: false}
+	if got := resolveBillingDocumentType(orderWithInvoice, locked); got == nil || *got != domain.BillingDocumentTypeProforma {
+		t.Errorf("override disabled: expected shop default proforma, got %v", got)
+	}
+	if got := resolveBillingDocumentType(orderWithNoType, locked); got == nil || *got != domain.BillingDocumentTypeProforma {
+		t.Errorf("override disabled: expected shop default proforma for typeless order, got %v", got)
+	}
+}
+
+func TestRenderWorkOrderHTMLBillingDefault(t *testing.T) {
+	order := domain.WorkOrder{
+		OrderNumber:    "RN-2026-00001",
+		ClientName:     "Profesionalni Upravnik",
+		JobDescription: "Vizit karte",
+		// No explicit document type, as with legacy/imported orders.
+	}
+
+	// A shop whose default is FAKTURA and which does not allow overrides must
+	// tick FAKTURA on the printout even though the order carries no type.
+	defaults := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeInvoice, AllowOverride: false}
+	html, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections(), "", defaults)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(html, `<span>FAKTURA</span>`) {
+		t.Fatalf("expected FAKTURA billing row in rendered sheet")
+	}
+	// The FAKTURA row's mark cell must carry the X.
+	faktura := strings.Index(html, `<span>FAKTURA</span>`)
+	after := html[faktura:]
+	markStart := strings.Index(after, `work-order-print-mark">`)
+	if markStart < 0 {
+		t.Fatalf("could not locate FAKTURA mark cell")
+	}
+	mark := after[markStart+len(`work-order-print-mark">`):]
+	if !strings.HasPrefix(strings.TrimSpace(mark), "X") {
+		t.Errorf("expected FAKTURA to be ticked (X) for the shop default, got %q", mark[:1])
 	}
 }
 
@@ -141,25 +202,54 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 		JobDescription: "Vizit karte",
 	}
 
-	full, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections())
+	// The notes (napomena) box is off by default, so enable it explicitly to
+	// exercise the fully-populated sheet.
+	allSections := domain.DefaultPDFSections()
+	allSections.Notes = true
+	full, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), allSections, "Grafika Čobanović", domain.DefaultBillingDefaults())
 	if err != nil {
 		t.Fatalf("render full: %v", err)
 	}
-	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA SLANJE", "RADNI NALOG ZAVRŠEN", "RN IZDAO"} {
+	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA DOSTAVU", "IZDAO / IZVRŠILAC"} {
 		if !strings.Contains(full, marker) {
 			t.Errorf("full sheet missing %q", marker)
 		}
+	}
+	// With both notes and address on, the row keeps its two-column layout.
+	// (Match the class attribute, not the always-present CSS selector.)
+	if strings.Contains(full, `work-order-print-notes-row work-order-print-notes-row-solo`) {
+		t.Errorf("notes-row unexpectedly collapsed to solo while notes shown")
+	}
+
+	// When notes are hidden but the shipping address stays, the address box
+	// takes the full row width via the -solo modifier.
+	addressOnly := domain.DefaultPDFSections()
+	addressOnly.Notes = false
+	addressOnly.ShippingAddress = true
+	addr, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), addressOnly, "", domain.DefaultBillingDefaults())
+	if err != nil {
+		t.Fatalf("render address-only: %v", err)
+	}
+	if strings.Contains(addr, "NAPOMENA") {
+		t.Errorf("address-only sheet still contains NAPOMENA")
+	}
+	if !strings.Contains(addr, `work-order-print-notes-row work-order-print-notes-row-solo`) {
+		t.Errorf("expected notes-row-solo class when notes hidden and address shown")
 	}
 	// The order number must be printed on the sheet (previously only in <title>).
 	if !strings.Contains(full, `work-order-print-number">RN-2026-00001<`) {
 		t.Errorf("full sheet missing printed order number")
 	}
+	// The client's location address renders in subscript under the client name.
+	if !strings.Contains(full, `work-order-print-client-address">KNEZA MILOSA 22, BEOGRAD<`) {
+		t.Errorf("full sheet missing client address subscript")
+	}
 
-	none, err := RenderWorkOrderHTML(order, nil, domain.PDFSections{})
+	none, err := RenderWorkOrderHTML(order, nil, domain.PDFSections{}, "", domain.DefaultBillingDefaults())
 	if err != nil {
 		t.Fatalf("render none: %v", err)
 	}
-	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA SLANJE", "RADNI NALOG ZAVRŠEN", "RN IZDAO"} {
+	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA DOSTAVU", "IZDAO / IZVRŠILAC"} {
 		if strings.Contains(none, marker) {
 			t.Errorf("disabled sheet still contains %q", marker)
 		}
@@ -168,9 +258,9 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 	if !strings.Contains(none, "PROFESIONALNI UPRAVNIK") {
 		t.Errorf("disabled sheet dropped core client field")
 	}
-	// Hiding delivery collapses the hero to a single column.
-	if !strings.Contains(none, "work-order-print-hero-solo") {
-		t.Errorf("expected hero-solo class when delivery hidden")
+	// Hiding delivery collapses the body to the left stack alone.
+	if !strings.Contains(none, "work-order-print-body-solo") {
+		t.Errorf("expected body-solo class when delivery hidden")
 	}
 }
 
@@ -183,7 +273,7 @@ func TestRenderWorkOrderHTMLTotalPrice(t *testing.T) {
 		Price:          &price,
 	}
 
-	html, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections())
+	html, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults())
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -204,7 +294,7 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, nil, domain.DefaultPDFSections())
+	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, nil, domain.DefaultPDFSections(), "Grafika Čobanović", domain.DefaultBillingDefaults())
 	if err != nil {
 		t.Logf("Failed to render PDF using chromedp: %v", err)
 		// We log instead of erroring out to handle environments without chrome gracefully
@@ -220,4 +310,3 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 		t.Errorf("expected PDF header, got %q", string(pdfBytes[:5]))
 	}
 }
-

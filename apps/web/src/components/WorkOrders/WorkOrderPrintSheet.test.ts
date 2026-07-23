@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { WorkOrder } from "@/types/work-order";
 import {
-  buildPrintJobLines,
+  buildPrintDescriptionLines,
+  buildPrintItemRows,
   getPrintBillingRows,
   getPrintDeliveryRows,
+  resolveBillingDocumentType,
+  resolvePrintClientAddress,
   resolvePrintShippingAddress,
 } from "./WorkOrderPrintSheet";
 
@@ -121,9 +124,42 @@ describe("WorkOrderPrintSheet helpers", () => {
     });
   });
 
-  it("builds large printable job lines from structured details and price", () => {
+  it("resolves the effective document type from the shop's billing defaults", () => {
+    const overridable = { documentType: "proforma", allowOverride: true } as const;
+    // Override allowed: the order's own choice wins, including "no type".
     expect(
-      buildPrintJobLines({
+      resolveBillingDocumentType(
+        { ...baseOrder, billingDocumentType: "invoice" },
+        overridable,
+      ),
+    ).toBe("invoice");
+    expect(
+      resolveBillingDocumentType(
+        { ...baseOrder, billingDocumentType: null },
+        overridable,
+      ),
+    ).toBeNull();
+
+    // Override disabled: the shop default is authoritative even when the order
+    // stored a different type or none at all (e.g. legacy/imported orders).
+    const locked = { documentType: "invoice", allowOverride: false } as const;
+    expect(
+      resolveBillingDocumentType(
+        { ...baseOrder, billingDocumentType: "proforma" },
+        locked,
+      ),
+    ).toBe("invoice");
+    expect(
+      resolveBillingDocumentType(
+        { ...baseOrder, billingDocumentType: null },
+        locked,
+      ),
+    ).toBe("invoice");
+  });
+
+  it("builds large printable description lines from structured details", () => {
+    expect(
+      buildPrintDescriptionLines({
         ...baseOrder,
         jobDetails: {
           productCode: "VK",
@@ -143,13 +179,13 @@ describe("WorkOrderPrintSheet helpers", () => {
   });
 
   it("falls back to the order description when structured details are absent", () => {
-    // The grand total is rendered separately (UKUPNA CENA), not in the job lines.
-    expect(buildPrintJobLines(baseOrder)).toEqual(["VIZIT KARTE"]);
+    // Line items (stavke) live in their own panel via buildPrintItemLines.
+    expect(buildPrintDescriptionLines(baseOrder)).toEqual(["VIZIT KARTE"]);
   });
 
   it("falls back to the order description when structured details are empty", () => {
     expect(
-      buildPrintJobLines({
+      buildPrintDescriptionLines({
         ...baseOrder,
         jobDetails: {
           productCode: null,
@@ -162,9 +198,9 @@ describe("WorkOrderPrintSheet helpers", () => {
     ).toEqual(["VIZIT KARTE"]);
   });
 
-  it("renders each line item's price as DESC — QTY UNIT × UNITPRICE = LINETOTAL", () => {
+  it("builds table rows with name, unit price, quantity, and line total columns", () => {
     expect(
-      buildPrintJobLines({
+      buildPrintItemRows({
         ...baseOrder,
         invoiceDraft: {
           ...baseOrder.invoiceDraft,
@@ -193,16 +229,20 @@ describe("WorkOrderPrintSheet helpers", () => {
         },
       }),
     ).toEqual([
-      "VIZIT KARTE",
-      "PLAKATI A2 — 100 KOM × 150 = 15.000",
-      // Zero-priced line (or a money-stripped operator copy) falls back to qty only.
-      "KAŠIRANJE — 100 KOM",
+      { name: "PLAKATI A2", unitPrice: "150", quantity: "100 KOM", total: "15.000" },
+      // Zero-priced line (or a money-stripped operator copy): price/total blank.
+      { name: "KAŠIRANJE", unitPrice: "", quantity: "100 KOM", total: "" },
     ]);
   });
 
-  it("drops per-line prices from the operator (money-hidden) printout", () => {
+  it("returns no item rows when the order has no line items", () => {
+    // The description panel handles the job text; the items panel is empty here.
+    expect(buildPrintItemRows(baseOrder)).toEqual([]);
+  });
+
+  it("blanks the price and total columns on the operator (money-hidden) printout", () => {
     expect(
-      buildPrintJobLines(
+      buildPrintItemRows(
         {
           ...baseOrder,
           invoiceDraft: {
@@ -223,17 +263,34 @@ describe("WorkOrderPrintSheet helpers", () => {
         },
         false,
       ),
-    ).toEqual(["VIZIT KARTE", "PLAKATI A2 — 100 KOM"]);
+    ).toEqual([
+      { name: "PLAKATI A2", unitPrice: "", quantity: "100 KOM", total: "" },
+    ]);
   });
 
-  it("uses the selected location address when shipping address is missing", () => {
+  it("prints only the explicit delivery address, never the client location", () => {
+    // Missing delivery address does not fall back to the client's location: the
+    // location address is shown at the top of the nalog instead.
     expect(
-      resolvePrintShippingAddress(
-        {
-          ...baseOrder,
-          locationId: "loc-3",
-          shipping: { ...baseShipping, shippingAddress: null },
-        },
+      resolvePrintShippingAddress({
+        ...baseOrder,
+        locationId: "loc-3",
+        shipping: { ...baseShipping, shippingAddress: null },
+      }),
+    ).toBeNull();
+
+    expect(
+      resolvePrintShippingAddress({
+        ...baseOrder,
+        shipping: { ...baseShipping, shippingAddress: "Druga adresa 4, Beograd" },
+      }),
+    ).toBe("DRUGA ADRESA 4, BEOGRAD");
+  });
+
+  it("resolves the client's location address for the top-of-nalog subscript", () => {
+    expect(
+      resolvePrintClientAddress(
+        { ...baseOrder, locationId: "loc-3" },
         [
           {
             id: "loc-3",
@@ -244,5 +301,8 @@ describe("WorkOrderPrintSheet helpers", () => {
         ],
       ),
     ).toBe("KNEZA MILOSA 22, BEOGRAD");
+
+    // No location selected → no client address to print.
+    expect(resolvePrintClientAddress(baseOrder, [])).toBeNull();
   });
 });

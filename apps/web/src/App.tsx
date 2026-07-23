@@ -30,6 +30,7 @@ const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
 const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
 const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
+const CostReviewPage = lazy(() => import("@/pages/CostReviewPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const HelpPage = lazy(() => import("@/pages/HelpPage"));
@@ -227,7 +228,10 @@ function App(): React.JSX.Element {
                       <Route path="/settings" element={<SettingsPage />} />
                       <Route path="/help" element={<HelpPage />} />
                       {currentUser.role === "admin" && (
-                        <Route path="/users" element={<UsersPage />} />
+                        <>
+                          <Route path="/cost-review" element={<CostReviewPage />} />
+                          <Route path="/users" element={<UsersPage />} />
+                        </>
                       )}
                     </Routes>
                     <CommandPalette />

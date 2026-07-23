@@ -237,4 +237,33 @@ describe('createHttpApi', () => {
     expect(list.items[0].internalNotes).toEqual([])
     expect(list.items[0].invoiceDraft.lineItems).toEqual([])
   })
+
+  it('fetches catalog cost history and unwraps the items array', async () => {
+    const records = [
+      {
+        id: 'cph-1',
+        catalogItemId: 'cat-1',
+        purchasePrice: 120,
+        salePrice: 260,
+        effectiveFrom: '2026-08-01',
+        effectiveTo: null,
+        createdAt: '2026-07-23T00:00:00Z',
+      },
+    ]
+    const fetchMock = vi.fn(async () => response({ items: records }))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const history = await api.getCatalogItemCostHistory('cat-1')
+    expect(history).toEqual(records)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/catalog-items/cat-1/cost-history',
+      expect.objectContaining({ credentials: 'include' }),
+    )
+  })
+
+  it('returns an empty array when cost history is missing', async () => {
+    const fetchMock = vi.fn(async () => response({}))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+    await expect(api.getCatalogItemCostHistory('cat-x')).resolves.toEqual([])
+  })
 })

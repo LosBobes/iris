@@ -99,10 +99,14 @@ func (s *FixtureStore) CatalogItemCostHistory(
 	return []domain.CatalogItemCost{}, nil
 }
 
-// UpsertCatalogItem creates or replaces an item in the in-memory catalog.
+// UpsertCatalogItem creates or replaces an item in the in-memory catalog. The
+// fixture store keeps a single current price (no effective-dated history), so
+// effectiveFrom is accepted for interface parity and ignored — future-dating is
+// a SQLite-only concern exercised against SQLiteStore.
 func (s *FixtureStore) UpsertCatalogItem(
 	_ context.Context,
 	item domain.CatalogItem,
+	_ string,
 ) (*domain.CatalogItem, error) {
 	normalized, err := normalizeCatalogItem(item)
 	if err != nil {

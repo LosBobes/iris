@@ -99,7 +99,7 @@ func Seed(ctx context.Context, sqliteStore *store.SQLiteStore, dir string) error
 		}
 	}
 	for _, item := range seed.CatalogItems {
-		if _, err := sqliteStore.UpsertCatalogItem(ctx, item); err != nil {
+		if _, err := sqliteStore.UpsertCatalogItem(ctx, item, ""); err != nil {
 			return fmt.Errorf("seed catalog item %s: %w", item.ID, err)
 		}
 	}

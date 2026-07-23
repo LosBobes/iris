@@ -16,6 +16,7 @@ import type {
 } from '@/types/work-order'
 import type {
   CatalogItem,
+  CatalogItemCost,
   CatalogItemInput,
   CatalogItemListResult,
   CatalogItemQuery,
@@ -270,6 +271,15 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
       )
       if (response.status === 404) return null
       return readJSON<CatalogItem>(response)
+    },
+
+    async getCatalogItemCostHistory(id: string) {
+      const response = await fetchImpl(
+        url(`/catalog-items/${encodeURIComponent(id)}/cost-history`),
+        credentialedRequest(),
+      )
+      const result = await readJSON<{ items: CatalogItemCost[] }>(response)
+      return readArray(result?.items)
     },
 
     async createCatalogItem(input: CatalogItemInput) {

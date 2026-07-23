@@ -102,7 +102,7 @@ type Store interface {
 	CatalogItems(ctx context.Context, query CatalogItemQuery) (CatalogItemListResult, error)
 	CatalogItemByID(ctx context.Context, id string) (*domain.CatalogItem, error)
 	CatalogItemCostHistory(ctx context.Context, catalogItemID string) ([]domain.CatalogItemCost, error)
-	UpsertCatalogItem(ctx context.Context, item domain.CatalogItem) (*domain.CatalogItem, error)
+	UpsertCatalogItem(ctx context.Context, item domain.CatalogItem, effectiveFrom string) (*domain.CatalogItem, error)
 	DeleteCatalogItem(ctx context.Context, id string) error
 
 	OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error)

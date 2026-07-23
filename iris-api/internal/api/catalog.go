@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -86,6 +87,32 @@ func (s *Server) handleCatalogItemCostHistory(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]any{"items": history})
 }
 
+// validCatalogEffectiveFrom validates the optional price effective date. A nil or
+// blank value means "today" (returned as "" so the store applies its own today).
+// A provided value must be a YYYY-MM-DD date today or later — past dates are
+// rejected so prices can only be scheduled forward, never back-dated. On failure
+// it writes a 400 and returns ok=false.
+func validCatalogEffectiveFrom(w http.ResponseWriter, raw *string) (string, bool) {
+	if raw == nil {
+		return "", true
+	}
+	value := strings.TrimSpace(*raw)
+	if value == "" {
+		return "", true
+	}
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Datum primene mora biti u formatu GGGG-MM-DD."})
+		return "", false
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	if parsed.UTC().Format("2006-01-02") < today {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Datum primene ne može biti u prošlosti."})
+		return "", false
+	}
+	return value, true
+}
+
 func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request) {
 	var input domain.CatalogItemInput
 	if !decodeJSONBody(w, r, &input) {
@@ -99,6 +126,11 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 	// apply just the kind, so nothing else can be overwritten.
 	if !isAdmin(r) {
 		s.updateCatalogItemKind(w, r, input.Kind)
+		return
+	}
+
+	effectiveFrom, ok := validCatalogEffectiveFrom(w, input.EffectiveFrom)
+	if !ok {
 		return
 	}
 
@@ -117,7 +149,7 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 	if id := chi.URLParam(r, "id"); id != "" {
 		item.ID = id
 	}
-	result, err := s.store.UpsertCatalogItem(r.Context(), item)
+	result, err := s.store.UpsertCatalogItem(r.Context(), item, effectiveFrom)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -153,7 +185,10 @@ func (s *Server) updateCatalogItemKind(w http.ResponseWriter, r *http.Request, k
 		return
 	}
 	existing.Kind = kind
-	result, err := s.store.UpsertCatalogItem(r.Context(), *existing)
+	// Kind-only edit: no price change, so no effective date (empty defaults to
+	// today in the store, which no-ops the unchanged price and preserves any
+	// pending future schedule).
+	result, err := s.store.UpsertCatalogItem(r.Context(), *existing, "")
 	if err != nil {
 		writeStoreError(w, err)
 		return

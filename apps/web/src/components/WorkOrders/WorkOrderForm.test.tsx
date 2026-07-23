@@ -210,30 +210,17 @@ describe("computeLineItemsTotal", () => {
 });
 
 describe("resolveShippingAddress", () => {
-  const locations = [
-    {
-      id: "loc-1",
-      customerId: "cust-1",
-      name: "Agencija",
-      address: "Kralja Petra 8, Nis",
-    },
-  ];
-
-  it("uses the selected location address for delivery methods that require shipping", () => {
-    expect(resolveShippingAddress(null, "postExpress", "loc-1", locations)).toBe(
-      "Kralja Petra 8, Nis",
-    );
+  it("clears the delivery address for pickup / no delivery method", () => {
+    expect(resolveShippingAddress("Druga adresa 4, Beograd", null)).toBeNull();
+    expect(resolveShippingAddress("Druga adresa 4, Beograd", "pickup")).toBeNull();
   });
 
-  it("preserves an explicitly entered shipping address", () => {
-    expect(
-      resolveShippingAddress(
-        "Druga adresa 4, Beograd",
-        "postExpress",
-        "loc-1",
-        locations,
-      ),
-    ).toBe("Druga adresa 4, Beograd");
+  it("preserves the hand-entered delivery address without inheriting the client location", () => {
+    expect(resolveShippingAddress("Druga adresa 4, Beograd", "postExpress")).toBe(
+      "Druga adresa 4, Beograd",
+    );
+    // An empty address stays empty — it is not backfilled from the client's location.
+    expect(resolveShippingAddress(null, "postExpress")).toBeNull();
   });
 });
 

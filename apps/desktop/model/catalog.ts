@@ -34,6 +34,27 @@ export interface CatalogItemInput {
   taxGroup: string | null;
   description: string | null;
   isActive: boolean;
+  /**
+   * Date (YYYY-MM-DD) a changed price takes effect. Optional (defaults to today);
+   * must be today or later. A future date schedules the new price without moving
+   * the item's displayed current price until that date arrives.
+   */
+  effectiveFrom?: string | null;
+}
+
+/**
+ * One effective-dated record in a catalog item's price history. Mirrors
+ * CatalogItemCost in iris-api/openapi.yaml. A null effectiveTo marks the
+ * currently-effective (or scheduled future) record.
+ */
+export interface CatalogItemCost {
+  id: string;
+  catalogItemId: string;
+  purchasePrice: number | null;
+  salePrice: number | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  createdAt: string;
 }
 
 export interface CatalogItemQuery {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatCatalogPrice, kindLabel, toCatalogInput } from '@/lib/catalog'
+import {
+  formatCatalogPrice,
+  formatEffectiveDate,
+  kindLabel,
+  toCatalogInput,
+} from '@/lib/catalog'
 import type { CatalogItem } from '@/types/catalog'
 
 describe('formatCatalogPrice', () => {
@@ -48,5 +53,34 @@ describe('toCatalogInput', () => {
       description: null,
       isActive: true,
     })
+  })
+
+  it('passes a provided effective date and omits it otherwise', () => {
+    const item: CatalogItem = {
+      id: 'cat-2',
+      code: 'SVC-2',
+      name: 'Štampa',
+      kind: 'service',
+      unit: 'kom',
+      purchasePrice: 100,
+      salePrice: 200,
+      barcode: null,
+      taxGroup: null,
+      description: null,
+      isActive: true,
+    }
+    expect(toCatalogInput(item, '2026-08-01').effectiveFrom).toBe('2026-08-01')
+    expect(toCatalogInput(item).effectiveFrom).toBeUndefined()
+    expect(toCatalogInput(item, null).effectiveFrom).toBeUndefined()
+  })
+})
+
+describe('formatEffectiveDate', () => {
+  it('formats a stored ISO date as DD.MM.YYYY', () => {
+    expect(formatEffectiveDate('2026-08-01')).toBe('01.08.2026')
+  })
+
+  it('returns the input unchanged when it is not a valid date', () => {
+    expect(formatEffectiveDate('not-a-date')).toBe('not-a-date')
   })
 })

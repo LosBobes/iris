@@ -1,3 +1,4 @@
+import { format, parse } from "date-fns";
 import i18n from "@/i18n";
 import type { CatalogItem, CatalogItemInput, CatalogItemKind } from "@/types/catalog";
 
@@ -42,8 +43,15 @@ export function kindLabel(kind: CatalogItemKind): string {
     : i18n.t("catalog.kindArticle");
 }
 
-/** Maps an editable catalog item to the input payload the API expects. */
-export function toCatalogInput(item: CatalogItem): CatalogItemInput {
+/**
+ * Maps an editable catalog item to the input payload the API expects.
+ * effectiveFrom (optional, YYYY-MM-DD) is the date a changed price takes effect;
+ * omit it (or pass undefined) to default to today on the server.
+ */
+export function toCatalogInput(
+  item: CatalogItem,
+  effectiveFrom?: string | null,
+): CatalogItemInput {
   return {
     code: item.code.trim(),
     name: item.name.trim(),
@@ -55,7 +63,20 @@ export function toCatalogInput(item: CatalogItem): CatalogItemInput {
     taxGroup: blankToNull(item.taxGroup),
     description: blankToNull(item.description),
     isActive: item.isActive,
+    effectiveFrom: effectiveFrom ?? undefined,
   };
+}
+
+/** Formats a stored YYYY-MM-DD date for display as DD.MM.YYYY. */
+export function formatEffectiveDate(iso: string): string {
+  const parsed = parse(iso, "yyyy-MM-dd", new Date());
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return format(parsed, "dd.MM.yyyy");
+}
+
+/** Today as a stored YYYY-MM-DD string (local time), matching DatePicker output. */
+export function todayIso(): string {
+  return format(new Date(), "yyyy-MM-dd");
 }
 
 export function blankToNull(value: string | null): string | null {

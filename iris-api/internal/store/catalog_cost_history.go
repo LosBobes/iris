@@ -20,48 +20,86 @@ type dbExecQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// recordCatalogCost appends an effective-dated cost record for a catalog item
-// when its price changed, keeping the history append-only. The newly-effective
-// record is stamped effective_from = today and the previous open record is
-// closed (effective_to = today). A same-day re-edit updates the open record in
-// place rather than creating a second record for the same day. When the item has
-// no history yet (a freshly created item) the first open record is inserted.
+// recordCatalogCost records an effective-dated price change for a catalog item,
+// keeping the history append-only. effectiveFrom is the date the new price takes
+// effect (today or a future date; callers default "" to today upstream); today
+// is the server's current date.
+//
+// Behaviour:
+//   - Unchanged price + effectiveFrom == today: no-op. This protects operator
+//     kind-only edits and other incidental re-saves — crucially, a pending future
+//     schedule is left intact.
+//   - Changed price, effectiveFrom == today (immediate): supersede any pending
+//     future schedule, then either update the current period in place (same-day
+//     correction) or close it today and open a new period from today.
+//   - Changed price, effectiveFrom > today (scheduled): supersede any pending
+//     future schedule, close the current period at effectiveFrom, and open a new
+//     period from effectiveFrom. The item's currently-effective price is left
+//     untouched until that date arrives (resolved on read via catalogPricesAsOf).
+//
+// "Current" means the record effective as of today (latest effective_from <=
+// today), never a not-yet-effective future record.
 func recordCatalogCost(
 	ctx context.Context,
 	q dbExecQuerier,
 	catalogItemID string,
 	purchase, sale *float64,
-	today string,
+	effectiveFrom, today string,
 ) error {
-	var (
-		curID       string
-		curFrom     string
-		curPurchase sql.NullFloat64
-		curSale     sql.NullFloat64
-	)
-	err := q.QueryRowContext(
-		ctx,
-		`SELECT id, effective_from, purchase_price, sale_price
-		   FROM catalog_item_price_history
-		  WHERE catalog_item_id = ? AND effective_to IS NULL
-		  ORDER BY effective_from DESC LIMIT 1`,
-		catalogItemID,
-	).Scan(&curID, &curFrom, &curPurchase, &curSale)
+	if effectiveFrom == "" {
+		effectiveFrom = today
+	}
+	isFuture := effectiveFrom > today // YYYY-MM-DD compares lexicographically
 
-	switch {
-	case err == sql.ErrNoRows:
-		// No history yet — seed the first open record.
-		return insertCostRecord(ctx, q, catalogItemID, purchase, sale, today)
-	case err != nil:
-		return fmt.Errorf("load current catalog cost: %w", err)
+	curID, curFrom, curPurchase, curSale, curFound, err := currentCostRecord(ctx, q, catalogItemID, today)
+	if err != nil {
+		return err
 	}
 
-	if nullFloatEqualsPtr(curPurchase, purchase) && nullFloatEqualsPtr(curSale, sale) {
-		return nil // unchanged — nothing to record
+	priceChanged := !curFound ||
+		!nullFloatEqualsPtr(curPurchase, purchase) ||
+		!nullFloatEqualsPtr(curSale, sale)
+
+	if !priceChanged && !isFuture {
+		// No-op save / operator kind edit: leave everything, including any pending
+		// future schedule, untouched.
+		return nil
+	}
+
+	// From here we mutate history, so first supersede any not-yet-effective
+	// schedule and heal the (possibly future-closed) current period.
+	if err := supersedeFutureCostRecords(ctx, q, catalogItemID, today); err != nil {
+		return err
+	}
+	if !priceChanged {
+		// A future save whose price equals the current one: nothing to schedule.
+		return nil
+	}
+
+	// Re-read the current record after healing (supersede may have re-opened it).
+	curID, curFrom, _, _, curFound, err = currentCostRecord(ctx, q, catalogItemID, today)
+	if err != nil {
+		return err
+	}
+	if !curFound {
+		// No current period yet (brand-new item): seed the first record.
+		return insertCostRecord(ctx, q, catalogItemID, purchase, sale, effectiveFrom)
+	}
+
+	if isFuture {
+		// Close the current period at the future boundary and schedule the new one.
+		if _, err := q.ExecContext(
+			ctx,
+			`UPDATE catalog_item_price_history SET effective_to = ? WHERE id = ?`,
+			effectiveFrom, curID,
+		); err != nil {
+			return fmt.Errorf("close catalog cost record: %w", err)
+		}
+		return insertCostRecord(ctx, q, catalogItemID, purchase, sale, effectiveFrom)
 	}
 
 	if curFrom == today {
-		// Same-day correction: update the open record in place.
+		// Same-day correction: update the current period in place.
 		if _, err := q.ExecContext(
 			ctx,
 			`UPDATE catalog_item_price_history SET purchase_price = ?, sale_price = ? WHERE id = ?`,
@@ -72,7 +110,7 @@ func recordCatalogCost(
 		return nil
 	}
 
-	// Close the prior period and open a new one effective today.
+	// Close the prior period today and open a new one effective today.
 	if _, err := q.ExecContext(
 		ctx,
 		`UPDATE catalog_item_price_history SET effective_to = ? WHERE id = ?`,
@@ -81,6 +119,61 @@ func recordCatalogCost(
 		return fmt.Errorf("close catalog cost record: %w", err)
 	}
 	return insertCostRecord(ctx, q, catalogItemID, purchase, sale, today)
+}
+
+// currentCostRecord loads the record effective as of today (the latest
+// effective_from on or before today), ignoring not-yet-effective future records.
+// found is false when the item has no such record yet.
+func currentCostRecord(
+	ctx context.Context,
+	q dbExecQuerier,
+	catalogItemID, today string,
+) (id, from string, purchase, sale sql.NullFloat64, found bool, err error) {
+	scanErr := q.QueryRowContext(
+		ctx,
+		`SELECT id, effective_from, purchase_price, sale_price
+		   FROM catalog_item_price_history
+		  WHERE catalog_item_id = ? AND effective_from <= ?
+		  ORDER BY effective_from DESC LIMIT 1`,
+		catalogItemID, today,
+	).Scan(&id, &from, &purchase, &sale)
+	switch {
+	case scanErr == sql.ErrNoRows:
+		return "", "", sql.NullFloat64{}, sql.NullFloat64{}, false, nil
+	case scanErr != nil:
+		return "", "", sql.NullFloat64{}, sql.NullFloat64{}, false, fmt.Errorf("load current catalog cost: %w", scanErr)
+	}
+	return id, from, purchase, sale, true, nil
+}
+
+// supersedeFutureCostRecords deletes any not-yet-effective (future) schedule for
+// the item and re-opens the now-latest record, healing a current period that a
+// deleted future record had closed. This enforces at most one pending change per
+// item and makes reschedule/cancel coherent.
+func supersedeFutureCostRecords(
+	ctx context.Context,
+	q dbExecQuerier,
+	catalogItemID, today string,
+) error {
+	if _, err := q.ExecContext(
+		ctx,
+		`DELETE FROM catalog_item_price_history WHERE catalog_item_id = ? AND effective_from > ?`,
+		catalogItemID, today,
+	); err != nil {
+		return fmt.Errorf("supersede future catalog cost records: %w", err)
+	}
+	if _, err := q.ExecContext(
+		ctx,
+		`UPDATE catalog_item_price_history SET effective_to = NULL
+		  WHERE id = (
+		    SELECT id FROM catalog_item_price_history
+		     WHERE catalog_item_id = ? ORDER BY effective_from DESC LIMIT 1
+		  )`,
+		catalogItemID,
+	); err != nil {
+		return fmt.Errorf("reopen latest catalog cost record: %w", err)
+	}
+	return nil
 }
 
 func insertCostRecord(
@@ -172,6 +265,100 @@ func (s *SQLiteStore) catalogCostsAsOf(
 	return costs, rows.Err()
 }
 
+// catalogPrice holds the purchase (cost) and sale price effective on a date.
+type catalogPrice struct {
+	Purchase *float64
+	Sale     *float64
+}
+
+// catalogPricesAsOf resolves both the purchase and sale price effective on the
+// given date for each catalog item id (the latest record with effective_from on
+// or before the date, else the earliest as a fallback). This is the read path
+// that makes a scheduled future price self-activate on its date without a cron:
+// list/detail handlers call it with today so a not-yet-effective record never
+// shows as the current price. Tenant-scoped, mirroring catalogCostsAsOf.
+func (s *SQLiteStore) catalogPricesAsOf(
+	ctx context.Context,
+	ids []string,
+	date string,
+) (map[string]catalogPrice, error) {
+	prices := make(map[string]catalogPrice, len(ids))
+	if len(ids) == 0 {
+		return prices, nil
+	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+3)
+	args = append(args, date, date)
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, tenantID)
+
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT catalog_item_id, purchase_price, sale_price FROM (
+		   SELECT catalog_item_id, purchase_price, sale_price,
+		          ROW_NUMBER() OVER (
+		            PARTITION BY catalog_item_id
+		            ORDER BY (effective_from <= ?) DESC,
+		                     CASE WHEN effective_from <= ? THEN effective_from END DESC,
+		                     effective_from ASC
+		          ) AS rn
+		     FROM catalog_item_price_history
+		    WHERE catalog_item_id IN (`+strings.Join(placeholders, ",")+`)
+		      AND catalog_item_id IN (SELECT id FROM catalog_items WHERE tenant_id = ?)
+		 ) WHERE rn = 1`,
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load catalog prices as of %s: %w", date, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var purchase, sale sql.NullFloat64
+		if err := rows.Scan(&id, &purchase, &sale); err != nil {
+			return nil, fmt.Errorf("scan catalog price: %w", err)
+		}
+		prices[id] = catalogPrice{Purchase: nullFloatPtr(purchase), Sale: nullFloatPtr(sale)}
+	}
+	return prices, rows.Err()
+}
+
+// applyAsOfPrices overrides each item's cached purchase/sale price with the value
+// effective on the given date (resolved from history), so a scheduled future
+// change activates at its date and a future price never displays early. Items
+// without a resolved record keep their scanned (cached) value.
+func (s *SQLiteStore) applyAsOfPrices(
+	ctx context.Context,
+	items []domain.CatalogItem,
+	date string,
+) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]string, len(items))
+	for i := range items {
+		ids[i] = items[i].ID
+	}
+	prices, err := s.catalogPricesAsOf(ctx, ids, date)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		if p, ok := prices[items[i].ID]; ok {
+			items[i].PurchasePrice = p.Purchase
+			items[i].SalePrice = p.Sale
+		}
+	}
+	return nil
+}
+
 // CatalogItemCostHistory returns an item's cost records, newest period first,
 // for the admin catalog-detail view.
 func (s *SQLiteStore) CatalogItemCostHistory(
@@ -220,6 +407,14 @@ func (s *SQLiteStore) CatalogItemCostHistory(
 		history = append(history, rec)
 	}
 	return history, rows.Err()
+}
+
+func nullFloatPtr(v sql.NullFloat64) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	f := v.Float64
+	return &f
 }
 
 func nullFloatEqualsPtr(a sql.NullFloat64, b *float64) bool {

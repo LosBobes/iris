@@ -151,6 +151,11 @@ type CatalogItemCost struct {
 
 // CatalogItemInput is the payload an admin submits when creating or editing a
 // catalog item.
+//
+// EffectiveFrom is the date (YYYY-MM-DD) a changed price takes effect. It is
+// optional (nil ⇒ today) and, when set, must be today or later — the API rejects
+// past dates. A future date schedules the new price without changing the item's
+// currently-displayed price until that date arrives.
 type CatalogItemInput struct {
 	Code          string          `json:"code"`
 	Name          string          `json:"name"`
@@ -162,6 +167,7 @@ type CatalogItemInput struct {
 	TaxGroup      *string         `json:"taxGroup"`
 	Description   *string         `json:"description"`
 	IsActive      bool            `json:"isActive"`
+	EffectiveFrom *string         `json:"effectiveFrom,omitempty"`
 }
 
 // DefaultFirmName is the shop's display name shown in the app branding until an
@@ -169,8 +175,9 @@ type CatalogItemInput struct {
 const DefaultFirmName = "Grafika Čobanović"
 
 // PDFSections controls which sections of the work-order printout are rendered.
-// Every section defaults to true (see DefaultPDFSections) so an unconfigured shop
-// keeps the full sheet.
+// Most sections default to true (see DefaultPDFSections) so an unconfigured shop
+// keeps the full sheet; the free-text notes (napomena) box is the exception and
+// defaults to false, so a shop opts in to it explicitly.
 type PDFSections struct {
 	Delivery        bool `json:"delivery"`
 	Billing         bool `json:"billing"`
@@ -180,13 +187,14 @@ type PDFSections struct {
 	Signatures      bool `json:"signatures"`
 }
 
-// DefaultPDFSections returns the all-enabled configuration used when a shop has
-// not customized its printout.
+// DefaultPDFSections returns the configuration used when a shop has not
+// customized its printout: every section enabled except the notes (napomena)
+// box, which is off until an administrator turns it on.
 func DefaultPDFSections() PDFSections {
 	return PDFSections{
 		Delivery:        true,
 		Billing:         true,
-		Notes:           true,
+		Notes:           false,
 		ShippingAddress: true,
 		Completion:      true,
 		Signatures:      true,

@@ -55,11 +55,14 @@ export interface OrganizationSettings {
 /** Fallback firm name used before settings load or when the request fails. */
 export const DEFAULT_FIRM_NAME = "Grafika Čobanović";
 
-/** All-enabled PDF sections, used before settings load or for an unconfigured shop. */
+/**
+ * Default PDF sections, used before settings load or for an unconfigured shop.
+ * Every section is on except notes (napomena), which a shop opts into.
+ */
 export const DEFAULT_PDF_SECTIONS: PDFSections = {
   delivery: true,
   billing: true,
-  notes: true,
+  notes: false,
   shippingAddress: true,
   completion: true,
   signatures: true,
