@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	firmNameSettingKey            = "firm_name"
-	pdfSectionsSettingKey         = "pdf_sections"
-	billingDefaultsSettingKey     = "billing_defaults"
-	priorityDefaultsSettingKey    = "priority_defaults"
-	showShippingOptionsSettingKey = "show_shipping_options"
+	firmNameSettingKey               = "firm_name"
+	pdfSectionsSettingKey            = "pdf_sections"
+	billingDefaultsSettingKey        = "billing_defaults"
+	priorityDefaultsSettingKey       = "priority_defaults"
+	showShippingOptionsSettingKey    = "show_shipping_options"
+	allowMultipleLocationsSettingKey = "allow_multiple_locations"
 )
 
 // OrganizationSettings returns the shop-wide settings, falling back to defaults
@@ -26,22 +27,24 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 		return domain.OrganizationSettings{}, err
 	}
 	settings := domain.OrganizationSettings{
-		FirmName:            domain.DefaultFirmName,
-		PDFSections:         domain.DefaultPDFSections(),
-		BillingDefaults:     domain.DefaultBillingDefaults(),
-		PriorityDefaults:    domain.DefaultPriorityDefaults(),
-		ShowShippingOptions: false,
+		FirmName:               domain.DefaultFirmName,
+		PDFSections:            domain.DefaultPDFSections(),
+		BillingDefaults:        domain.DefaultBillingDefaults(),
+		PriorityDefaults:       domain.DefaultPriorityDefaults(),
+		ShowShippingOptions:    false,
+		AllowMultipleLocations: domain.DefaultAllowMultipleLocations,
 	}
 
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?)`,
+		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?, ?)`,
 		tenantID,
 		firmNameSettingKey,
 		pdfSectionsSettingKey,
 		billingDefaultsSettingKey,
 		priorityDefaultsSettingKey,
 		showShippingOptionsSettingKey,
+		allowMultipleLocationsSettingKey,
 	)
 	if err != nil {
 		return domain.OrganizationSettings{}, fmt.Errorf("load organization settings: %w", err)
@@ -79,6 +82,10 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 		case showShippingOptionsSettingKey:
 			if parsed, err := strconv.ParseBool(value); err == nil {
 				settings.ShowShippingOptions = parsed
+			}
+		case allowMultipleLocationsSettingKey:
+			if parsed, err := strconv.ParseBool(value); err == nil {
+				settings.AllowMultipleLocations = parsed
 			}
 		}
 	}
@@ -126,6 +133,9 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 	if update.ShowShippingOptions != nil {
 		current.ShowShippingOptions = *update.ShowShippingOptions
 	}
+	if update.AllowMultipleLocations != nil {
+		current.AllowMultipleLocations = *update.AllowMultipleLocations
+	}
 
 	sectionsJSON, err := json.Marshal(current.PDFSections)
 	if err != nil {
@@ -153,6 +163,9 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 		return domain.OrganizationSettings{}, err
 	}
 	if err := s.upsertSetting(ctx, showShippingOptionsSettingKey, strconv.FormatBool(current.ShowShippingOptions)); err != nil {
+		return domain.OrganizationSettings{}, err
+	}
+	if err := s.upsertSetting(ctx, allowMultipleLocationsSettingKey, strconv.FormatBool(current.AllowMultipleLocations)); err != nil {
 		return domain.OrganizationSettings{}, err
 	}
 	return current, nil

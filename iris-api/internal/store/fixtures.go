@@ -53,12 +53,13 @@ type FixtureStore struct {
 	referencesLoaded bool
 	usersLoaded      bool
 	fixtureUsers     []domain.FixtureUser
-	firmName            string
-	pdfSections         *domain.PDFSections
-	billingDefaults     *domain.BillingDefaults
-	priorityDefaults    *domain.PriorityDefaults
-	showShippingOptions *bool
-	sessions            map[string]fixtureSession
+	firmName               string
+	pdfSections            *domain.PDFSections
+	billingDefaults        *domain.BillingDefaults
+	priorityDefaults       *domain.PriorityDefaults
+	showShippingOptions    *bool
+	allowMultipleLocations *bool
+	sessions               map[string]fixtureSession
 }
 
 type fixtureSession struct {

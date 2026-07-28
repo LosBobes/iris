@@ -1247,7 +1247,7 @@ components:
             When false, clients hide the priority picker and always use priority.
     OrganizationSettings:
       type: object
-      required: [firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions]
+      required: [firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions, allowMultipleLocations]
       properties:
         firmName:
           type: string
@@ -1265,6 +1265,13 @@ components:
             Whether the work-order form exposes the extra shipping/handling
             fields (drives-out, wait-for-payment, packaging, labeling, fragile,
             signature, insurance). Off by default.
+        allowMultipleLocations:
+          type: boolean
+          description: >-
+            Whether firms may have multiple locations. When false, a firm's
+            location is presented as part of the firm (single address, no
+            location picker); when true, several locations can be managed. Off
+            by default. Purely presentational — locations remain separate rows.
     OrganizationSettingsUpdate:
       type: object
       description: >-
@@ -1283,6 +1290,9 @@ components:
         showShippingOptions:
           type: boolean
           description: Whether the work-order form exposes extra shipping/handling fields.
+        allowMultipleLocations:
+          type: boolean
+          description: Whether firms may have multiple locations (else location shown as part of the firm).
     CatalogItemInput:
       type: object
       required: [name, kind, unit]
