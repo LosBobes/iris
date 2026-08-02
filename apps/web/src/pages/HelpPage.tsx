@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { useAuth } from "@/hooks/useAuth";
+import { useInteractiveTour } from "@/hooks/useInteractiveTour";
 import {
   WORK_ORDER_STATUS_ORDER,
   WORK_ORDER_TRANSITIONS,
@@ -37,6 +38,7 @@ function Section({
 function HelpPage(): React.JSX.Element {
   const { t } = useTranslation();
   const { currentUser } = useAuth();
+  const { startTour } = useInteractiveTour();
   const isAdmin = currentUser.role === "admin";
 
   const concepts: Array<{ term: string; body: string }> = [
@@ -65,6 +67,22 @@ function HelpPage(): React.JSX.Element {
         </div>
 
         <div className="grid gap-5 px-5 pb-10 sm:px-8 lg:grid-cols-2">
+          <div className="flex flex-col items-start gap-2 lg:col-span-2">
+            <button
+              type="button"
+              data-tour="help-start"
+              aria-haspopup="dialog"
+              onClick={startTour}
+              className="iris-focusable iris-press group inline-flex items-center gap-2 bg-foreground px-4 py-3 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+            >
+              <Sparkles className="h-4 w-4 text-[color:var(--iris-accent)] transition-transform duration-300 group-hover:rotate-6 group-hover:scale-110" />
+              {t("help.tour.start")}
+            </button>
+            <p className="text-[11px] leading-relaxed text-[color:var(--iris-ink-mute)]">
+              {t("help.tour.hint")}
+            </p>
+          </div>
+
           <Section title={t("help.about.title")}>
             <p className="text-[13px] leading-relaxed text-[color:var(--iris-ink-soft)]">
               {t("help.about.body")}

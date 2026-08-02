@@ -161,9 +161,12 @@ function WorkOrdersPage(): React.JSX.Element {
   return (
     <AppShell>
       <div className="space-y-8">
-        <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
+        <div
+          data-tour="work-orders-overview"
+          className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10"
+        >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+            <div data-tour="work-orders-heading">
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
                 {t("workOrders.list.eyebrow")}
               </div>
@@ -208,6 +211,7 @@ function WorkOrdersPage(): React.JSX.Element {
               </button>
               <button
                 type="button"
+                data-tour="new-work-order"
                 onClick={() => navigate("/work-orders/new")}
                 className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
               >
