@@ -634,7 +634,7 @@ export const en: typeof sr = {
         },
         items: {
           title: 'Line items and deadlines',
-          body: 'Add services and articles from the catalog or as a custom item. Quantity and sale price determine the total, while deadlines drive dashboard alerts.',
+          body: 'Add services and articles from the catalog or as a custom item. Quantity accepts decimals (e.g. 1.5 m²) and together with the sale price determines the total, while deadlines drive dashboard alerts.',
         },
         job: {
           title: 'Job details and assignee',

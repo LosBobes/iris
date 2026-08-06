@@ -633,7 +633,7 @@ export const sr = {
         },
         items: {
           title: 'Stavke i rokovi',
-          body: 'Usluge i artikle dodajte iz kataloga ili kao posebnu stavku. Količina i prodajna cena određuju ukupan iznos, a rokovi pokreću upozorenja na kontrolnoj tabli.',
+          body: 'Usluge i artikle dodajte iz kataloga ili kao posebnu stavku. Količina prihvata i decimalne vrednosti (npr. 1,5 m²) i zajedno sa prodajnom cenom određuje ukupan iznos, a rokovi pokreću upozorenja na kontrolnoj tabli.',
         },
         job: {
           title: 'Opis posla i izvršilac',
