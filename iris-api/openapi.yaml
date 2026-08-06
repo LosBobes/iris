@@ -222,6 +222,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /catalog-items/cleanup:
+    post:
+      tags: [Catalog]
+      summary: Delete empty service catalog items (admin only)
+      description: >-
+        Removes every service catalog item that has neither an input (purchase)
+        nor an output (sale) price set — placeholder rows an administrator wants
+        to sweep out — and returns how many were deleted.
+      operationId: cleanupCatalogItems
+      responses:
+        '200':
+          description: Number of service items removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted:
+                    type: integer
+                    description: Count of service items that were deleted.
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /catalog-items/{id}:
     get:
       tags: [Catalog]
@@ -1090,7 +1117,11 @@ components:
         description:
           type: string
         quantity:
-          type: integer
+          type: number
+          format: double
+          description: >-
+            Line-item quantity. Fractional values are allowed so services billed
+            by area or length (e.g. 1.5 m² of tarpaulin) can be entered directly.
         unit:
           type: string
           description: >-

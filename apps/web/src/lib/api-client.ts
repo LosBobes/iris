@@ -303,6 +303,14 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
       return readJSON<{ success: boolean }>(response)
     },
 
+    async cleanupEmptyServices() {
+      const response = await fetchImpl(
+        url('/catalog-items/cleanup'),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<{ deleted: number }>(response)
+    },
+
     async getSettings() {
       const response = await fetchImpl(url('/settings'), credentialedRequest())
       return readJSON<OrganizationSettings>(response)

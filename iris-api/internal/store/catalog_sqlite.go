@@ -271,6 +271,31 @@ func (s *SQLiteStore) DeleteCatalogItem(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteEmptyServiceCatalogItems removes every service item in the current
+// tenant whose purchase (input) and sale (output) prices are both unset,
+// returning the number of rows deleted.
+func (s *SQLiteStore) DeleteEmptyServiceCatalogItems(ctx context.Context) (int, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	result, err := s.db.ExecContext(ctx,
+		`DELETE FROM catalog_items
+		   WHERE tenant_id = ?
+		     AND kind = ?
+		     AND purchase_price IS NULL
+		     AND sale_price IS NULL`,
+		tenantID, domain.CatalogItemKindService)
+	if err != nil {
+		return 0, fmt.Errorf("delete empty service catalog items: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("delete empty service catalog items: rows affected: %w", err)
+	}
+	return int(affected), nil
+}
+
 func scanCatalogItem(rows *sql.Rows) (domain.CatalogItem, error) {
 	var item domain.CatalogItem
 	var kind string

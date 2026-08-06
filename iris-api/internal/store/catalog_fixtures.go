@@ -149,6 +149,26 @@ func (s *FixtureStore) DeleteCatalogItem(_ context.Context, id string) error {
 	return nil
 }
 
+// DeleteEmptyServiceCatalogItems drops service items with neither a purchase
+// nor a sale price, returning how many were removed.
+func (s *FixtureStore) DeleteEmptyServiceCatalogItems(_ context.Context) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	remaining := make([]domain.CatalogItem, 0, len(s.catalogItems))
+	deleted := 0
+	for _, existing := range s.catalogItems {
+		if existing.Kind == domain.CatalogItemKindService &&
+			existing.PurchasePrice == nil && existing.SalePrice == nil {
+			deleted++
+			continue
+		}
+		remaining = append(remaining, existing)
+	}
+	s.catalogItems = remaining
+	return deleted, nil
+}
+
 // catalogPurchasePricesLocked returns purchase (cost) prices keyed by catalog
 // item id for the given ids. The caller must already hold s.mu (work-order
 // create/update run under the store lock).

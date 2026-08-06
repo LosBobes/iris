@@ -471,6 +471,17 @@ export const en: typeof sr = {
     costLabelService: 'Labor cost (RSD)',
     costLabelArticle: 'Purchase price (RSD)',
     breadcrumb: 'Catalog',
+    cleanup: {
+      button: 'Clean up empty services',
+      title: 'Delete empty services',
+      confirm:
+        'This deletes every catalog service that has neither an input nor an output price entered. This action cannot be undone. Continue?',
+      cancel: 'Cancel',
+      action: 'Delete',
+      done: 'Deleted {{count}} service(s).',
+      none: 'No empty services to delete.',
+      error: 'Error deleting empty services.',
+    },
     detail: {
       loadError: 'Error loading the item.',
       nameRequired: 'Name is required.',

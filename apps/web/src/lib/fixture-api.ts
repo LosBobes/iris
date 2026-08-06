@@ -842,6 +842,19 @@ export function createFixtureApi(): Window['api'] {
       return { success: true }
     },
 
+    async cleanupEmptyServices() {
+      const before = catalogItems.length
+      catalogItems = catalogItems.filter(
+        (item) =>
+          !(
+            item.kind === 'service' &&
+            item.purchasePrice === null &&
+            item.salePrice === null
+          ),
+      )
+      return { deleted: before - catalogItems.length }
+    },
+
     async getSettings(): Promise<OrganizationSettings> {
       return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions }
     },

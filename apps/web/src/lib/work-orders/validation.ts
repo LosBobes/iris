@@ -86,7 +86,9 @@ const invoiceLineItemSchema = z
     id: z.string(),
     kind: invoiceLineItemKindEnum,
     description: z.string(),
-    quantity: z.number().int().positive(),
+    // Fractional quantities are allowed so services billed by area or length
+    // (e.g. 1.5 m² of tarpaulin) can be entered directly, not just whole pieces.
+    quantity: z.number().positive(),
     unit: invoiceUnitEnum,
     unitPrice: z.number().min(0),
     // Per-unit cost. Server-derived for catalog lines; for ad-hoc lines an admin

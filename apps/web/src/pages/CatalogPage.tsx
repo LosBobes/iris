@@ -1,10 +1,21 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Loader2, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
+import { ChevronRight, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Pager } from "@/components/Pager";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useCatalogItems } from "@/hooks/useCatalogItems";
 import { formatCatalogPrice, kindLabel } from "@/lib/catalog";
@@ -38,8 +49,31 @@ function CatalogPage(): React.JSX.Element {
     }),
     [kindFilter, search, page],
   );
-  const { items, total, loading } = useCatalogItems(query);
+  const { items, total, loading, reload } = useCatalogItems(query);
   const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
+
+  // Admin-only maintenance: drop service items left without input/output prices.
+  const [confirmCleanup, setConfirmCleanup] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const handleCleanup = useCallback(async () => {
+    setCleaning(true);
+    try {
+      const { deleted } = await window.api.cleanupEmptyServices();
+      if (deleted > 0) {
+        toast.success(t("catalog.cleanup.done", { count: deleted }));
+        // Deleting rows can leave the current page past the end; snap back.
+        setPage(0);
+        await reload();
+      } else {
+        toast.info(t("catalog.cleanup.none"));
+      }
+    } catch {
+      toast.error(t("catalog.cleanup.error"));
+    } finally {
+      setCleaning(false);
+      setConfirmCleanup(false);
+    }
+  }, [reload, t]);
 
   // Any filter/search change resets to the first page.
   const changeKind = useCallback((next: KindFilter) => {
@@ -69,14 +103,24 @@ function CatalogPage(): React.JSX.Element {
             </div>
           </div>
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => navigate("/catalog/new")}
-              className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
-            >
-              <Plus className="h-4 w-4" />
-              {t("catalog.newItem")}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmCleanup(true)}
+                className="iris-focusable iris-press inline-flex items-center gap-2 border border-border px-4 py-2 text-[12px] font-medium text-[color:var(--iris-ink-soft)] hover:border-destructive/50 hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                {t("catalog.cleanup.button")}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/catalog/new")}
+                className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
+              >
+                <Plus className="h-4 w-4" />
+                {t("catalog.newItem")}
+              </button>
+            </div>
           )}
         </div>
 
@@ -171,6 +215,41 @@ function CatalogPage(): React.JSX.Element {
           </section>
         </div>
       </div>
+
+      <AlertDialog
+        open={confirmCleanup}
+        onOpenChange={(open) => {
+          if (!open) setConfirmCleanup(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("catalog.cleanup.title")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("catalog.cleanup.confirm")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cleaning}>
+              {t("catalog.cleanup.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleCleanup();
+              }}
+              disabled={cleaning}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cleaning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                t("catalog.cleanup.action")
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

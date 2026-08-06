@@ -104,6 +104,10 @@ type Store interface {
 	CatalogItemCostHistory(ctx context.Context, catalogItemID string) ([]domain.CatalogItemCost, error)
 	UpsertCatalogItem(ctx context.Context, item domain.CatalogItem, effectiveFrom string) (*domain.CatalogItem, error)
 	DeleteCatalogItem(ctx context.Context, id string) error
+	// DeleteEmptyServiceCatalogItems removes service catalog items that have
+	// neither a purchase (input) nor a sale (output) price set, returning how
+	// many were deleted. Used by the admin catalog cleanup action.
+	DeleteEmptyServiceCatalogItems(ctx context.Context) (int, error)
 
 	OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error)
 	UpdateOrganizationSettings(ctx context.Context, update domain.OrganizationSettingsUpdate) (domain.OrganizationSettings, error)

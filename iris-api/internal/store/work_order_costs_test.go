@@ -33,7 +33,7 @@ func mustUpsertCatalog(t *testing.T, ctx context.Context, s *SQLiteStore, id str
 	return item.ID
 }
 
-func catalogLine(id, catalogID string, qty int, unitPrice float64) domain.InvoiceLineItem {
+func catalogLine(id, catalogID string, qty float64, unitPrice float64) domain.InvoiceLineItem {
 	cid := catalogID
 	return domain.InvoiceLineItem{
 		ID:            id,
@@ -114,6 +114,35 @@ func TestWorkOrderCostFrozenAndPreservedOnEdit(t *testing.T) {
 	}
 	if edited.Profit == nil || *edited.Profit != 300 {
 		t.Fatalf("edited profit = %v, want 300 (frozen)", edited.Profit)
+	}
+}
+
+// A fractional quantity (e.g. 1.5 m² of tarpaulin) is preserved and multiplies
+// into the cached margin without being rounded to a whole number.
+func TestWorkOrderFractionalQuantityProfit(t *testing.T) {
+	ctx := testTenantContext()
+	s := costTestStore(t, ctx)
+	catID := mustUpsertCatalog(t, ctx, s, "cat-frac", 400, 1400)
+
+	today := time.Now().UTC().Format("2006-01-02")
+	created, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Klijent",
+		JobDescription: "Ceradno platno",
+		IssuedBy:       "admin",
+		IssueDate:      today,
+		InvoiceDraft: domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{catalogLine("li-1", catID, 1.5, 1400)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder: %v", err)
+	}
+	if got := created.InvoiceDraft.LineItems[0].Quantity; got != 1.5 {
+		t.Fatalf("quantity = %v, want 1.5 (fractional preserved)", got)
+	}
+	if created.Profit == nil || *created.Profit != 1500 { // (1400-400)*1.5
+		t.Fatalf("profit = %v, want 1500", created.Profit)
 	}
 }
 

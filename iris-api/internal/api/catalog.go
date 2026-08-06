@@ -205,3 +205,15 @@ func (s *Server) handleDeleteCatalogItem(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
+
+// handleCleanupCatalogItems (admin only) removes service catalog items that were
+// left without an input (purchase) or output (sale) price — placeholder rows an
+// admin wants to sweep out — and reports how many were deleted.
+func (s *Server) handleCleanupCatalogItems(w http.ResponseWriter, r *http.Request) {
+	deleted, err := s.store.DeleteEmptyServiceCatalogItems(r.Context())
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"deleted": deleted})
+}

@@ -470,6 +470,17 @@ export const sr = {
     costLabelService: 'Cena rada (RSD)',
     costLabelArticle: 'Nabavna cena (RSD)',
     breadcrumb: 'Katalog',
+    cleanup: {
+      button: 'Očisti prazne usluge',
+      title: 'Brisanje praznih usluga',
+      confirm:
+        'Ovim se brišu sve usluge iz kataloga koje nemaju unetu ni ulaznu ni izlaznu cenu. Radnja je nepovratna. Nastaviti?',
+      cancel: 'Otkaži',
+      action: 'Obriši',
+      done: 'Obrisano usluga: {{count}}.',
+      none: 'Nema praznih usluga za brisanje.',
+      error: 'Greška pri brisanju praznih usluga.',
+    },
     detail: {
       loadError: 'Greška pri učitavanju stavke.',
       nameRequired: 'Naziv je obavezan.',

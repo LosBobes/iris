@@ -119,6 +119,8 @@ func (s *Server) Routes() http.Handler {
 		protected.Get("/catalog-items/{id}", s.handleCatalogItemByID)
 		protected.Get("/catalog-items/{id}/cost-history", s.requireAdmin(s.handleCatalogItemCostHistory))
 		protected.Post("/catalog-items", s.requireAdmin(s.handleUpsertCatalogItem))
+		// Admin bulk cleanup: drop service items left without input/output prices.
+		protected.Post("/catalog-items/cleanup", s.requireAdmin(s.handleCleanupCatalogItems))
 		// Operators may update an existing item's kind (vrsta) only; the handler
 		// enforces that and rejects every other field change. Admins get the
 		// full upsert.
