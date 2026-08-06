@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Loader2, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
+import { ChevronRight, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Pager } from "@/components/Pager";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
+import { CatalogCleanupDialog } from "@/components/Catalog/CatalogCleanupDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useCatalogItems } from "@/hooks/useCatalogItems";
 import { formatCatalogPrice, kindLabel } from "@/lib/catalog";
@@ -38,8 +40,22 @@ function CatalogPage(): React.JSX.Element {
     }),
     [kindFilter, search, page],
   );
-  const { items, total, loading } = useCatalogItems(query);
+  const { items, total, loading, reload } = useCatalogItems(query);
   const totalPages = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
+
+  // Admin-only maintenance: the cleanup dialog owns the scope (which kinds, which
+  // missing price) and the confirmation listing what will go; the page only opens
+  // it and refreshes afterwards.
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const handleCleanupDone = useCallback(
+    async (deleted: number) => {
+      toast.success(t("catalog.cleanup.done", { count: deleted }));
+      // Deleting rows can leave the current page past the end; snap back.
+      setPage(0);
+      await reload();
+    },
+    [reload, t],
+  );
 
   // Any filter/search change resets to the first page.
   const changeKind = useCallback((next: KindFilter) => {
@@ -69,14 +85,24 @@ function CatalogPage(): React.JSX.Element {
             </div>
           </div>
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => navigate("/catalog/new")}
-              className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
-            >
-              <Plus className="h-4 w-4" />
-              {t("catalog.newItem")}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCleanupOpen(true)}
+                className="iris-focusable iris-press inline-flex items-center gap-2 border border-border px-4 py-2 text-[12px] font-medium text-[color:var(--iris-ink-soft)] hover:border-destructive/50 hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                {t("catalog.cleanup.button")}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/catalog/new")}
+                className="iris-focusable iris-press inline-flex items-center gap-2 bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
+              >
+                <Plus className="h-4 w-4" />
+                {t("catalog.newItem")}
+              </button>
+            </div>
           )}
         </div>
 
@@ -171,6 +197,13 @@ function CatalogPage(): React.JSX.Element {
           </section>
         </div>
       </div>
+
+      <CatalogCleanupDialog
+        open={cleanupOpen}
+        onOpenChange={setCleanupOpen}
+        onDeleted={(deleted) => void handleCleanupDone(deleted)}
+        onError={(message) => toast.error(message)}
+      />
     </AppShell>
   );
 }

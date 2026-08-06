@@ -122,10 +122,14 @@ func TestPrintHelpers(t *testing.T) {
 		{Description: "Plakati A2", Quantity: 100, Unit: "kom", UnitPrice: 150},
 		// Zero unit price (e.g. a non-admin stripped printout): price/total blank.
 		{Description: "Kaširanje", Quantity: 100, Unit: "kom", UnitPrice: 0},
+		// Fractional quantity for an area-billed service prints with a comma and
+		// multiplies cleanly into the line total (1.5 * 1400 = 2100).
+		{Description: "Ceradno platno", Quantity: 1.5, Unit: "m2", UnitPrice: 1400},
 	}
 	expectedItemRows := []PrintItemRow{
 		{Name: "PLAKATI A2", UnitPrice: "150", Quantity: "100 KOM", Total: "15.000"},
 		{Name: "KAŠIRANJE", UnitPrice: "", Quantity: "100 KOM", Total: ""},
+		{Name: "CERADNO PLATNO", UnitPrice: "1.400", Quantity: "1,5 M2", Total: "2.100"},
 	}
 	itemRows := buildPrintItemRows(orderWithItems)
 	if !reflect.DeepEqual(itemRows, expectedItemRows) {

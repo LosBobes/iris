@@ -205,3 +205,71 @@ func (s *Server) handleDeleteCatalogItem(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
+
+// catalogCleanupFilter reads the two parameters that scope a catalog cleanup:
+// the repeatable ?kind= (service, article, or both) and ?missing= (purchase,
+// sale, or both). Both are required and strictly validated — an empty or
+// mistyped value is a 400 rather than a wider sweep. It returns ok=false once a
+// response has been written.
+func catalogCleanupFilter(w http.ResponseWriter, r *http.Request) (store.CatalogCleanupFilter, bool) {
+	query := r.URL.Query()
+	kinds := make([]domain.CatalogItemKind, 0, 2)
+	seen := map[domain.CatalogItemKind]bool{}
+	for _, value := range query["kind"] {
+		kind := domain.CatalogItemKind(strings.TrimSpace(value))
+		if kind != domain.CatalogItemKindService && kind != domain.CatalogItemKindArticle {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Neispravna vrsta stavke."})
+			return store.CatalogCleanupFilter{}, false
+		}
+		if !seen[kind] {
+			seen[kind] = true
+			kinds = append(kinds, kind)
+		}
+	}
+	if len(kinds) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Izaberite bar jednu vrstu stavke."})
+		return store.CatalogCleanupFilter{}, false
+	}
+
+	missing := store.CatalogCleanupMissing(strings.TrimSpace(query.Get("missing")))
+	switch missing {
+	case store.CleanupMissingPurchase, store.CleanupMissingSale, store.CleanupMissingBoth:
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Neispravan izbor cene za čišćenje."})
+		return store.CatalogCleanupFilter{}, false
+	}
+	return store.CatalogCleanupFilter{Kinds: kinds, Missing: missing}, true
+}
+
+// handleCatalogCleanupPreview (admin only) lists the catalog items the matching
+// cleanup would delete, so the client can show exactly what is about to go
+// before the admin confirms it.
+func (s *Server) handleCatalogCleanupPreview(w http.ResponseWriter, r *http.Request) {
+	filter, ok := catalogCleanupFilter(w, r)
+	if !ok {
+		return
+	}
+	items, err := s.store.CatalogItemsMissingPrices(r.Context(), filter)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": len(items)})
+}
+
+// handleCleanupCatalogItems (admin only) removes catalog items of the selected
+// kinds that are missing the selected price — placeholder rows an admin wants to
+// sweep out — and reports how many were deleted. Both axes are explicit, so a
+// cleanup can never reach further than the preview showed.
+func (s *Server) handleCleanupCatalogItems(w http.ResponseWriter, r *http.Request) {
+	filter, ok := catalogCleanupFilter(w, r)
+	if !ok {
+		return
+	}
+	deleted, err := s.store.DeleteCatalogItemsMissingPrices(r.Context(), filter)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"deleted": deleted})
+}

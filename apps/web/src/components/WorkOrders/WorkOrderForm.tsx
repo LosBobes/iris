@@ -1752,6 +1752,11 @@ export function WorkOrderForm({
                                 <input
                                   id={`invoiceDraft.lineItems.${index}.quantity`}
                                   type="number"
+                                  // step="any" lets the browser accept fractional
+                                  // quantities (e.g. 1.5 m²); a default step of 1
+                                  // would flag decimals as invalid.
+                                  step="any"
+                                  min="0"
                                   className={`${underlineInput} tnum !py-1`}
                                   {...register(
                                     `invoiceDraft.lineItems.${index}.quantity` as const,

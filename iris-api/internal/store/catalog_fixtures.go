@@ -149,6 +149,66 @@ func (s *FixtureStore) DeleteCatalogItem(_ context.Context, id string) error {
 	return nil
 }
 
+// matchesCatalogCleanup reports whether an item is in scope for a cleanup: one
+// of the requested kinds, and missing the requested price. Anything other than
+// the two single-price modes falls back to the narrowest sweep (both prices
+// missing), mirroring the SQLite store.
+func matchesCatalogCleanup(item domain.CatalogItem, filter CatalogCleanupFilter) bool {
+	inKind := false
+	for _, kind := range filter.Kinds {
+		if item.Kind == kind {
+			inKind = true
+			break
+		}
+	}
+	if !inKind {
+		return false
+	}
+	switch filter.Missing {
+	case CleanupMissingPurchase:
+		return item.PurchasePrice == nil
+	case CleanupMissingSale:
+		return item.SalePrice == nil
+	default:
+		return item.PurchasePrice == nil && item.SalePrice == nil
+	}
+}
+
+// CatalogItemsMissingPrices lists the items DeleteCatalogItemsMissingPrices
+// would remove for the same filter, so the cleanup can show an admin exactly
+// what is at stake.
+func (s *FixtureStore) CatalogItemsMissingPrices(_ context.Context, filter CatalogCleanupFilter) ([]domain.CatalogItem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	items := make([]domain.CatalogItem, 0)
+	for _, existing := range s.catalogItems {
+		if matchesCatalogCleanup(existing, filter) {
+			items = append(items, cloneCatalogItem(existing))
+		}
+	}
+	return items, nil
+}
+
+// DeleteCatalogItemsMissingPrices drops the items matching the cleanup filter,
+// returning how many were removed.
+func (s *FixtureStore) DeleteCatalogItemsMissingPrices(_ context.Context, filter CatalogCleanupFilter) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	remaining := make([]domain.CatalogItem, 0, len(s.catalogItems))
+	deleted := 0
+	for _, existing := range s.catalogItems {
+		if matchesCatalogCleanup(existing, filter) {
+			deleted++
+			continue
+		}
+		remaining = append(remaining, existing)
+	}
+	s.catalogItems = remaining
+	return deleted, nil
+}
+
 // catalogPurchasePricesLocked returns purchase (cost) prices keyed by catalog
 // item id for the given ids. The caller must already hold s.mu (work-order
 // create/update run under the store lock).
