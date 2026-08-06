@@ -92,6 +92,8 @@ func TestAdminRoutesRejectNonAdmin(t *testing.T) {
 		{http.MethodPost, "/enum-values", `{"field":"priority","value":"rush","label":"Rush"}`},
 		{http.MethodPut, "/enum-values/does-not-exist", `{"field":"priority","value":"rush","label":"Rush"}`},
 		{http.MethodDelete, "/enum-values/does-not-exist", ""},
+		{http.MethodGet, "/catalog-items/cleanup?kind=service&missing=both", ""},
+		{http.MethodPost, "/catalog-items/cleanup?kind=service&missing=both", ""},
 	}
 
 	for _, route := range adminRoutes {

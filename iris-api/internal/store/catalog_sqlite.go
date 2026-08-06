@@ -271,6 +271,91 @@ func (s *SQLiteStore) DeleteCatalogItem(ctx context.Context, id string) error {
 	return nil
 }
 
+// missingPriceCondition renders the price half of a cleanup filter. Anything
+// other than the two single-price modes falls back to the narrowest sweep (both
+// prices missing), so an unrecognized value can never widen the deletion.
+func missingPriceCondition(missing CatalogCleanupMissing) string {
+	switch missing {
+	case CleanupMissingPurchase:
+		return "purchase_price IS NULL"
+	case CleanupMissingSale:
+		return "sale_price IS NULL"
+	default:
+		return "purchase_price IS NULL AND sale_price IS NULL"
+	}
+}
+
+// catalogCleanupWhere builds the shared WHERE clause for a cleanup filter, so
+// the preview and the delete that follows it can never disagree about scope.
+func catalogCleanupWhere(tenantID string, filter CatalogCleanupFilter) (string, []any) {
+	args := []any{tenantID}
+	placeholders := make([]string, 0, len(filter.Kinds))
+	for _, kind := range filter.Kinds {
+		placeholders = append(placeholders, "?")
+		args = append(args, string(kind))
+	}
+	where := ` WHERE tenant_id = ?
+		     AND kind IN (` + strings.Join(placeholders, ",") + `)
+		     AND ` + missingPriceCondition(filter.Missing)
+	return where, args
+}
+
+// CatalogItemsMissingPrices returns the current tenant's items matching the
+// cleanup filter — the exact rows DeleteCatalogItemsMissingPrices would remove,
+// listed so an admin can review them before confirming.
+func (s *SQLiteStore) CatalogItemsMissingPrices(ctx context.Context, filter CatalogCleanupFilter) ([]domain.CatalogItem, error) {
+	items := make([]domain.CatalogItem, 0)
+	if len(filter.Kinds) == 0 {
+		return items, nil
+	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	where, args := catalogCleanupWhere(tenantID, filter)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at
+			FROM catalog_items`+where+` ORDER BY kind, name COLLATE NOCASE`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list catalog items missing prices: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		item, err := scanCatalogItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// DeleteCatalogItemsMissingPrices removes every item in the current tenant that
+// matches the cleanup filter, returning the number of rows deleted. A filter
+// with no kinds deletes nothing.
+func (s *SQLiteStore) DeleteCatalogItemsMissingPrices(ctx context.Context, filter CatalogCleanupFilter) (int, error) {
+	if len(filter.Kinds) == 0 {
+		return 0, nil
+	}
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	where, args := catalogCleanupWhere(tenantID, filter)
+	result, err := s.db.ExecContext(ctx, `DELETE FROM catalog_items`+where, args...)
+	if err != nil {
+		return 0, fmt.Errorf("delete catalog items missing prices: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("delete catalog items missing prices: rows affected: %w", err)
+	}
+	return int(affected), nil
+}
+
 func scanCatalogItem(rows *sql.Rows) (domain.CatalogItem, error) {
 	var item domain.CatalogItem
 	var kind string

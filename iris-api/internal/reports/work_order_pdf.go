@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html/template"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +86,27 @@ func formatAmount(p float64) string {
 	fracStr := fmt.Sprintf("%.2f", fracPart)
 	fracStr = strings.TrimPrefix(fracStr, "0.")
 	fracStr = strings.TrimSuffix(fracStr, "0")
+
+	return intStr + "," + fracStr
+}
+
+// formatQuantity renders a line-item quantity. Whole numbers print without a
+// decimal part (e.g. "100"); fractional quantities used for area/length-based
+// services print with a comma decimal separator and no trailing zeros
+// (e.g. 1.5 → "1,5"). Up to three decimals are kept.
+func formatQuantity(q float64) string {
+	rounded := math.Round(q*1000) / 1000
+	intPart := int64(rounded)
+	fracPart := rounded - float64(intPart)
+	intStr := formatIntegerWithDots(intPart)
+
+	if fracPart < 0.0005 {
+		return intStr
+	}
+
+	fracStr := fmt.Sprintf("%.3f", fracPart)
+	fracStr = strings.TrimPrefix(fracStr, "0.")
+	fracStr = strings.TrimRight(fracStr, "0")
 
 	return intStr + "," + fracStr
 }
@@ -274,9 +296,9 @@ func buildPrintItemRows(order domain.WorkOrder) []PrintItemRow {
 		quantity := ""
 		if item.Quantity > 0 {
 			if unit != "" {
-				quantity = fmt.Sprintf("%d %s", item.Quantity, unit)
+				quantity = formatQuantity(item.Quantity) + " " + unit
 			} else {
-				quantity = strconv.Itoa(item.Quantity)
+				quantity = formatQuantity(item.Quantity)
 			}
 		}
 		unitPrice := ""
@@ -284,7 +306,7 @@ func buildPrintItemRows(order domain.WorkOrder) []PrintItemRow {
 		if item.UnitPrice > 0 {
 			unitPrice = formatAmount(item.UnitPrice)
 			if item.Quantity > 0 {
-				total = formatAmount(float64(item.Quantity) * item.UnitPrice)
+				total = formatAmount(item.Quantity * item.UnitPrice)
 			}
 		}
 		rows = append(rows, PrintItemRow{
@@ -1003,8 +1025,8 @@ func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAdd
 			pdf, _, err = page.PrintToPDF().
 				WithPrintBackground(true).
 				WithPreferCSSPageSize(true).
-				WithPaperWidth(8.27).   // A4 Width in inches (210mm)
-				WithPaperHeight(11.69). // A4 Height in inches (297mm)
+				WithPaperWidth(8.27).     // A4 Width in inches (210mm)
+				WithPaperHeight(11.69).   // A4 Height in inches (297mm)
 				WithMarginTop(0.787).     // 20mm, white space above the title
 				WithMarginBottom(0.0787). // 2mm, so content reaches near the page bottom
 				WithMarginLeft(0.315).

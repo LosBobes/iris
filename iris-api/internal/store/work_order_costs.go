@@ -111,7 +111,7 @@ func applyLineItemCosts(
 		if cost == nil {
 			needsReview = true
 		} else {
-			profit += (line.UnitPrice - *cost) * float64(line.Quantity)
+			profit += (line.UnitPrice - *cost) * line.Quantity
 		}
 	}
 	return items, &profit, needsReview

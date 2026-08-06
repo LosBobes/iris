@@ -50,6 +50,16 @@ function formatPrintPrice(price: number | null): string | null {
   return i18n.t("workOrders.print.price", { value: formatPrintAmount(price) });
 }
 
+// Quantities may be fractional for area/length-based services (e.g. 1.5 m²).
+// Whole numbers print without a decimal part; fractions use the Serbian comma
+// separator with trailing zeros dropped.
+function formatPrintQuantity(value: number): string {
+  return new Intl.NumberFormat("sr-Latn-RS", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  }).format(value);
+}
+
 function formatOptionalDate(value: string | null | undefined): string {
   return value ? `${formatWorkOrderDate(value)}.` : "/";
 }
@@ -201,8 +211,8 @@ export function buildPrintItemRows(
     const quantity =
       item.quantity > 0
         ? unit
-          ? `${item.quantity} ${unit}`
-          : `${item.quantity}`
+          ? `${formatPrintQuantity(item.quantity)} ${unit}`
+          : formatPrintQuantity(item.quantity)
         : "";
     const hasPrice = includePrice && item.unitPrice > 0;
     const unitPrice = hasPrice ? formatPrintAmount(item.unitPrice) : "";

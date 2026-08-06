@@ -182,6 +182,70 @@ describe("getInvoiceUnitOptions", () => {
   });
 });
 
+describe("fractional line-item quantities", () => {
+  function parseWithLine(line: Record<string, unknown>) {
+    return workOrderFormSchema.safeParse({
+      ...duplicateValues,
+      invoiceDraft: {
+        status: "draft",
+        invoiceNumber: null,
+        lineItems: [line],
+        paidAt: null,
+      },
+    });
+  }
+
+  // Decimals are not an m² feature: any unit and either kind accepts them.
+  it.each([
+    ["service", "kom", 2.5],
+    ["service", "m2", 1.25],
+    ["service", "set", 0.5],
+    ["goods", "kom", 3.75],
+    ["goods", "m2", 0.125],
+    // Admin-added custom units go through the same schema.
+    ["goods", "m", 1.5],
+  ])("accepts a fractional quantity for a %s line in %s", (kind, unit, quantity) => {
+    const result = parseWithLine({
+      id: "line-1",
+      kind,
+      description: "Stavka",
+      quantity,
+      unit,
+      unitPrice: 1000,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.invoiceDraft.lineItems[0].quantity).toBe(quantity);
+    }
+  });
+
+  it.each([
+    ["zero", 0],
+    ["negative", -1.5],
+  ])("still rejects a %s quantity", (_name, quantity) => {
+    expect(
+      parseWithLine({
+        id: "line-1",
+        kind: "service",
+        description: "Stavka",
+        quantity,
+        unit: "m2",
+        unitPrice: 1000,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("totals fractional lines without rounding", () => {
+    expect(
+      computeLineItemsTotal([
+        { quantity: 1.5, unitPrice: 1400 },
+        { quantity: 0.25, unitPrice: 800 },
+      ]),
+    ).toBe(2300);
+  });
+});
+
 describe("computeLineItemsTotal", () => {
   it("sums quantity × unit price across line items", () => {
     expect(

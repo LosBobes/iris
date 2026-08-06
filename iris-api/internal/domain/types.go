@@ -44,14 +44,14 @@ type WorkOrderStatus string
 
 const (
 	// Legacy statuses are accepted from older fixtures and normalized by the store.
-	WorkOrderStatusDraft               WorkOrderStatus = "draft"
-	WorkOrderStatusActive              WorkOrderStatus = "active"
-	WorkOrderStatusNew                 WorkOrderStatus = "new"
-	WorkOrderStatusAssigned            WorkOrderStatus = "assigned"
-	WorkOrderStatusInProgress          WorkOrderStatus = "inProgress"
-	WorkOrderStatusCompleted           WorkOrderStatus = "completed"
-	WorkOrderStatusCancelled           WorkOrderStatus = "cancelled"
-	WorkOrderStatusInvoiced            WorkOrderStatus = "invoiced"
+	WorkOrderStatusDraft      WorkOrderStatus = "draft"
+	WorkOrderStatusActive     WorkOrderStatus = "active"
+	WorkOrderStatusNew        WorkOrderStatus = "new"
+	WorkOrderStatusAssigned   WorkOrderStatus = "assigned"
+	WorkOrderStatusInProgress WorkOrderStatus = "inProgress"
+	WorkOrderStatusCompleted  WorkOrderStatus = "completed"
+	WorkOrderStatusCancelled  WorkOrderStatus = "cancelled"
+	WorkOrderStatusInvoiced   WorkOrderStatus = "invoiced"
 
 	// Retired statuses: accepted from older data and normalized to inProgress.
 	WorkOrderStatusWaitingForCustomer  WorkOrderStatus = "waitingForCustomer"
@@ -429,9 +429,11 @@ type InvoiceLineItem struct {
 	ID          string              `json:"id"`
 	Kind        InvoiceLineItemKind `json:"kind"`
 	Description string              `json:"description"`
-	Quantity    int                 `json:"quantity"`
-	Unit        InvoiceUnit         `json:"unit"`
-	UnitPrice   float64             `json:"unitPrice"`
+	// Quantity is a float so services billed by area or length (e.g. 1.5 m²)
+	// can be entered directly. Piece-count lines simply carry a whole number.
+	Quantity  float64     `json:"quantity"`
+	Unit      InvoiceUnit `json:"unit"`
+	UnitPrice float64     `json:"unitPrice"`
 	// UnitCost is the per-unit cost frozen onto the line when the order is saved:
 	// for catalog lines the catalog cost in effect at the issue date (re-snapshot
 	// to the completion date when the order completes), for ad-hoc lines a value
@@ -478,11 +480,11 @@ type WorkOrder struct {
 	IssueDate             string               `json:"issueDate"`
 	// ProformaDueDate is the deadline to issue the proforma invoice (predračun);
 	// DueDate is the deadline to finish the job.
-	ProformaDueDate       *string              `json:"proformaDueDate"`
-	DueDate               *string              `json:"dueDate"`
-	IsCompleted           bool                 `json:"isCompleted"`
-	Status                WorkOrderStatus      `json:"status"`
-	Price                 *float64             `json:"price"`
+	ProformaDueDate *string         `json:"proformaDueDate"`
+	DueDate         *string         `json:"dueDate"`
+	IsCompleted     bool            `json:"isCompleted"`
+	Status          WorkOrderStatus `json:"status"`
+	Price           *float64        `json:"price"`
 	// Profit is the cached margin (sum of (unitPrice-unitCost)*qty over line
 	// items with a captured cost), recomputed server-side on every save.
 	// Admin-only: stripped from responses to non-admin users alongside per-line
