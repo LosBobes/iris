@@ -34,6 +34,30 @@ type CatalogItemQuery struct {
 	Offset     int
 }
 
+// CatalogCleanupMissing names which price a catalog item must be missing to be
+// swept by the admin cleanup.
+type CatalogCleanupMissing string
+
+const (
+	// CleanupMissingPurchase matches items with no purchase (input) price, whether
+	// or not they have a sale price.
+	CleanupMissingPurchase CatalogCleanupMissing = "purchase"
+	// CleanupMissingSale matches items with no sale (output) price, whether or not
+	// they have a purchase price.
+	CleanupMissingSale CatalogCleanupMissing = "sale"
+	// CleanupMissingBoth matches only items with neither price — the narrowest,
+	// safest sweep.
+	CleanupMissingBoth CatalogCleanupMissing = "both"
+)
+
+// CatalogCleanupFilter scopes the admin catalog cleanup on two axes: which kinds
+// of item are in scope, and which price has to be missing. An empty Kinds slice
+// matches nothing, so a mis-built filter deletes nothing rather than everything.
+type CatalogCleanupFilter struct {
+	Kinds   []domain.CatalogItemKind
+	Missing CatalogCleanupMissing
+}
+
 // CatalogItemListResult is a page of catalog items plus the total match count.
 type CatalogItemListResult struct {
 	Items []domain.CatalogItem `json:"items"`
@@ -104,10 +128,14 @@ type Store interface {
 	CatalogItemCostHistory(ctx context.Context, catalogItemID string) ([]domain.CatalogItemCost, error)
 	UpsertCatalogItem(ctx context.Context, item domain.CatalogItem, effectiveFrom string) (*domain.CatalogItem, error)
 	DeleteCatalogItem(ctx context.Context, id string) error
-	// DeleteEmptyServiceCatalogItems removes service catalog items that have
-	// neither a purchase (input) nor a sale (output) price set, returning how
-	// many were deleted. Used by the admin catalog cleanup action.
-	DeleteEmptyServiceCatalogItems(ctx context.Context) (int, error)
+	// CatalogItemsMissingPrices lists the catalog items matching a cleanup filter
+	// (which kinds, and which price is missing) — the preview an admin confirms
+	// before anything is deleted.
+	CatalogItemsMissingPrices(ctx context.Context, filter CatalogCleanupFilter) ([]domain.CatalogItem, error)
+	// DeleteCatalogItemsMissingPrices removes the catalog items
+	// CatalogItemsMissingPrices reports for the same filter, returning how many
+	// were deleted.
+	DeleteCatalogItemsMissingPrices(ctx context.Context, filter CatalogCleanupFilter) (int, error)
 
 	OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error)
 	UpdateOrganizationSettings(ctx context.Context, update domain.OrganizationSettingsUpdate) (domain.OrganizationSettings, error)

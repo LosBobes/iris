@@ -17,6 +17,7 @@ import type {
   WorkOrderListResult,
 } from '@/types/work-order'
 import type {
+  CatalogCleanupFilter,
   CatalogItem,
   CatalogItemCost,
   CatalogItemInput,
@@ -81,7 +82,8 @@ declare global {
       createCatalogItem: (input: CatalogItemInput) => Promise<CatalogItem>
       updateCatalogItem: (id: string, input: CatalogItemInput) => Promise<CatalogItem>
       deleteCatalogItem: (id: string) => Promise<{ success: boolean }>
-      cleanupEmptyServices: () => Promise<{ deleted: number }>
+      previewCatalogCleanup: (filter: CatalogCleanupFilter) => Promise<CatalogItemListResult>
+      cleanupCatalogItems: (filter: CatalogCleanupFilter) => Promise<{ deleted: number }>
       getSettings: () => Promise<OrganizationSettings>
       updateSettings: (settings: Partial<OrganizationSettings>) => Promise<OrganizationSettings>
       listUsers: () => Promise<ManagedUser[]>

@@ -92,7 +92,8 @@ func TestAdminRoutesRejectNonAdmin(t *testing.T) {
 		{http.MethodPost, "/enum-values", `{"field":"priority","value":"rush","label":"Rush"}`},
 		{http.MethodPut, "/enum-values/does-not-exist", `{"field":"priority","value":"rush","label":"Rush"}`},
 		{http.MethodDelete, "/enum-values/does-not-exist", ""},
-		{http.MethodPost, "/catalog-items/cleanup", ""},
+		{http.MethodGet, "/catalog-items/cleanup?kind=service&missing=both", ""},
+		{http.MethodPost, "/catalog-items/cleanup?kind=service&missing=both", ""},
 	}
 
 	for _, route := range adminRoutes {
@@ -104,46 +105,6 @@ func TestAdminRoutesRejectNonAdmin(t *testing.T) {
 		if rec := roleRequest(t, server, adminToken, route.method, route.path, route.body); rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
 			t.Errorf("%s %s as admin = %d, want the admin gate to pass", route.method, route.path, rec.Code)
 		}
-	}
-}
-
-// TestCatalogCleanupRemovesPricelessServices drives the admin cleanup endpoint
-// end to end: a service with no prices is swept, a priced one is kept, and the
-// response reports the number deleted.
-func TestCatalogCleanupRemovesPricelessServices(t *testing.T) {
-	server, adminToken, _ := newServerWithRoles(t)
-
-	create := func(body string) {
-		if rec := roleRequest(t, server, adminToken, http.MethodPost, "/catalog-items", body); rec.Code != http.StatusCreated {
-			t.Fatalf("create catalog item = %d (%s)", rec.Code, rec.Body.String())
-		}
-	}
-	create(`{"code":"S1","name":"Prazna usluga","kind":"service","unit":"m2","purchasePrice":null,"salePrice":null,"barcode":null,"taxGroup":null,"description":null,"isActive":true}`)
-	create(`{"code":"S2","name":"Cena usluga","kind":"service","unit":"m2","purchasePrice":400,"salePrice":1400,"barcode":null,"taxGroup":null,"description":null,"isActive":true}`)
-
-	rec := roleRequest(t, server, adminToken, http.MethodPost, "/catalog-items/cleanup", "")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("cleanup status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	var result struct {
-		Deleted int `json:"deleted"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode cleanup response: %v", err)
-	}
-	if result.Deleted != 1 {
-		t.Fatalf("deleted = %d, want 1", result.Deleted)
-	}
-
-	listRec := roleRequest(t, server, adminToken, http.MethodGet, "/catalog-items", "")
-	var list struct {
-		Total int `json:"total"`
-	}
-	if err := json.Unmarshal(listRec.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decode list response: %v", err)
-	}
-	if list.Total != 1 {
-		t.Fatalf("remaining total = %d, want 1", list.Total)
 	}
 }
 

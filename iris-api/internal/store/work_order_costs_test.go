@@ -144,6 +144,123 @@ func TestWorkOrderFractionalQuantityProfit(t *testing.T) {
 	if created.Profit == nil || *created.Profit != 1500 { // (1400-400)*1.5
 		t.Fatalf("profit = %v, want 1500", created.Profit)
 	}
+
+	// Re-read from SQLite: the quantity column is declared INTEGER, so this is
+	// what proves a fraction is not silently truncated on the way to disk.
+	reread, err := s.WorkOrderByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("WorkOrderByID: %v", err)
+	}
+	if got := reread.InvoiceDraft.LineItems[0].Quantity; got != 1.5 {
+		t.Fatalf("persisted quantity = %v, want 1.5", got)
+	}
+}
+
+// Fractional quantities are not an m²-only feature: every unit and both line
+// kinds (services and goods, catalog-backed or ad hoc) accept them, and the
+// values survive a round trip through the INTEGER-declared quantity column on
+// create and on update.
+func TestFractionalQuantityAcceptedForEveryUnitAndKind(t *testing.T) {
+	ctx := testTenantContext()
+	s := costTestStore(t, ctx)
+	catID := mustUpsertCatalog(t, ctx, s, "cat-units", 100, 250)
+
+	// An admin-added unit, to prove fractions are not tied to the built-in units.
+	if _, err := s.CreateEnumValue(ctx, domain.EnumValueInput{
+		Field: domain.EnumFieldInvoiceUnit,
+		Value: "m",
+		Label: "m",
+	}); err != nil {
+		t.Fatalf("CreateEnumValue(m): %v", err)
+	}
+
+	// One line per unit, alternating kind, each with a different fraction —
+	// including thirds, which cannot be represented exactly in the column's
+	// declared INTEGER affinity if it truncated.
+	lines := []domain.InvoiceLineItem{
+		{ID: "li-kom", Kind: domain.InvoiceLineItemKindGoods, Description: "Papir", Quantity: 2.5, Unit: domain.InvoiceUnitKom, UnitPrice: 100},
+		{ID: "li-m2", Kind: domain.InvoiceLineItemKindService, Description: "Ceradno platno", Quantity: 1.25, Unit: domain.InvoiceUnitM2, UnitPrice: 1400},
+		{ID: "li-set", Kind: domain.InvoiceLineItemKindService, Description: "Komplet", Quantity: 0.5, Unit: domain.InvoiceUnitSet, UnitPrice: 800},
+		// An admin-added custom unit behaves the same way.
+		{ID: "li-custom", Kind: domain.InvoiceLineItemKindGoods, Description: "Traka", Quantity: 3.75, Unit: domain.InvoiceUnit("m"), UnitPrice: 60},
+		// A catalog-backed line (cost is server-derived) with a fraction too.
+		catalogLine("li-catalog", catID, 0.75, 250),
+	}
+	want := map[string]float64{
+		"li-kom":     2.5,
+		"li-m2":      1.25,
+		"li-set":     0.5,
+		"li-custom":  3.75,
+		"li-catalog": 0.75,
+	}
+
+	today := time.Now().UTC().Format("2006-01-02")
+	created, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Klijent",
+		JobDescription: "Mešovite stavke",
+		IssuedBy:       "admin",
+		IssueDate:      today,
+		InvoiceDraft: domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: lines,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder: %v", err)
+	}
+
+	assertQuantities := func(stage string, order *domain.WorkOrder, expected map[string]float64) {
+		t.Helper()
+		if len(order.InvoiceDraft.LineItems) != len(expected) {
+			t.Fatalf("%s: %d line items, want %d", stage, len(order.InvoiceDraft.LineItems), len(expected))
+		}
+		for _, line := range order.InvoiceDraft.LineItems {
+			if got := line.Quantity; got != expected[line.ID] {
+				t.Fatalf("%s: %s (unit %s) quantity = %v, want %v", stage, line.ID, line.Unit, got, expected[line.ID])
+			}
+		}
+	}
+	assertQuantities("created", created, want)
+
+	reread, err := s.WorkOrderByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("WorkOrderByID: %v", err)
+	}
+	assertQuantities("persisted", reread, want)
+
+	// Editing a quantity to another fraction keeps it fractional.
+	edited := make([]map[string]any, 0, len(lines))
+	updated := map[string]float64{}
+	for _, line := range lines {
+		quantity := want[line.ID] + 0.1
+		updated[line.ID] = quantity
+		edited = append(edited, map[string]any{
+			"id":          line.ID,
+			"kind":        line.Kind,
+			"description": line.Description,
+			"quantity":    quantity,
+			"unit":        line.Unit,
+			"unitPrice":   line.UnitPrice,
+		})
+	}
+	saved, err := s.UpdateWorkOrder(ctx, created.ID, rawUpdate(t, map[string]any{
+		"invoiceDraft": map[string]any{
+			"status":        domain.InvoiceDraftStatusDraft,
+			"invoiceNumber": nil,
+			"lineItems":     edited,
+			"paidAt":        nil,
+		},
+	}))
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder: %v", err)
+	}
+	assertQuantities("updated", saved, updated)
+
+	afterUpdate, err := s.WorkOrderByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("WorkOrderByID after update: %v", err)
+	}
+	assertQuantities("persisted after update", afterUpdate, updated)
 }
 
 // Completing an order re-snapshots catalog-line cost to the completion-date cost.

@@ -223,17 +223,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /catalog-items/cleanup:
-    post:
+    get:
       tags: [Catalog]
-      summary: Delete empty service catalog items (admin only)
+      summary: Preview the catalog items a cleanup would delete (admin only)
       description: >-
-        Removes every service catalog item that has neither an input (purchase)
-        nor an output (sale) price set — placeholder rows an administrator wants
-        to sweep out — and returns how many were deleted.
-      operationId: cleanupCatalogItems
+        Lists the catalog items of the selected kinds that are missing the
+        selected price. These are exactly the rows the matching POST removes
+        (same query parameters), so an administrator can review them first.
+      operationId: previewCatalogCleanup
+      parameters:
+        - $ref: '#/components/parameters/CatalogCleanupKind'
+        - $ref: '#/components/parameters/CatalogCleanupMissing'
       responses:
         '200':
-          description: Number of service items removed
+          description: Items that would be deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CatalogItem'
+                  total:
+                    type: integer
+        '400':
+          description: Missing or invalid kind/missing selection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Catalog]
+      summary: Delete catalog items missing the selected price (admin only)
+      description: >-
+        Removes every catalog item of the selected kinds that is missing the
+        selected price — placeholder rows an administrator wants to sweep out —
+        and returns how many were deleted. Both axes are explicit, so services
+        and articles can be swept together or one at a time, and the sweep can
+        target items with no purchase price, no sale price, or neither.
+      operationId: cleanupCatalogItems
+      parameters:
+        - $ref: '#/components/parameters/CatalogCleanupKind'
+        - $ref: '#/components/parameters/CatalogCleanupMissing'
+      responses:
+        '200':
+          description: Number of items removed
           content:
             application/json:
               schema:
@@ -242,7 +285,13 @@ paths:
                 properties:
                   deleted:
                     type: integer
-                    description: Count of service items that were deleted.
+                    description: Count of items that were deleted.
+        '400':
+          description: Missing or invalid kind/missing selection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Caller is not an administrator
           content:
@@ -842,6 +891,34 @@ components:
       type: apiKey
       in: cookie
       name: iris_session
+  parameters:
+    CatalogCleanupKind:
+      name: kind
+      in: query
+      required: true
+      description: >-
+        Which kinds of catalog item are in scope. Repeat the parameter
+        (kind=service&kind=article) to sweep both at once. At least one is
+        required.
+      schema:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          enum: [service, article]
+      style: form
+      explode: true
+    CatalogCleanupMissing:
+      name: missing
+      in: query
+      required: true
+      description: >-
+        Which price has to be missing: `purchase` (no input price, regardless of
+        the sale price), `sale` (no output price, regardless of the purchase
+        price), or `both` (neither price set — the narrowest sweep).
+      schema:
+        type: string
+        enum: [purchase, sale, both]
   schemas:
     HealthResponse:
       type: object

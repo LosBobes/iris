@@ -26,7 +26,7 @@ import type {
   WorkOrderStatus,
   WorkOrderStatusHistory,
 } from '@/types/work-order'
-import type { CatalogItem, CatalogItemCost } from '@/types/catalog'
+import type { CatalogCleanupFilter, CatalogItem, CatalogItemCost } from '@/types/catalog'
 import {
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
@@ -112,6 +112,16 @@ const customers = (rawCustomers as Partial<Customer>[]).map((raw): Customer => {
   }
 })
 const locations = rawLocations as Location[]
+
+// matchesCleanupFilter mirrors the API's cleanup rules: the item must be one of
+// the selected kinds and missing the selected price. An unrecognized mode falls
+// back to the narrowest sweep (both prices missing), as the server does.
+function matchesCleanupFilter(item: CatalogItem, filter: CatalogCleanupFilter): boolean {
+  if (!filter.kinds.includes(item.kind)) return false
+  if (filter.missing === 'purchase') return item.purchasePrice === null
+  if (filter.missing === 'sale') return item.salePrice === null
+  return item.purchasePrice === null && item.salePrice === null
+}
 
 function cloneValue<T>(value: T): T {
   return structuredClone(value)
@@ -842,16 +852,14 @@ export function createFixtureApi(): Window['api'] {
       return { success: true }
     },
 
-    async cleanupEmptyServices() {
+    async previewCatalogCleanup(filter) {
+      const items = catalogItems.filter((item) => matchesCleanupFilter(item, filter))
+      return { items, total: items.length }
+    },
+
+    async cleanupCatalogItems(filter) {
       const before = catalogItems.length
-      catalogItems = catalogItems.filter(
-        (item) =>
-          !(
-            item.kind === 'service' &&
-            item.purchasePrice === null &&
-            item.salePrice === null
-          ),
-      )
+      catalogItems = catalogItems.filter((item) => !matchesCleanupFilter(item, filter))
       return { deleted: before - catalogItems.length }
     },
 
