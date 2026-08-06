@@ -255,6 +255,19 @@
     }
   }
 
+  @keyframes iris-tour-glow {
+    0%, 100% {
+      box-shadow:
+        0 0 0 3px color-mix(in oklch, var(--iris-accent) 35%, transparent),
+        0 0 18px 5px color-mix(in oklch, var(--iris-accent) 45%, transparent);
+    }
+    50% {
+      box-shadow:
+        0 0 0 5px color-mix(in oklch, var(--iris-accent) 22%, transparent),
+        0 0 30px 9px color-mix(in oklch, var(--iris-accent) 58%, transparent);
+    }
+  }
+
   .animate-iris-enter {
     animation: iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both;
   }
@@ -265,6 +278,10 @@
 
   .animate-iris-shake {
     animation: iris-error-shake 360ms var(--iris-ease-out) both;
+  }
+
+  .iris-tour-spotlight {
+    animation: iris-tour-glow 1.8s var(--iris-ease-out-soft) infinite;
   }
 
   /* Iris focus ring - used on bare buttons (nav, table actions, pagination). Only shows on keyboard focus. */
