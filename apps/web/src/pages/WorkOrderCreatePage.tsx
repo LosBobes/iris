@@ -74,15 +74,22 @@ function WorkOrderCreatePage(): React.JSX.Element {
   const location = useLocation();
   const { currentUser } = useAuth();
 
-  // Duplicate pre-fill: data passed via router state
-  const duplicateSource =
-    (location.state as { duplicateFrom?: WorkOrder })?.duplicateFrom ?? null;
+  // Duplicate pre-fill and the read-only tutorial mode are passed via router
+  // state. Tutorial mode deliberately avoids number reservations, drafts, and
+  // API writes so the walkthrough is a true demo rather than a live form.
+  const routeState = location.state as
+    | { duplicateFrom?: WorkOrder; interactiveTour?: boolean }
+    | null;
+  const isInteractiveTour = routeState?.interactiveTour === true;
+  const duplicateSource = routeState?.duplicateFrom ?? null;
   const duplicateInitialValues = getDuplicateInitialValues(duplicateSource);
 
   // Recover an in-progress draft cached before an accidental refresh. Read once on
   // mount; a recovered draft takes precedence over a duplicate pre-fill (the draft
   // already reflects whatever the operator had edited, duplicate included).
-  const [recoveredDraft] = useState(() => readWorkOrderDraft());
+  const [recoveredDraft] = useState(() =>
+    isInteractiveTour ? null : readWorkOrderDraft(),
+  );
   const initialValues = recoveredDraft?.values ?? duplicateInitialValues;
 
   // Reserve the next order number as soon as the form opens so the operator can
@@ -104,6 +111,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
   }, [reservedOrderNumber]);
 
   useEffect(() => {
+    if (isInteractiveTour) return;
     // On refresh recovery, reuse the number from the cached draft instead of
     // reserving a fresh one: the browser reload skipped the release cleanup, so
     // the original reservation still stands server-side and the save will keep it.
@@ -123,7 +131,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
     return () => {
       active = false;
     };
-  }, [recoveredDraft]);
+  }, [isInteractiveTour, recoveredDraft]);
 
   // Re-cache the draft once the reserved number is known, so a draft first written
   // before the reservation returned gets the number attached — that number is what
@@ -147,23 +155,26 @@ function WorkOrderCreatePage(): React.JSX.Element {
   // way is a deliberate abandon, so drop the cached draft too. A browser refresh
   // does not run this cleanup, which is exactly why the draft survives a reload.
   useEffect(() => {
+    if (isInteractiveTour) return;
     return () => {
       if (reservedRef.current && !consumedRef.current) {
         void window.api.releaseWorkOrderNumber(reservedRef.current);
         clearWorkOrderDraft();
       }
     };
-  }, []);
+  }, [isInteractiveTour]);
 
   // Persist the in-progress draft (reserved number + current values) on every
   // form change so an accidental refresh can restore both.
   const handleValuesChange = useCallback((values: WorkOrderFormValues) => {
+    if (isInteractiveTour) return;
     latestValuesRef.current = values;
     writeWorkOrderDraft(reservedRef.current, values);
-  }, []);
+  }, [isInteractiveTour]);
 
   const handleSubmit = useCallback(
     async (values: WorkOrderFormValues) => {
+      if (isInteractiveTour) return;
       try {
         const result = await window.api.createWorkOrder({
           // Pass the reserved number so the saved order keeps the number shown in
@@ -205,7 +216,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
         toast.error(t("workOrders.toast.createError"));
       }
     },
-    [currentUser.username, navigate, reservedOrderNumber, t],
+    [currentUser.username, isInteractiveTour, navigate, reservedOrderNumber, t],
   );
 
   const handleCancel = useCallback(() => {
@@ -227,15 +238,20 @@ function WorkOrderCreatePage(): React.JSX.Element {
           <p className="text-[10px] font-medium uppercase tracking-[2px] text-[color:var(--iris-ink-mute)]">
             {t("workOrders.create.eyebrow")}
           </p>
-          <div className="mt-3 inline-flex items-baseline gap-2 rounded-md border border-border bg-[color:var(--iris-surface-raised,transparent)] px-3 py-1.5">
+          <div
+            data-tour="work-order-number"
+            className="mt-3 inline-flex items-baseline gap-2 rounded-md border border-border bg-[color:var(--iris-surface-raised,transparent)] px-3 py-1.5"
+          >
             <span className="text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
               {t("workOrders.create.orderNumberLabel")}
             </span>
             <span className="font-mono text-[15px] font-medium tabular-nums text-foreground">
-              {reservedOrderNumber ??
-                (reservationFailed
-                  ? t("workOrders.create.orderNumberError")
-                  : t("workOrders.create.orderNumberPending"))}
+              {isInteractiveTour
+                ? t("help.tour.demoOrderNumber")
+                : reservedOrderNumber ??
+                  (reservationFailed
+                    ? t("workOrders.create.orderNumberError")
+                    : t("workOrders.create.orderNumberPending"))}
             </span>
           </div>
           <h1 className="mt-2.5 text-[32px] font-normal leading-[1.08] tracking-[-0.5px] text-foreground">
@@ -251,8 +267,13 @@ function WorkOrderCreatePage(): React.JSX.Element {
             initialValues={initialValues}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
-            onValuesChange={handleValuesChange}
-            previewOrderNumber={reservedOrderNumber}
+            onValuesChange={isInteractiveTour ? undefined : handleValuesChange}
+            readOnly={isInteractiveTour}
+            previewOrderNumber={
+              isInteractiveTour
+                ? t("help.tour.demoOrderNumber")
+                : reservedOrderNumber
+            }
           />
         </div>
       </div>

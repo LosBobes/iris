@@ -72,3 +72,16 @@ export interface CatalogItemListResult {
   items: CatalogItem[]
   total: number
 }
+
+/**
+ * Which price a catalog item must be missing to be swept by the admin cleanup:
+ * `purchase` (no input price, whatever the sale price), `sale` (no output price,
+ * whatever the purchase price), or `both` (neither price set — the narrowest).
+ */
+export type CatalogCleanupMissing = 'purchase' | 'sale' | 'both'
+
+/** Scope of an admin catalog cleanup: which kinds, and which price is missing. */
+export interface CatalogCleanupFilter {
+  kinds: CatalogItemKind[]
+  missing: CatalogCleanupMissing
+}

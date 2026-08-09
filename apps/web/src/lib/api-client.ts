@@ -15,6 +15,7 @@ import type {
   WorkOrderListResult,
 } from '@/types/work-order'
 import type {
+  CatalogCleanupFilter,
   CatalogItem,
   CatalogItemCost,
   CatalogItemInput,
@@ -114,6 +115,17 @@ function queryString(query: WorkOrderListQuery = {}): string {
   }
   const encoded = params.toString()
   return encoded ? `?${encoded}` : ''
+}
+
+// catalogCleanupQuery encodes a cleanup filter the way the API expects it: one
+// repeated `kind` parameter per selected kind, plus the `missing` price mode.
+// The preview and the delete use the identical string, so what an admin sees is
+// exactly what gets removed.
+function catalogCleanupQuery(filter: CatalogCleanupFilter): string {
+  const params = new URLSearchParams()
+  for (const kind of filter.kinds) params.append('kind', kind)
+  params.set('missing', filter.missing)
+  return params.toString()
 }
 
 export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Window['api'] {
@@ -301,6 +313,23 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
         credentialedRequest({ method: 'DELETE' }),
       )
       return readJSON<{ success: boolean }>(response)
+    },
+
+    async previewCatalogCleanup(filter) {
+      const response = await fetchImpl(
+        url(`/catalog-items/cleanup?${catalogCleanupQuery(filter)}`),
+        credentialedRequest(),
+      )
+      const result = await readJSON<CatalogItemListResult>(response)
+      return { items: readArray(result?.items), total: result?.total ?? 0 }
+    },
+
+    async cleanupCatalogItems(filter) {
+      const response = await fetchImpl(
+        url(`/catalog-items/cleanup?${catalogCleanupQuery(filter)}`),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<{ deleted: number }>(response)
     },
 
     async getSettings() {

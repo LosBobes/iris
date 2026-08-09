@@ -78,13 +78,24 @@ interface WorkOrderFormProps {
 
 interface FormSectionProps {
   title: string;
+  tourId?: string;
   children: React.ReactNode;
 }
 
-function FormSection({ title, children }: FormSectionProps): React.JSX.Element {
+function FormSection({
+  title,
+  tourId,
+  children,
+}: FormSectionProps): React.JSX.Element {
   return (
-    <section className="mb-6 border border-[color:var(--iris-border-soft)] bg-card">
-      <div className="flex items-baseline gap-3 border-b border-[color:var(--iris-border-soft)] px-6 py-3.5">
+    <section
+      data-tour={tourId}
+      className="mb-6 border border-[color:var(--iris-border-soft)] bg-card"
+    >
+      <div
+        data-tour={tourId ? `${tourId}-heading` : undefined}
+        className="flex items-baseline gap-3 border-b border-[color:var(--iris-border-soft)] px-6 py-3.5"
+      >
         <span className="text-[13px] font-medium text-foreground">{title}</span>
       </div>
       <div className="px-6 py-6">{children}</div>
@@ -1094,7 +1105,10 @@ export function WorkOrderForm({
           </div>
         )}
 
-        <FormSection title={t("workOrders.form.sectionClient")}>
+        <FormSection
+          title={t("workOrders.form.sectionClient")}
+          tourId="work-order-client"
+        >
           <div className="grid grid-cols-2 gap-6">
             <FieldShell
               id="customerId"
@@ -1470,7 +1484,10 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection title={t("workOrders.form.sectionItems")}>
+        <FormSection
+          title={t("workOrders.form.sectionItems")}
+          tourId="work-order-items"
+        >
           <div className="space-y-6">
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1735,6 +1752,11 @@ export function WorkOrderForm({
                                 <input
                                   id={`invoiceDraft.lineItems.${index}.quantity`}
                                   type="number"
+                                  // step="any" lets the browser accept fractional
+                                  // quantities (e.g. 1.5 m²); a default step of 1
+                                  // would flag decimals as invalid.
+                                  step="any"
+                                  min="0"
                                   className={`${underlineInput} tnum !py-1`}
                                   {...register(
                                     `invoiceDraft.lineItems.${index}.quantity` as const,
@@ -1922,7 +1944,10 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        <FormSection title={t("workOrders.form.sectionJob")}>
+        <FormSection
+          title={t("workOrders.form.sectionJob")}
+          tourId="work-order-job"
+        >
           <div className="space-y-6">
             <FieldShell
               id="jobDescription"
@@ -2297,7 +2322,10 @@ export function WorkOrderForm({
           </div>
         )}
 
-        <div className="mt-6 flex flex-col gap-2">
+        <div
+          data-tour="work-order-actions"
+          className="mt-6 flex flex-col gap-2"
+        >
           <button
             type="submit"
             disabled={submitting}

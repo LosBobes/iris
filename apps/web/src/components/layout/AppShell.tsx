@@ -189,6 +189,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
             desktop sidebar), which slide in from the left. */}
         <button
           type="button"
+          data-tour="mobile-menu"
           onClick={() => setMobileMenuOpen((open) => !open)}
           aria-expanded={mobileMenuOpen}
           aria-controls="app-sidebar"
@@ -256,7 +257,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           role="separator"
           className="mb-3 hidden border-t border-[color:var(--iris-border-soft)] lg:block"
         />
-        <nav className="relative flex flex-col gap-0.5">
+        <nav
+          className="relative flex flex-col gap-0.5"
+          data-tour="main-navigation"
+        >
           {navItems.map((item, idx) => {
             const Icon = item.icon;
             const badgeCount = item.to === "/cost-review" ? costReviewCount : 0;

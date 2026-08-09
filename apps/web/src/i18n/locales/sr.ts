@@ -470,6 +470,39 @@ export const sr = {
     costLabelService: 'Cena rada (RSD)',
     costLabelArticle: 'Nabavna cena (RSD)',
     breadcrumb: 'Katalog',
+    cleanup: {
+      button: 'Očisti katalog',
+      cancel: 'Otkaži',
+      back: 'Nazad',
+      next: 'Dalje',
+      action: 'Obriši ({{count}})',
+      options: {
+        title: 'Čišćenje kataloga',
+        description:
+          'Izaberite šta se briše. U sledećem koraku dobijate tačan spisak stavki pre potvrde.',
+        kindsLegend: 'Vrsta stavke',
+        kindService: 'Usluge',
+        kindArticle: 'Artikli',
+        missingLegend: 'Obriši stavke koje nemaju',
+        missingPurchase: 'nabavnu cenu (ulaznu)',
+        missingSale: 'prodajnu cenu (izlaznu)',
+        missingBoth: 'nijednu cenu',
+        kindsRequired: 'Izaberite bar jednu vrstu stavke.',
+      },
+      confirm: {
+        title: 'Ovo će biti obrisano',
+        description: 'Trajno se briše stavki: {{count}}. Radnja je nepovratna.',
+        empty: 'Nijedna stavka ne odgovara izabranim uslovima.',
+        loading: 'Učitavanje spiska…',
+        noPurchase: 'bez nabavne cene',
+        noSale: 'bez prodajne cene',
+        noPrices: 'bez ijedne cene',
+        close: 'Zatvori',
+      },
+      previewError: 'Greška pri učitavanju spiska stavki za brisanje.',
+      done: 'Obrisano stavki: {{count}}.',
+      error: 'Greška pri brisanju stavki.',
+    },
     detail: {
       loadError: 'Greška pri učitavanju stavke.',
       nameRequired: 'Naziv je obavezan.',
@@ -559,6 +592,59 @@ export const sr = {
     title: 'Pomoć',
     subtitle: 'Kako aplikacija radi i šta koji status znači.',
     adminBadge: 'Za administratore',
+    tour: {
+      start: 'Pokreni interaktivni vodič',
+      hint: 'Kratak obilazak kroz glavne delove aplikacije i kreiranje radnog naloga. Vodič neće sačuvati nikakve podatke.',
+      progress: 'Korak {{current}} od {{total}}',
+      close: 'Zatvori vodič',
+      exit: 'Izađi iz vodiča',
+      previous: 'Nazad',
+      next: 'Dalje',
+      finish: 'Završi vodič',
+      demoOrderNumber: 'DEMO',
+      steps: {
+        welcome: {
+          title: 'Dobro došli u Iris vodič',
+          body: 'Svetleći okvir pokazuje deo aplikacije o kojem govorimo. Kretaćemo se automatski između stranica, a vodič neće unositi niti sačuvati podatke.',
+        },
+        dashboard: {
+          title: 'Kontrolna tabla',
+          body: 'Ovde počinje radni dan: rokovi, nalozi koji traže pažnju i pregled trenutnog opterećenja nalaze se na jednom mestu.',
+        },
+        navigation: {
+          title: 'Glavna navigacija',
+          body: 'Iz menija otvarate kontrolnu tablu, radne naloge, klijente i katalog. Na manjem ekranu isti meni se otvara dugmetom u gornjem levom uglu.',
+        },
+        workOrders: {
+          title: 'Pregled radnih naloga',
+          body: 'Lista okuplja sve naloge. Pretragom i filterima brzo pronalazite posao, a iz reda naloga otvarate detalje i menjate njegov status.',
+        },
+        newOrder: {
+          title: 'Kreiranje novog naloga',
+          body: 'Dugme „Novi radni nalog“ otvara formu. Vodič će je sada otvoriti umesto vas, bez kreiranja naloga.',
+        },
+        orderNumber: {
+          title: 'Broj naloga',
+          body: 'Pri pravom kreiranju Iris unapred rezerviše jedinstven broj koji nalog dobija tek kada sačuvate popunjenu formu. U vodiču je zato prikazana oznaka DEMO.',
+        },
+        client: {
+          title: 'Klijent i lokacija',
+          body: 'Najpre izaberite klijenta iz evidencije. Kontakti i lokacije se dopunjavaju automatski, a novog klijenta ili lokaciju možete dodati direktno iz forme.',
+        },
+        items: {
+          title: 'Stavke i rokovi',
+          body: 'Usluge i artikle dodajte iz kataloga ili kao posebnu stavku. Količina prihvata i decimalne vrednosti (npr. 1,5 m²) i zajedno sa prodajnom cenom određuje ukupan iznos, a rokovi pokreću upozorenja na kontrolnoj tabli.',
+        },
+        job: {
+          title: 'Opis posla i izvršilac',
+          body: 'Zapišite jasan opis posla, odaberite izvršioca i način isporuke. Ovi podaci timu govore šta treba uraditi i ko preuzima sledeći korak.',
+        },
+        save: {
+          title: 'Čuvanje radnog naloga',
+          body: 'Tek klik na „Sačuvaj nalog“ proverava formu i kreira nalog. Vodič neće kliknuti dugme; završetkom se vraćate na Pomoć, bez rezervacije broja i bez upisa podataka.',
+        },
+      },
+    },
     about: {
       title: 'O aplikaciji',
       body: 'Iris vodi radne naloge štamparije od kreiranja do fakturisanja. Na jednom mestu su nalozi, klijenti (sa lokacijama i kontaktima), katalog usluga i artikala, kao i kontrolna tabla sa rokovima i pregledom rada.',

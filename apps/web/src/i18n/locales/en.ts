@@ -471,6 +471,39 @@ export const en: typeof sr = {
     costLabelService: 'Labor cost (RSD)',
     costLabelArticle: 'Purchase price (RSD)',
     breadcrumb: 'Catalog',
+    cleanup: {
+      button: 'Clean up catalog',
+      cancel: 'Cancel',
+      back: 'Back',
+      next: 'Next',
+      action: 'Delete ({{count}})',
+      options: {
+        title: 'Catalog cleanup',
+        description:
+          'Choose what gets deleted. The next step shows the exact list of items before you confirm.',
+        kindsLegend: 'Item kind',
+        kindService: 'Services',
+        kindArticle: 'Articles',
+        missingLegend: 'Delete items with no',
+        missingPurchase: 'purchase price (input)',
+        missingSale: 'sale price (output)',
+        missingBoth: 'price at all',
+        kindsRequired: 'Select at least one item kind.',
+      },
+      confirm: {
+        title: 'This will be deleted',
+        description: 'Permanently deletes {{count}} item(s). This cannot be undone.',
+        empty: 'No item matches the selected conditions.',
+        loading: 'Loading the list…',
+        noPurchase: 'no purchase price',
+        noSale: 'no sale price',
+        noPrices: 'no prices at all',
+        close: 'Close',
+      },
+      previewError: 'Error loading the list of items to delete.',
+      done: 'Deleted {{count}} item(s).',
+      error: 'Error deleting items.',
+    },
     detail: {
       loadError: 'Error loading the item.',
       nameRequired: 'Name is required.',
@@ -560,6 +593,59 @@ export const en: typeof sr = {
     title: 'Help',
     subtitle: 'How the app works and what each status means.',
     adminBadge: 'For administrators',
+    tour: {
+      start: 'Start interactive guide',
+      hint: 'A short tour of the app and the work-order creation process. The guide will not save any data.',
+      progress: 'Step {{current}} of {{total}}',
+      close: 'Close guide',
+      exit: 'Exit guide',
+      previous: 'Back',
+      next: 'Next',
+      finish: 'Finish guide',
+      demoOrderNumber: 'DEMO',
+      steps: {
+        welcome: {
+          title: 'Welcome to the Iris guide',
+          body: 'The glowing frame points to the part of the app being explained. We will move between pages automatically, and the guide will not enter or save data.',
+        },
+        dashboard: {
+          title: 'Dashboard',
+          body: 'This is where the workday starts: deadlines, orders that need attention, and the current workload are gathered in one place.',
+        },
+        navigation: {
+          title: 'Main navigation',
+          body: 'Use the menu to open the dashboard, work orders, clients, and catalog. On a smaller screen, the same menu opens from the button in the top-left corner.',
+        },
+        workOrders: {
+          title: 'Work-order overview',
+          body: 'The list brings every order together. Search and filters help you find work quickly, while opening a row shows its details and status actions.',
+        },
+        newOrder: {
+          title: 'Create a new order',
+          body: 'The “New work order” button opens the form. The guide will open it for you now without creating an order.',
+        },
+        orderNumber: {
+          title: 'Order number',
+          body: 'During real creation, Iris reserves a unique number in advance. The order receives it only after you save the form, so the guide shows DEMO instead.',
+        },
+        client: {
+          title: 'Client and location',
+          body: 'Start by selecting a client from the registry. Contacts and locations are filled in automatically, and you can add a new client or location without leaving the form.',
+        },
+        items: {
+          title: 'Line items and deadlines',
+          body: 'Add services and articles from the catalog or as a custom item. Quantity accepts decimals (e.g. 1.5 m²) and together with the sale price determines the total, while deadlines drive dashboard alerts.',
+        },
+        job: {
+          title: 'Job details and assignee',
+          body: 'Enter a clear job description, choose the assignee, and select a delivery method. These details tell the team what to do and who owns the next step.',
+        },
+        save: {
+          title: 'Save the work order',
+          body: 'Only “Save order” validates the form and creates the order. The guide will not press it; finishing returns you to Help without reserving a number or writing any data.',
+        },
+      },
+    },
     about: {
       title: 'About the app',
       body: 'Iris runs the print shop\'s work orders from creation to invoicing. Orders, clients (with locations and contacts), the catalog of services and articles, and the dashboard with deadlines and an overview of work all live in one place.',
