@@ -156,6 +156,16 @@ export const sr = {
       saveErrorPrefix: 'Greška pri čuvanju',
       saveError: 'Greška pri čuvanju podešavanja opcija isporuke.',
     },
+    printItemColumns: {
+      title: 'Redosled kolona stavki',
+      hint: 'Redosled kolona u tabeli stavki na štampanom radnom nalogu i u PDF-u. Naziv stavke je uvek prvi.',
+      preview: 'Izgled zaglavlja',
+      moveUp: 'Pomeri kolonu {{column}} nagore',
+      moveDown: 'Pomeri kolonu {{column}} nadole',
+      saved: 'Redosled kolona stavki je sačuvan.',
+      saveErrorPrefix: 'Greška pri čuvanju',
+      saveError: 'Greška pri čuvanju redosleda kolona stavki.',
+    },
     enums: {
       title: 'Vrednosti šifarnika',
       hint: 'Dodajte sopstvene opcije za padajuće liste radnih naloga. Ugrađene vrednosti su zaključane.',

@@ -6,7 +6,11 @@ import type {
   Shipping,
   WorkOrder,
 } from "@/types/work-order";
-import type { BillingDefaults } from "@/types/settings";
+import {
+  normalizePrintItemColumns,
+  type BillingDefaults,
+  type PrintItemColumn,
+} from "@/types/settings";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -225,6 +229,29 @@ export function buildPrintItemRows(
   return rows;
 }
 
+/** i18n key under `workOrders.print.itemsTable` for a reorderable column. */
+const PRINT_ITEM_COLUMN_LABEL_KEYS: Record<PrintItemColumn, string> = {
+  quantity: "workOrders.print.itemsTable.quantity",
+  unitPrice: "workOrders.print.itemsTable.price",
+  total: "workOrders.print.itemsTable.total",
+};
+
+/** Resolves a printout column's heading in the active language. */
+export function printItemColumnLabel(column: PrintItemColumn): string {
+  return i18n.t(PRINT_ITEM_COLUMN_LABEL_KEYS[column]);
+}
+
+/**
+ * Picks a row's cell for one column, so the table body follows the same
+ * configured order as its headers.
+ */
+export function printItemCell(
+  row: PrintItemRow,
+  column: PrintItemColumn,
+): string {
+  return row[column];
+}
+
 function buildPrintNoteLines(order: WorkOrder): string[] {
   return [
     uppercaseLine(order.note),
@@ -296,11 +323,14 @@ export function WorkOrderPrintSheet({
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { currentUser } = useAuth();
-  const { pdfSections, billingDefaults } = useOrganization();
+  const { pdfSections, billingDefaults, printItemColumns } = useOrganization();
   const isAdmin = currentUser.role === "admin";
   const descriptionLines = buildPrintDescriptionLines(order);
   // Operators never see money: price and total columns stay blank for them.
   const itemRows = buildPrintItemRows(order, isAdmin);
+  // Guard the shop's configured order so a stale/partial value can never drop a
+  // column from the printed nalog.
+  const itemColumns = normalizePrintItemColumns(printItemColumns);
   // Operators never see money: the total is omitted from their printout.
   const totalPrice = isAdmin ? formatPrintPrice(order.price) : null;
   const deliveryRows = getPrintDeliveryRows(order.shipping);
@@ -405,15 +435,11 @@ export function WorkOrderPrintSheet({
                     <th className="work-order-print-col-name">
                       {t("workOrders.print.itemsTable.name")}
                     </th>
-                    <th className="work-order-print-col-num">
-                      {t("workOrders.print.itemsTable.price")}
-                    </th>
-                    <th className="work-order-print-col-num">
-                      {t("workOrders.print.itemsTable.quantity")}
-                    </th>
-                    <th className="work-order-print-col-num">
-                      {t("workOrders.print.itemsTable.total")}
-                    </th>
+                    {itemColumns.map((column) => (
+                      <th key={column} className="work-order-print-col-num">
+                        {printItemColumnLabel(column)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -427,13 +453,11 @@ export function WorkOrderPrintSheet({
                           {row.name}
                         </span>
                       </td>
-                      <td className="work-order-print-col-num">
-                        {row.unitPrice}
-                      </td>
-                      <td className="work-order-print-col-num">
-                        {row.quantity}
-                      </td>
-                      <td className="work-order-print-col-num">{row.total}</td>
+                      {itemColumns.map((column) => (
+                        <td key={column} className="work-order-print-col-num">
+                          {printItemCell(row, column)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

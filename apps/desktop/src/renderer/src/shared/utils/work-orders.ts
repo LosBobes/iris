@@ -81,3 +81,31 @@ export function formatWorkOrderDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
   return `${day}.${month}.${year}`;
 }
+
+/**
+ * Compares two order numbers the way the shop reads them: by their embedded
+ * digits, so RN-2026-9 sorts before RN-2026-10 instead of after it (a plain
+ * alphabetical compare puts "10" first). Non-numeric parts are compared as
+ * text, so the year/prefix segments still order correctly.
+ */
+export function compareWorkOrderNumbers(a: string, b: string): number {
+  // Split each number into runs of digits and runs of everything else, then
+  // walk the two segment lists in step.
+  const segmentsA = a.match(/\d+|\D+/g) ?? [];
+  const segmentsB = b.match(/\d+|\D+/g) ?? [];
+  const shared = Math.min(segmentsA.length, segmentsB.length);
+  for (let i = 0; i < shared; i += 1) {
+    const segA = segmentsA[i];
+    const segB = segmentsB[i];
+    const numericA = /^\d+$/.test(segA);
+    const numericB = /^\d+$/.test(segB);
+    if (numericA && numericB) {
+      const diff = Number(segA) - Number(segB);
+      if (diff !== 0) return diff;
+      continue;
+    }
+    const cmp = segA.localeCompare(segB, "sr-Latn");
+    if (cmp !== 0) return cmp;
+  }
+  return segmentsA.length - segmentsB.length;
+}

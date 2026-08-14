@@ -15,6 +15,7 @@ const (
 	pdfSectionsSettingKey         = "pdf_sections"
 	billingDefaultsSettingKey     = "billing_defaults"
 	priorityDefaultsSettingKey    = "priority_defaults"
+	printItemColumnsSettingKey    = "print_item_columns"
 	showShippingOptionsSettingKey = "show_shipping_options"
 )
 
@@ -30,17 +31,19 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 		PDFSections:         domain.DefaultPDFSections(),
 		BillingDefaults:     domain.DefaultBillingDefaults(),
 		PriorityDefaults:    domain.DefaultPriorityDefaults(),
+		PrintItemColumns:    domain.DefaultPrintItemColumns(),
 		ShowShippingOptions: false,
 	}
 
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?)`,
+		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?, ?)`,
 		tenantID,
 		firmNameSettingKey,
 		pdfSectionsSettingKey,
 		billingDefaultsSettingKey,
 		priorityDefaultsSettingKey,
+		printItemColumnsSettingKey,
 		showShippingOptionsSettingKey,
 	)
 	if err != nil {
@@ -75,6 +78,15 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 			defaults := domain.DefaultPriorityDefaults()
 			if err := json.Unmarshal([]byte(value), &defaults); err == nil {
 				settings.PriorityDefaults = defaults
+			}
+		case printItemColumnsSettingKey:
+			// A stored order that no longer parses, or that predates a column
+			// rename, falls back to the default rather than dropping a column.
+			var columns []domain.PrintItemColumn
+			if err := json.Unmarshal([]byte(value), &columns); err == nil {
+				if normalized, err := normalizePrintItemColumns(columns); err == nil {
+					settings.PrintItemColumns = normalized
+				}
 			}
 		case showShippingOptionsSettingKey:
 			if parsed, err := strconv.ParseBool(value); err == nil {
@@ -123,6 +135,13 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 		}
 		current.PriorityDefaults = defaults
 	}
+	if update.PrintItemColumns != nil {
+		columns, err := normalizePrintItemColumns(*update.PrintItemColumns)
+		if err != nil {
+			return domain.OrganizationSettings{}, err
+		}
+		current.PrintItemColumns = columns
+	}
 	if update.ShowShippingOptions != nil {
 		current.ShowShippingOptions = *update.ShowShippingOptions
 	}
@@ -139,6 +158,10 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 	if err != nil {
 		return domain.OrganizationSettings{}, fmt.Errorf("marshal priority defaults: %w", err)
 	}
+	printColumnsJSON, err := json.Marshal(current.PrintItemColumns)
+	if err != nil {
+		return domain.OrganizationSettings{}, fmt.Errorf("marshal print item columns: %w", err)
+	}
 
 	if err := s.upsertSetting(ctx, firmNameSettingKey, current.FirmName); err != nil {
 		return domain.OrganizationSettings{}, err
@@ -150,6 +173,9 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 		return domain.OrganizationSettings{}, err
 	}
 	if err := s.upsertSetting(ctx, priorityDefaultsSettingKey, string(priorityJSON)); err != nil {
+		return domain.OrganizationSettings{}, err
+	}
+	if err := s.upsertSetting(ctx, printItemColumnsSettingKey, string(printColumnsJSON)); err != nil {
 		return domain.OrganizationSettings{}, err
 	}
 	if err := s.upsertSetting(ctx, showShippingOptionsSettingKey, strconv.FormatBool(current.ShowShippingOptions)); err != nil {
@@ -191,6 +217,34 @@ func normalizePriorityDefaults(defaults domain.PriorityDefaults) (domain.Priorit
 		return domain.PriorityDefaults{}, newValidationError("Nepoznat prioritet.")
 	}
 	return defaults, nil
+}
+
+// normalizePrintItemColumns validates the printout's line-item column order. An
+// empty list falls back to the shop default; anything else must be an exact
+// permutation of the three known columns, so the printout can never silently
+// lose or duplicate a column.
+func normalizePrintItemColumns(columns []domain.PrintItemColumn) ([]domain.PrintItemColumn, error) {
+	if len(columns) == 0 {
+		return domain.DefaultPrintItemColumns(), nil
+	}
+	seen := make(map[domain.PrintItemColumn]bool, len(columns))
+	for _, column := range columns {
+		switch column {
+		case domain.PrintItemColumnQuantity,
+			domain.PrintItemColumnUnitPrice,
+			domain.PrintItemColumnTotal:
+		default:
+			return nil, newValidationError("Nepoznata kolona stavki.")
+		}
+		if seen[column] {
+			return nil, newValidationError("Kolona stavki je navedena više puta.")
+		}
+		seen[column] = true
+	}
+	if len(seen) != len(domain.DefaultPrintItemColumns()) {
+		return nil, newValidationError("Redosled kolona mora sadržati sve kolone stavki.")
+	}
+	return append([]domain.PrintItemColumn(nil), columns...), nil
 }
 
 func (s *SQLiteStore) upsertSetting(ctx context.Context, key, value string) error {

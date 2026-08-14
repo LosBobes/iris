@@ -31,6 +31,64 @@ type PrintItemRow struct {
 	Total     string
 }
 
+// PrintItemLine is a PrintItemRow flattened for the template: the name plus the
+// numeric cells already arranged in the shop's configured column order.
+type PrintItemLine struct {
+	Name   string
+	Values []string
+}
+
+// printItemColumnHeader is the Serbian printout heading for a reorderable
+// line-item column.
+func printItemColumnHeader(column domain.PrintItemColumn) string {
+	switch column {
+	case domain.PrintItemColumnQuantity:
+		return "KOL."
+	case domain.PrintItemColumnUnitPrice:
+		return "CENA"
+	case domain.PrintItemColumnTotal:
+		return "UKUPNO"
+	}
+	return ""
+}
+
+func (r PrintItemRow) valueFor(column domain.PrintItemColumn) string {
+	switch column {
+	case domain.PrintItemColumnQuantity:
+		return r.Quantity
+	case domain.PrintItemColumnUnitPrice:
+		return r.UnitPrice
+	case domain.PrintItemColumnTotal:
+		return r.Total
+	}
+	return ""
+}
+
+// orderPrintItemColumns arranges the headers and every row's numeric cells into
+// the shop's configured column order. An empty/partial configuration falls back
+// to the default order, so the printout always renders all three columns.
+func orderPrintItemColumns(
+	rows []PrintItemRow,
+	columns []domain.PrintItemColumn,
+) ([]string, []PrintItemLine) {
+	if len(columns) != len(domain.DefaultPrintItemColumns()) {
+		columns = domain.DefaultPrintItemColumns()
+	}
+	headers := make([]string, 0, len(columns))
+	for _, column := range columns {
+		headers = append(headers, printItemColumnHeader(column))
+	}
+	lines := make([]PrintItemLine, 0, len(rows))
+	for _, row := range rows {
+		values := make([]string, 0, len(columns))
+		for _, column := range columns {
+			values = append(values, row.valueFor(column))
+		}
+		lines = append(lines, PrintItemLine{Name: row.Name, Values: values})
+	}
+	return headers, lines
+}
+
 type WorkOrderPrintData struct {
 	FirmName         string
 	OrderNumber      string
@@ -38,8 +96,11 @@ type WorkOrderPrintData struct {
 	ClientAddress    string
 	IssueDate        string
 	DescriptionLines []string
-	ItemRows         []PrintItemRow
-	TotalPrice       string
+	// ItemHeaders and ItemLines are the "stavke" table, already arranged in the
+	// shop's configured line-item column order.
+	ItemHeaders []string
+	ItemLines   []PrintItemLine
+	TotalPrice  string
 	ContactPerson    string
 	DeliveryRows     []PrintCheckRow
 	PlannedDate      string
@@ -813,18 +874,14 @@ const htmlTemplateStr = `<!DOCTYPE html>
               <thead>
                 <tr>
                   <th class="work-order-print-col-name">NAZIV</th>
-                  <th class="work-order-print-col-num">CENA</th>
-                  <th class="work-order-print-col-num">KOL.</th>
-                  <th class="work-order-print-col-num">UKUPNO</th>
+                  {{range .ItemHeaders}}<th class="work-order-print-col-num">{{.}}</th>{{end}}
                 </tr>
               </thead>
               <tbody>
-                {{range $i, $row := .ItemRows}}
+                {{range $i, $row := .ItemLines}}
                   <tr>
                     <td class="work-order-print-col-name"><span class="work-order-print-item-number">{{inc $i}}.</span><span class="work-order-print-item-text">{{$row.Name}}</span></td>
-                    <td class="work-order-print-col-num">{{$row.UnitPrice}}</td>
-                    <td class="work-order-print-col-num">{{$row.Quantity}}</td>
-                    <td class="work-order-print-col-num">{{$row.Total}}</td>
+                    {{range $row.Values}}<td class="work-order-print-col-num">{{.}}</td>{{end}}
                   </tr>
                 {{end}}
               </tbody>
@@ -945,7 +1002,12 @@ func ResolvePrintShippingAddress(order domain.WorkOrder) string {
 	return uppercaseLine(order.Shipping.ShippingAddress)
 }
 
-func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sections domain.PDFSections, firmName string, billingDefaults domain.BillingDefaults) (string, error) {
+// RenderWorkOrderHTML renders the printable nalog. Everything shop-configurable
+// (section toggles, firm name, document-type default, line-item column order)
+// comes from the organization settings, so a new setting does not grow the
+// parameter list again.
+func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, settings domain.OrganizationSettings) (string, error) {
+	sections := settings.PDFSections
 	plannedDate := order.DueDate
 	if plannedDate == nil {
 		plannedDate = order.CompletionDate
@@ -958,19 +1020,25 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sectio
 		execBy = *order.ExecutedBy
 	}
 
+	itemHeaders, itemLines := orderPrintItemColumns(
+		buildPrintItemRows(order),
+		settings.PrintItemColumns,
+	)
+
 	data := WorkOrderPrintData{
-		FirmName:         strings.TrimSpace(firmName),
+		FirmName:         strings.TrimSpace(settings.FirmName),
 		OrderNumber:      order.OrderNumber,
 		ClientName:       uppercaseString(order.ClientName),
 		ClientAddress:    uppercaseLine(locationAddress),
 		IssueDate:        formatOptionalDate(&order.IssueDate),
 		DescriptionLines: buildPrintDescriptionLines(order),
-		ItemRows:         buildPrintItemRows(order),
+		ItemHeaders:      itemHeaders,
+		ItemLines:        itemLines,
 		TotalPrice:       formatPrintPrice(order.Price),
 		ContactPerson:    uppercaseLine(order.ContactPerson),
 		DeliveryRows:     getPrintDeliveryRows(order.Shipping),
 		PlannedDate:      formatOptionalDate(plannedDate),
-		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, billingDefaults)),
+		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults)),
 		NoteLines:        buildPrintNoteLines(order),
 		ShippingAddress:  ResolvePrintShippingAddress(order),
 		Completed:        completed,
@@ -992,8 +1060,8 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, sectio
 	return sb.String(), nil
 }
 
-func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAddress *string, sections domain.PDFSections, firmName string, billingDefaults domain.BillingDefaults) ([]byte, error) {
-	htmlContent, err := RenderWorkOrderHTML(order, locationAddress, sections, firmName, billingDefaults)
+func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAddress *string, settings domain.OrganizationSettings) ([]byte, error) {
+	htmlContent, err := RenderWorkOrderHTML(order, locationAddress, settings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render HTML template: %w", err)
 	}

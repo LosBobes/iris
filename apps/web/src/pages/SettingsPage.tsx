@@ -12,6 +12,7 @@ import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
 import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
 import { PdfSectionsSettings } from "@/components/settings/PdfSectionsSettings";
+import { PrintItemColumnsSettings } from "@/components/settings/PrintItemColumnsSettings";
 import { BillingDefaultsSettings } from "@/components/settings/BillingDefaultsSettings";
 import { PriorityDefaultsSettings } from "@/components/settings/PriorityDefaultsSettings";
 import { ShippingOptionsSettings } from "@/components/settings/ShippingOptionsSettings";
@@ -246,6 +247,8 @@ export function SettingsPage(): React.JSX.Element {
           {isAdmin && <ShippingOptionsSettings />}
 
           {isAdmin && <PdfSectionsSettings />}
+
+          {isAdmin && <PrintItemColumnsSettings />}
 
           {isAdmin && <EnumValuesSettings />}
         </div>

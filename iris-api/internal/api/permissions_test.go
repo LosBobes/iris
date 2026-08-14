@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -240,6 +241,11 @@ func TestOrganizationSettings(t *testing.T) {
 	if settings.ShowShippingOptions {
 		t.Fatalf("default showShippingOptions = true, want false")
 	}
+	// The shop-preferred reading order: how many, at what price, for how much.
+	if !slices.Equal(settings.PrintItemColumns, domain.DefaultPrintItemColumns()) {
+		t.Fatalf("default printItemColumns = %v, want %v",
+			settings.PrintItemColumns, domain.DefaultPrintItemColumns())
+	}
 
 	if rec := roleRequest(t, server, userToken, http.MethodPut, "/settings", `{"firmName":"Hack"}`); rec.Code != http.StatusForbidden {
 		t.Fatalf("PUT /settings as user = %d, want %d", rec.Code, http.StatusForbidden)
@@ -326,6 +332,48 @@ func TestOrganizationSettings(t *testing.T) {
 	}
 	if final.FirmName != "Grafika Novi Naziv" {
 		t.Fatalf("showShippingOptions update wiped firmName: %q", final.FirmName)
+	}
+
+	// An unknown line-item column is rejected.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"printItemColumns":["quantity","bogus","total"]}`,
+	); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("PUT unknown printItemColumns = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	// So is a partial order, which would silently drop a column from the printout.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"printItemColumns":["quantity","total"]}`,
+	); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("PUT partial printItemColumns = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+	// And so is a duplicate.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"printItemColumns":["quantity","quantity","total"]}`,
+	); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("PUT duplicate printItemColumns = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+	}
+
+	// A printItemColumns-only update must persist and must not wipe the firm name.
+	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
+		`{"printItemColumns":["total","unitPrice","quantity"]}`,
+	); rec.Code != http.StatusOK {
+		t.Fatalf("PUT printItemColumns as admin = %d, want %d", rec.Code, http.StatusOK)
+	}
+	columnsRec := roleRequest(t, server, userToken, http.MethodGet, "/settings", "")
+	var afterColumns domain.OrganizationSettings
+	if err := json.Unmarshal(columnsRec.Body.Bytes(), &afterColumns); err != nil {
+		t.Fatalf("decode after columns: %v", err)
+	}
+	wantColumns := []domain.PrintItemColumn{
+		domain.PrintItemColumnTotal,
+		domain.PrintItemColumnUnitPrice,
+		domain.PrintItemColumnQuantity,
+	}
+	if !slices.Equal(afterColumns.PrintItemColumns, wantColumns) {
+		t.Fatalf("printItemColumns not persisted: %v", afterColumns.PrintItemColumns)
+	}
+	if afterColumns.FirmName != "Grafika Novi Naziv" {
+		t.Fatalf("printItemColumns update wiped firmName: %q", afterColumns.FirmName)
 	}
 	if after.PDFSections.Delivery || after.PDFSections.ShippingAddress {
 		t.Fatalf("pdfSections not persisted: %+v", after.PDFSections)

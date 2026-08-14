@@ -31,11 +31,14 @@ import {
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
+  DEFAULT_PRINT_ITEM_COLUMNS,
   DEFAULT_PRIORITY_DEFAULTS,
   DEFAULT_SHOW_SHIPPING_OPTIONS,
+  normalizePrintItemColumns,
   type BillingDefaults,
   type OrganizationSettings,
   type PDFSections,
+  type PrintItemColumn,
   type PriorityDefaults,
 } from '@/types/settings'
 
@@ -473,6 +476,7 @@ let firmName = DEFAULT_FIRM_NAME
 let pdfSections: PDFSections = { ...DEFAULT_PDF_SECTIONS }
 let billingDefaults: BillingDefaults = { ...DEFAULT_BILLING_DEFAULTS }
 let priorityDefaults: PriorityDefaults = { ...DEFAULT_PRIORITY_DEFAULTS }
+let printItemColumns: PrintItemColumn[] = [...DEFAULT_PRINT_ITEM_COLUMNS]
 let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
 
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
@@ -864,7 +868,7 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions }
     },
 
     async updateSettings(
@@ -884,10 +888,13 @@ export function createFixtureApi(): Window['api'] {
       if (settings.priorityDefaults !== undefined) {
         priorityDefaults = { ...settings.priorityDefaults }
       }
+      if (settings.printItemColumns !== undefined) {
+        printItemColumns = normalizePrintItemColumns(settings.printItemColumns)
+      }
       if (settings.showShippingOptions !== undefined) {
         showShippingOptions = settings.showShippingOptions
       }
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions }
     },
 
     async getWorkOrders(query) {

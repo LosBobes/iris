@@ -3,6 +3,7 @@ package reports
 import (
 	"context"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +12,22 @@ import (
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+// printSettings builds organization settings for the render tests, defaulting
+// everything a given test does not care about.
+func printSettings(
+	sections domain.PDFSections,
+	firmName string,
+	billingDefaults domain.BillingDefaults,
+) domain.OrganizationSettings {
+	return domain.OrganizationSettings{
+		FirmName:         firmName,
+		PDFSections:      sections,
+		BillingDefaults:  billingDefaults,
+		PriorityDefaults: domain.DefaultPriorityDefaults(),
+		PrintItemColumns: domain.DefaultPrintItemColumns(),
+	}
 }
 
 func TestPrintHelpers(t *testing.T) {
@@ -178,7 +195,7 @@ func TestRenderWorkOrderHTMLBillingDefault(t *testing.T) {
 	// A shop whose default is FAKTURA and which does not allow overrides must
 	// tick FAKTURA on the printout even though the order carries no type.
 	defaults := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeInvoice, AllowOverride: false}
-	html, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections(), "", defaults)
+	html, err := RenderWorkOrderHTML(order, nil, printSettings(domain.DefaultPDFSections(), "", defaults))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -210,7 +227,7 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 	// exercise the fully-populated sheet.
 	allSections := domain.DefaultPDFSections()
 	allSections.Notes = true
-	full, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), allSections, "Grafika Čobanović", domain.DefaultBillingDefaults())
+	full, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), printSettings(allSections, "Grafika Čobanović", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render full: %v", err)
 	}
@@ -230,7 +247,7 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 	addressOnly := domain.DefaultPDFSections()
 	addressOnly.Notes = false
 	addressOnly.ShippingAddress = true
-	addr, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), addressOnly, "", domain.DefaultBillingDefaults())
+	addr, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), printSettings(addressOnly, "", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render address-only: %v", err)
 	}
@@ -249,7 +266,7 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 		t.Errorf("full sheet missing client address subscript")
 	}
 
-	none, err := RenderWorkOrderHTML(order, nil, domain.PDFSections{}, "", domain.DefaultBillingDefaults())
+	none, err := RenderWorkOrderHTML(order, nil, printSettings(domain.PDFSections{}, "", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render none: %v", err)
 	}
@@ -268,6 +285,71 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 	}
 }
 
+// TestRenderWorkOrderHTMLItemColumnOrder proves the stavke table follows the
+// shop's configured column order, and that the default puts quantity ahead of
+// price.
+func TestRenderWorkOrderHTMLItemColumnOrder(t *testing.T) {
+	order := domain.WorkOrder{
+		OrderNumber:    "RN-2026-00001",
+		ClientName:     "Profesionalni Upravnik",
+		JobDescription: "Vizit karte",
+	}
+	order.InvoiceDraft.LineItems = []domain.InvoiceLineItem{
+		{Description: "Plakati A2", Quantity: 100, Unit: "kom", UnitPrice: 150},
+	}
+
+	headerOrder := func(html string) []string {
+		var headers []string
+		for _, candidate := range []string{"KOL.", "CENA", "UKUPNO"} {
+			headers = append(headers, candidate)
+		}
+		slices.SortFunc(headers, func(a, b string) int {
+			return strings.Index(html, `col-num">`+a+`<`) - strings.Index(html, `col-num">`+b+`<`)
+		})
+		return headers
+	}
+
+	defaults, err := RenderWorkOrderHTML(order, nil,
+		printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()))
+	if err != nil {
+		t.Fatalf("render defaults: %v", err)
+	}
+	if got := headerOrder(defaults); !slices.Equal(got, []string{"KOL.", "CENA", "UKUPNO"}) {
+		t.Fatalf("default header order = %v, want [KOL. CENA UKUPNO]", got)
+	}
+	// The cells must follow their headers, not stay in struct order.
+	if qty, price := strings.Index(defaults, "100 KOM"), strings.Index(defaults, `col-num">150<`); qty > price {
+		t.Errorf("default row puts price before quantity")
+	}
+
+	settings := printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults())
+	settings.PrintItemColumns = []domain.PrintItemColumn{
+		domain.PrintItemColumnUnitPrice,
+		domain.PrintItemColumnQuantity,
+		domain.PrintItemColumnTotal,
+	}
+	reordered, err := RenderWorkOrderHTML(order, nil, settings)
+	if err != nil {
+		t.Fatalf("render reordered: %v", err)
+	}
+	if got := headerOrder(reordered); !slices.Equal(got, []string{"CENA", "KOL.", "UKUPNO"}) {
+		t.Fatalf("reordered header order = %v, want [CENA KOL. UKUPNO]", got)
+	}
+	if qty, price := strings.Index(reordered, "100 KOM"), strings.Index(reordered, `col-num">150<`); price > qty {
+		t.Errorf("reordered row puts quantity before price")
+	}
+
+	// An unconfigured shop (nil order) still gets all three columns.
+	settings.PrintItemColumns = nil
+	fallback, err := RenderWorkOrderHTML(order, nil, settings)
+	if err != nil {
+		t.Fatalf("render fallback: %v", err)
+	}
+	if got := headerOrder(fallback); !slices.Equal(got, []string{"KOL.", "CENA", "UKUPNO"}) {
+		t.Fatalf("fallback header order = %v, want the default order", got)
+	}
+}
+
 func TestRenderWorkOrderHTMLTotalPrice(t *testing.T) {
 	price := 1450.0
 	order := domain.WorkOrder{
@@ -277,7 +359,7 @@ func TestRenderWorkOrderHTMLTotalPrice(t *testing.T) {
 		Price:          &price,
 	}
 
-	html, err := RenderWorkOrderHTML(order, nil, domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults())
+	html, err := RenderWorkOrderHTML(order, nil, printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -298,7 +380,7 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, nil, domain.DefaultPDFSections(), "Grafika Čobanović", domain.DefaultBillingDefaults())
+	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, nil, printSettings(domain.DefaultPDFSections(), "Grafika Čobanović", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Logf("Failed to render PDF using chromedp: %v", err)
 		// We log instead of erroring out to handle environments without chrome gracefully

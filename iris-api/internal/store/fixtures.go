@@ -57,6 +57,7 @@ type FixtureStore struct {
 	pdfSections         *domain.PDFSections
 	billingDefaults     *domain.BillingDefaults
 	priorityDefaults    *domain.PriorityDefaults
+	printItemColumns    *[]domain.PrintItemColumn
 	showShippingOptions *bool
 	sessions            map[string]fixtureSession
 }

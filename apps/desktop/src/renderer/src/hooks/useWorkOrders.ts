@@ -5,6 +5,7 @@ import type {
   BillingDocumentType,
   DeliveryMethod,
 } from "@/types/work-order";
+import { compareWorkOrderNumbers } from "@/shared/utils/work-orders";
 import i18n from "@/i18n";
 
 export type SortField =
@@ -67,7 +68,9 @@ export function useWorkOrders(): UseWorkOrdersResult {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] =
     useState<WorkOrdersFiltersState>(INITIAL_FILTERS);
-  const [sortField, setSortField] = useState<SortField>("issueDate");
+  // Newest nalog on top: the list follows the order number, counting down, so
+  // the rows read one under the other by broj naloga rather than by date.
+  const [sortField, setSortField] = useState<SortField>("orderNumber");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
@@ -124,6 +127,11 @@ export function useWorkOrders(): UseWorkOrdersResult {
       let bVal: string | number | null;
 
       switch (sortField) {
+        case "orderNumber":
+          // Order numbers sort by their digits, not alphabetically.
+          return sortDirection === "asc"
+            ? compareWorkOrderNumbers(a.orderNumber, b.orderNumber)
+            : -compareWorkOrderNumbers(a.orderNumber, b.orderNumber);
         case "shipping.deliveryMethod":
           aVal = a.shipping.deliveryMethod;
           bVal = b.shipping.deliveryMethod;

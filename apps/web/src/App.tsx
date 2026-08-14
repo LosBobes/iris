@@ -13,10 +13,13 @@ import {
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
   DEFAULT_PDF_SECTIONS,
+  DEFAULT_PRINT_ITEM_COLUMNS,
   DEFAULT_PRIORITY_DEFAULTS,
   DEFAULT_SHOW_SHIPPING_OPTIONS,
+  normalizePrintItemColumns,
   type BillingDefaults,
   type PDFSections,
+  type PrintItemColumn,
   type PriorityDefaults,
 } from "@/types/settings";
 import i18n from "@/i18n";
@@ -115,6 +118,9 @@ function App(): React.JSX.Element {
   const [priorityDefaults, setPriorityDefaults] = useState<PriorityDefaults>(
     DEFAULT_PRIORITY_DEFAULTS,
   );
+  const [printItemColumns, setPrintItemColumns] = useState<PrintItemColumn[]>(
+    DEFAULT_PRINT_ITEM_COLUMNS,
+  );
   const [showShippingOptions, setShowShippingOptions] = useState(
     DEFAULT_SHOW_SHIPPING_OPTIONS,
   );
@@ -151,6 +157,10 @@ function App(): React.JSX.Element {
             setBillingDefaults(settings.billingDefaults);
           if (settings?.priorityDefaults)
             setPriorityDefaults(settings.priorityDefaults);
+          if (settings?.printItemColumns)
+            setPrintItemColumns(
+              normalizePrintItemColumns(settings.printItemColumns),
+            );
           if (typeof settings?.showShippingOptions === "boolean")
             setShowShippingOptions(settings.showShippingOptions);
         } catch {
@@ -212,7 +222,7 @@ function App(): React.JSX.Element {
                 <Login onLoginSuccess={handleLoginSuccess} />
               ) : (
                 <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, showShippingOptions, setShowShippingOptions }}>
+                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, printItemColumns, setPrintItemColumns, showShippingOptions, setShowShippingOptions }}>
                   <TooltipProvider>
                     <InteractiveTourProvider>
                       <Routes>
