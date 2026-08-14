@@ -243,15 +243,40 @@ func DefaultPriorityDefaults() PriorityDefaults {
 	}
 }
 
+// PrintItemColumn is one of the numeric columns in the work-order printout's
+// "stavke" (line items) table. The item name always leads the row; only these
+// three are reorderable.
+type PrintItemColumn string
+
+const (
+	PrintItemColumnQuantity  PrintItemColumn = "quantity"
+	PrintItemColumnUnitPrice PrintItemColumn = "unitPrice"
+	PrintItemColumnTotal     PrintItemColumn = "total"
+)
+
+// DefaultPrintItemColumns is the shop-preferred reading order: how many, at what
+// price, for how much.
+func DefaultPrintItemColumns() []PrintItemColumn {
+	return []PrintItemColumn{
+		PrintItemColumnQuantity,
+		PrintItemColumnUnitPrice,
+		PrintItemColumnTotal,
+	}
+}
+
 // OrganizationSettings holds shop-wide branding/config an admin can edit: the
 // firm name shown in the app header, the work-order PDF section toggles, the
-// default document type and priority for new work orders, and whether the
-// work-order form exposes the extra shipping/handling options.
+// order of the printout's line-item columns, the default document type and
+// priority for new work orders, and whether the work-order form exposes the
+// extra shipping/handling options.
 type OrganizationSettings struct {
 	FirmName         string           `json:"firmName"`
 	PDFSections      PDFSections      `json:"pdfSections"`
 	BillingDefaults  BillingDefaults  `json:"billingDefaults"`
 	PriorityDefaults PriorityDefaults `json:"priorityDefaults"`
+	// PrintItemColumns is the left-to-right order of the printout's numeric
+	// line-item columns. Always a permutation of the three known columns.
+	PrintItemColumns []PrintItemColumn `json:"printItemColumns"`
 	// ShowShippingOptions toggles the work-order form's extra shipping/handling
 	// fields (drives-out, wait-for-payment, packaging, labeling, fragile,
 	// signature, insurance). Off by default so the form stays compact.
@@ -262,11 +287,12 @@ type OrganizationSettings struct {
 // Nil fields are left unchanged, so a firm-name-only save does not wipe the PDF
 // configuration and vice versa.
 type OrganizationSettingsUpdate struct {
-	FirmName            *string           `json:"firmName"`
-	PDFSections         *PDFSections      `json:"pdfSections"`
-	BillingDefaults     *BillingDefaults  `json:"billingDefaults"`
-	PriorityDefaults    *PriorityDefaults `json:"priorityDefaults"`
-	ShowShippingOptions *bool             `json:"showShippingOptions"`
+	FirmName            *string            `json:"firmName"`
+	PDFSections         *PDFSections       `json:"pdfSections"`
+	BillingDefaults     *BillingDefaults   `json:"billingDefaults"`
+	PriorityDefaults    *PriorityDefaults  `json:"priorityDefaults"`
+	PrintItemColumns    *[]PrintItemColumn `json:"printItemColumns"`
+	ShowShippingOptions *bool              `json:"showShippingOptions"`
 }
 
 type User struct {

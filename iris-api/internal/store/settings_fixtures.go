@@ -50,6 +50,13 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 		}
 		current.PriorityDefaults = defaults
 	}
+	if update.PrintItemColumns != nil {
+		columns, err := normalizePrintItemColumns(*update.PrintItemColumns)
+		if err != nil {
+			return domain.OrganizationSettings{}, err
+		}
+		current.PrintItemColumns = columns
+	}
 	if update.ShowShippingOptions != nil {
 		current.ShowShippingOptions = *update.ShowShippingOptions
 	}
@@ -61,6 +68,8 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 	s.billingDefaults = &billingDefaults
 	priorityDefaults := current.PriorityDefaults
 	s.priorityDefaults = &priorityDefaults
+	printItemColumns := current.PrintItemColumns
+	s.printItemColumns = &printItemColumns
 	showShippingOptions := current.ShowShippingOptions
 	s.showShippingOptions = &showShippingOptions
 	return current, nil
@@ -83,6 +92,10 @@ func (s *FixtureStore) organizationSettingsLocked() domain.OrganizationSettings 
 	if s.priorityDefaults != nil {
 		priorityDefaults = *s.priorityDefaults
 	}
+	printItemColumns := domain.DefaultPrintItemColumns()
+	if s.printItemColumns != nil {
+		printItemColumns = *s.printItemColumns
+	}
 	showShippingOptions := false
 	if s.showShippingOptions != nil {
 		showShippingOptions = *s.showShippingOptions
@@ -92,6 +105,7 @@ func (s *FixtureStore) organizationSettingsLocked() domain.OrganizationSettings 
 		PDFSections:         sections,
 		BillingDefaults:     billingDefaults,
 		PriorityDefaults:    priorityDefaults,
+		PrintItemColumns:    printItemColumns,
 		ShowShippingOptions: showShippingOptions,
 	}
 }

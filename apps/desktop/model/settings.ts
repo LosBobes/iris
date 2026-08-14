@@ -36,6 +36,13 @@ export interface PriorityDefaults {
   allowOverride: boolean;
 }
 
+/**
+ * One of the numeric columns in the work-order printout's "stavke" (line items)
+ * table. The item name always leads the row, so only these three are
+ * reorderable.
+ */
+export type PrintItemColumn = "quantity" | "unitPrice" | "total";
+
 export interface OrganizationSettings {
   /** The shop's display name shown in the app branding. */
   firmName: string;
@@ -45,6 +52,11 @@ export interface OrganizationSettings {
   billingDefaults: BillingDefaults;
   /** Priority default + override behavior for new work orders. */
   priorityDefaults: PriorityDefaults;
+  /**
+   * Left-to-right order of the printout's numeric line-item columns. Always a
+   * permutation of all three columns.
+   */
+  printItemColumns: PrintItemColumn[];
   /**
    * Whether the work-order form exposes the extra shipping/handling fields.
    * Off by default. Configured via the web settings UI.
@@ -82,3 +94,13 @@ export const DEFAULT_PRIORITY_DEFAULTS: PriorityDefaults = {
 
 /** Extra shipping/handling fields are hidden by default. */
 export const DEFAULT_SHOW_SHIPPING_OPTIONS = false;
+
+/**
+ * The shop-preferred reading order for printed line items: how many, at what
+ * price, for how much.
+ */
+export const DEFAULT_PRINT_ITEM_COLUMNS: PrintItemColumn[] = [
+  "quantity",
+  "unitPrice",
+  "total",
+];

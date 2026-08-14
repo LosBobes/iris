@@ -157,6 +157,16 @@ export const en: typeof sr = {
       saveErrorPrefix: 'Error saving',
       saveError: 'Error saving the shipping options settings.',
     },
+    printItemColumns: {
+      title: 'Line item column order',
+      hint: 'Order of the columns in the line items table on the printed work order and the PDF. The item name always comes first.',
+      preview: 'Header preview',
+      moveUp: 'Move the {{column}} column up',
+      moveDown: 'Move the {{column}} column down',
+      saved: 'Line item column order saved.',
+      saveErrorPrefix: 'Error saving',
+      saveError: 'Error saving the line item column order.',
+    },
     enums: {
       title: 'Enum values',
       hint: 'Add your own options for work-order dropdowns. Built-in values are locked.',

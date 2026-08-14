@@ -1353,9 +1353,22 @@ components:
           type: boolean
           description: >-
             When false, clients hide the priority picker and always use priority.
+    PrintItemColumns:
+      type: array
+      description: >-
+        Left-to-right order of the numeric columns in the work-order printout's
+        "stavke" (line items) table. The item name always leads the row, so only
+        these three are reorderable. Must be an exact permutation of all three
+        values; duplicates and omissions are rejected.
+      items:
+        type: string
+        enum: [quantity, unitPrice, total]
+      minItems: 3
+      maxItems: 3
+      example: [quantity, unitPrice, total]
     OrganizationSettings:
       type: object
-      required: [firmName, pdfSections, billingDefaults, priorityDefaults, showShippingOptions]
+      required: [firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions]
       properties:
         firmName:
           type: string
@@ -1367,6 +1380,8 @@ components:
           $ref: '#/components/schemas/BillingDefaults'
         priorityDefaults:
           $ref: '#/components/schemas/PriorityDefaults'
+        printItemColumns:
+          $ref: '#/components/schemas/PrintItemColumns'
         showShippingOptions:
           type: boolean
           description: >-
@@ -1388,6 +1403,8 @@ components:
           $ref: '#/components/schemas/BillingDefaults'
         priorityDefaults:
           $ref: '#/components/schemas/PriorityDefaults'
+        printItemColumns:
+          $ref: '#/components/schemas/PrintItemColumns'
         showShippingOptions:
           type: boolean
           description: Whether the work-order form exposes extra shipping/handling fields.

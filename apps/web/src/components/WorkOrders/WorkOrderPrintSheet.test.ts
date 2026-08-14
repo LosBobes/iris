@@ -3,12 +3,18 @@ import type { WorkOrder } from "@/types/work-order";
 import {
   buildPrintDescriptionLines,
   buildPrintItemRows,
+  printItemCell,
   getPrintBillingRows,
   getPrintDeliveryRows,
   resolveBillingDocumentType,
   resolvePrintClientAddress,
   resolvePrintShippingAddress,
 } from "./WorkOrderPrintSheet";
+import {
+  DEFAULT_PRINT_ITEM_COLUMNS,
+  normalizePrintItemColumns,
+  type PrintItemColumn,
+} from "@/types/settings";
 
 const baseShipping: WorkOrder["shipping"] = {
   deliveryMethod: "pickup",
@@ -304,5 +310,55 @@ describe("WorkOrderPrintSheet helpers", () => {
 
     // No location selected → no client address to print.
     expect(resolvePrintClientAddress(baseOrder, [])).toBeNull();
+  });
+});
+
+
+describe("print item column order", () => {
+  const row = {
+    name: "PLAKATI A2",
+    unitPrice: "150",
+    quantity: "100 KOM",
+    total: "15.000",
+  };
+
+  it("defaults to quantity before price, then the total", () => {
+    expect(DEFAULT_PRINT_ITEM_COLUMNS).toEqual([
+      "quantity",
+      "unitPrice",
+      "total",
+    ]);
+    expect(DEFAULT_PRINT_ITEM_COLUMNS.map((c) => printItemCell(row, c))).toEqual(
+      ["100 KOM", "150", "15.000"],
+    );
+  });
+
+  it("follows a reordered configuration", () => {
+    const columns: PrintItemColumn[] = ["unitPrice", "quantity", "total"];
+    expect(columns.map((c) => printItemCell(row, c))).toEqual([
+      "150",
+      "100 KOM",
+      "15.000",
+    ]);
+  });
+
+  it("keeps a valid permutation as-is", () => {
+    expect(normalizePrintItemColumns(["total", "quantity", "unitPrice"])).toEqual(
+      ["total", "quantity", "unitPrice"],
+    );
+  });
+
+  it("falls back to the default when a column is missing or duplicated", () => {
+    // A partial or duplicated order would drop a column from the printed nalog.
+    expect(normalizePrintItemColumns(["quantity", "total"])).toEqual(
+      DEFAULT_PRINT_ITEM_COLUMNS,
+    );
+    expect(
+      normalizePrintItemColumns(["quantity", "quantity", "total"]),
+    ).toEqual(DEFAULT_PRINT_ITEM_COLUMNS);
+    expect(normalizePrintItemColumns(null)).toEqual(DEFAULT_PRINT_ITEM_COLUMNS);
+    expect(normalizePrintItemColumns(undefined)).toEqual(
+      DEFAULT_PRINT_ITEM_COLUMNS,
+    );
   });
 });
