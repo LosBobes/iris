@@ -928,7 +928,8 @@ export function WorkOrderForm({
   const showPostageOptions =
     deliveryMethod === "postExpress" || deliveryMethod === "cityExpress";
 
-  // The admin-only PDF preview can be hidden to give the form the full width.
+  // The live PDF preview is available to every role (the API strips money from
+  // the render for operators) and can be hidden to give the form full width.
   const [showPreview, setShowPreview] = useState(true);
   // Line kind (service/article) is locked to a static pill by default; the pen
   // toggles the line into edit mode where the kind becomes a Select again.
@@ -1065,17 +1066,17 @@ export function WorkOrderForm({
     <form
       onSubmit={handleSubmit(handleFormSubmit, handleInvalidSubmit)}
       className={`grid gap-0 ${
-        isAdmin
-          ? showPreview
+        showPreview
+          ? isAdmin
             ? "xl:grid-cols-[minmax(0,1fr)_460px]"
-            : ""
-          : "lg:grid-cols-[minmax(0,1fr)_320px]"
+            : "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_460px]"
+          : ""
       }`}
     >
       {/* A disabled fieldset natively disables every nested control, giving a
           read-only view when another operator holds the edit lock. */}
       <fieldset disabled={readOnly} className="contents">
-      <div className={isAdmin ? (showPreview ? "xl:pr-10" : "") : "lg:pr-10"}>
+      <div className={showPreview ? (isAdmin ? "xl:pr-10" : "lg:pr-10") : ""}>
         {isEdit && initialData && (
           <div className="mb-8 flex flex-wrap gap-x-10 gap-y-4 border border-[color:var(--iris-border-soft)] bg-card px-6 py-4 text-[12px]">
             <div>
@@ -2278,11 +2279,12 @@ export function WorkOrderForm({
       </div>
 
       <aside className="bg-card p-8 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-border">
-        {/* The PDF preview is a wide document render; it only shows from xl up
-            (below that the form uses the full width) and can be hidden entirely
-            via the toggle. The submit/cancel actions stay visible. */}
-        {isAdmin ? (
-          showPreview && (
+        {/* The PDF preview is a wide document render, so it only shows from xl
+            up; between lg and xl the narrower text summary stands in. Both roles
+            get the preview — the API strips money from an operator's render.
+            The toggle hides it entirely; submit/cancel stay visible. */}
+        {showPreview && (
+          <>
             <div className="hidden xl:block">
               <div className="mb-2 flex justify-end">
                 <button
@@ -2302,14 +2304,15 @@ export function WorkOrderForm({
                 previewOrderNumber={previewOrderNumber}
               />
             </div>
-          )
-        ) : (
-          <div className="hidden lg:block">
-            <SummaryPanel watch={watch} isEdit={isEdit} isAdmin={isAdmin} />
-          </div>
+            {!isAdmin && (
+              <div className="hidden lg:block xl:hidden">
+                <SummaryPanel watch={watch} isEdit={isEdit} isAdmin={isAdmin} />
+              </div>
+            )}
+          </>
         )}
 
-        {isAdmin && !showPreview && (
+        {!showPreview && (
           <div className="mb-4 hidden justify-end xl:flex">
             <button
               type="button"
