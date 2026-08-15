@@ -3,10 +3,14 @@ name: Deploy to Hetzner
 # Builds the Iris stack on the server from source, exactly like gamgee.
 # This is separate from build.yml (which publishes GHCR images); the Hetzner
 # host builds locally with docker compose, so no registry pull is involved.
+#
+# Deploy is NO LONGER fired on every push to main. It runs only when:
+#   - release.yml calls it after a Release PR merge (workflow_call), or
+#   - a maintainer triggers it manually (workflow_dispatch).
+# This makes "merge the Release PR" the single action that ships to production.
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 jobs:

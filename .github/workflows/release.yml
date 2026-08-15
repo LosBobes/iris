@@ -1,0 +1,107 @@
+name: Release
+
+# The semantic-versioning brain. Runs on every push to main and picks one of
+# three modes based on the state of the tree:
+#
+#   pending changesets in .changesets/  -> (re)generate the "Release vX.Y.Z" PR
+#   HEAD bumped VERSION, no changesets   -> the Release PR was just merged:
+#                                           tag vX.Y.Z, publish a Release, deploy
+#   neither                              -> nothing to do
+#
+# So a normal feature merge only refreshes the Release PR; merging the Release
+# PR itself is what tags and ships. See .changesets/README.md.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  decide:
+    name: Decide release mode
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+      version: ${{ steps.mode.outputs.version }}
+      bump: ${{ steps.mode.outputs.bump }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # need HEAD~1 to see whether VERSION just changed
+
+      - name: Determine mode
+        id: mode
+        run: |
+          info="$(node scripts/release/version.mjs next)"
+          echo "version.mjs next -> $info"
+          bump="$(echo "$info" | node -e 'process.stdin.on("data",d=>console.log(JSON.parse(d).bump))')"
+          next="$(echo "$info" | node -e 'process.stdin.on("data",d=>console.log(JSON.parse(d).next))')"
+
+          if [ "$bump" != "none" ]; then
+            echo "mode=pr"      >> "$GITHUB_OUTPUT"
+            echo "version=$next" >> "$GITHUB_OUTPUT"
+            echo "bump=$bump"    >> "$GITHUB_OUTPUT"
+          elif git diff --quiet HEAD~1 HEAD -- VERSION; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+            echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+          fi
+
+  release-pr:
+    name: Update Release PR
+    needs: decide
+    if: needs.decide.outputs.mode == 'pr'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply version bump to the tree
+        run: node scripts/release/version.mjs apply
+
+      - name: Create or update the Release PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: release/next
+          title: "Release v${{ needs.decide.outputs.version }}"
+          commit-message: "chore(release): v${{ needs.decide.outputs.version }}"
+          body: |
+            Automated release PR. Merging this ships **v${{ needs.decide.outputs.version }}** to production.
+
+            It bumps `VERSION`, updates `CHANGELOG.md`, and removes the consumed
+            changesets. See the diff for the accumulated changelog entries.
+
+            > Regenerated automatically on every merge to `main`. Do not edit by hand.
+          labels: release
+
+  tag-and-release:
+    name: Tag and publish
+    needs: decide
+    if: needs.decide.outputs.mode == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.decide.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${VERSION}"
+          git push origin "v${VERSION}"
+
+          # Extract the newest section from CHANGELOG.md as the release notes.
+          notes="$(awk '/^## /{n++} n==1{print} n==2{exit}' CHANGELOG.md)"
+          gh release create "v${VERSION}" --title "v${VERSION}" --notes "${notes}"
+
+  deploy:
+    name: Deploy
+    needs: [decide, tag-and-release]
+    if: needs.decide.outputs.mode == 'release'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
