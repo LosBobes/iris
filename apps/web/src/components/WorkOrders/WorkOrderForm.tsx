@@ -1891,16 +1891,18 @@ export function WorkOrderForm({
                                 </LineField>
                               ))}
 
-                            {isAdmin && (
-                              <div className="ml-auto self-end pb-1 text-right">
-                                <div className="text-[9px] font-medium uppercase tracking-[0.6px] text-[color:var(--iris-ink-mute)]">
-                                  {t("workOrders.form.colLineTotal")}
-                                </div>
-                                <div className="tnum mt-0.5 text-[13px] font-medium text-foreground">
-                                  {lineTotal.toLocaleString("sr-RS")}
-                                </div>
+                            {/* Kol. × cena for this line, pinned to the right end
+                                of the meta row. It is a selling figure, so every
+                                role sees it — without it an operator has to do
+                                the multiplication in their head. */}
+                            <div className="ml-auto self-end pb-1 text-right">
+                              <div className="text-[9px] font-medium uppercase tracking-[0.6px] text-[color:var(--iris-ink-mute)]">
+                                {t("workOrders.form.colLineTotal")}
                               </div>
-                            )}
+                              <div className="tnum mt-0.5 text-[13px] font-medium text-foreground">
+                                {lineTotal.toLocaleString("sr-RS")}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
