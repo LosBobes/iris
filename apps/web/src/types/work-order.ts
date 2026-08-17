@@ -193,6 +193,8 @@ export interface InvoiceLineItem {
   description: string
   quantity: number
   unit: InvoiceUnit
+  // Selling price per unit (prodajna cena) — what the customer is charged.
+  // Visible to every role, on screen and on the printed nalog.
   unitPrice: number
   // Per-unit cost frozen onto the line at save time: catalog cost as of the
   // issue date (re-snapshot to completion date on completion) for catalog lines,

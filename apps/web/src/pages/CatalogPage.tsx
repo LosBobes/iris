@@ -169,10 +169,13 @@ function CatalogPage(): React.JSX.Element {
                           )}
                         </span>
                         <span className="block truncate text-[11px] text-[color:var(--iris-ink-soft)]">
+                          {/* Sale price (prodajna cena) is what the shop charges,
+                              so it is listed for every role; the cost is
+                              admin-only and the API withholds it. */}
                           {[
                             item.code,
                             item.unit,
-                            isAdmin ? formatCatalogPrice(item.salePrice) : null,
+                            formatCatalogPrice(item.salePrice),
                           ]
                             .filter(Boolean)
                             .join(" · ")}

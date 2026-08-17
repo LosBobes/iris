@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import i18n from "@/i18n";
 import {
   ArrowLeft,
   Ban,
@@ -40,25 +39,6 @@ import {
   getWorkOrderCustomerNextStep,
 } from "@/shared/utils/work-orders";
 
-
-/**
- * Masks the monetary *amount* in a price-change timeline event for non-admin
- * operators: they still see that the price was entered/changed (lifecycle), just
- * not the figure. The stored label is "Cena: <before> → <after>" (see diffPrice
- * in the store); "—" on the before side means the price was set for the first
- * time. Cost-workflow markers ("Čeka unos troška", "Trošak unet") carry no
- * figure already, so they pass through unchanged. Returns the original label for
- * every non-price event.
- */
-function maskMoneyTimelineLabel(label: string, kind: string): string {
-  if (kind !== "change" || !label.startsWith("Cena:")) return label;
-  const arrow = label.indexOf(" → ");
-  const before = (arrow === -1 ? label.slice(5) : label.slice(5, arrow)).trim();
-  const firstTime = before === "" || before === "—";
-  return i18n.t(
-    firstTime ? "workOrders.detail.priceEntered" : "workOrders.detail.priceChanged",
-  );
-}
 
 // Renders a timeline label. Field-change events arrive as
 // "<polje>: <pre> → <posle>"; we style the before/after so the diff reads at a
@@ -537,12 +517,13 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
   }> =
     order.events.length > 0
       ? order.events.map((event, index) => {
-          // Operators keep every event but never see the price amount — the
-          // price-change label is replaced with an amount-free marker.
+          // Price-change events carry the selling amount, which every role may
+          // see. Cost-workflow markers ("Čeka unos troška", "Trošak unet") carry
+          // no figure, so the timeline never exposes cost either way.
           const formatted = formatWorkOrderEventLabel(event.label, event.kind);
           return {
             time: formatWorkOrderDateTime(event.createdAt),
-            label: isAdmin ? formatted : maskMoneyTimelineLabel(formatted, event.kind),
+            label: formatted,
             kind: event.kind,
             who: event.actor,
             state: index === order.events.length - 1 ? "current" : "done",
@@ -687,11 +668,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.quantity")}
                 </th>
-                {isAdmin && (
-                  <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
-                    {t("workOrders.detail.amount")}
-                  </th>
-                )}
+                <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.amount")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -718,11 +697,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
                     {line.quantity} {line.unit}
                   </td>
-                  {isAdmin && (
-                    <td className="tnum py-3 text-right font-medium text-foreground">
-                      {formatWorkOrderPrice(line.quantity * line.unitPrice)}
-                    </td>
-                  )}
+                  <td className="tnum py-3 text-right font-medium text-foreground">
+                    {formatWorkOrderPrice(line.quantity * line.unitPrice)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -745,7 +722,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             </div>
           )}
 
-          {isAdmin && order.price !== null && (
+          {/* Osnovica / PDV / za naplatu: the selling total every role needs to
+              know what to charge. Cost and margin are not part of this block. */}
+          {order.price !== null && (
             <div className="mt-4 flex justify-end">
               <div className="w-64 text-[12px]">
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">

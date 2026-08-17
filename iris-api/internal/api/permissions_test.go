@@ -418,7 +418,7 @@ func TestCostDataHiddenFromNonAdmin(t *testing.T) {
 
 	// A work order with a catalog-linked line: cost is derived server-side and
 	// the cached profit = (300-120)*2 = 360.
-	createOrder := `{"clientName":"Klijent","jobDescription":"Plakati","shipping":{},"issuedBy":"admin","issueDate":"2026-06-22",` +
+	createOrder := `{"clientName":"Klijent","jobDescription":"Plakati","shipping":{},"issuedBy":"admin","issueDate":"2026-06-22","price":600,` +
 		`"invoiceDraft":{"status":"draft","lineItems":[{"id":"li-1","kind":"service","description":"Štampa plakata","quantity":2,"unit":"kom","unitPrice":300,"catalogItemId":"` + item.ID + `"}]}}`
 	orderRec := roleRequest(t, server, adminToken, http.MethodPost, "/work-orders", createOrder)
 	if orderRec.Code != http.StatusCreated {
@@ -448,6 +448,55 @@ func TestCostDataHiddenFromNonAdmin(t *testing.T) {
 	}
 	if len(userOrder.InvoiceDraft.LineItems) != 1 || userOrder.InvoiceDraft.LineItems[0].UnitCost != nil {
 		t.Errorf("non-admin line unitCost = %#v, want nil", userOrder.InvoiceDraft.LineItems)
+	}
+
+	// ...while the selling side stays visible: operators need to know what the
+	// customer is charged, so the per-line price and the order total survive.
+	if len(userOrder.InvoiceDraft.LineItems) != 1 ||
+		userOrder.InvoiceDraft.LineItems[0].UnitPrice != 300 {
+		t.Errorf("non-admin line unitPrice = %#v, want 300 (visible)", userOrder.InvoiceDraft.LineItems)
+	}
+	if userOrder.Price == nil || *userOrder.Price != 600 {
+		t.Errorf("non-admin order price = %v, want 600 (visible)", userOrder.Price)
+	}
+}
+
+// TestOperatorPrintoutShowsSellingPrice proves the rendered nalog an operator
+// sees carries the selling figures (per-line price, line total, "UKUPNA CENA")
+// while the cost that produced the margin never reaches the markup.
+func TestOperatorPrintoutShowsSellingPrice(t *testing.T) {
+	server, adminToken, userToken := newServerWithRoles(t)
+
+	// A catalog service costing 120 and sold at 300.
+	createItem := `{"code":"SVC-1","name":"Štampa plakata","kind":"service","unit":"kom","purchasePrice":120,"salePrice":300,"isActive":true}`
+	itemRec := roleRequest(t, server, adminToken, http.MethodPost, "/catalog-items", createItem)
+	if itemRec.Code != http.StatusCreated {
+		t.Fatalf("create catalog item = %d (%s)", itemRec.Code, itemRec.Body.String())
+	}
+	var item domain.CatalogItem
+	if err := json.Unmarshal(itemRec.Body.Bytes(), &item); err != nil {
+		t.Fatalf("decode item: %v", err)
+	}
+
+	// 2 × 300 = 600 sold, 2 × 120 = 240 cost.
+	order := `{"clientName":"Klijent","jobDescription":"Plakati","shipping":{},"issuedBy":"admin","issueDate":"2026-06-22","price":600,` +
+		`"invoiceDraft":{"status":"draft","lineItems":[{"id":"li-1","kind":"service","description":"Štampa plakata","quantity":2,"unit":"kom","unitPrice":300,"unitCost":120,"catalogItemId":"` + item.ID + `"}]}}`
+	previewRec := roleRequest(t, server, userToken, http.MethodPost, "/work-orders/preview", order)
+	if previewRec.Code != http.StatusOK {
+		t.Fatalf("operator preview = %d (%s)", previewRec.Code, previewRec.Body.String())
+	}
+	html := previewRec.Body.String()
+
+	for _, want := range []string{"300", "600", "UKUPNA CENA"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("operator printout missing %q; selling price must be visible", want)
+		}
+	}
+	// 240 is the line cost (2 × 120) and 360 the margin — neither may appear.
+	for _, unwanted := range []string{"240", "360"} {
+		if strings.Contains(html, unwanted) {
+			t.Errorf("operator printout leaked cost/margin figure %q", unwanted)
+		}
 	}
 }
 

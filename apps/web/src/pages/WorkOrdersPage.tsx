@@ -54,15 +54,12 @@ function WorkOrdersPage(): React.JSX.Element {
       toast.info(t("workOrders.toast.nothingToExport"));
       return;
     }
-    // Operators never export money: drop the price column from their CSV.
-    const exportColumns = isAdmin
-      ? visibleColumnSet
-      : new Set([...visibleColumnSet].filter((key) => key !== "price"));
-    downloadWorkOrdersCsv(filteredSortedOrders, exportColumns);
+    // The exported price is the selling price, which every role may see.
+    downloadWorkOrdersCsv(filteredSortedOrders, visibleColumnSet);
     toast.success(
       t("workOrders.toast.exported", { count: filteredSortedOrders.length }),
     );
-  }, [filteredSortedOrders, visibleColumnSet, isAdmin, t]);
+  }, [filteredSortedOrders, visibleColumnSet, t]);
 
   const handleToggleStatus = useCallback(
     async (order: WorkOrder) => {

@@ -16,8 +16,6 @@ interface CatalogPickerDialogProps {
   onSelect: (item: CatalogItem) => void;
   /** Ids already on the order, hidden from the results. */
   excludeIds: Set<string>;
-  /** Admin sees sale prices in the sublabel; operators do not. */
-  isAdmin: boolean;
 }
 
 /**
@@ -33,7 +31,6 @@ export function CatalogPickerDialog({
   onOpenChange,
   onSelect,
   excludeIds,
-  isAdmin,
 }: CatalogPickerDialogProps): React.JSX.Element {
   const { t } = useTranslation();
   const [term, setTerm] = useState("");
@@ -104,11 +101,11 @@ export function CatalogPickerDialog({
             ) : (
               <div className="flex flex-col">
                 {results.map((item) => {
+                  // The sale price is the figure the picked line will carry, so
+                  // every role sees it here; the cost is never fetched for them.
                   const sublabel = [
                     item.code,
-                    isAdmin && item.salePrice !== null
-                      ? `${item.salePrice} RSD`
-                      : null,
+                    item.salePrice !== null ? `${item.salePrice} RSD` : null,
                   ]
                     .filter(Boolean)
                     .join(" · ");

@@ -457,9 +457,11 @@ type InvoiceLineItem struct {
 	Description string              `json:"description"`
 	// Quantity is a float so services billed by area or length (e.g. 1.5 m²)
 	// can be entered directly. Piece-count lines simply carry a whole number.
-	Quantity  float64     `json:"quantity"`
-	Unit      InvoiceUnit `json:"unit"`
-	UnitPrice float64     `json:"unitPrice"`
+	Quantity float64     `json:"quantity"`
+	Unit     InvoiceUnit `json:"unit"`
+	// UnitPrice is the selling price per unit (prodajna cena) — what the customer
+	// is charged. Visible to every role, on screen and on the printed nalog.
+	UnitPrice float64 `json:"unitPrice"`
 	// UnitCost is the per-unit cost frozen onto the line when the order is saved:
 	// for catalog lines the catalog cost in effect at the issue date (re-snapshot
 	// to the completion date when the order completes), for ad-hoc lines a value
