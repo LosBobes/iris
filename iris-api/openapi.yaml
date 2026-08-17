@@ -741,6 +741,11 @@ paths:
     get:
       tags: [Work Orders]
       summary: Return a PDF work-order report
+      description: >-
+        The rendered nalog carries the selling figures (per-line unitPrice, line
+        totals and the order total) for every role — the shop floor has to know
+        what the customer is charged. Cost and margin (unitCost, profit) are
+        stripped for non-admin sessions and never appear on the sheet.
       operationId: getWorkOrderReport
       responses:
         '200':
@@ -763,7 +768,9 @@ paths:
       description: >-
         Returns the same HTML used to generate the PDF report, for an unsaved
         work order supplied in the body. Nothing is persisted. Used by the editor
-        to show a live preview that updates as fields change.
+        to show a live preview that updates as fields change. Money visibility
+        matches the PDF report: selling prices render for every role, cost and
+        margin are stripped for non-admin sessions.
       operationId: previewWorkOrder
       requestBody:
         required: true

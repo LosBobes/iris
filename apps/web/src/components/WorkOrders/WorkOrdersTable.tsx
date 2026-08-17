@@ -33,7 +33,6 @@ import {
 import { useListPreferences } from "@/hooks/useListPreferences";
 import { getRowHeightClass } from "@/lib/list-preferences";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
-import { useAuth } from "@/hooks/useAuth";
 import {
   WORK_ORDER_COLUMNS,
   columnLabel,
@@ -193,13 +192,9 @@ export function WorkOrdersTable({
   const rowHeightClass = getRowHeightClass(density);
 
   const { isVisible } = useColumnVisibility();
-  // Operators never see money: the price column is stripped regardless of the
-  // saved column-visibility preference.
-  const { currentUser } = useAuth();
-  const isAdmin = currentUser.role === "admin";
-  const dataColumns = WORK_ORDER_COLUMNS.filter(
-    (col) => isVisible(col.key) && (isAdmin || col.key !== "price"),
-  );
+  // The price column is the selling price, which every role may see; only
+  // cost/margin is admin-only and it has no column here.
+  const dataColumns = WORK_ORDER_COLUMNS.filter((col) => isVisible(col.key));
 
   // When the user pages while scrolled to the pagination bar, bring the top
   // of the new page back into view instead of leaving them at the bottom.

@@ -460,22 +460,15 @@ func (s *Server) handleWorkOrders(w http.ResponseWriter, r *http.Request) {
 // stripWorkOrderCost removes the admin-only cost and margin figures (cached
 // profit, per-line UnitCost, and the cost-review flag) so regular operators
 // never receive cost data.
+//
+// The selling side is deliberately left intact: operators run the shop floor and
+// need to know what the customer is charged (per-line UnitPrice and the order
+// total Price), on screen and on the printed nalog alike. Only what the job cost
+// the shop — and the margin derived from it — stays admin-only.
 func stripWorkOrderCost(workOrder *domain.WorkOrder) {
 	workOrder.Profit = nil
 	workOrder.NeedsCostReview = false
 	for i := range workOrder.InvoiceDraft.LineItems {
-		workOrder.InvoiceDraft.LineItems[i].UnitCost = nil
-	}
-}
-
-// stripWorkOrderRenderMoney removes all price figures from a work order before it
-// is rendered to HTML/PDF, so a non-admin operator's printout shows no money.
-func stripWorkOrderRenderMoney(workOrder *domain.WorkOrder) {
-	workOrder.Price = nil
-	workOrder.Profit = nil
-	workOrder.NeedsCostReview = false
-	for i := range workOrder.InvoiceDraft.LineItems {
-		workOrder.InvoiceDraft.LineItems[i].UnitPrice = 0
 		workOrder.InvoiceDraft.LineItems[i].UnitCost = nil
 	}
 }
@@ -700,9 +693,9 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Non-admin operators get a price-less work order on the printout.
+	// Non-admin operators print the selling price but never the cost/margin.
 	if !isAdmin(r) {
-		stripWorkOrderRenderMoney(workOrder)
+		stripWorkOrderCost(workOrder)
 	}
 
 	settings, err := s.store.OrganizationSettings(r.Context())
@@ -749,9 +742,9 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Non-admin operators get a price-less work order in the preview.
+	// Non-admin operators preview the selling price but never the cost/margin.
 	if !isAdmin(r) {
-		stripWorkOrderRenderMoney(&order)
+		stripWorkOrderCost(&order)
 	}
 
 	settings, err := s.store.OrganizationSettings(r.Context())

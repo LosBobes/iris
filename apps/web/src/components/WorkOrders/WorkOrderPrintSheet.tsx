@@ -12,7 +12,6 @@ import {
   type PrintItemColumn,
 } from "@/types/settings";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
-import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
@@ -190,8 +189,8 @@ export function buildPrintDescriptionLines(order: WorkOrder): string[] {
 
 // A single "stavka" (line item) rendered as a table row: name plus the selling
 // price, quantity, and line total columns. The numeric columns are pre-formatted
-// strings and are left blank when there is nothing to show (zero price, or an
-// operator/money-hidden printout), so the table never leaks a bogus "0".
+// strings and are left blank when there is nothing to show (a zero price), so
+// the table never leaks a bogus "0".
 export interface PrintItemRow {
   name: string;
   unitPrice: string;
@@ -199,14 +198,12 @@ export interface PrintItemRow {
   total: string;
 }
 
-// The "stavke" (line items) as table rows. Operators never see money, so their
-// printout leaves the price and total columns empty (includePrice = false). The
+// The "stavke" (line items) as table rows. The selling price is on every
+// printout, operators included — the shop floor has to know what the customer is
+// charged. Only cost/margin is admin-only, and it never reaches this sheet. The
 // grand total is rendered separately (as "UKUPNA CENA", pinned to the bottom of
 // the job panel), not mixed into the per-line rows here.
-export function buildPrintItemRows(
-  order: WorkOrder,
-  includePrice = true,
-): PrintItemRow[] {
+export function buildPrintItemRows(order: WorkOrder): PrintItemRow[] {
   const rows: PrintItemRow[] = [];
   for (const item of order.invoiceDraft.lineItems) {
     const name = uppercaseLine(item.description);
@@ -218,7 +215,7 @@ export function buildPrintItemRows(
           ? `${formatPrintQuantity(item.quantity)} ${unit}`
           : formatPrintQuantity(item.quantity)
         : "";
-    const hasPrice = includePrice && item.unitPrice > 0;
+    const hasPrice = item.unitPrice > 0;
     const unitPrice = hasPrice ? formatPrintAmount(item.unitPrice) : "";
     const total =
       hasPrice && item.quantity > 0
@@ -322,17 +319,13 @@ export function WorkOrderPrintSheet({
   locations?: Location[];
 }): React.JSX.Element {
   const { t } = useTranslation();
-  const { currentUser } = useAuth();
   const { pdfSections, billingDefaults, printItemColumns } = useOrganization();
-  const isAdmin = currentUser.role === "admin";
   const descriptionLines = buildPrintDescriptionLines(order);
-  // Operators never see money: price and total columns stay blank for them.
-  const itemRows = buildPrintItemRows(order, isAdmin);
+  const itemRows = buildPrintItemRows(order);
   // Guard the shop's configured order so a stale/partial value can never drop a
   // column from the printed nalog.
   const itemColumns = normalizePrintItemColumns(printItemColumns);
-  // Operators never see money: the total is omitted from their printout.
-  const totalPrice = isAdmin ? formatPrintPrice(order.price) : null;
+  const totalPrice = formatPrintPrice(order.price);
   const deliveryRows = getPrintDeliveryRows(order.shipping);
   const billingRows = getPrintBillingRows(
     resolveBillingDocumentType(order, billingDefaults),

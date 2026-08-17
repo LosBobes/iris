@@ -197,9 +197,9 @@ function CatalogDetailPage(): React.JSX.Element {
                   value={formatCatalogPrice(item.purchasePrice)}
                 />
               )}
-              {isAdmin && (
-                <SummaryRow label={t("catalog.detail.sale")} value={formatCatalogPrice(item.salePrice)} />
-              )}
+              {/* Prodajna cena is visible to everyone; the cost above and the
+                  margin below stay admin-only. */}
+              <SummaryRow label={t("catalog.detail.sale")} value={formatCatalogPrice(item.salePrice)} />
               {isAdmin && item.purchasePrice !== null && item.salePrice !== null && (
                 <SummaryRow
                   label={t("catalog.detail.margin")}
@@ -354,15 +354,14 @@ function DetailsForm({
             onChange={(purchasePrice) => onChange({ ...value, purchasePrice })}
           />
         )}
-        {/* Operators see no money: the sale price is admin-only too. */}
-        {!readOnly && (
-          <PriceInput
-            label={t("catalog.detail.salePriceField")}
-            value={value.salePrice}
-            readOnly={readOnly}
-            onChange={(salePrice) => onChange({ ...value, salePrice })}
-          />
-        )}
+        {/* The sale price is what the shop charges, so operators see it too —
+            read-only, since only admins may change a price. */}
+        <PriceInput
+          label={t("catalog.detail.salePriceField")}
+          value={value.salePrice}
+          readOnly={readOnly}
+          onChange={(salePrice) => onChange({ ...value, salePrice })}
+        />
         {/* Effective date for a price change: today or future only. Existing
             items only — a new item's price takes effect immediately on create. */}
         {canSchedulePrice && (

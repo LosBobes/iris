@@ -1545,7 +1545,6 @@ export function WorkOrderForm({
                 }}
                 onSelect={handleAddCatalogLineItem}
                 excludeIds={usedCatalogItemIds}
-                isAdmin={isAdmin}
               />
 
               {invoiceLineItemFields.length === 0 ? (
@@ -2249,33 +2248,34 @@ export function WorkOrderForm({
         </FormSection>
         )}
 
-        {/* Finance summary (admin only). The free-text Napomena and Interna
-            beleška fields were removed per client request. The order's note is
-            still preserved on edit (unregistered fields keep their initial
-            value) and shown on the detail page. */}
-        {isAdmin && (
-          <FormSection title={t("workOrders.form.sectionFinance")}>
-            <div className="grid grid-cols-2 gap-6">
-              <FieldShell
+        {/* Finance summary: the order total, i.e. the sum of the line items'
+            selling prices, shown to every role — it is what the shop charges.
+            Cost/margin lives on the per-line Trošak field, which stays admin-only.
+            The free-text Napomena and Interna beleška fields were removed per
+            client request. The order's note is still preserved on edit
+            (unregistered fields keep their initial value) and shown on the
+            detail page. */}
+        <FormSection title={t("workOrders.form.sectionFinance")}>
+          <div className="grid grid-cols-2 gap-6">
+            <FieldShell
+              id="price"
+              label={t("workOrders.form.price")}
+              error={errors.price?.message}
+            >
+              {/* Derived from the line items, not hand-editable — rendered as
+                  static text (no input underline) so it reads as read-only. */}
+              <div
                 id="price"
-                label={t("workOrders.form.price")}
-                error={errors.price?.message}
+                className="tnum py-2 text-[13px] text-[color:var(--iris-ink-soft)]"
               >
-                {/* Derived from the line items, not hand-editable — rendered as
-                    static text (no input underline) so it reads as read-only. */}
-                <div
-                  id="price"
-                  className="tnum py-2 text-[13px] text-[color:var(--iris-ink-soft)]"
-                >
-                  {lineItemsTotal.toLocaleString("sr-RS")}
-                </div>
-                <p className="mt-1 text-[11px] text-[color:var(--iris-ink-mute)]">
-                  {t("workOrders.form.priceAutoHint")}
-                </p>
-              </FieldShell>
-            </div>
-          </FormSection>
-        )}
+                {lineItemsTotal.toLocaleString("sr-RS")}
+              </div>
+              <p className="mt-1 text-[11px] text-[color:var(--iris-ink-mute)]">
+                {t("workOrders.form.priceAutoHint")}
+              </p>
+            </FieldShell>
+          </div>
+        </FormSection>
       </div>
 
       <aside className="bg-card p-8 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-border">
@@ -2415,21 +2415,22 @@ function SummaryPanel({ watch, isEdit, isAdmin }: SummaryPanelProps): React.JSX.
         ))}
       </div>
 
-      {isAdmin && (
-        <div className="mt-6 border-t border-border pt-5">
-          <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            {t("workOrders.summary.estimate")}
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-[12px] text-[color:var(--iris-ink-soft)]">
-              {isEdit ? t("workOrders.summary.price") : t("workOrders.summary.total")}
-            </span>
-            <span className="tnum text-[22px] font-normal tracking-[-0.3px] text-foreground">
-              {formatWorkOrderPrice(price ?? null)}
-            </span>
-          </div>
+      {/* The estimate is the selling total — shown to operators too, so the
+          narrow (lg–xl) summary answers "koliko da naplatimo" like the preview
+          does above xl. */}
+      <div className="mt-6 border-t border-border pt-5">
+        <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+          {t("workOrders.summary.estimate")}
         </div>
-      )}
+        <div className="flex items-baseline justify-between">
+          <span className="text-[12px] text-[color:var(--iris-ink-soft)]">
+            {isEdit ? t("workOrders.summary.price") : t("workOrders.summary.total")}
+          </span>
+          <span className="tnum text-[22px] font-normal tracking-[-0.3px] text-foreground">
+            {formatWorkOrderPrice(price ?? null)}
+          </span>
+        </div>
+      </div>
     </>
   );
 }

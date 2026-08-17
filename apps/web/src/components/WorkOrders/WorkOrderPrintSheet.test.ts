@@ -246,32 +246,34 @@ describe("WorkOrderPrintSheet helpers", () => {
     expect(buildPrintItemRows(baseOrder)).toEqual([]);
   });
 
-  it("blanks the price and total columns on the operator (money-hidden) printout", () => {
-    expect(
-      buildPrintItemRows(
-        {
-          ...baseOrder,
-          invoiceDraft: {
-            ...baseOrder.invoiceDraft,
-            lineItems: [
-              {
-                id: "l1",
-                kind: "goods",
-                description: "Plakati A2",
-                quantity: 100,
-                unit: "kom",
-                unitPrice: 150,
-                unitCost: null,
-                catalogItemId: null,
-              },
-            ],
+  it("prints the selling price but never the cost behind it", () => {
+    // A line carrying a captured cost (admin copy) and the same line with the
+    // cost stripped (operator copy) must produce identical rows: the sale price
+    // is on every printout, the nabavna cena on none.
+    const lineItemWith = (unitCost: number | null) => ({
+      ...baseOrder,
+      invoiceDraft: {
+        ...baseOrder.invoiceDraft,
+        lineItems: [
+          {
+            id: "l1",
+            kind: "goods" as const,
+            description: "Plakati A2",
+            quantity: 100,
+            unit: "kom" as const,
+            unitPrice: 150,
+            unitCost,
+            catalogItemId: null,
           },
-        },
-        false,
-      ),
-    ).toEqual([
-      { name: "PLAKATI A2", unitPrice: "", quantity: "100 KOM", total: "" },
-    ]);
+        ],
+      },
+    });
+
+    const expected = [
+      { name: "PLAKATI A2", unitPrice: "150", quantity: "100 KOM", total: "15.000" },
+    ];
+    expect(buildPrintItemRows(lineItemWith(90))).toEqual(expected);
+    expect(buildPrintItemRows(lineItemWith(null))).toEqual(expected);
   });
 
   it("prints only the explicit delivery address, never the client location", () => {

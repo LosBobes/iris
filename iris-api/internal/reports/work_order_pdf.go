@@ -342,10 +342,12 @@ func buildPrintDescriptionLines(order domain.WorkOrder) []string {
 }
 
 // buildPrintItemRows returns the "stavke" (line items) as table rows: name plus
-// the selling price, quantity, and line-total columns. Non-admin printouts have
-// line prices stripped to 0 upstream, so the price and total columns come out
-// empty (no "0" money leak). The grand total is rendered separately (pinned to
-// the bottom of the job panel as "UKUPNA CENA"), not mixed in here.
+// the selling price, quantity, and line-total columns. Every role's printout
+// carries the selling price — the shop floor has to know what the customer is
+// charged — while cost/margin is stripped upstream and never reaches this sheet.
+// A line with no price yet leaves both money columns empty rather than printing
+// a "0". The grand total is rendered separately (pinned to the bottom of the job
+// panel as "UKUPNA CENA"), not mixed in here.
 func buildPrintItemRows(order domain.WorkOrder) []PrintItemRow {
 	var rows []PrintItemRow
 	for _, item := range order.InvoiceDraft.LineItems {
