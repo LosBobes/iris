@@ -15,13 +15,11 @@ export interface PDFSections {
 
 /**
  * Controls the work-order document type (tip dokumenta): the value new orders
- * start with, and whether operators may change it per order.
+ * start with. Operators can always change it per order.
  */
 export interface BillingDefaults {
   /** Document type new work orders start with. */
   documentType: BillingDocumentType;
-  /** When false, the form hides the picker and always uses documentType. */
-  allowOverride: boolean;
 }
 
 /**
@@ -79,10 +77,9 @@ export const DEFAULT_PDF_SECTIONS: PDFSections = {
   signatures: true,
 };
 
-/** Proforma / not overridable, used before settings load or for an unconfigured shop. */
+/** Proforma, used before settings load or for an unconfigured shop. */
 export const DEFAULT_BILLING_DEFAULTS: BillingDefaults = {
   documentType: "proforma",
-  allowOverride: false,
 };
 
 /** Normal / not overridable, used before settings load or for an unconfigured shop. */

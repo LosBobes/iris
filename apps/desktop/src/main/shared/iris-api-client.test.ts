@@ -23,7 +23,6 @@ const sampleCreateInput: CreateWorkOrderInput = {
   jobDetails: null,
   billingDocumentType: null,
   billingDocumentNumber: null,
-  paymentMethod: 'bankTransfer',
   shipping: {
     deliveryMethod: null,
     hasPackaging: false,

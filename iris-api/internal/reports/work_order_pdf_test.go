@@ -163,24 +163,15 @@ func TestResolveBillingDocumentType(t *testing.T) {
 	invoice := domain.BillingDocumentTypeInvoice
 	orderWithInvoice := domain.WorkOrder{BillingDocumentType: &invoice}
 	orderWithNoType := domain.WorkOrder{}
+	defaults := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeProforma}
 
-	// Override allowed: the order's own choice wins, including "no type" (nil).
-	overridable := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeProforma, AllowOverride: true}
-	if got := resolveBillingDocumentType(orderWithInvoice, overridable); got == nil || *got != invoice {
-		t.Errorf("override allowed: expected order's invoice type, got %v", got)
+	// The order's own choice wins.
+	if got := resolveBillingDocumentType(orderWithInvoice, defaults); got == nil || *got != invoice {
+		t.Errorf("expected order's invoice type, got %v", got)
 	}
-	if got := resolveBillingDocumentType(orderWithNoType, overridable); got != nil {
-		t.Errorf("override allowed: expected nil for order without a type, got %v", got)
-	}
-
-	// Override disabled: the shop default is authoritative, even when the order
-	// stored a different type or none at all (e.g. legacy/imported orders).
-	locked := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeProforma, AllowOverride: false}
-	if got := resolveBillingDocumentType(orderWithInvoice, locked); got == nil || *got != domain.BillingDocumentTypeProforma {
-		t.Errorf("override disabled: expected shop default proforma, got %v", got)
-	}
-	if got := resolveBillingDocumentType(orderWithNoType, locked); got == nil || *got != domain.BillingDocumentTypeProforma {
-		t.Errorf("override disabled: expected shop default proforma for typeless order, got %v", got)
+	// Legacy/imported orders without a type fall back to the shop default.
+	if got := resolveBillingDocumentType(orderWithNoType, defaults); got == nil || *got != domain.BillingDocumentTypeProforma {
+		t.Errorf("expected shop default proforma for typeless order, got %v", got)
 	}
 }
 
@@ -192,9 +183,9 @@ func TestRenderWorkOrderHTMLBillingDefault(t *testing.T) {
 		// No explicit document type, as with legacy/imported orders.
 	}
 
-	// A shop whose default is FAKTURA and which does not allow overrides must
-	// tick FAKTURA on the printout even though the order carries no type.
-	defaults := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeInvoice, AllowOverride: false}
+	// A shop whose default is FAKTURA must tick FAKTURA on the printout even
+	// though the order carries no type of its own.
+	defaults := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeInvoice}
 	html, err := RenderWorkOrderHTML(order, nil, printSettings(domain.DefaultPDFSections(), "", defaults))
 	if err != nil {
 		t.Fatalf("render: %v", err)
@@ -397,15 +388,16 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 	}
 }
 
-// TestRenderWorkOrderHTMLPaymentMethod proves the način-plaćanja rows print in
-// the billing box and that only the order's own method is ticked.
-func TestRenderWorkOrderHTMLPaymentMethod(t *testing.T) {
-	virman := domain.PaymentMethodBankTransfer
+// TestRenderWorkOrderHTMLBillingRows proves the billing box prints exactly the
+// three document types (faktura / otkup / profaktura) and ticks the one the
+// order carries.
+func TestRenderWorkOrderHTMLBillingRows(t *testing.T) {
+	otkup := domain.BillingDocumentTypeCashCollection
 	order := domain.WorkOrder{
-		OrderNumber:    "RN-2026-00001",
-		ClientName:     "Profesionalni Upravnik",
-		JobDescription: "Vizit karte",
-		PaymentMethod:  &virman,
+		OrderNumber:         "RN-2026-00001",
+		ClientName:          "Profesionalni Upravnik",
+		JobDescription:      "Vizit karte",
+		BillingDocumentType: &otkup,
 	}
 
 	html, err := RenderWorkOrderHTML(
@@ -415,16 +407,23 @@ func TestRenderWorkOrderHTMLPaymentMethod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	for _, label := range []string{"KEŠ", "VIRMAN"} {
+	for _, label := range []string{"FAKTURA", "OTKUP", "PROFAKTURA"} {
 		if !strings.Contains(html, "<span>"+label+"</span>") {
-			t.Errorf("expected %q payment row in rendered sheet", label)
+			t.Errorf("expected %q billing row in rendered sheet", label)
 		}
 	}
-	if got := markAfter(t, html, "VIRMAN"); got != "X" {
-		t.Errorf("VIRMAN mark = %q, want X", got)
+	// The former način-plaćanja rows are gone: the document type is the only choice.
+	for _, label := range []string{"KEŠ", "VIRMAN"} {
+		if strings.Contains(html, "<span>"+label+"</span>") {
+			t.Errorf("unexpected %q row in rendered sheet", label)
+		}
 	}
-	if got := markAfter(t, html, "KEŠ"); got == "X" {
-		t.Error("KEŠ must stay unticked when the order pays by bank transfer")
+	if got := markAfter(t, html, "OTKUP"); got != "X" {
+		t.Errorf("OTKUP mark = %q, want X", got)
+	}
+	// PROFAKTURA is the shop default, but the order's own choice wins.
+	if got := markAfter(t, html, "PROFAKTURA"); got == "X" {
+		t.Error("PROFAKTURA must stay unticked when the order is an otkup")
 	}
 }
 

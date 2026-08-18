@@ -3,7 +3,6 @@ import i18n from '@/i18n'
 
 const deliveryMethodEnum = z.enum(['pickup', 'postExpress', 'cityExpress', 'fieldVisit'])
 const billingDocumentTypeEnum = z.enum(['invoice', 'cashCollection', 'proforma'])
-const paymentMethodEnum = z.enum(['cash', 'bankTransfer'])
 
 const jobDetailsSchema = z.object({
   productCode: z.string().nullable(),
@@ -34,7 +33,6 @@ export const workOrderFormSchema = z
     jobDescription: z.string().min(1, { message: i18n.t('validation.jobDescriptionRequired') }),
     jobDetails: jobDetailsSchema.nullable(),
     billingDocumentType: billingDocumentTypeEnum.nullable(),
-    paymentMethod: paymentMethodEnum.nullable(),
     billingDocumentNumber: z.string().nullable(),
     shipping: shippingSchema,
     price: z.number().min(0, { message: i18n.t('validation.priceNegative') }).nullable(),

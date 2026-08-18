@@ -40,17 +40,6 @@ const (
 	BillingDocumentTypeProforma       BillingDocumentType = "proforma"
 )
 
-// PaymentMethod is how the customer settles the order (način plaćanja): cash
-// over the counter or a bank transfer (virman). Like the other picklists it is
-// admin-extensible via the managed `paymentMethod` enum, so stored values may
-// be any value the shop defined on top of these two built-ins.
-type PaymentMethod string
-
-const (
-	PaymentMethodCash         PaymentMethod = "cash"
-	PaymentMethodBankTransfer PaymentMethod = "bankTransfer"
-)
-
 type WorkOrderStatus string
 
 const (
@@ -217,19 +206,17 @@ func DefaultPDFSections() PDFSections {
 const DefaultBillingDocumentType = BillingDocumentTypeProforma
 
 // BillingDefaults controls the work-order document type (tip dokumenta): the
-// value new orders start with, and whether it may be changed per order. When
-// AllowOverride is false the clients hide the picker and always use DocumentType.
+// value new orders start with. The type is always changeable per order, so the
+// default only seeds the picker on a fresh order.
 type BillingDefaults struct {
-	DocumentType  BillingDocumentType `json:"documentType"`
-	AllowOverride bool                `json:"allowOverride"`
+	DocumentType BillingDocumentType `json:"documentType"`
 }
 
 // DefaultBillingDefaults returns the configuration used when a shop has not
-// customized its document-type behavior: proforma, not overridable.
+// customized its document-type behavior: proforma.
 func DefaultBillingDefaults() BillingDefaults {
 	return BillingDefaults{
-		DocumentType:  DefaultBillingDocumentType,
-		AllowOverride: false,
+		DocumentType: DefaultBillingDocumentType,
 	}
 }
 
@@ -512,14 +499,11 @@ type WorkOrder struct {
 	JobDetails            *JobDetails          `json:"jobDetails"`
 	BillingDocumentType   *BillingDocumentType `json:"billingDocumentType"`
 	BillingDocumentNumber *string              `json:"billingDocumentNumber"`
-	// PaymentMethod is how the customer pays (keš / virman). Optional: nil means
-	// the operator has not picked one yet.
-	PaymentMethod *PaymentMethod `json:"paymentMethod"`
-	Shipping      Shipping       `json:"shipping"`
-	IssuedBy      string         `json:"issuedBy"`
-	ExecutedBy    *string        `json:"executedBy"`
-	Assignment    Assignment     `json:"assignment"`
-	IssueDate     string         `json:"issueDate"`
+	Shipping              Shipping             `json:"shipping"`
+	IssuedBy              string               `json:"issuedBy"`
+	ExecutedBy            *string              `json:"executedBy"`
+	Assignment            Assignment           `json:"assignment"`
+	IssueDate             string               `json:"issueDate"`
 	// ProformaDueDate is the deadline to issue the proforma invoice (predračun);
 	// DueDate is the deadline to finish the job.
 	ProformaDueDate *string         `json:"proformaDueDate"`
@@ -565,7 +549,6 @@ type CreateWorkOrderInput struct {
 	JobDetails            *JobDetails           `json:"jobDetails"`
 	BillingDocumentType   *BillingDocumentType  `json:"billingDocumentType"`
 	BillingDocumentNumber *string               `json:"billingDocumentNumber"`
-	PaymentMethod         *PaymentMethod        `json:"paymentMethod"`
 	Shipping              Shipping              `json:"shipping"`
 	Assignment            Assignment            `json:"assignment"`
 	IssuedBy              string                `json:"issuedBy"`

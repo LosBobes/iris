@@ -6,7 +6,6 @@ import {
   printItemCell,
   getPrintBillingRows,
   getPrintDeliveryRows,
-  getPrintPaymentRows,
   resolveBillingDocumentType,
   resolvePrintClientAddress,
   resolvePrintShippingAddress,
@@ -41,7 +40,6 @@ const baseOrder: WorkOrder = {
   jobDetails: null,
   billingDocumentType: "invoice",
   billingDocumentNumber: null,
-  paymentMethod: null,
   shipping: baseShipping,
   issuedBy: "mihajlo",
   executedBy: null,
@@ -132,51 +130,22 @@ describe("WorkOrderPrintSheet helpers", () => {
     });
   });
 
-  it("resolves the effective document type from the shop's billing defaults", () => {
-    const overridable = { documentType: "proforma", allowOverride: true } as const;
-    // Override allowed: the order's own choice wins, including "no type".
-    expect(
-      resolveBillingDocumentType(
-        { ...baseOrder, billingDocumentType: "invoice" },
-        overridable,
-      ),
-    ).toBe("invoice");
-    expect(
-      resolveBillingDocumentType(
-        { ...baseOrder, billingDocumentType: null },
-        overridable,
-      ),
-    ).toBeNull();
-
-    // Override disabled: the shop default is authoritative even when the order
-    // stored a different type or none at all (e.g. legacy/imported orders).
-    const locked = { documentType: "invoice", allowOverride: false } as const;
+  it("resolves the effective document type, falling back to the shop default", () => {
+    const defaults = { documentType: "invoice" } as const;
+    // The order's own choice wins.
     expect(
       resolveBillingDocumentType(
         { ...baseOrder, billingDocumentType: "proforma" },
-        locked,
+        defaults,
       ),
-    ).toBe("invoice");
+    ).toBe("proforma");
+    // Legacy/imported orders without a type fall back to the shop default.
     expect(
       resolveBillingDocumentType(
         { ...baseOrder, billingDocumentType: null },
-        locked,
+        defaults,
       ),
     ).toBe("invoice");
-  });
-
-  it("ticks only the order's payment method on the printed nalog", () => {
-    expect(getPrintPaymentRows("cash")).toEqual([
-      { label: "KEŠ", checked: true },
-      { label: "VIRMAN", checked: false },
-    ]);
-    expect(getPrintPaymentRows("bankTransfer")).toEqual([
-      { label: "KEŠ", checked: false },
-      { label: "VIRMAN", checked: true },
-    ]);
-    // No method chosen, or an admin-defined custom one: nothing is ticked.
-    expect(getPrintPaymentRows(null).every((row) => !row.checked)).toBe(true);
-    expect(getPrintPaymentRows("card").every((row) => !row.checked)).toBe(true);
   });
 
   it("builds large printable description lines from structured details", () => {

@@ -160,7 +160,7 @@ IRIS_API_BASE_URL (.env or config)
 - `GET`/`PUT /settings` back the admin **Settings** page. Values are stored per
   tenant in the key/value `app_settings` table (adding a key needs **no migration** -
   a missing row falls back to a coded default). Current settings: `firmName`,
-  `pdfSections`, `billingDefaults { documentType, allowOverride }`,
+  `pdfSections`, `billingDefaults { documentType }`,
   `priorityDefaults { priority, allowOverride }`, and `showShippingOptions`.
   `OrganizationSettingsUpdate` uses optional/pointer fields (nil = "leave unchanged").
 - Web surfaces them through `OrganizationContext`; desktop mirrors the **types only**

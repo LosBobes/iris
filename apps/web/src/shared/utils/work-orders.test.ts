@@ -16,11 +16,11 @@ describe("work order label + price helpers", () => {
 
   it("maps billing document types, with blank for null", () => {
     expect(getWorkOrderBillingDocumentLabel("invoice")).toBe("Faktura");
-    expect(getWorkOrderBillingDocumentLabel("cashCollection")).toBe(
-      "Gotovinski račun",
-    );
+    expect(getWorkOrderBillingDocumentLabel("cashCollection")).toBe("Otkup");
     expect(getWorkOrderBillingDocumentLabel("proforma")).toBe("Profaktura");
     expect(getWorkOrderBillingDocumentLabel(null)).toBe("");
+    // Admin-defined types have no translation: the stored value is shown as-is.
+    expect(getWorkOrderBillingDocumentLabel("avans")).toBe("avans");
   });
 
   it("formats prices with sr-Latn grouping and a dash for null", () => {

@@ -79,15 +79,12 @@ Work orders progress sequentially through a defined lifecycle. Transitions are s
 ## Delivery & Billing Classifications
 
 ### Billing Document Type (`BillingDocumentType`)
+How the job is billed (`Tip dokumenta`) — the single money-side choice on a work
+order, ticked as one of the three boxes on the printed nalog. Optional per order;
+extendable by an admin through the `billingDocumentType` managed enum.
 - `invoice` (`Faktura`): Standard invoice billing.
-- `cashCollection` (`Gotovinski račun`): Point-of-sale cash collection.
+- `cashCollection` (`Otkup`): Cash collected on delivery.
 - `proforma` (`Profaktura`): Pre-payment request sheet.
-
-### Payment Method (`PaymentMethod`)
-Kako klijent plaća (`Način plaćanja`). Optional per order; extendable by an admin
-through the `paymentMethod` managed enum.
-- `cash` (`Keš`): Paid in cash.
-- `bankTransfer` (`Virman`): Paid by bank transfer.
 
 ### Delivery Method (`DeliveryMethod`)
 - `pickup` (`Lično preuzimanje`): Client collects order in person.
@@ -107,7 +104,7 @@ setting needs no migration.
 | --- | --- | --- | --- |
 | **Firm Name** | `firmName` | `Naziv firme` | Shop name printed on documents. |
 | **PDF Sections** | `pdfSections` | `Sekcije PDF-a` | Which sections appear on the work-order printout. |
-| **Billing Defaults** | `billingDefaults` | `Podrazumevani obračun` | Default `documentType` for new orders + `allowOverride` (whether operators may change it). Default `proforma`, not overridable. |
+| **Billing Defaults** | `billingDefaults` | `Podrazumevani obračun` | Default `documentType` for new orders. Default `proforma`; operators can always change it per order. |
 | **Priority Defaults** | `priorityDefaults` | `Podrazumevani prioritet` | Default `priority` for new orders + `allowOverride`. Default `normal`, not overridable. |
 | **Show Shipping Options** | `showShippingOptions` | `Prikaži opcije otpreme` | Toggles the extra shipping/handling fields on the work-order form. Off by default. |
 

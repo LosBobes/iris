@@ -5,9 +5,6 @@ export type DeliveryMethod = 'pickup' | 'postExpress' | 'cityExpress' | 'fieldVi
 
 export type BillingDocumentType = 'invoice' | 'cashCollection' | 'proforma'
 
-/** How the customer pays (način plaćanja): keš or virman. */
-export type PaymentMethod = 'cash' | 'bankTransfer'
-
 export type WorkOrderStatus = 'draft' | 'active' | 'completed' | 'cancelled'
 
 export interface JobDetails {
@@ -36,7 +33,6 @@ export interface WorkOrder {
   jobDescription: string
   jobDetails: JobDetails | null
   billingDocumentType: BillingDocumentType | null
-  paymentMethod: PaymentMethod | null
   billingDocumentNumber: string | null
   shipping: Shipping
   /** Operator username */
@@ -101,7 +97,6 @@ export interface CreateWorkOrderInput {
   jobDescription: string
   jobDetails: JobDetails | null
   billingDocumentType: BillingDocumentType | null
-  paymentMethod: PaymentMethod | null
   billingDocumentNumber: string | null
   shipping: Shipping
   issuedBy: string
@@ -119,7 +114,6 @@ export interface UpdateWorkOrderInput {
   jobDescription?: string
   jobDetails?: JobDetails | null
   billingDocumentType?: BillingDocumentType | null
-  paymentMethod?: PaymentMethod | null
   billingDocumentNumber?: string | null
   shipping?: Shipping
   issuedBy?: string

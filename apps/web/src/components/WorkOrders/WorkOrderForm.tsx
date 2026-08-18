@@ -27,7 +27,6 @@ import type {
   BuiltinInvoiceUnit,
   InvoiceLineItemKind,
   Location,
-  PaymentMethod,
   PostagePaymentType,
   WorkOrder,
   WorkOrderNoteVisibility,
@@ -439,7 +438,7 @@ export function WorkOrderForm({
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
   // Shop-wide document-type policy: new orders start on the configured default
-  // (proforma out of the box) and the picker only appears when overriding is on.
+  // (proforma out of the box); the operator can always change it per order.
   // The extra shipping/handling fields are hidden unless the shop enables them.
   const { billingDefaults, priorityDefaults, showShippingOptions } =
     useOrganization();
@@ -456,7 +455,6 @@ export function WorkOrderForm({
           jobDetails: initialData.jobDetails,
           billingDocumentType: initialData.billingDocumentType,
           billingDocumentNumber: initialData.billingDocumentNumber,
-          paymentMethod: initialData.paymentMethod,
           shipping: { ...EMPTY_SHIPPING, ...initialData.shipping },
           assignment: initialData.assignment,
           price: initialData.price,
@@ -489,7 +487,6 @@ export function WorkOrderForm({
           jobDetails: null,
           billingDocumentType: billingDefaults.documentType,
           billingDocumentNumber: null,
-          paymentMethod: null,
           shipping: { ...EMPTY_SHIPPING },
           assignment: {
             assignedTo: null,
@@ -2043,7 +2040,10 @@ export function WorkOrderForm({
 
         <FormSection title={t("workOrders.form.sectionDocument")}>
           <div className="grid grid-cols-2 gap-6">
-            {billingDefaults.allowOverride && (
+            {/* Tip dokumenta: faktura / otkup / profaktura out of the box, plus
+                any type the shop added to the `billingDocumentType` managed
+                enum. Always shown — every role fills it in, and it is the box
+                ticked on the printed nalog. */}
             <FieldShell id="billingDocumentType" label={t("workOrders.form.documentType")}>
               <Controller
                 name="billingDocumentType"
@@ -2071,49 +2071,6 @@ export function WorkOrderForm({
                         Nije izabrano
                       </SelectItem>
                       {optionsFor("billingDocumentType").map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </FieldShell>
-            )}
-
-            {/* Način plaćanja: keš or virman out of the box, plus any method the
-                shop added to the `paymentMethod` managed enum. Always shown —
-                every role fills it in. */}
-            <FieldShell id="paymentMethod" label={t("workOrders.form.paymentMethod")}>
-              <Controller
-                name="paymentMethod"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
-                    onValueChange={(v) =>
-                      field.onChange(
-                        v === WORK_ORDER_SELECT_NONE_VALUE
-                          ? null
-                          : (v as PaymentMethod),
-                      )
-                    }
-                  >
-                    <SelectTrigger
-                      id="paymentMethod"
-                      aria-labelledby="paymentMethod-label"
-                      className={underlineTrigger}
-                    >
-                      <SelectValue
-                        placeholder={t("workOrders.form.selectPaymentMethod")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
-                        Nije izabrano
-                      </SelectItem>
-                      {optionsFor("paymentMethod").map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>

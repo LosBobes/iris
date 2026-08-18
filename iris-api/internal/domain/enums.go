@@ -9,7 +9,6 @@ const (
 	EnumFieldDeliveryMethod      EnumField = "deliveryMethod"
 	EnumFieldPostagePaymentType  EnumField = "postagePaymentType"
 	EnumFieldBillingDocumentType EnumField = "billingDocumentType"
-	EnumFieldPaymentMethod       EnumField = "paymentMethod"
 	EnumFieldPriority            EnumField = "priority"
 	EnumFieldInvoiceUnit         EnumField = "invoiceUnit"
 )
@@ -19,7 +18,6 @@ var ManagedEnumFields = []EnumField{
 	EnumFieldDeliveryMethod,
 	EnumFieldPostagePaymentType,
 	EnumFieldBillingDocumentType,
-	EnumFieldPaymentMethod,
 	EnumFieldPriority,
 	EnumFieldInvoiceUnit,
 }
@@ -73,12 +71,8 @@ var builtinEnumValues = map[EnumField][]EnumValue{
 	},
 	EnumFieldBillingDocumentType: {
 		{Value: "invoice", Label: "Faktura"},
-		{Value: "cashCollection", Label: "Gotovinski račun"},
+		{Value: "cashCollection", Label: "Otkup"},
 		{Value: "proforma", Label: "Profaktura"},
-	},
-	EnumFieldPaymentMethod: {
-		{Value: "cash", Label: "Keš"},
-		{Value: "bankTransfer", Label: "Virman"},
 	},
 	EnumFieldPriority: {
 		{Value: "low", Label: "Nizak"},
