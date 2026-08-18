@@ -826,6 +826,7 @@ func (s *SQLiteStore) CreateWorkOrder(
 		JobDetails:            input.JobDetails,
 		BillingDocumentType:   input.BillingDocumentType,
 		BillingDocumentNumber: input.BillingDocumentNumber,
+		PaymentMethod:         input.PaymentMethod,
 		Shipping:              input.Shipping,
 		IssuedBy:              input.IssuedBy,
 		ExecutedBy:            input.ExecutedBy,

@@ -92,6 +92,10 @@ export const sr = {
       cashCollection: 'Gotovinski račun',
       proforma: 'Profaktura',
     },
+    payment: {
+      cash: 'Keš',
+      bankTransfer: 'Virman',
+    },
     delivery: {
       pickup: 'Lično preuzimanje',
       postExpress: 'Post Express',
@@ -171,6 +175,8 @@ export const sr = {
       finishingNote: 'Napomena o doradi',
       documentType: 'Tip dokumenta',
       selectType: 'Izaberite tip',
+      paymentMethod: 'Način plaćanja',
+      selectPaymentMethod: 'Izaberite način plaćanja',
       notSelected: 'Nije izabrano',
       deliveryMethod: 'Način dostave',
       selectMethod: 'Izaberite način',

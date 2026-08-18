@@ -54,6 +54,7 @@ function buildPreviewOrder(
     jobDetails: values.jobDetails,
     billingDocumentType: values.billingDocumentType,
     billingDocumentNumber: values.billingDocumentNumber,
+    paymentMethod: values.paymentMethod,
     shipping: values.shipping,
     assignment: values.assignment,
     issuedBy: values.issuedBy ?? base.issuedBy ?? "",

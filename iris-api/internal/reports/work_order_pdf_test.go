@@ -396,3 +396,50 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 		t.Errorf("expected PDF header, got %q", string(pdfBytes[:5]))
 	}
 }
+
+// TestRenderWorkOrderHTMLPaymentMethod proves the način-plaćanja rows print in
+// the billing box and that only the order's own method is ticked.
+func TestRenderWorkOrderHTMLPaymentMethod(t *testing.T) {
+	virman := domain.PaymentMethodBankTransfer
+	order := domain.WorkOrder{
+		OrderNumber:    "RN-2026-00001",
+		ClientName:     "Profesionalni Upravnik",
+		JobDescription: "Vizit karte",
+		PaymentMethod:  &virman,
+	}
+
+	html, err := RenderWorkOrderHTML(
+		order, nil,
+		printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()),
+	)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	for _, label := range []string{"KEŠ", "VIRMAN"} {
+		if !strings.Contains(html, "<span>"+label+"</span>") {
+			t.Errorf("expected %q payment row in rendered sheet", label)
+		}
+	}
+	if got := markAfter(t, html, "VIRMAN"); got != "X" {
+		t.Errorf("VIRMAN mark = %q, want X", got)
+	}
+	if got := markAfter(t, html, "KEŠ"); got == "X" {
+		t.Error("KEŠ must stay unticked when the order pays by bank transfer")
+	}
+}
+
+// markAfter returns the first character of the mark cell that follows the given
+// billing/payment row label.
+func markAfter(t *testing.T, html, label string) string {
+	t.Helper()
+	rowStart := strings.Index(html, "<span>"+label+"</span>")
+	if rowStart < 0 {
+		t.Fatalf("row %q not found", label)
+	}
+	after := html[rowStart:]
+	markStart := strings.Index(after, `work-order-print-mark">`)
+	if markStart < 0 {
+		t.Fatalf("could not locate mark cell for %q", label)
+	}
+	return strings.TrimSpace(after[markStart+len(`work-order-print-mark">`):])[:1]
+}

@@ -14,6 +14,7 @@ const sampleOrder: WorkOrder = {
   jobDescription: "Stampa flajera",
   jobDetails: null,
   billingDocumentType: null,
+  paymentMethod: null,
   billingDocumentNumber: null,
   shipping: {
     deliveryMethod: null,

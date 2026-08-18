@@ -30,6 +30,7 @@ const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   jobDescription: 'Test job',
   jobDetails: null,
   billingDocumentType: 'invoice',
+  paymentMethod: null,
   billingDocumentNumber: null,
   shipping: ship('pickup'),
   issuedBy: 'operator.a',

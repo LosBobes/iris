@@ -8,6 +8,7 @@ import i18n from '@/i18n'
 const deliveryMethodEnum = z.string().min(1)
 const postagePaymentTypeEnum = z.string().min(1)
 const billingDocumentTypeEnum = z.string().min(1)
+const paymentMethodEnum = z.string().min(1)
 const priorityEnum = z.string().min(1)
 const invoiceDraftStatusEnum = z.enum(['none', 'draft', 'issued', 'paid'])
 const invoiceLineItemKindEnum = z.enum(['service', 'goods'])
@@ -132,6 +133,7 @@ export const workOrderFormSchema = z
     jobDetails: jobDetailsSchema.nullable(),
     billingDocumentType: billingDocumentTypeEnum.nullable(),
     billingDocumentNumber: emptyToNullString,
+    paymentMethod: paymentMethodEnum.nullable(),
     shipping: shippingSchema,
     assignment: assignmentSchema,
     price: z.number().min(0, { message: i18n.t('validation.priceNegative') }).nullable(),

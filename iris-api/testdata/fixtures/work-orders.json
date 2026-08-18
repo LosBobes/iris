@@ -15,7 +15,8 @@
     "price": 12000,
     "createdAt": "2024-10-03T08:00:00Z",
     "updatedAt": "2024-10-05T14:30:00Z",
-    "completionDate": "2024-10-05"
+    "completionDate": "2024-10-05",
+    "paymentMethod": "cash"
   },
   {
     "id": "2",
@@ -33,7 +34,8 @@
     "price": 35000,
     "createdAt": "2024-10-08T09:15:00Z",
     "updatedAt": "2024-10-12T11:00:00Z",
-    "completionDate": "2024-10-12"
+    "completionDate": "2024-10-12",
+    "paymentMethod": "bankTransfer"
   },
   {
     "id": "3",
