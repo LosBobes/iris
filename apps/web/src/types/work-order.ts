@@ -22,6 +22,9 @@ export type BillingDocumentType =
   | 'proforma'
   | (string & {})
 
+/** How the customer pays (način plaćanja): keš or virman. */
+export type PaymentMethod = 'cash' | 'bankTransfer' | (string & {})
+
 export type WorkOrderStatus =
   | 'new'
   | 'assigned'
@@ -36,6 +39,7 @@ export type EnumField =
   | 'deliveryMethod'
   | 'postagePaymentType'
   | 'billingDocumentType'
+  | 'paymentMethod'
   | 'priority'
   | 'invoiceUnit'
 
@@ -232,6 +236,7 @@ export interface WorkOrder {
   jobDetails: JobDetails | null
   billingDocumentType: BillingDocumentType | null
   billingDocumentNumber: string | null
+  paymentMethod: PaymentMethod | null
   shipping: Shipping
   /** Operator username */
   issuedBy: string
@@ -320,6 +325,7 @@ export interface CreateWorkOrderInput {
   jobDetails: JobDetails | null
   billingDocumentType: BillingDocumentType | null
   billingDocumentNumber: string | null
+  paymentMethod: PaymentMethod | null
   shipping: Shipping
   assignment: Assignment
   issuedBy: string
@@ -347,6 +353,7 @@ export interface UpdateWorkOrderInput {
   jobDetails?: JobDetails | null
   billingDocumentType?: BillingDocumentType | null
   billingDocumentNumber?: string | null
+  paymentMethod?: PaymentMethod | null
   shipping?: Shipping
   assignment?: Assignment
   issuedBy?: string

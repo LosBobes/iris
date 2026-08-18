@@ -27,6 +27,7 @@ import type {
   BuiltinInvoiceUnit,
   InvoiceLineItemKind,
   Location,
+  PaymentMethod,
   PostagePaymentType,
   WorkOrder,
   WorkOrderNoteVisibility,
@@ -431,11 +432,10 @@ export function WorkOrderForm({
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const isEdit = !!initialData;
-  // Regular operators get a reduced form: they may edit line items including the
-  // selling price, but not cost/margin or the back-office billing/shipping/
-  // assignment detail. Admins keep the full form. Hidden fields keep their
-  // default/initial values (react-hook-form does not unregister them), so an
-  // operator's edit never wipes admin data.
+  // Operators fill in the whole nalog — client, job, delivery address, payment
+  // method, billing and assignment. The one thing that stays admin-only is
+  // cost/margin (the per-line Trošak field and the derived profit), which the
+  // API also strips from an operator's responses.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
   // Shop-wide document-type policy: new orders start on the configured default
@@ -456,6 +456,7 @@ export function WorkOrderForm({
           jobDetails: initialData.jobDetails,
           billingDocumentType: initialData.billingDocumentType,
           billingDocumentNumber: initialData.billingDocumentNumber,
+          paymentMethod: initialData.paymentMethod,
           shipping: { ...EMPTY_SHIPPING, ...initialData.shipping },
           assignment: initialData.assignment,
           price: initialData.price,
@@ -488,6 +489,7 @@ export function WorkOrderForm({
           jobDetails: null,
           billingDocumentType: billingDefaults.documentType,
           billingDocumentNumber: null,
+          paymentMethod: null,
           shipping: { ...EMPTY_SHIPPING },
           assignment: {
             assignedTo: null,
@@ -2008,7 +2010,7 @@ export function WorkOrderForm({
           </div>
         </FormSection>
 
-        {isAdmin && priorityDefaults.allowOverride && (
+        {priorityDefaults.allowOverride && (
         <FormSection title={t("workOrders.form.sectionAssignment")}>
           <div className="grid gap-x-6 gap-y-5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
             <FieldShell id="assignment.priority" label={t("workOrders.form.priority")}>
@@ -2039,10 +2041,6 @@ export function WorkOrderForm({
         </FormSection>
         )}
 
-        {isAdmin &&
-          (billingDefaults.allowOverride ||
-            showShippingAddress ||
-            showShippingOptions) && (
         <FormSection title={t("workOrders.form.sectionDocument")}>
           <div className="grid grid-cols-2 gap-6">
             {billingDefaults.allowOverride && (
@@ -2083,6 +2081,48 @@ export function WorkOrderForm({
               />
             </FieldShell>
             )}
+
+            {/* Način plaćanja: keš or virman out of the box, plus any method the
+                shop added to the `paymentMethod` managed enum. Always shown —
+                every role fills it in. */}
+            <FieldShell id="paymentMethod" label={t("workOrders.form.paymentMethod")}>
+              <Controller
+                name="paymentMethod"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
+                    onValueChange={(v) =>
+                      field.onChange(
+                        v === WORK_ORDER_SELECT_NONE_VALUE
+                          ? null
+                          : (v as PaymentMethod),
+                      )
+                    }
+                  >
+                    <SelectTrigger
+                      id="paymentMethod"
+                      aria-labelledby="paymentMethod-label"
+                      className={underlineTrigger}
+                    >
+                      <SelectValue
+                        placeholder={t("workOrders.form.selectPaymentMethod")}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                        Nije izabrano
+                      </SelectItem>
+                      {optionsFor("paymentMethod").map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FieldShell>
 
             {showShippingAddress && (
               <FieldShell
@@ -2248,7 +2288,6 @@ export function WorkOrderForm({
           </div>
           )}
         </FormSection>
-        )}
 
         {/* Finance summary: the order total, i.e. the sum of the line items'
             selling prices, shown to every role — it is what the shop charges.

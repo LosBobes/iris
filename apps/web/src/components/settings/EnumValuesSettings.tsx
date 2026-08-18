@@ -17,6 +17,7 @@ const FIELD_ORDER: EnumField[] = [
   "deliveryMethod",
   "postagePaymentType",
   "billingDocumentType",
+  "paymentMethod",
   "priority",
   "invoiceUnit",
 ];

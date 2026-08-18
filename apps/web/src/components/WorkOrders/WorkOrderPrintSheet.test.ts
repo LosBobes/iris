@@ -6,6 +6,7 @@ import {
   printItemCell,
   getPrintBillingRows,
   getPrintDeliveryRows,
+  getPrintPaymentRows,
   resolveBillingDocumentType,
   resolvePrintClientAddress,
   resolvePrintShippingAddress,
@@ -40,6 +41,7 @@ const baseOrder: WorkOrder = {
   jobDetails: null,
   billingDocumentType: "invoice",
   billingDocumentNumber: null,
+  paymentMethod: null,
   shipping: baseShipping,
   issuedBy: "mihajlo",
   executedBy: null,
@@ -161,6 +163,20 @@ describe("WorkOrderPrintSheet helpers", () => {
         locked,
       ),
     ).toBe("invoice");
+  });
+
+  it("ticks only the order's payment method on the printed nalog", () => {
+    expect(getPrintPaymentRows("cash")).toEqual([
+      { label: "KEŠ", checked: true },
+      { label: "VIRMAN", checked: false },
+    ]);
+    expect(getPrintPaymentRows("bankTransfer")).toEqual([
+      { label: "KEŠ", checked: false },
+      { label: "VIRMAN", checked: true },
+    ]);
+    // No method chosen, or an admin-defined custom one: nothing is ticked.
+    expect(getPrintPaymentRows(null).every((row) => !row.checked)).toBe(true);
+    expect(getPrintPaymentRows("card").every((row) => !row.checked)).toBe(true);
   });
 
   it("builds large printable description lines from structured details", () => {

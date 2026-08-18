@@ -40,6 +40,17 @@ const (
 	BillingDocumentTypeProforma       BillingDocumentType = "proforma"
 )
 
+// PaymentMethod is how the customer settles the order (način plaćanja): cash
+// over the counter or a bank transfer (virman). Like the other picklists it is
+// admin-extensible via the managed `paymentMethod` enum, so stored values may
+// be any value the shop defined on top of these two built-ins.
+type PaymentMethod string
+
+const (
+	PaymentMethodCash         PaymentMethod = "cash"
+	PaymentMethodBankTransfer PaymentMethod = "bankTransfer"
+)
+
 type WorkOrderStatus string
 
 const (
@@ -501,11 +512,14 @@ type WorkOrder struct {
 	JobDetails            *JobDetails          `json:"jobDetails"`
 	BillingDocumentType   *BillingDocumentType `json:"billingDocumentType"`
 	BillingDocumentNumber *string              `json:"billingDocumentNumber"`
-	Shipping              Shipping             `json:"shipping"`
-	IssuedBy              string               `json:"issuedBy"`
-	ExecutedBy            *string              `json:"executedBy"`
-	Assignment            Assignment           `json:"assignment"`
-	IssueDate             string               `json:"issueDate"`
+	// PaymentMethod is how the customer pays (keš / virman). Optional: nil means
+	// the operator has not picked one yet.
+	PaymentMethod *PaymentMethod `json:"paymentMethod"`
+	Shipping      Shipping       `json:"shipping"`
+	IssuedBy      string         `json:"issuedBy"`
+	ExecutedBy    *string        `json:"executedBy"`
+	Assignment    Assignment     `json:"assignment"`
+	IssueDate     string         `json:"issueDate"`
 	// ProformaDueDate is the deadline to issue the proforma invoice (predračun);
 	// DueDate is the deadline to finish the job.
 	ProformaDueDate *string         `json:"proformaDueDate"`
@@ -551,6 +565,7 @@ type CreateWorkOrderInput struct {
 	JobDetails            *JobDetails           `json:"jobDetails"`
 	BillingDocumentType   *BillingDocumentType  `json:"billingDocumentType"`
 	BillingDocumentNumber *string               `json:"billingDocumentNumber"`
+	PaymentMethod         *PaymentMethod        `json:"paymentMethod"`
 	Shipping              Shipping              `json:"shipping"`
 	Assignment            Assignment            `json:"assignment"`
 	IssuedBy              string                `json:"issuedBy"`

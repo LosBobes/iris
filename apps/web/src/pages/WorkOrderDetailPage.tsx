@@ -28,6 +28,7 @@ import {
   buildWorkOrderCustomerNotice,
   getWorkOrderBillingDocumentLabel,
   getWorkOrderDeliveryLabel,
+  getWorkOrderPaymentMethodLabel,
   getWorkOrderStatusLabel,
   getPrimaryWorkOrderTransition,
   getAllowedWorkOrderTransitions,
@@ -490,6 +491,12 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       t("workOrders.detail.documentType"),
       order.billingDocumentType
         ? getWorkOrderBillingDocumentLabel(order.billingDocumentType)
+        : "-",
+    ],
+    [
+      t("workOrders.detail.paymentMethod"),
+      order.paymentMethod
+        ? getWorkOrderPaymentMethodLabel(order.paymentMethod)
         : "-",
     ],
     [

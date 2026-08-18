@@ -22,6 +22,7 @@ const duplicateValues: WorkOrderFormValues = {
   jobDetails: null,
   billingDocumentType: "invoice",
   billingDocumentNumber: null,
+  paymentMethod: "cash",
   shipping: {
     deliveryMethod: "pickup",
     drivesOut: false,

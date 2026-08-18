@@ -93,6 +93,10 @@ export const en: typeof sr = {
       cashCollection: 'Cash receipt',
       proforma: 'Proforma',
     },
+    payment: {
+      cash: 'Cash',
+      bankTransfer: 'Bank transfer',
+    },
     delivery: {
       pickup: 'Personal pickup',
       postExpress: 'Post Express',
@@ -172,6 +176,8 @@ export const en: typeof sr = {
       finishingNote: 'Finishing note',
       documentType: 'Document type',
       selectType: 'Select a type',
+      paymentMethod: 'Payment method',
+      selectPaymentMethod: 'Select a payment method',
       notSelected: 'Not selected',
       deliveryMethod: 'Delivery method',
       selectMethod: 'Select a method',

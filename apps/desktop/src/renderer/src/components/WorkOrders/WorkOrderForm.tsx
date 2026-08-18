@@ -20,9 +20,11 @@ import {
 import {
   BILLING_DOCUMENT_TYPES,
   DELIVERY_METHODS,
+  PAYMENT_METHODS,
   WORK_ORDER_SELECT_NONE_VALUE,
   getWorkOrderBillingDocumentLabel,
   getWorkOrderDeliveryLabel,
+  getWorkOrderPaymentMethodLabel,
   getWorkOrderStatusLabel,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
@@ -122,6 +124,7 @@ export function WorkOrderForm({
           jobDetails: initialData.jobDetails,
           billingDocumentType: initialData.billingDocumentType,
           billingDocumentNumber: initialData.billingDocumentNumber,
+          paymentMethod: initialData.paymentMethod,
           shipping: initialData.shipping,
           price: initialData.price,
           note: initialData.note,
@@ -138,6 +141,7 @@ export function WorkOrderForm({
           // policy the web settings expose shop-wide.
           billingDocumentType: "proforma",
           billingDocumentNumber: null,
+          paymentMethod: null,
           shipping: {
             deliveryMethod: null,
             hasPackaging: false,
@@ -304,6 +308,42 @@ export function WorkOrderForm({
                       {BILLING_DOCUMENT_TYPES.map((value) => (
                         <SelectItem key={value} value={value}>
                           {getWorkOrderBillingDocumentLabel(value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FieldShell>
+
+            {/* Način plaćanja: keš or virman. */}
+            <FieldShell id="paymentMethod" label={t("workOrders.form.paymentMethod")}>
+              <Controller
+                name="paymentMethod"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? WORK_ORDER_SELECT_NONE_VALUE}
+                    onValueChange={(v) =>
+                      field.onChange(v === WORK_ORDER_SELECT_NONE_VALUE ? null : v)
+                    }
+                  >
+                    <SelectTrigger
+                      id="paymentMethod"
+                      aria-labelledby="paymentMethod-label"
+                      className={underlineTrigger}
+                    >
+                      <SelectValue
+                        placeholder={t("workOrders.form.selectPaymentMethod")}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={WORK_ORDER_SELECT_NONE_VALUE}>
+                        {t("workOrders.form.notSelected")}
+                      </SelectItem>
+                      {PAYMENT_METHODS.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {getWorkOrderPaymentMethodLabel(value)}
                         </SelectItem>
                       ))}
                     </SelectContent>

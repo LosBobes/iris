@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type {
   BillingDocumentType,
   Location,
+  PaymentMethod,
   Shipping,
   WorkOrder,
 } from "@/types/work-order";
@@ -31,6 +32,19 @@ const PRINT_BILLING_ROWS: Array<{
     billingDocumentType: "cashCollection",
   },
   { labelKey: "workOrders.print.billing.proforma", billingDocumentType: "proforma" },
+];
+
+// Način plaćanja rows. Only the two built-ins get a box on the paper form, so an
+// order carrying an admin-defined custom method leaves both unticked.
+const PRINT_PAYMENT_ROWS: Array<{
+  labelKey: string;
+  paymentMethod: PaymentMethod;
+}> = [
+  { labelKey: "workOrders.print.payment.cash", paymentMethod: "cash" },
+  {
+    labelKey: "workOrders.print.payment.bankTransfer",
+    paymentMethod: "bankTransfer",
+  },
 ];
 
 function uppercaseLine(value: string | null | undefined): string | null {
@@ -145,6 +159,15 @@ export function getPrintBillingRows(
   return PRINT_BILLING_ROWS.map((row) => ({
     label: i18n.t(row.labelKey),
     checked: row.billingDocumentType === billingDocumentType,
+  }));
+}
+
+export function getPrintPaymentRows(
+  paymentMethod: PaymentMethod | null,
+): PrintCheckRow[] {
+  return PRINT_PAYMENT_ROWS.map((row) => ({
+    label: i18n.t(row.labelKey),
+    checked: row.paymentMethod === paymentMethod,
   }));
 }
 
@@ -330,6 +353,7 @@ export function WorkOrderPrintSheet({
   const billingRows = getPrintBillingRows(
     resolveBillingDocumentType(order, billingDefaults),
   );
+  const paymentRows = getPrintPaymentRows(order.paymentMethod);
   const noteLines = buildPrintNoteLines(order);
   const shippingAddress = resolvePrintShippingAddress(order);
   const clientAddress = resolvePrintClientAddress(order, locations);
@@ -470,7 +494,7 @@ export function WorkOrderPrintSheet({
 
           {pdfSections.billing && (
             <div className="work-order-print-billing-box">
-              {billingRows.map((row) => (
+              {[...billingRows, ...paymentRows].map((row) => (
                 <div className="work-order-print-billing-row" key={row.label}>
                   <span>{row.label}</span>
                   <span className="work-order-print-mark">

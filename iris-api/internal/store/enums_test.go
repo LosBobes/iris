@@ -119,3 +119,54 @@ func TestSQLiteCustomInvoiceUnit(t *testing.T) {
 		t.Fatal("CreateWorkOrder() accepted set unit on goods, want validation error")
 	}
 }
+
+// TestSQLitePaymentMethod covers the način-plaćanja picklist end to end: both
+// built-ins persist, an unknown value is rejected, and an admin-defined custom
+// value is accepted once registered.
+func TestSQLitePaymentMethod(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	for _, method := range []domain.PaymentMethod{domain.PaymentMethodCash, domain.PaymentMethodBankTransfer} {
+		value := method
+		created, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+			ClientName: "Test Klijent", JobDescription: "Štampa", IssuedBy: "admin",
+			IssueDate: "2026-06-21", PaymentMethod: &value,
+		})
+		if err != nil {
+			t.Fatalf("CreateWorkOrder() with %s error: %v", method, err)
+		}
+		if created.PaymentMethod == nil || *created.PaymentMethod != method {
+			t.Fatalf("created.PaymentMethod = %v, want %s", created.PaymentMethod, method)
+		}
+		// The value must survive the JSON payload round-trip.
+		reloaded, err := sqliteStore.WorkOrderByID(ctx, created.ID)
+		if err != nil || reloaded == nil {
+			t.Fatalf("WorkOrderByID() = %v, %v", reloaded, err)
+		}
+		if reloaded.PaymentMethod == nil || *reloaded.PaymentMethod != method {
+			t.Fatalf("reloaded.PaymentMethod = %v, want %s", reloaded.PaymentMethod, method)
+		}
+	}
+
+	// An unknown method is rejected until an admin registers it.
+	unknown := domain.PaymentMethod("crypto")
+	if _, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName: "Test", JobDescription: "Štampa", IssuedBy: "admin",
+		IssueDate: "2026-06-21", PaymentMethod: &unknown,
+	}); err == nil {
+		t.Fatal("CreateWorkOrder() accepted unknown payment method, want validation error")
+	}
+	if _, err := sqliteStore.CreateEnumValue(ctx, domain.EnumValueInput{
+		Field: domain.EnumFieldPaymentMethod, Value: "crypto", Label: "Kripto",
+	}); err != nil {
+		t.Fatalf("CreateEnumValue() error: %v", err)
+	}
+	if _, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName: "Test", JobDescription: "Štampa", IssuedBy: "admin",
+		IssueDate: "2026-06-21", PaymentMethod: &unknown,
+	}); err != nil {
+		t.Fatalf("CreateWorkOrder() with custom payment method error: %v", err)
+	}
+}

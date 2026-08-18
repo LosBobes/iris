@@ -29,6 +29,7 @@ function getDuplicateInitialValues(
     jobDetails: source.jobDetails,
     billingDocumentType: source.billingDocumentType,
     billingDocumentNumber: source.billingDocumentNumber,
+    paymentMethod: source.paymentMethod,
     shipping: source.shipping,
     assignment: {
       ...source.assignment,
@@ -188,6 +189,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
           jobDetails: values.jobDetails,
           billingDocumentType: values.billingDocumentType,
           billingDocumentNumber: values.billingDocumentNumber,
+          paymentMethod: values.paymentMethod,
           shipping: values.shipping,
           assignment: values.assignment,
           issuedBy: values.issuedBy || currentUser.username,

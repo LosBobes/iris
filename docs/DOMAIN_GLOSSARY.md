@@ -83,6 +83,12 @@ Work orders progress sequentially through a defined lifecycle. Transitions are s
 - `cashCollection` (`Gotovinski račun`): Point-of-sale cash collection.
 - `proforma` (`Profaktura`): Pre-payment request sheet.
 
+### Payment Method (`PaymentMethod`)
+Kako klijent plaća (`Način plaćanja`). Optional per order; extendable by an admin
+through the `paymentMethod` managed enum.
+- `cash` (`Keš`): Paid in cash.
+- `bankTransfer` (`Virman`): Paid by bank transfer.
+
 ### Delivery Method (`DeliveryMethod`)
 - `pickup` (`Lično preuzimanje`): Client collects order in person.
 - `postExpress` (`Post Express`): Delivered via Post Express courier.

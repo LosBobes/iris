@@ -39,20 +39,20 @@ func newValidationError(message string) error {
 type FixtureStore struct {
 	basePath string
 
-	mu               sync.Mutex
-	customers        []domain.Customer
-	locations        []domain.Location
-	workOrders       []domain.WorkOrder
-	enumValues       []domain.EnumValue
-	catalogItems     []domain.CatalogItem
-	nextEnumSequence int
-	nextSequence     int
-	reservations     []fixtureReservation
-	editLocks        map[string]fixtureEditLock
-	loaded           bool
-	referencesLoaded bool
-	usersLoaded      bool
-	fixtureUsers     []domain.FixtureUser
+	mu                  sync.Mutex
+	customers           []domain.Customer
+	locations           []domain.Location
+	workOrders          []domain.WorkOrder
+	enumValues          []domain.EnumValue
+	catalogItems        []domain.CatalogItem
+	nextEnumSequence    int
+	nextSequence        int
+	reservations        []fixtureReservation
+	editLocks           map[string]fixtureEditLock
+	loaded              bool
+	referencesLoaded    bool
+	usersLoaded         bool
+	fixtureUsers        []domain.FixtureUser
 	firmName            string
 	pdfSections         *domain.PDFSections
 	billingDefaults     *domain.BillingDefaults
@@ -480,6 +480,7 @@ func (s *FixtureStore) CreateWorkOrder(
 		JobDetails:            input.JobDetails,
 		BillingDocumentType:   input.BillingDocumentType,
 		BillingDocumentNumber: input.BillingDocumentNumber,
+		PaymentMethod:         input.PaymentMethod,
 		Shipping:              input.Shipping,
 		IssuedBy:              input.IssuedBy,
 		ExecutedBy:            input.ExecutedBy,
@@ -1403,6 +1404,9 @@ func validateCreateWorkOrderInput(input domain.CreateWorkOrderInput, custom cust
 	if err := validateBillingDocumentType(input.BillingDocumentType, custom); err != nil {
 		return err
 	}
+	if err := validatePaymentMethod(input.PaymentMethod, custom); err != nil {
+		return err
+	}
 	if err := validateAssignment(input.Assignment, custom); err != nil {
 		return err
 	}
@@ -1476,6 +1480,15 @@ func applyWorkOrderChanges(
 				return domain.WorkOrder{}, err
 			}
 			updated.BillingDocumentNumber = value
+		case "paymentMethod":
+			var value *domain.PaymentMethod
+			if err := decodeField(raw, &value); err != nil {
+				return domain.WorkOrder{}, err
+			}
+			if err := validatePaymentMethod(value, custom); err != nil {
+				return domain.WorkOrder{}, err
+			}
+			updated.PaymentMethod = value
 		case "shipping":
 			var value domain.Shipping
 			if err := decodeField(raw, &value); err != nil {
@@ -1643,6 +1656,7 @@ func applyWorkOrderChanges(
 		JobDetails:            updated.JobDetails,
 		BillingDocumentType:   updated.BillingDocumentType,
 		BillingDocumentNumber: updated.BillingDocumentNumber,
+		PaymentMethod:         updated.PaymentMethod,
 		Shipping:              updated.Shipping,
 		Assignment:            updated.Assignment,
 		IssuedBy:              validationIssuedBy,
@@ -1704,6 +1718,14 @@ func validateBillingDocumentType(value *domain.BillingDocumentType, custom custo
 	return nil
 }
 
+func validatePaymentMethod(value *domain.PaymentMethod, custom customEnumSet) error {
+	if value != nil && !isValidPaymentMethod(*value, custom) {
+		return newValidationError(invalidWorkOrderMessage)
+	}
+
+	return nil
+}
+
 func validateAssignment(value domain.Assignment, custom customEnumSet) error {
 	if value.Priority != "" && !isValidPriority(value.Priority, custom) {
 		return newValidationError(invalidWorkOrderMessage)
@@ -1749,6 +1771,16 @@ func isValidBillingDocumentType(value domain.BillingDocumentType, custom customE
 		return true
 	default:
 		return custom.has(domain.EnumFieldBillingDocumentType, string(value))
+	}
+}
+
+func isValidPaymentMethod(value domain.PaymentMethod, custom customEnumSet) bool {
+	switch value {
+	case domain.PaymentMethodCash,
+		domain.PaymentMethodBankTransfer:
+		return true
+	default:
+		return custom.has(domain.EnumFieldPaymentMethod, string(value))
 	}
 }
 
@@ -1878,6 +1910,20 @@ func billingDocumentTypeLabel(docType *domain.BillingDocumentType) string {
 	}
 }
 
+func paymentMethodLabel(method *domain.PaymentMethod) string {
+	if method == nil {
+		return emptyDiffValue
+	}
+	switch *method {
+	case domain.PaymentMethodCash:
+		return "Keš"
+	case domain.PaymentMethodBankTransfer:
+		return "Virman"
+	default:
+		return string(*method)
+	}
+}
+
 func deliveryMethodLabel(method *domain.DeliveryMethod) string {
 	if method == nil {
 		return emptyDiffValue
@@ -1965,6 +2011,7 @@ func appendWorkOrderChangeEvents(current, updated *domain.WorkOrder) {
 	add("Opis posla", current.JobDescription, updated.JobDescription)
 	add("Tip dokumenta", billingDocumentTypeLabel(current.BillingDocumentType), billingDocumentTypeLabel(updated.BillingDocumentType))
 	add("Broj dokumenta", diffOptionalString(current.BillingDocumentNumber), diffOptionalString(updated.BillingDocumentNumber))
+	add("Način plaćanja", paymentMethodLabel(current.PaymentMethod), paymentMethodLabel(updated.PaymentMethod))
 	add("Operater", diffOptionalString(current.Assignment.AssignedTo), diffOptionalString(updated.Assignment.AssignedTo))
 	add("Prioritet", workOrderPriorityLabel(current.Assignment.Priority), workOrderPriorityLabel(updated.Assignment.Priority))
 	add("Način dostave", deliveryMethodLabel(current.Shipping.DeliveryMethod), deliveryMethodLabel(updated.Shipping.DeliveryMethod))
@@ -2126,6 +2173,7 @@ func deepCopyWorkOrder(workOrder domain.WorkOrder) domain.WorkOrder {
 	cloned.JobDetails = cloneJobDetails(workOrder.JobDetails)
 	cloned.BillingDocumentType = clonePtrBillingDocumentType(workOrder.BillingDocumentType)
 	cloned.BillingDocumentNumber = clonePtrString(workOrder.BillingDocumentNumber)
+	cloned.PaymentMethod = clonePtrPaymentMethod(workOrder.PaymentMethod)
 	cloned.Shipping = cloneShipping(workOrder.Shipping)
 	cloned.ExecutedBy = clonePtrString(workOrder.ExecutedBy)
 	cloned.ProformaDueDate = clonePtrString(workOrder.ProformaDueDate)
@@ -2198,6 +2246,14 @@ func clonePtrDeliveryMethod(value *domain.DeliveryMethod) *domain.DeliveryMethod
 }
 
 func clonePtrBillingDocumentType(value *domain.BillingDocumentType) *domain.BillingDocumentType {
+	if value == nil {
+		return nil
+	}
+	v := *value
+	return &v
+}
+
+func clonePtrPaymentMethod(value *domain.PaymentMethod) *domain.PaymentMethod {
 	if value == nil {
 		return nil
 	}
