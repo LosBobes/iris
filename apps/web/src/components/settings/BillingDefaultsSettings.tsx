@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileCheck2, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -24,13 +23,13 @@ const DOCUMENT_TYPES: BillingDocumentType[] = [
 ];
 
 function defaultsEqual(a: BillingDefaults, b: BillingDefaults): boolean {
-  return a.documentType === b.documentType && a.allowOverride === b.allowOverride;
+  return a.documentType === b.documentType;
 }
 
 /**
  * Admin-only editor for the work-order document type (tip dokumenta): the type
- * new orders start with and whether operators may change it per order. Persists
- * shop-wide via the organization settings endpoint.
+ * new orders start with. Operators can always change it per order, so this only
+ * seeds the picker. Persists shop-wide via the organization settings endpoint.
  */
 export function BillingDefaultsSettings(): React.JSX.Element {
   const { t } = useTranslation();
@@ -100,24 +99,6 @@ export function BillingDefaultsSettings(): React.JSX.Element {
             </SelectContent>
           </Select>
         </div>
-
-        <label className="iris-focusable group flex cursor-pointer items-center justify-between gap-3 border-t border-border pt-4">
-          <div className="min-w-0">
-            <div className="text-[13px] font-medium text-foreground">
-              {t("settings.billing.allowOverride")}
-            </div>
-            <div className="text-[11px] text-[color:var(--iris-ink-soft)]">
-              {t("settings.billing.allowOverrideHint")}
-            </div>
-          </div>
-          <Checkbox
-            checked={draft.allowOverride}
-            onCheckedChange={(checked) =>
-              setDraft((prev) => ({ ...prev, allowOverride: checked === true }))
-            }
-            aria-label={t("settings.billing.allowOverride")}
-          />
-        </label>
       </div>
 
       <div className="flex justify-end border-t border-border px-5 py-4">

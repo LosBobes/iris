@@ -1331,19 +1331,14 @@ components:
       type: object
       description: >-
         Controls the work-order document type (tip dokumenta): the value new
-        orders start with and whether it may be changed per order. Defaults to
-        proforma, not overridable, for an unconfigured shop.
-      required: [documentType, allowOverride]
+        orders start with. The type is always changeable per order; defaults to
+        proforma for an unconfigured shop.
+      required: [documentType]
       properties:
         documentType:
           type: string
           enum: [invoice, cashCollection, proforma]
           description: The document type new work orders start with.
-        allowOverride:
-          type: boolean
-          description: >-
-            When false, clients hide the document-type picker and always use
-            documentType.
     PriorityDefaults:
       type: object
       description: >-
@@ -1471,7 +1466,7 @@ components:
     WorkOrder:
       type: object
       required:
-        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, paymentMethod, shipping, issuedBy, executedBy, assignment, issueDate, proformaDueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
+        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, proformaDueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
         id:
           type: string
@@ -1503,15 +1498,6 @@ components:
         billingDocumentNumber:
           type: [string, 'null']
           example: INV-42
-        paymentMethod:
-          type: [string, 'null']
-          description: >-
-            How the customer pays (način plaćanja). The two values below are
-            built in; an administrator may add more via the `paymentMethod`
-            managed enum (see GET /enum-values), so any non-empty string the
-            shop defined is also accepted.
-          enum: [cash, bankTransfer, null]
-          example: cash
         shipping:
           $ref: '#/components/schemas/Shipping'
         issuedBy:
@@ -1645,7 +1631,7 @@ components:
     CreateWorkOrderInput:
       type: object
       required:
-        [customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, paymentMethod, shipping, assignment, issuedBy, issueDate, proformaDueDate, dueDate, price, note, internalNotes, customerNotes, attachments, materialUsage, timeEntries, invoiceDraft, communication]
+        [customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, assignment, issuedBy, issueDate, proformaDueDate, dueDate, price, note, internalNotes, customerNotes, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
         orderNumber:
           type: [string, 'null']
@@ -1672,9 +1658,6 @@ components:
           enum: [invoice, cashCollection, proforma, null]
         billingDocumentNumber:
           type: [string, 'null']
-        paymentMethod:
-          type: [string, 'null']
-          enum: [cash, bankTransfer, null]
         shipping:
           $ref: '#/components/schemas/Shipping'
         assignment:
@@ -1744,9 +1727,6 @@ components:
           enum: [invoice, cashCollection, proforma, null]
         billingDocumentNumber:
           type: [string, 'null']
-        paymentMethod:
-          type: [string, 'null']
-          enum: [cash, bankTransfer, null]
         shipping:
           $ref: '#/components/schemas/Shipping'
         assignment:

@@ -2,7 +2,6 @@ import i18n from "@/i18n";
 import type {
   BillingDocumentType,
   DeliveryMethod,
-  PaymentMethod,
   PostagePaymentType,
   WorkOrder,
   WorkOrderPriority,
@@ -30,21 +29,14 @@ export function getWorkOrderPriorityLabel(priority: WorkOrderPriority): string {
   return i18n.t(`workOrders.priority.${priority}`);
 }
 
+// The document type (tip dokumenta) is admin-extensible, so a value with no
+// built-in translation falls back to the stored value rather than leaking the
+// i18n key.
 export function getWorkOrderBillingDocumentLabel(
   type: BillingDocumentType | null,
 ): string {
   if (!type) return "";
-  return i18n.t(`workOrders.billing.${type}`);
-}
-
-// Payment method (način plaćanja) is admin-extensible, so a value with no
-// built-in translation falls back to the stored value rather than leaking the
-// i18n key.
-export function getWorkOrderPaymentMethodLabel(
-  method: PaymentMethod | null,
-): string {
-  if (!method) return "";
-  return i18n.t(`workOrders.payment.${method}`, { defaultValue: method });
+  return i18n.t(`workOrders.billing.${type}`, { defaultValue: type });
 }
 
 const WORK_ORDER_STATUSES: WorkOrderStatus[] = [

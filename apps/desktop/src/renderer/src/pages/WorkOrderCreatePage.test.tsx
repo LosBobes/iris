@@ -18,7 +18,6 @@ const duplicateSource: WorkOrder = {
     finishingNote: 'Mat plastifikacija',
   },
   billingDocumentType: 'invoice',
-  paymentMethod: 'cash',
   billingDocumentNumber: 'INV-42',
   shipping: {
     deliveryMethod: 'postExpress',

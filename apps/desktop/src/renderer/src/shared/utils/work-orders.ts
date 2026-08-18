@@ -1,7 +1,6 @@
 import type {
   BillingDocumentType,
   DeliveryMethod,
-  PaymentMethod,
   WorkOrderStatus,
 } from "@/types/work-order";
 import i18n from "@/i18n";
@@ -23,8 +22,6 @@ export const BILLING_DOCUMENT_TYPES: BillingDocumentType[] = [
   "proforma",
 ];
 
-export const PAYMENT_METHODS: PaymentMethod[] = ["cash", "bankTransfer"];
-
 export function getWorkOrderDeliveryLabel(method: DeliveryMethod): string {
   return i18n.t(`workOrders.delivery.${method}`);
 }
@@ -33,10 +30,6 @@ export function getWorkOrderBillingDocumentLabel(
   type: BillingDocumentType,
 ): string {
   return i18n.t(`workOrders.billing.${type}`);
-}
-
-export function getWorkOrderPaymentMethodLabel(method: PaymentMethod): string {
-  return i18n.t(`workOrders.payment.${method}`);
 }
 
 export function getWorkOrderStatusLabel(status: WorkOrderStatus): string {

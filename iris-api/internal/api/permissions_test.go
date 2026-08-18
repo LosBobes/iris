@@ -267,14 +267,14 @@ func TestOrganizationSettings(t *testing.T) {
 
 	// An unknown document type is rejected.
 	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
-		`{"billingDefaults":{"documentType":"bogus","allowOverride":true}}`,
+		`{"billingDefaults":{"documentType":"bogus"}}`,
 	); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("PUT invalid billingDefaults = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 
 	// A billingDefaults-only update must persist and must not wipe the firm name.
 	if rec := roleRequest(t, server, adminToken, http.MethodPut, "/settings",
-		`{"billingDefaults":{"documentType":"invoice","allowOverride":true}}`,
+		`{"billingDefaults":{"documentType":"invoice"}}`,
 	); rec.Code != http.StatusOK {
 		t.Fatalf("PUT billingDefaults as admin = %d, want %d", rec.Code, http.StatusOK)
 	}
@@ -287,7 +287,7 @@ func TestOrganizationSettings(t *testing.T) {
 	if after.FirmName != "Grafika Novi Naziv" {
 		t.Fatalf("persisted firmName = %q, want %q", after.FirmName, "Grafika Novi Naziv")
 	}
-	if after.BillingDefaults.DocumentType != domain.BillingDocumentTypeInvoice || !after.BillingDefaults.AllowOverride {
+	if after.BillingDefaults.DocumentType != domain.BillingDocumentTypeInvoice {
 		t.Fatalf("billingDefaults not persisted: %+v", after.BillingDefaults)
 	}
 

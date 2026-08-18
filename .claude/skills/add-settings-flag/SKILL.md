@@ -26,7 +26,7 @@ field configurable.
   Example: `showShippingOptions`.
 - **Default value + override toggle** (pin a value, optionally let operators
   change it per record): model as a small struct `{ value; allowOverride bool }`.
-  Example: `billingDefaults { documentType; allowOverride }`.
+  Example: `priorityDefaults { priority; allowOverride }`.
 
 Pick the safe default (usually the **compact / hidden / pinned** state) so an
 unconfigured shop gets the simpler form.

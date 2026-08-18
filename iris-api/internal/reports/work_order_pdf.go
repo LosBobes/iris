@@ -98,16 +98,13 @@ type WorkOrderPrintData struct {
 	DescriptionLines []string
 	// ItemHeaders and ItemLines are the "stavke" table, already arranged in the
 	// shop's configured line-item column order.
-	ItemHeaders   []string
-	ItemLines     []PrintItemLine
-	TotalPrice    string
-	ContactPerson string
-	DeliveryRows  []PrintCheckRow
-	PlannedDate   string
-	BillingRows   []PrintCheckRow
-	// PaymentRows are the način-plaćanja ticks (keš / virman). They render inside
-	// the same billing box, below the document-type rows.
-	PaymentRows     []PrintCheckRow
+	ItemHeaders     []string
+	ItemLines       []PrintItemLine
+	TotalPrice      string
+	ContactPerson   string
+	DeliveryRows    []PrintCheckRow
+	PlannedDate     string
+	BillingRows     []PrintCheckRow
 	NoteLines       []string
 	ShippingAddress string
 	Completed       bool
@@ -248,12 +245,10 @@ func getPrintDeliveryRows(shipping domain.Shipping) []PrintCheckRow {
 }
 
 // resolveBillingDocumentType returns the document type (tip dokumenta) to tick on
-// the printout. When the shop does not allow per-order override, the type is
-// entirely shop-controlled, so the shop default is authoritative regardless of
-// what the order stored (this is what keeps legacy/imported orders in sync with
-// the configured default). When override is allowed, the order's own choice wins.
+// the printout: the order's own choice, falling back to the shop default for
+// legacy/imported orders that never stored one.
 func resolveBillingDocumentType(order domain.WorkOrder, defaults domain.BillingDefaults) *domain.BillingDocumentType {
-	if defaults.AllowOverride {
+	if order.BillingDocumentType != nil {
 		return order.BillingDocumentType
 	}
 	docType := defaults.DocumentType
@@ -279,29 +274,6 @@ func getPrintBillingRows(billingDocType *domain.BillingDocumentType) []PrintChec
 		res[i] = PrintCheckRow{
 			Label:   r.label,
 			Checked: checked,
-		}
-	}
-	return res
-}
-
-// getPrintPaymentRows ticks the order's payment method (način plaćanja) on the
-// printout. Custom, admin-defined methods have no fixed box on the paper form,
-// so only the two built-ins are listed; an order carrying a custom value simply
-// leaves both unticked.
-func getPrintPaymentRows(method *domain.PaymentMethod) []PrintCheckRow {
-	rows := []struct {
-		label  string
-		method domain.PaymentMethod
-	}{
-		{label: "KEŠ", method: domain.PaymentMethodCash},
-		{label: "VIRMAN", method: domain.PaymentMethodBankTransfer},
-	}
-
-	res := make([]PrintCheckRow, len(rows))
-	for i, r := range rows {
-		res[i] = PrintCheckRow{
-			Label:   r.label,
-			Checked: method != nil && *method == r.method,
 		}
 	}
 	return res
@@ -933,12 +905,6 @@ const htmlTemplateStr = `<!DOCTYPE html>
               <span class="work-order-print-mark">{{if .Checked}}X{{end}}</span>
             </div>
           {{end}}
-          {{range .PaymentRows}}
-            <div class="work-order-print-billing-row">
-              <span>{{.Label}}</span>
-              <span class="work-order-print-mark">{{if .Checked}}X{{end}}</span>
-            </div>
-          {{end}}
         </div>
         {{end}}
 
@@ -1073,7 +1039,6 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, settin
 		DeliveryRows:     getPrintDeliveryRows(order.Shipping),
 		PlannedDate:      formatOptionalDate(plannedDate),
 		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults)),
-		PaymentRows:      getPrintPaymentRows(order.PaymentMethod),
 		NoteLines:        buildPrintNoteLines(order),
 		ShippingAddress:  ResolvePrintShippingAddress(order),
 		Completed:        completed,

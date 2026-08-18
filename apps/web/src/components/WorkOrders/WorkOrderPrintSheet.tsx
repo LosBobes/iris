@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import type {
   BillingDocumentType,
   Location,
-  PaymentMethod,
   Shipping,
   WorkOrder,
 } from "@/types/work-order";
@@ -32,19 +31,6 @@ const PRINT_BILLING_ROWS: Array<{
     billingDocumentType: "cashCollection",
   },
   { labelKey: "workOrders.print.billing.proforma", billingDocumentType: "proforma" },
-];
-
-// Način plaćanja rows. Only the two built-ins get a box on the paper form, so an
-// order carrying an admin-defined custom method leaves both unticked.
-const PRINT_PAYMENT_ROWS: Array<{
-  labelKey: string;
-  paymentMethod: PaymentMethod;
-}> = [
-  { labelKey: "workOrders.print.payment.cash", paymentMethod: "cash" },
-  {
-    labelKey: "workOrders.print.payment.bankTransfer",
-    paymentMethod: "bankTransfer",
-  },
 ];
 
 function uppercaseLine(value: string | null | undefined): string | null {
@@ -139,18 +125,13 @@ export function getPrintDeliveryRows(shipping: Shipping): PrintCheckRow[] {
 }
 
 // resolveBillingDocumentType returns the document type (tip dokumenta) to tick on
-// the printout. When the shop does not allow per-order override, the type is
-// entirely shop-controlled, so the shop default is authoritative regardless of
-// what the order stored (this keeps legacy/imported orders in sync with the
-// configured default). When override is allowed, the order's own choice wins.
+// the printout: the order's own choice, falling back to the shop default for
+// legacy/imported orders that never stored one.
 export function resolveBillingDocumentType(
   order: WorkOrder,
   billingDefaults: BillingDefaults,
 ): BillingDocumentType | null {
-  if (billingDefaults.allowOverride) {
-    return order.billingDocumentType;
-  }
-  return billingDefaults.documentType;
+  return order.billingDocumentType ?? billingDefaults.documentType;
 }
 
 export function getPrintBillingRows(
@@ -159,15 +140,6 @@ export function getPrintBillingRows(
   return PRINT_BILLING_ROWS.map((row) => ({
     label: i18n.t(row.labelKey),
     checked: row.billingDocumentType === billingDocumentType,
-  }));
-}
-
-export function getPrintPaymentRows(
-  paymentMethod: PaymentMethod | null,
-): PrintCheckRow[] {
-  return PRINT_PAYMENT_ROWS.map((row) => ({
-    label: i18n.t(row.labelKey),
-    checked: row.paymentMethod === paymentMethod,
   }));
 }
 
@@ -353,7 +325,6 @@ export function WorkOrderPrintSheet({
   const billingRows = getPrintBillingRows(
     resolveBillingDocumentType(order, billingDefaults),
   );
-  const paymentRows = getPrintPaymentRows(order.paymentMethod);
   const noteLines = buildPrintNoteLines(order);
   const shippingAddress = resolvePrintShippingAddress(order);
   const clientAddress = resolvePrintClientAddress(order, locations);
@@ -494,7 +465,7 @@ export function WorkOrderPrintSheet({
 
           {pdfSections.billing && (
             <div className="work-order-print-billing-box">
-              {[...billingRows, ...paymentRows].map((row) => (
+              {billingRows.map((row) => (
                 <div className="work-order-print-billing-row" key={row.label}>
                   <span>{row.label}</span>
                   <span className="work-order-print-mark">
