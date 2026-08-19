@@ -23,7 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
-import type { Location, WorkOrder } from "@/types/work-order";
+import type { Customer, Location, WorkOrder } from "@/types/work-order";
 import {
   buildWorkOrderCustomerNotice,
   getWorkOrderBillingDocumentLabel,
@@ -120,6 +120,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
+  // The registry client behind the order, so the printed nalog can show its
+  // PIB and matični broj next to the address.
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -242,6 +245,27 @@ function WorkOrderDetailPage(): React.JSX.Element {
   useEffect(() => {
     void window.api.getLocations().then(setLocations);
   }, []);
+
+  useEffect(() => {
+    const customerId = order?.customerId;
+    if (!customerId) {
+      setCustomer(null);
+      return;
+    }
+    let active = true;
+    window.api
+      .getCustomerById(customerId)
+      .then((next) => {
+        if (active) setCustomer(next);
+      })
+      .catch(() => {
+        // A missing/unreadable client only costs the printout its PIB/MB line.
+        if (active) setCustomer(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [order?.customerId]);
 
   return (
     <>
@@ -445,7 +469,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
         </AppShell>
       </div>
-      {order && <WorkOrderPrintSheet order={order} locations={locations} />}
+      {order && (
+        <WorkOrderPrintSheet order={order} locations={locations} customer={customer} />
+      )}
       <CancelWorkOrderDialog
         orderNumber={order?.orderNumber ?? ""}
         open={cancelOpen}

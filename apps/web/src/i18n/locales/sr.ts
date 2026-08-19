@@ -1125,6 +1125,8 @@ export const sr = {
       price: 'UKUPNA CENA: {{value}} DINARA',
       noDescription: 'OPIS POSLA NIJE UNET',
       documentNumber: 'BROJ DOKUMENTA: {{number}}',
+      pib: 'PIB: {{value}}',
+      mb: 'MB: {{value}}',
       gsmSuffix: '{{value}}G',
       pcsSuffix: '{{value}}KOM',
       delivery: {

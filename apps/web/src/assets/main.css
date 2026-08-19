@@ -475,6 +475,22 @@
     overflow-wrap: anywhere;
   }
 
+  .work-order-print-client-ids {
+    display: flex;
+    gap: 4mm;
+    padding: 0 3mm 3mm;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  /* With the firm identifiers below it, the address stops carrying the box's
+     bottom padding so address and PIB/MB read as one block. */
+  .work-order-print-client-address:has(+ .work-order-print-client-ids) {
+    padding-bottom: 0.5mm;
+  }
+
 
   .work-order-print-issue-box {
     display: flex;

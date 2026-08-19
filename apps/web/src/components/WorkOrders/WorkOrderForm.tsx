@@ -622,6 +622,7 @@ export function WorkOrderForm({
   const [customerDraft, setCustomerDraft] = useState<{
     name: string;
     pib: string;
+    mb: string;
     contact: string;
   } | null>(null);
   const [savingCustomer, setSavingCustomer] = useState(false);
@@ -853,7 +854,7 @@ export function WorkOrderForm({
         email: null,
         phone: null,
         pib: customerDraft.pib.trim() || null,
-        mb: null,
+        mb: customerDraft.mb.trim() || null,
         emails: [],
         contacts: [],
       });
@@ -1125,7 +1126,7 @@ export function WorkOrderForm({
                 // "Novi klijent (van evidencije)" opens the new-client menu,
                 // prefilled with whatever was typed in the search.
                 onClear={(typedName) =>
-                  setCustomerDraft({ name: typedName, pib: "", contact: "" })
+                  setCustomerDraft({ name: typedName, pib: "", mb: "", contact: "" })
                 }
                 placeholder={t("workOrders.form.selectClient")}
                 searchPlaceholder={t("workOrders.form.searchClients")}
@@ -1138,7 +1139,7 @@ export function WorkOrderForm({
                 <button
                   type="button"
                   onClick={() =>
-                    setCustomerDraft({ name: "", pib: "", contact: "" })
+                    setCustomerDraft({ name: "", pib: "", mb: "", contact: "" })
                   }
                   className="iris-focusable iris-press mt-2 inline-flex items-center gap-1 bg-transparent p-0 text-[11px] text-[color:var(--iris-accent)] hover:opacity-80"
                 >
@@ -1177,6 +1178,16 @@ export function WorkOrderForm({
                     onChange={(event) =>
                       setCustomerDraft((draft) =>
                         draft ? { ...draft, pib: event.target.value } : draft,
+                      )
+                    }
+                    className="block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+                  />
+                  <input
+                    value={customerDraft.mb}
+                    placeholder={t("workOrders.form.newCustomerMb")}
+                    onChange={(event) =>
+                      setCustomerDraft((draft) =>
+                        draft ? { ...draft, mb: event.target.value } : draft,
                       )
                     }
                     className="block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
@@ -2249,11 +2260,10 @@ export function WorkOrderForm({
         {/* Finance summary: the order total, i.e. the sum of the line items'
             selling prices, shown to every role — it is what the shop charges.
             Cost/margin lives on the per-line Trošak field, which stays admin-only.
-            The free-text Napomena and Interna beleška fields were removed per
-            client request. The order's note is still preserved on edit
-            (unregistered fields keep their initial value) and shown on the
-            detail page. */}
-        <FormSection title={t("workOrders.form.sectionFinance")}>
+            The free-text Napomena sits beside it: the printed nalog has always
+            had a NAPOMENA box, so the shop needs somewhere to fill it in. The
+            Interna beleška field stays removed. */}
+        <FormSection title={t("workOrders.form.sectionFinanceNotes")}>
           <div className="grid grid-cols-2 gap-6">
             <FieldShell
               id="price"
@@ -2271,6 +2281,22 @@ export function WorkOrderForm({
               <p className="mt-1 text-[11px] text-[color:var(--iris-ink-mute)]">
                 {t("workOrders.form.priceAutoHint")}
               </p>
+            </FieldShell>
+            {/* Free-text napomena. It prints in the nalog's NAPOMENA box when
+                the shop has that section enabled in Settings. */}
+            <FieldShell
+              id="note"
+              label={t("workOrders.form.note")}
+              error={errors.note?.message}
+              full
+            >
+              <textarea
+                id="note"
+                rows={3}
+                placeholder={t("workOrders.form.notePlaceholder")}
+                className={`${underlineInput} resize-none`}
+                {...register("note")}
+              />
             </FieldShell>
           </div>
         </FormSection>

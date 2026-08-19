@@ -2,6 +2,9 @@ import { useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   BillingDocumentType,
+  Customer,
+  EnumField,
+  EnumValue,
   Location,
   Shipping,
   WorkOrder,
@@ -13,6 +16,7 @@ import {
 } from "@/types/settings";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
 import { useOrganization } from "@/hooks/useOrganization";
+import { useEnumValues } from "@/hooks/useEnumValues";
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
 
@@ -32,6 +36,23 @@ const PRINT_BILLING_ROWS: Array<{
   },
   { labelKey: "workOrders.print.billing.proforma", billingDocumentType: "proforma" },
 ];
+
+// The admin-added (non built-in) values of one managed field, as printable
+// rows ticked when they match the order's stored value. Built-ins are skipped:
+// they already have hand-placed rows on the nalog, so customs are appended
+// after them and the familiar sheet layout stays put.
+function customEnumRows(
+  enumValues: EnumValue[],
+  field: EnumField,
+  selected: string | null | undefined,
+): PrintCheckRow[] {
+  return enumValues
+    .filter((entry) => entry.field === field && !entry.isBuiltin)
+    .map((entry) => ({
+      label: (entry.label.trim() || entry.value).toLocaleUpperCase("sr-Latn-RS"),
+      checked: entry.value === selected,
+    }));
+}
 
 function uppercaseLine(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -85,7 +106,10 @@ export function resolvePrintClientAddress(
   return uppercaseLine(location?.address);
 }
 
-export function getPrintDeliveryRows(shipping: Shipping): PrintCheckRow[] {
+export function getPrintDeliveryRows(
+  shipping: Shipping,
+  enumValues: EnumValue[] = [],
+): PrintCheckRow[] {
   const method = shipping.deliveryMethod;
   const postage = shipping.postagePaymentType;
 
@@ -121,6 +145,9 @@ export function getPrintDeliveryRows(shipping: Shipping): PrintCheckRow[] {
       label: i18n.t("workOrders.print.delivery.fieldVisit"),
       checked: method === "fieldVisit",
     },
+    // Admin-added delivery and postage options print after the built-in rows.
+    ...customEnumRows(enumValues, "deliveryMethod", method),
+    ...customEnumRows(enumValues, "postagePaymentType", postage),
   ];
 }
 
@@ -134,13 +161,21 @@ export function resolveBillingDocumentType(
   return order.billingDocumentType ?? billingDefaults.documentType;
 }
 
+// Builds the document-type (tip dokumenta) box: the three built-in rows in
+// their established order, followed by any document type the shop added in
+// Settings (e.g. "PLAĆENO" under PROFAKTURA), so a custom option is visible on
+// the nalog instead of silently disappearing.
 export function getPrintBillingRows(
   billingDocumentType: BillingDocumentType | null,
+  enumValues: EnumValue[] = [],
 ): PrintCheckRow[] {
-  return PRINT_BILLING_ROWS.map((row) => ({
-    label: i18n.t(row.labelKey),
-    checked: row.billingDocumentType === billingDocumentType,
-  }));
+  return [
+    ...PRINT_BILLING_ROWS.map((row) => ({
+      label: i18n.t(row.labelKey),
+      checked: row.billingDocumentType === billingDocumentType,
+    })),
+    ...customEnumRows(enumValues, "billingDocumentType", billingDocumentType),
+  ];
 }
 
 function jobDetailsHasContent(
@@ -309,25 +344,36 @@ function PrintCheckBox({ checked }: { checked: boolean }): React.JSX.Element {
 export function WorkOrderPrintSheet({
   order,
   locations = [],
+  customer = null,
 }: {
   order: WorkOrder;
   locations?: Location[];
+  /** Registry client behind the order, for the PIB / matični broj line. */
+  customer?: Customer | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { pdfSections, billingDefaults, printItemColumns } = useOrganization();
+  const { values: enumValues } = useEnumValues();
   const descriptionLines = buildPrintDescriptionLines(order);
   const itemRows = buildPrintItemRows(order);
   // Guard the shop's configured order so a stale/partial value can never drop a
   // column from the printed nalog.
   const itemColumns = normalizePrintItemColumns(printItemColumns);
   const totalPrice = formatPrintPrice(order.price);
-  const deliveryRows = getPrintDeliveryRows(order.shipping);
+  const deliveryRows = getPrintDeliveryRows(order.shipping, enumValues);
   const billingRows = getPrintBillingRows(
     resolveBillingDocumentType(order, billingDefaults),
+    enumValues,
   );
   const noteLines = buildPrintNoteLines(order);
   const shippingAddress = resolvePrintShippingAddress(order);
   const clientAddress = resolvePrintClientAddress(order, locations);
+  // Firm identifiers only print for the registry client this order points at,
+  // so a stale/mismatched customer prop never leaks onto the sheet.
+  const printedCustomer =
+    customer && order.customerId && customer.id === order.customerId ? customer : null;
+  const clientPib = printedCustomer?.pib?.trim() || null;
+  const clientMb = printedCustomer?.mb?.trim() || null;
   const plannedDate = order.dueDate ?? order.completionDate;
 
   // Auto-fit the opis posla and stavke text so it never overflows its panel.
@@ -367,6 +413,16 @@ export function WorkOrderPrintSheet({
           {clientAddress && (
             <div className="work-order-print-client-address">
               {clientAddress}
+            </div>
+          )}
+          {(clientPib || clientMb) && (
+            <div className="work-order-print-client-ids">
+              {clientPib && (
+                <span>{t("workOrders.print.pib", { value: clientPib })}</span>
+              )}
+              {clientMb && (
+                <span>{t("workOrders.print.mb", { value: clientMb })}</span>
+              )}
             </div>
           )}
         </div>

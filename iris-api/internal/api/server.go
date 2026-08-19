@@ -667,6 +667,35 @@ func (s *Server) handleDeleteWorkOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// workOrderPrintContext gathers the per-order lookups the printable nalog needs
+// on top of the order itself: the client's location address, the client's firm
+// identifiers (PIB / matični broj), and the shop's picklist values so
+// admin-added options print alongside the built-in ones. A client that cannot be
+// resolved (ad-hoc order, deleted registry row) simply prints without
+// identifiers rather than failing the render.
+func (s *Server) workOrderPrintContext(
+	r *http.Request,
+	order domain.WorkOrder,
+	locationAddress *string,
+) (reports.PrintContext, error) {
+	printCtx := reports.PrintContext{LocationAddress: locationAddress}
+
+	enumValues, err := s.store.EnumValues(r.Context())
+	if err != nil {
+		return reports.PrintContext{}, err
+	}
+	printCtx.EnumValues = enumValues
+
+	if order.CustomerID != nil && *order.CustomerID != "" {
+		customer, err := s.store.CustomerByID(r.Context(), *order.CustomerID)
+		if err != nil {
+			return reports.PrintContext{}, err
+		}
+		printCtx.Customer = customer
+	}
+	return printCtx, nil
+}
+
 func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 	workOrder, err := s.store.WorkOrderByID(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -704,7 +733,13 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, locationAddress, settings)
+	printCtx, err := s.workOrderPrintContext(r, *workOrder, locationAddress)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+
+	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, printCtx, settings)
 	if err != nil {
 		writeServerError(w, err)
 		return
@@ -753,7 +788,13 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	html, err := reports.RenderWorkOrderHTML(order, locationAddress, settings)
+	printCtx, err := s.workOrderPrintContext(r, order, locationAddress)
+	if err != nil {
+		writeServerError(w, err)
+		return
+	}
+
+	html, err := reports.RenderWorkOrderHTML(order, printCtx, settings)
 	if err != nil {
 		writeServerError(w, err)
 		return

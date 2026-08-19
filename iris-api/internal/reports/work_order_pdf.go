@@ -94,6 +94,11 @@ type WorkOrderPrintData struct {
 	OrderNumber      string
 	ClientName       string
 	ClientAddress    string
+	// ClientPib and ClientMb are the client's firm identifiers (PIB and matični
+	// broj), printed under the address in the KLIJENT box. Empty when the order
+	// has no registry client or the client has not filled them in.
+	ClientPib        string
+	ClientMb         string
 	IssueDate        string
 	DescriptionLines []string
 	// ItemHeaders and ItemLines are the "stavke" table, already arranged in the
@@ -126,6 +131,13 @@ func uppercaseLine(value *string) string {
 	}
 	trimmed := strings.TrimSpace(*value)
 	return strings.ToUpper(trimmed)
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func uppercaseString(value string) string {
@@ -214,7 +226,42 @@ func formatOptionalDate(value *string) string {
 	return formatWorkOrderDate(*value) + "."
 }
 
-func getPrintDeliveryRows(shipping domain.Shipping) []PrintCheckRow {
+// PrintContext carries the per-order lookups the nalog needs beyond the order
+// itself and the shop settings: the client's registry address and firm
+// identifiers (PIB / matični broj), and the shop's admin-managed picklist
+// values. The picklists matter because an administrator may add options beyond
+// the built-in ones (e.g. an extra document type); without them the printout
+// would silently omit every custom option.
+type PrintContext struct {
+	LocationAddress *string
+	Customer        *domain.Customer
+	EnumValues      []domain.EnumValue
+}
+
+// customEnumRows returns the admin-added (non built-in) values of one managed
+// field as printable rows, ticked when they match the order's stored value.
+// Built-in values are excluded: those already have hand-placed rows on the
+// nalog, so the customs are appended after them and the familiar sheet layout
+// stays put.
+func customEnumRows(values []domain.EnumValue, field domain.EnumField, selected *string) []PrintCheckRow {
+	rows := make([]PrintCheckRow, 0, len(values))
+	for _, value := range values {
+		if value.Field != field || value.IsBuiltin {
+			continue
+		}
+		label := strings.TrimSpace(value.Label)
+		if label == "" {
+			label = value.Value
+		}
+		rows = append(rows, PrintCheckRow{
+			Label:   uppercaseString(label),
+			Checked: selected != nil && *selected == value.Value,
+		})
+	}
+	return rows
+}
+
+func getPrintDeliveryRows(shipping domain.Shipping, enumValues []domain.EnumValue) []PrintCheckRow {
 	method := shipping.DeliveryMethod
 	postage := shipping.PostagePaymentType
 
@@ -241,6 +288,9 @@ func getPrintDeliveryRows(shipping domain.Shipping) []PrintCheckRow {
 			Checked: r.checked,
 		}
 	}
+	// Admin-added delivery and postage options print after the built-in rows.
+	res = append(res, customEnumRows(enumValues, domain.EnumFieldDeliveryMethod, (*string)(method))...)
+	res = append(res, customEnumRows(enumValues, domain.EnumFieldPostagePaymentType, (*string)(postage))...)
 	return res
 }
 
@@ -255,7 +305,11 @@ func resolveBillingDocumentType(order domain.WorkOrder, defaults domain.BillingD
 	return &docType
 }
 
-func getPrintBillingRows(billingDocType *domain.BillingDocumentType) []PrintCheckRow {
+// getPrintBillingRows builds the document-type (tip dokumenta) box: the three
+// built-in rows in their established order, followed by any document type the
+// shop added in Settings (e.g. "PLAĆENO" under PROFAKTURA), so a custom option
+// is visible on the nalog instead of silently disappearing.
+func getPrintBillingRows(billingDocType *domain.BillingDocumentType, enumValues []domain.EnumValue) []PrintCheckRow {
 	rows := []struct {
 		label  string
 		method domain.BillingDocumentType
@@ -276,7 +330,7 @@ func getPrintBillingRows(billingDocType *domain.BillingDocumentType) []PrintChec
 			Checked: checked,
 		}
 	}
-	return res
+	return append(res, customEnumRows(enumValues, domain.EnumFieldBillingDocumentType, (*string)(billingDocType))...)
 }
 
 func jobDetailsHasContent(details *domain.JobDetails) bool {
@@ -536,6 +590,22 @@ const htmlTemplateStr = `<!DOCTYPE html>
       font-weight: 500;
       line-height: 1.15;
       overflow-wrap: anywhere;
+    }
+
+    .work-order-print-client-ids {
+      display: flex;
+      gap: 4mm;
+      padding: 0 3mm 3mm;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }
+
+    /* With the firm identifiers below it, the address stops carrying the box's
+       bottom padding so address and PIB/MB read as one block. */
+    .work-order-print-client-address:has(+ .work-order-print-client-ids) {
+      padding-bottom: 0.5mm;
     }
 
     .work-order-print-issue-box {
@@ -839,6 +909,12 @@ const htmlTemplateStr = `<!DOCTYPE html>
         <div class="work-order-print-label">KLIJENT</div>
         <div class="work-order-print-client-name">{{.ClientName}}</div>
         {{if .ClientAddress}}<div class="work-order-print-client-address">{{.ClientAddress}}</div>{{end}}
+        {{if or .ClientPib .ClientMb}}
+          <div class="work-order-print-client-ids">
+            {{if .ClientPib}}<span>PIB: {{.ClientPib}}</span>{{end}}
+            {{if .ClientMb}}<span>MB: {{.ClientMb}}</span>{{end}}
+          </div>
+        {{end}}
       </div>
       <div class="work-order-print-issue-box">
         <div class="work-order-print-issue-cell">
@@ -1005,8 +1081,10 @@ func ResolvePrintShippingAddress(order domain.WorkOrder) string {
 // RenderWorkOrderHTML renders the printable nalog. Everything shop-configurable
 // (section toggles, firm name, document-type default, line-item column order)
 // comes from the organization settings, so a new setting does not grow the
-// parameter list again.
-func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, settings domain.OrganizationSettings) (string, error) {
+// parameter list again; per-order lookups travel in printCtx for the same
+// reason. A zero printCtx renders the sheet with the built-in picklist rows and
+// no client address or identifiers.
+func RenderWorkOrderHTML(order domain.WorkOrder, printCtx PrintContext, settings domain.OrganizationSettings) (string, error) {
 	sections := settings.PDFSections
 	plannedDate := order.DueDate
 	if plannedDate == nil {
@@ -1025,20 +1103,29 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, settin
 		settings.PrintItemColumns,
 	)
 
+	clientPib := ""
+	clientMb := ""
+	if printCtx.Customer != nil {
+		clientPib = strings.TrimSpace(derefString(printCtx.Customer.Pib))
+		clientMb = strings.TrimSpace(derefString(printCtx.Customer.Mb))
+	}
+
 	data := WorkOrderPrintData{
 		FirmName:         strings.TrimSpace(settings.FirmName),
 		OrderNumber:      order.OrderNumber,
 		ClientName:       uppercaseString(order.ClientName),
-		ClientAddress:    uppercaseLine(locationAddress),
+		ClientAddress:    uppercaseLine(printCtx.LocationAddress),
+		ClientPib:        clientPib,
+		ClientMb:         clientMb,
 		IssueDate:        formatOptionalDate(&order.IssueDate),
 		DescriptionLines: buildPrintDescriptionLines(order),
 		ItemHeaders:      itemHeaders,
 		ItemLines:        itemLines,
 		TotalPrice:       formatPrintPrice(order.Price),
 		ContactPerson:    uppercaseLine(order.ContactPerson),
-		DeliveryRows:     getPrintDeliveryRows(order.Shipping),
+		DeliveryRows:     getPrintDeliveryRows(order.Shipping, printCtx.EnumValues),
 		PlannedDate:      formatOptionalDate(plannedDate),
-		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults)),
+		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues),
 		NoteLines:        buildPrintNoteLines(order),
 		ShippingAddress:  ResolvePrintShippingAddress(order),
 		Completed:        completed,
@@ -1060,8 +1147,8 @@ func RenderWorkOrderHTML(order domain.WorkOrder, locationAddress *string, settin
 	return sb.String(), nil
 }
 
-func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, locationAddress *string, settings domain.OrganizationSettings) ([]byte, error) {
-	htmlContent, err := RenderWorkOrderHTML(order, locationAddress, settings)
+func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, printCtx PrintContext, settings domain.OrganizationSettings) ([]byte, error) {
+	htmlContent, err := RenderWorkOrderHTML(order, printCtx, settings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render HTML template: %w", err)
 	}

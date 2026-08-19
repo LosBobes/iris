@@ -1126,6 +1126,8 @@ export const en: typeof sr = {
       price: 'TOTAL PRICE: {{value}} RSD',
       noDescription: 'NO JOB DESCRIPTION ENTERED',
       documentNumber: 'DOCUMENT NUMBER: {{number}}',
+      pib: 'PIB: {{value}}',
+      mb: 'MB: {{value}}',
       gsmSuffix: '{{value}}G',
       pcsSuffix: '{{value}}PCS',
       delivery: {
