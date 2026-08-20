@@ -885,6 +885,12 @@ export const sr = {
       confirm: 'Da li ste sigurni da želite da otkažete radni nalog {{order}}? Otkazan nalog se ne može vratiti u rad.',
       keep: 'Odustani',
     },
+    completeDialog: {
+      title: 'Zatvaranje radnog naloga',
+      confirm: 'Da li ste sigurni da želite da zatvorite radni nalog {{order}}? Zatvoren nalog se ne može vratiti u rad, može samo da se fakturiše.',
+      keep: 'Odustani',
+      confirmAction: 'Zatvori nalog',
+    },
     notice: {
       workOrder: 'Radni nalog',
       status: 'Status',

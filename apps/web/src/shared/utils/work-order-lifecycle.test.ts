@@ -8,6 +8,7 @@ import {
   getWorkOrderCustomerNextStep,
   getPrimaryWorkOrderTransition,
   isWorkOrderStatusTerminal,
+  requiresWorkOrderCloseConfirm,
 } from './work-orders'
 
 describe('work-order lifecycle transitions', () => {
@@ -35,6 +36,17 @@ describe('work-order lifecycle transitions', () => {
     expect(isWorkOrderStatusTerminal('invoiced')).toBe(true)
     expect(isWorkOrderStatusTerminal('cancelled')).toBe(true)
     expect(isWorkOrderStatusTerminal('inProgress')).toBe(false)
+  })
+
+  it('asks for confirmation only on the advance that closes the order', () => {
+    // inProgress -> completed takes the order out of production for good, so
+    // the UI confirms it; the earlier steps stay one-click.
+    expect(requiresWorkOrderCloseConfirm('inProgress')).toBe(true)
+    expect(requiresWorkOrderCloseConfirm('new')).toBe(false)
+    expect(requiresWorkOrderCloseConfirm('assigned')).toBe(false)
+    expect(requiresWorkOrderCloseConfirm('completed')).toBe(false)
+    expect(requiresWorkOrderCloseConfirm('invoiced')).toBe(false)
+    expect(requiresWorkOrderCloseConfirm('cancelled')).toBe(false)
   })
 
   it('returns customer-safe next step copy by status', () => {

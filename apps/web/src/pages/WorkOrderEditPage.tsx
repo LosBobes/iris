@@ -5,12 +5,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
+import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useWorkOrderEditLock } from "@/hooks/useWorkOrderEditLock";
 import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
   getWorkOrderStatusLabel,
+  requiresWorkOrderCloseConfirm,
 } from "@/shared/utils/work-orders";
 import type {
   WorkOrder,
@@ -29,6 +31,7 @@ function WorkOrderEditPage(): React.JSX.Element {
   const [order, setOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [completeOpen, setCompleteOpen] = useState(false);
   const { lockedBy, readOnly } = useWorkOrderEditLock(id);
 
   useEffect(() => {
@@ -113,7 +116,7 @@ function WorkOrderEditPage(): React.JSX.Element {
     [id, order, navigate, t],
   );
 
-  const handleToggleStatus = useCallback(async () => {
+  const advanceStatus = useCallback(async () => {
     if (!id || !order) return;
     const newStatus = getPrimaryWorkOrderTransition(order.status);
     if (!newStatus) return;
@@ -140,6 +143,22 @@ function WorkOrderEditPage(): React.JSX.Element {
       toast.error(t("workOrders.toast.statusError"));
     }
   }, [id, order, t]);
+
+  // Closing the order is one-way, so ask first; the other advances stay
+  // one-click.
+  const handleToggleStatus = useCallback(() => {
+    if (!order) return;
+    if (requiresWorkOrderCloseConfirm(order.status)) {
+      setCompleteOpen(true);
+      return;
+    }
+    void advanceStatus();
+  }, [advanceStatus, order]);
+
+  const handleCompleteConfirm = useCallback(async () => {
+    await advanceStatus();
+    setCompleteOpen(false);
+  }, [advanceStatus]);
 
   const handleCancel = useCallback(() => {
     navigate("/work-orders");
@@ -218,6 +237,13 @@ function WorkOrderEditPage(): React.JSX.Element {
           </div>
         )}
       </div>
+
+      <CompleteWorkOrderDialog
+        orderNumber={order?.orderNumber ?? ""}
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        onConfirm={() => void handleCompleteConfirm()}
+      />
     </AppShell>
   );
 }
