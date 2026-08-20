@@ -118,8 +118,6 @@ export const en: typeof sr = {
         deliveryHint: 'The delivery and postage checklist (drives out, pickup…).',
         billing: 'Billing document',
         billingHint: 'The invoice, cash collection and proforma fields.',
-        notes: 'Note',
-        notesHint: 'The work order notes section.',
         shippingAddress: 'Shipping address',
         shippingAddressHint: 'The delivery address field.',
         completion: 'Completion',

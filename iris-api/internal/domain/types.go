@@ -174,27 +174,28 @@ type CatalogItemInput struct {
 // administrator changes it via the organization settings.
 const DefaultFirmName = "Grafika Čobanović"
 
-// PDFSections controls which sections of the work-order printout are rendered.
-// Most sections default to true (see DefaultPDFSections) so an unconfigured shop
-// keeps the full sheet; the free-text notes (napomena) box is the exception and
-// defaults to false, so a shop opts in to it explicitly.
+// PDFSections controls which optional sections of the work-order printout are
+// rendered; all of them default to true (see DefaultPDFSections) so an
+// unconfigured shop keeps the full sheet.
+//
+// The napomena (notes) box is deliberately not toggleable. It is the only
+// destination for the work order's free-text note, so hiding the box would
+// leave the form's napomena field writing to nowhere. The box always renders
+// and the field is always offered.
 type PDFSections struct {
 	Delivery        bool `json:"delivery"`
 	Billing         bool `json:"billing"`
-	Notes           bool `json:"notes"`
 	ShippingAddress bool `json:"shippingAddress"`
 	Completion      bool `json:"completion"`
 	Signatures      bool `json:"signatures"`
 }
 
 // DefaultPDFSections returns the configuration used when a shop has not
-// customized its printout: every section enabled except the notes (napomena)
-// box, which is off until an administrator turns it on.
+// customized its printout: every optional section enabled.
 func DefaultPDFSections() PDFSections {
 	return PDFSections{
 		Delivery:        true,
 		Billing:         true,
-		Notes:           false,
 		ShippingAddress: true,
 		Completion:      true,
 		Signatures:      true,

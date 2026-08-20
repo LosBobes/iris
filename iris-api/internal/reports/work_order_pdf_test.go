@@ -214,10 +214,7 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 		JobDescription: "Vizit karte",
 	}
 
-	// The notes (napomena) box is off by default, so enable it explicitly to
-	// exercise the fully-populated sheet.
 	allSections := domain.DefaultPDFSections()
-	allSections.Notes = true
 	full, err := RenderWorkOrderHTML(order, PrintContext{LocationAddress: ptr("Kneza Milosa 22, Beograd")}, printSettings(allSections, "Grafika Čobanović", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render full: %v", err)
@@ -227,26 +224,28 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 			t.Errorf("full sheet missing %q", marker)
 		}
 	}
-	// With both notes and address on, the row keeps its two-column layout.
+	// With the address box beside it, the row keeps its two-column layout.
 	// (Match the class attribute, not the always-present CSS selector.)
 	if strings.Contains(full, `work-order-print-notes-row work-order-print-notes-row-solo`) {
-		t.Errorf("notes-row unexpectedly collapsed to solo while notes shown")
+		t.Errorf("notes-row unexpectedly collapsed to solo while the address box is shown")
 	}
 
-	// When notes are hidden but the shipping address stays, the address box
+	// With the shipping address switched off, the napomena box still renders and
 	// takes the full row width via the -solo modifier.
-	addressOnly := domain.DefaultPDFSections()
-	addressOnly.Notes = false
-	addressOnly.ShippingAddress = true
-	addr, err := RenderWorkOrderHTML(order, PrintContext{LocationAddress: ptr("Kneza Milosa 22, Beograd")}, printSettings(addressOnly, "", domain.DefaultBillingDefaults()))
+	notesOnly := domain.DefaultPDFSections()
+	notesOnly.ShippingAddress = false
+	noAddr, err := RenderWorkOrderHTML(order, PrintContext{LocationAddress: ptr("Kneza Milosa 22, Beograd")}, printSettings(notesOnly, "", domain.DefaultBillingDefaults()))
 	if err != nil {
-		t.Fatalf("render address-only: %v", err)
+		t.Fatalf("render notes-only: %v", err)
 	}
-	if strings.Contains(addr, "NAPOMENA") {
-		t.Errorf("address-only sheet still contains NAPOMENA")
+	if !strings.Contains(noAddr, "NAPOMENA") {
+		t.Errorf("notes-only sheet is missing NAPOMENA")
 	}
-	if !strings.Contains(addr, `work-order-print-notes-row work-order-print-notes-row-solo`) {
-		t.Errorf("expected notes-row-solo class when notes hidden and address shown")
+	if strings.Contains(noAddr, "ADRESA ZA DOSTAVU") {
+		t.Errorf("notes-only sheet still contains the shipping address box")
+	}
+	if !strings.Contains(noAddr, `work-order-print-notes-row work-order-print-notes-row-solo`) {
+		t.Errorf("expected notes-row-solo class when the address box is hidden")
 	}
 	// The order number must be printed on the sheet (previously only in <title>).
 	if !strings.Contains(full, `work-order-print-number">RN-2026-00001<`) {
@@ -261,10 +260,16 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render none: %v", err)
 	}
-	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA DOSTAVU", "IZDAO / IZVRŠILAC"} {
+	for _, marker := range []string{"VOZI SE", "FAKTURA", "ADRESA ZA DOSTAVU", "IZDAO / IZVRŠILAC"} {
 		if strings.Contains(none, marker) {
 			t.Errorf("disabled sheet still contains %q", marker)
 		}
+	}
+	// The napomena box is not one of the toggles: with every optional section
+	// off it still renders, so the form's napomena field always has a
+	// destination on the sheet.
+	if !strings.Contains(none, "NAPOMENA") {
+		t.Errorf("disabled sheet dropped the non-toggleable NAPOMENA box")
 	}
 	// The client name (a non-configurable core field) must always render.
 	if !strings.Contains(none, "PROFESIONALNI UPRAVNIK") {

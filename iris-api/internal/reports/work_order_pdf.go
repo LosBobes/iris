@@ -119,7 +119,6 @@ type WorkOrderPrintData struct {
 	// Section visibility, driven by the shop's PDF configuration.
 	ShowDelivery        bool
 	ShowBilling         bool
-	ShowNotes           bool
 	ShowShippingAddress bool
 	ShowCompletion      bool
 	ShowSignatures      bool
@@ -846,10 +845,14 @@ const htmlTemplateStr = `<!DOCTYPE html>
       border-top: 2px solid #000;
     }
 
-    /* When the notes (napomena) box is hidden, the shipping address takes the
-       full row width instead of being pinned to the right-hand column. */
+    /* The napomena box always renders; when the shipping address beside it is
+       switched off, it takes the full row width and drops its divider. */
     .work-order-print-notes-row-solo {
       grid-template-columns: 1fr;
+    }
+
+    .work-order-print-notes-row-solo .work-order-print-note-box {
+      border-right: 0;
     }
 
     .work-order-print-note-box,
@@ -984,9 +987,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
         </div>
         {{end}}
 
-        {{if or .ShowNotes .ShowShippingAddress}}
-        <div class="work-order-print-notes-row{{if not .ShowNotes}} work-order-print-notes-row-solo{{end}}">
-          {{if .ShowNotes}}
+        <div class="work-order-print-notes-row{{if not .ShowShippingAddress}} work-order-print-notes-row-solo{{end}}">
           <div class="work-order-print-note-box">
             <div class="work-order-print-label">NAPOMENA</div>
             <div class="work-order-print-note-lines">
@@ -995,7 +996,6 @@ const htmlTemplateStr = `<!DOCTYPE html>
               {{end}}
             </div>
           </div>
-          {{end}}
           {{if .ShowShippingAddress}}
           <div class="work-order-print-address-box">
             <div class="work-order-print-label">ADRESA ZA DOSTAVU:</div>
@@ -1005,7 +1005,6 @@ const htmlTemplateStr = `<!DOCTYPE html>
           </div>
           {{end}}
         </div>
-        {{end}}
       </div>
 
       {{if .ShowDelivery}}
@@ -1134,7 +1133,6 @@ func RenderWorkOrderHTML(order domain.WorkOrder, printCtx PrintContext, settings
 
 		ShowDelivery:        sections.Delivery,
 		ShowBilling:         sections.Billing,
-		ShowNotes:           sections.Notes,
 		ShowShippingAddress: sections.ShippingAddress,
 		ShowCompletion:      sections.Completion,
 		ShowSignatures:      sections.Signatures,

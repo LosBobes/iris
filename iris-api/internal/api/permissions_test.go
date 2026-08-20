@@ -229,9 +229,6 @@ func TestOrganizationSettings(t *testing.T) {
 		t.Fatalf("default pdfSections = %+v, want defaults", settings.PDFSections)
 	}
 	// The notes (napomena) box is the one section that defaults off.
-	if settings.PDFSections.Notes {
-		t.Fatalf("default pdfSections.notes = true, want false (napomena off by default)")
-	}
 	if settings.BillingDefaults != domain.DefaultBillingDefaults() {
 		t.Fatalf("default billingDefaults = %+v, want proforma/no-override", settings.BillingDefaults)
 	}

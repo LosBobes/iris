@@ -730,10 +730,14 @@
     border-top: 2px solid #000;
   }
 
-  /* When the notes (napomena) box is hidden, the shipping address takes the
-     full row width instead of being pinned to the right-hand column. */
+  /* The napomena box always renders; when the shipping address beside it is
+     switched off, it takes the full row width and drops its divider. */
   .work-order-print-notes-row-solo {
     grid-template-columns: 1fr;
+  }
+
+  .work-order-print-notes-row-solo .work-order-print-note-box {
+    border-right: 0;
   }
 
   .work-order-print-note-box,

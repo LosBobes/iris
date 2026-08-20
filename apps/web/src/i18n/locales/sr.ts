@@ -117,8 +117,6 @@ export const sr = {
         deliveryHint: 'Lista opcija isporuke i poštarine (VOZI SE, LIČNO…).',
         billing: 'Vrsta dokumenta',
         billingHint: 'Polja za fakturu, otkup i profakturu.',
-        notes: 'Napomena',
-        notesHint: 'Sekcija sa napomenama radnog naloga.',
         shippingAddress: 'Adresa za slanje',
         shippingAddressHint: 'Polje sa adresom za isporuku.',
         completion: 'Završetak posla',

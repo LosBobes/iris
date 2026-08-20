@@ -532,40 +532,38 @@ export function WorkOrderPrintSheet({
             </div>
           )}
 
-          {(pdfSections.notes || pdfSections.shippingAddress) && (
-            <div
-              className={
-                pdfSections.notes
-                  ? "work-order-print-notes-row"
-                  : "work-order-print-notes-row work-order-print-notes-row-solo"
-              }
-            >
-              {pdfSections.notes && (
-                <div className="work-order-print-note-box">
-                  <div className="work-order-print-label">
-                    {t("workOrders.print.note")}
-                  </div>
-                  <div className="work-order-print-note-lines">
-                    {noteLines.length > 0
-                      ? noteLines.map((line) => <div key={line}>{line}</div>)
-                      : null}
-                  </div>
-                </div>
-              )}
-              {pdfSections.shippingAddress && (
-                <div className="work-order-print-address-box">
-                  <div className="work-order-print-label">
-                    {t("workOrders.print.shipTo")}
-                  </div>
-                  {shippingAddress && (
-                    <div className="work-order-print-address">
-                      {shippingAddress}
-                    </div>
-                  )}
-                </div>
-              )}
+          {/* The napomena box is not one of the section toggles: it is the only
+              destination for the order's free-text note, so it always renders
+              and the form always offers the field. */}
+          <div
+            className={cn(
+              "work-order-print-notes-row",
+              !pdfSections.shippingAddress && "work-order-print-notes-row-solo",
+            )}
+          >
+            <div className="work-order-print-note-box">
+              <div className="work-order-print-label">
+                {t("workOrders.print.note")}
+              </div>
+              <div className="work-order-print-note-lines">
+                {noteLines.length > 0
+                  ? noteLines.map((line) => <div key={line}>{line}</div>)
+                  : null}
+              </div>
             </div>
-          )}
+            {pdfSections.shippingAddress && (
+              <div className="work-order-print-address-box">
+                <div className="work-order-print-label">
+                  {t("workOrders.print.shipTo")}
+                </div>
+                {shippingAddress && (
+                  <div className="work-order-print-address">
+                    {shippingAddress}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {pdfSections.delivery && (
