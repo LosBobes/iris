@@ -3,14 +3,18 @@
 
 import type { BillingDocumentType, WorkOrderPriority } from '@/types/work-order'
 
-/** Which sections of the work-order PDF/printout are rendered. */
+/**
+ * Which optional sections of the work-order PDF/printout are rendered.
+ *
+ * The napomena (notes) box is deliberately absent: it is the only destination
+ * for a work order's free-text note, so hiding it would leave the form's
+ * napomena field writing to nowhere. It always renders.
+ */
 export interface PDFSections {
   /** The delivery-method / postage checklist box. */
   delivery: boolean
   /** The billing-document box (faktura / otkup / profaktura). */
   billing: boolean
-  /** The notes section. */
-  notes: boolean
   /** The shipping-address box. */
   shippingAddress: boolean
   /** The completion state + date row. */
@@ -73,12 +77,11 @@ export const DEFAULT_FIRM_NAME = 'Grafika Čobanović'
 
 /**
  * Default PDF sections, used before settings load or for an unconfigured shop.
- * Every section is on except notes (napomena), which a shop opts into.
+ * Every optional section is on.
  */
 export const DEFAULT_PDF_SECTIONS: PDFSections = {
   delivery: true,
   billing: true,
-  notes: false,
   shippingAddress: true,
   completion: true,
   signatures: true,

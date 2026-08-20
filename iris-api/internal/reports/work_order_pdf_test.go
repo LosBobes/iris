@@ -33,7 +33,7 @@ func printSettings(
 func TestPrintHelpers(t *testing.T) {
 	// 1. Delivery method check rows
 	pickup := domain.DeliveryMethodPickup
-	deliveryRows := getPrintDeliveryRows(domain.Shipping{DeliveryMethod: &pickup})
+	deliveryRows := getPrintDeliveryRows(domain.Shipping{DeliveryMethod: &pickup}, nil)
 	if len(deliveryRows) != 10 {
 		t.Fatalf("expected 10 delivery rows, got %d", len(deliveryRows))
 	}
@@ -46,16 +46,16 @@ func TestPrintHelpers(t *testing.T) {
 
 	// 2. Billing document check rows
 	invoice := domain.BillingDocumentTypeInvoice
-	billingRows := getPrintBillingRows(&invoice)
-	if len(billingRows) != 3 {
-		t.Fatalf("expected 3 billing rows, got %d", len(billingRows))
+	billingRows := getPrintBillingRows(&invoice, nil, false)
+	if len(billingRows) != 4 {
+		t.Fatalf("expected 3 document-type rows + PLAĆENO, got %d", len(billingRows))
 	}
 	if !billingRows[0].Checked || billingRows[0].Label != "FAKTURA" {
 		t.Errorf("expected row 0 (FAKTURA) to be checked, got %+v", billingRows[0])
 	}
 
 	proforma := domain.BillingDocumentTypeProforma
-	billingRowsProforma := getPrintBillingRows(&proforma)
+	billingRowsProforma := getPrintBillingRows(&proforma, nil, false)
 	if !billingRowsProforma[2].Checked || billingRowsProforma[2].Label != "PROFAKTURA" {
 		t.Errorf("expected row 2 (PROFAKTURA) to be checked, got %+v", billingRowsProforma[2])
 	}
@@ -186,7 +186,7 @@ func TestRenderWorkOrderHTMLBillingDefault(t *testing.T) {
 	// A shop whose default is FAKTURA must tick FAKTURA on the printout even
 	// though the order carries no type of its own.
 	defaults := domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeInvoice}
-	html, err := RenderWorkOrderHTML(order, nil, printSettings(domain.DefaultPDFSections(), "", defaults))
+	html, err := RenderWorkOrderHTML(order, PrintContext{}, printSettings(domain.DefaultPDFSections(), "", defaults))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -214,11 +214,8 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 		JobDescription: "Vizit karte",
 	}
 
-	// The notes (napomena) box is off by default, so enable it explicitly to
-	// exercise the fully-populated sheet.
 	allSections := domain.DefaultPDFSections()
-	allSections.Notes = true
-	full, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), printSettings(allSections, "Grafika Čobanović", domain.DefaultBillingDefaults()))
+	full, err := RenderWorkOrderHTML(order, PrintContext{LocationAddress: ptr("Kneza Milosa 22, Beograd")}, printSettings(allSections, "Grafika Čobanović", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render full: %v", err)
 	}
@@ -227,26 +224,28 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 			t.Errorf("full sheet missing %q", marker)
 		}
 	}
-	// With both notes and address on, the row keeps its two-column layout.
+	// With the address box beside it, the row keeps its two-column layout.
 	// (Match the class attribute, not the always-present CSS selector.)
 	if strings.Contains(full, `work-order-print-notes-row work-order-print-notes-row-solo`) {
-		t.Errorf("notes-row unexpectedly collapsed to solo while notes shown")
+		t.Errorf("notes-row unexpectedly collapsed to solo while the address box is shown")
 	}
 
-	// When notes are hidden but the shipping address stays, the address box
+	// With the shipping address switched off, the napomena box still renders and
 	// takes the full row width via the -solo modifier.
-	addressOnly := domain.DefaultPDFSections()
-	addressOnly.Notes = false
-	addressOnly.ShippingAddress = true
-	addr, err := RenderWorkOrderHTML(order, ptr("Kneza Milosa 22, Beograd"), printSettings(addressOnly, "", domain.DefaultBillingDefaults()))
+	notesOnly := domain.DefaultPDFSections()
+	notesOnly.ShippingAddress = false
+	noAddr, err := RenderWorkOrderHTML(order, PrintContext{LocationAddress: ptr("Kneza Milosa 22, Beograd")}, printSettings(notesOnly, "", domain.DefaultBillingDefaults()))
 	if err != nil {
-		t.Fatalf("render address-only: %v", err)
+		t.Fatalf("render notes-only: %v", err)
 	}
-	if strings.Contains(addr, "NAPOMENA") {
-		t.Errorf("address-only sheet still contains NAPOMENA")
+	if !strings.Contains(noAddr, "NAPOMENA") {
+		t.Errorf("notes-only sheet is missing NAPOMENA")
 	}
-	if !strings.Contains(addr, `work-order-print-notes-row work-order-print-notes-row-solo`) {
-		t.Errorf("expected notes-row-solo class when notes hidden and address shown")
+	if strings.Contains(noAddr, "ADRESA ZA DOSTAVU") {
+		t.Errorf("notes-only sheet still contains the shipping address box")
+	}
+	if !strings.Contains(noAddr, `work-order-print-notes-row work-order-print-notes-row-solo`) {
+		t.Errorf("expected notes-row-solo class when the address box is hidden")
 	}
 	// The order number must be printed on the sheet (previously only in <title>).
 	if !strings.Contains(full, `work-order-print-number">RN-2026-00001<`) {
@@ -257,14 +256,20 @@ func TestRenderWorkOrderHTMLSectionToggles(t *testing.T) {
 		t.Errorf("full sheet missing client address subscript")
 	}
 
-	none, err := RenderWorkOrderHTML(order, nil, printSettings(domain.PDFSections{}, "", domain.DefaultBillingDefaults()))
+	none, err := RenderWorkOrderHTML(order, PrintContext{}, printSettings(domain.PDFSections{}, "", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render none: %v", err)
 	}
-	for _, marker := range []string{"VOZI SE", "FAKTURA", "NAPOMENA", "ADRESA ZA DOSTAVU", "IZDAO / IZVRŠILAC"} {
+	for _, marker := range []string{"VOZI SE", "FAKTURA", "ADRESA ZA DOSTAVU", "IZDAO / IZVRŠILAC"} {
 		if strings.Contains(none, marker) {
 			t.Errorf("disabled sheet still contains %q", marker)
 		}
+	}
+	// The napomena box is not one of the toggles: with every optional section
+	// off it still renders, so the form's napomena field always has a
+	// destination on the sheet.
+	if !strings.Contains(none, "NAPOMENA") {
+		t.Errorf("disabled sheet dropped the non-toggleable NAPOMENA box")
 	}
 	// The client name (a non-configurable core field) must always render.
 	if !strings.Contains(none, "PROFESIONALNI UPRAVNIK") {
@@ -300,7 +305,7 @@ func TestRenderWorkOrderHTMLItemColumnOrder(t *testing.T) {
 		return headers
 	}
 
-	defaults, err := RenderWorkOrderHTML(order, nil,
+	defaults, err := RenderWorkOrderHTML(order, PrintContext{},
 		printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render defaults: %v", err)
@@ -319,7 +324,7 @@ func TestRenderWorkOrderHTMLItemColumnOrder(t *testing.T) {
 		domain.PrintItemColumnQuantity,
 		domain.PrintItemColumnTotal,
 	}
-	reordered, err := RenderWorkOrderHTML(order, nil, settings)
+	reordered, err := RenderWorkOrderHTML(order, PrintContext{}, settings)
 	if err != nil {
 		t.Fatalf("render reordered: %v", err)
 	}
@@ -332,7 +337,7 @@ func TestRenderWorkOrderHTMLItemColumnOrder(t *testing.T) {
 
 	// An unconfigured shop (nil order) still gets all three columns.
 	settings.PrintItemColumns = nil
-	fallback, err := RenderWorkOrderHTML(order, nil, settings)
+	fallback, err := RenderWorkOrderHTML(order, PrintContext{}, settings)
 	if err != nil {
 		t.Fatalf("render fallback: %v", err)
 	}
@@ -350,7 +355,7 @@ func TestRenderWorkOrderHTMLTotalPrice(t *testing.T) {
 		Price:          &price,
 	}
 
-	html, err := RenderWorkOrderHTML(order, nil, printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()))
+	html, err := RenderWorkOrderHTML(order, PrintContext{}, printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -371,7 +376,7 @@ func TestRenderWorkOrderPDF(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, nil, printSettings(domain.DefaultPDFSections(), "Grafika Čobanović", domain.DefaultBillingDefaults()))
+	pdfBytes, err := RenderWorkOrderPDF(ctx, baseOrder, PrintContext{}, printSettings(domain.DefaultPDFSections(), "Grafika Čobanović", domain.DefaultBillingDefaults()))
 	if err != nil {
 		t.Logf("Failed to render PDF using chromedp: %v", err)
 		// We log instead of erroring out to handle environments without chrome gracefully
@@ -401,7 +406,7 @@ func TestRenderWorkOrderHTMLBillingRows(t *testing.T) {
 	}
 
 	html, err := RenderWorkOrderHTML(
-		order, nil,
+		order, PrintContext{},
 		printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()),
 	)
 	if err != nil {
@@ -441,4 +446,105 @@ func markAfter(t *testing.T, html, label string) string {
 		t.Fatalf("could not locate mark cell for %q", label)
 	}
 	return strings.TrimSpace(after[markStart+len(`work-order-print-mark">`):])[:1]
+}
+
+// TestPrintRowsIncludeCustomEnumValues proves that a document type, delivery
+// method, or postage option an administrator added in Settings prints on the
+// nalog, appended after the built-in rows so the familiar sheet layout holds.
+func TestPrintRowsIncludeCustomEnumValues(t *testing.T) {
+	enumValues := []domain.EnumValue{
+		{Field: domain.EnumFieldBillingDocumentType, Value: "invoice", Label: "Faktura", IsBuiltin: true},
+		{Field: domain.EnumFieldBillingDocumentType, Value: "advance", Label: "Avansni račun"},
+		{Field: domain.EnumFieldDeliveryMethod, Value: "courier", Label: "Kurirska služba"},
+		{Field: domain.EnumFieldPostagePaymentType, Value: "split", Label: "Podeljena poštarina"},
+	}
+
+	advance := domain.BillingDocumentType("advance")
+	billingRows := getPrintBillingRows(&advance, enumValues, false)
+	if len(billingRows) != 5 {
+		t.Fatalf("expected 3 built-in + 1 custom + PLAĆENO, got %d", len(billingRows))
+	}
+	if billingRows[3].Label != "AVANSNI RAČUN" || !billingRows[3].Checked {
+		t.Errorf("expected a checked AVANSNI RAČUN row after PROFAKTURA, got %+v", billingRows[3])
+	}
+	for _, row := range billingRows[:3] {
+		if row.Checked {
+			t.Errorf("expected built-in row %q unchecked when a custom type is selected", row.Label)
+		}
+	}
+
+	courier := domain.DeliveryMethod("courier")
+	deliveryRows := getPrintDeliveryRows(domain.Shipping{DeliveryMethod: &courier}, enumValues)
+	if len(deliveryRows) != 12 {
+		t.Fatalf("expected 10 built-in + 2 custom delivery rows, got %d", len(deliveryRows))
+	}
+	if deliveryRows[10].Label != "KURIRSKA SLUŽBA" || !deliveryRows[10].Checked {
+		t.Errorf("expected a checked KURIRSKA SLUŽBA row, got %+v", deliveryRows[10])
+	}
+	if deliveryRows[11].Label != "PODELJENA POŠTARINA" || deliveryRows[11].Checked {
+		t.Errorf("expected an unchecked PODELJENA POŠTARINA row, got %+v", deliveryRows[11])
+	}
+}
+
+// TestRenderWorkOrderHTMLClientIdentifiers proves the client's PIB and matični
+// broj print in the KLIJENT box, and that a client without them (or none at
+// all) renders the box unchanged.
+func TestRenderWorkOrderHTMLClientIdentifiers(t *testing.T) {
+	order := domain.WorkOrder{
+		OrderNumber:    "RN-2026-00001",
+		ClientName:     "Profesionalni Upravnik",
+		JobDescription: "Vizit karte",
+		CustomerID:     ptr("cust-1"),
+	}
+	settings := printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults())
+
+	withIDs, err := RenderWorkOrderHTML(order, PrintContext{
+		LocationAddress: ptr("Kneza Miloša 22, Beograd"),
+		Customer: &domain.Customer{
+			ID:   "cust-1",
+			Name: "Profesionalni Upravnik",
+			Pib:  ptr("100200300"),
+			Mb:   ptr("12345678"),
+		},
+	}, settings)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(withIDs, "PIB: 100200300") {
+		t.Error("expected the client's PIB in the rendered sheet")
+	}
+	if !strings.Contains(withIDs, "MB: 12345678") {
+		t.Error("expected the client's matični broj in the rendered sheet")
+	}
+
+	withoutIDs, err := RenderWorkOrderHTML(order, PrintContext{}, settings)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	// The class always appears in the stylesheet; only the rendered div matters.
+	if strings.Contains(withoutIDs, `<div class="work-order-print-client-ids">`) {
+		t.Error("expected no identifier line when the client has no PIB/MB")
+	}
+}
+
+// TestPrintBillingRowsPaidIsIndependent proves PLAĆENO ticks on its own row
+// without disturbing the document type, so a paid proforma prints both marks.
+func TestPrintBillingRowsPaidIsIndependent(t *testing.T) {
+	proforma := domain.BillingDocumentTypeProforma
+
+	paid := getPrintBillingRows(&proforma, nil, true)
+	if len(paid) != 4 {
+		t.Fatalf("expected 3 document-type rows + PLAĆENO, got %d", len(paid))
+	}
+	if paid[2].Label != "PROFAKTURA" || !paid[2].Checked {
+		t.Errorf("expected PROFAKTURA to stay checked, got %+v", paid[2])
+	}
+	if paid[3].Label != "PLAĆENO" || !paid[3].Checked {
+		t.Errorf("expected a checked PLAĆENO row, got %+v", paid[3])
+	}
+
+	unpaid := getPrintBillingRows(&proforma, nil, false)
+	if unpaid[3].Label != "PLAĆENO" || unpaid[3].Checked {
+		t.Errorf("expected the PLAĆENO row present but unticked, got %+v", unpaid[3])
+	}
 }

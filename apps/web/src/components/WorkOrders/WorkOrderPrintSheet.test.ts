@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkOrder } from "@/types/work-order";
+import type { EnumValue, WorkOrder } from "@/types/work-order";
 import {
   buildPrintDescriptionLines,
   buildPrintItemRows,
@@ -78,6 +78,43 @@ const baseOrder: WorkOrder = {
   },
 };
 
+// Custom (admin-added) picklist values, as the enums endpoint returns them
+// alongside the built-ins.
+const customEnumValues: EnumValue[] = [
+  {
+    id: "builtin:billingDocumentType:invoice",
+    field: "billingDocumentType",
+    value: "invoice",
+    label: "Faktura",
+    sortOrder: 0,
+    isBuiltin: true,
+  },
+  {
+    id: "enum-advance",
+    field: "billingDocumentType",
+    value: "advance",
+    label: "Avansni račun",
+    sortOrder: 3,
+    isBuiltin: false,
+  },
+  {
+    id: "enum-courier",
+    field: "deliveryMethod",
+    value: "courier",
+    label: "Kurirska služba",
+    sortOrder: 4,
+    isBuiltin: false,
+  },
+  {
+    id: "enum-split",
+    field: "postagePaymentType",
+    value: "split",
+    label: "Podeljena poštarina",
+    sortOrder: 4,
+    isBuiltin: false,
+  },
+];
+
 describe("WorkOrderPrintSheet helpers", () => {
   it("marks the selected delivery row while keeping all paper checklist rows", () => {
     expect(getPrintDeliveryRows(baseShipping)).toEqual([
@@ -122,12 +159,60 @@ describe("WorkOrderPrintSheet helpers", () => {
       { label: "FAKTURA", checked: true },
       { label: "OTKUP", checked: false },
       { label: "PROFAKTURA", checked: false },
+      { label: "PLAĆENO", checked: false },
     ]);
 
     expect(getPrintBillingRows("proforma")[2]).toEqual({
       label: "PROFAKTURA",
       checked: true,
     });
+  });
+
+  it("prints admin-added document types after the built-in rows", () => {
+    // A document type a shop adds in Settings belongs on the nalog under
+    // PROFAKTURA, not silently dropped.
+    const rows = getPrintBillingRows("advance", customEnumValues);
+    expect(rows).toEqual([
+      { label: "FAKTURA", checked: false },
+      { label: "OTKUP", checked: false },
+      { label: "PROFAKTURA", checked: false },
+      { label: "AVANSNI RAČUN", checked: true },
+      { label: "PLAĆENO", checked: false },
+    ]);
+  });
+
+  it("ticks PLAĆENO independently of the document type", () => {
+    // Paid is orthogonal to the document type: a proforma can be paid, and
+    // ticking it must not disturb which document-type row is marked.
+    const paidProforma = getPrintBillingRows("proforma", [], true);
+    expect(paidProforma).toEqual([
+      { label: "FAKTURA", checked: false },
+      { label: "OTKUP", checked: false },
+      { label: "PROFAKTURA", checked: true },
+      { label: "PLAĆENO", checked: true },
+    ]);
+
+    // ...and an unpaid order still gets the row, just unticked.
+    expect(getPrintBillingRows("proforma", [])).toEqual([
+      { label: "FAKTURA", checked: false },
+      { label: "OTKUP", checked: false },
+      { label: "PROFAKTURA", checked: true },
+      { label: "PLAĆENO", checked: false },
+    ]);
+  });
+
+  it("prints admin-added delivery and postage options after the built-in rows", () => {
+    const rows = getPrintDeliveryRows(
+      { ...baseShipping, deliveryMethod: "courier" },
+      customEnumValues,
+    );
+    expect(rows).toHaveLength(12);
+    expect(rows.slice(10)).toEqual([
+      { label: "KURIRSKA SLUŽBA", checked: true },
+      { label: "PODELJENA POŠTARINA", checked: false },
+    ]);
+    // Built-in rows keep their place and stay unticked.
+    expect(rows[1]).toEqual({ label: "LIČNO", checked: false });
   });
 
   it("resolves the effective document type, falling back to the shop default", () => {

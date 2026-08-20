@@ -30,6 +30,7 @@ const sampleOrder: WorkOrder = {
   proformaDueDate: null,
   dueDate: null,
   isCompleted: false,
+  isPaid: false,
   status: "active",
   price: 12000,
   note: "Napomena za nalog",

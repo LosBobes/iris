@@ -2,6 +2,9 @@ import { useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   BillingDocumentType,
+  Customer,
+  EnumField,
+  EnumValue,
   Location,
   Shipping,
   WorkOrder,
@@ -13,6 +16,7 @@ import {
 } from "@/types/settings";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
 import { useOrganization } from "@/hooks/useOrganization";
+import { useEnumValues } from "@/hooks/useEnumValues";
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
 
@@ -32,6 +36,23 @@ const PRINT_BILLING_ROWS: Array<{
   },
   { labelKey: "workOrders.print.billing.proforma", billingDocumentType: "proforma" },
 ];
+
+// The admin-added (non built-in) values of one managed field, as printable
+// rows ticked when they match the order's stored value. Built-ins are skipped:
+// they already have hand-placed rows on the nalog, so customs are appended
+// after them and the familiar sheet layout stays put.
+function customEnumRows(
+  enumValues: EnumValue[],
+  field: EnumField,
+  selected: string | null | undefined,
+): PrintCheckRow[] {
+  return enumValues
+    .filter((entry) => entry.field === field && !entry.isBuiltin)
+    .map((entry) => ({
+      label: (entry.label.trim() || entry.value).toLocaleUpperCase("sr-Latn-RS"),
+      checked: entry.value === selected,
+    }));
+}
 
 function uppercaseLine(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -85,7 +106,10 @@ export function resolvePrintClientAddress(
   return uppercaseLine(location?.address);
 }
 
-export function getPrintDeliveryRows(shipping: Shipping): PrintCheckRow[] {
+export function getPrintDeliveryRows(
+  shipping: Shipping,
+  enumValues: EnumValue[] = [],
+): PrintCheckRow[] {
   const method = shipping.deliveryMethod;
   const postage = shipping.postagePaymentType;
 
@@ -121,6 +145,9 @@ export function getPrintDeliveryRows(shipping: Shipping): PrintCheckRow[] {
       label: i18n.t("workOrders.print.delivery.fieldVisit"),
       checked: method === "fieldVisit",
     },
+    // Admin-added delivery and postage options print after the built-in rows.
+    ...customEnumRows(enumValues, "deliveryMethod", method),
+    ...customEnumRows(enumValues, "postagePaymentType", postage),
   ];
 }
 
@@ -134,13 +161,24 @@ export function resolveBillingDocumentType(
   return order.billingDocumentType ?? billingDefaults.documentType;
 }
 
+// Builds the document box: the three built-in document-type rows in their
+// established order, then any document type the shop added in Settings, and
+// finally PLAĆENO. The paid row is deliberately last and independent — it ticks
+// alongside whichever document type is selected, since a proforma or otkup can
+// be paid just as an invoice can.
 export function getPrintBillingRows(
   billingDocumentType: BillingDocumentType | null,
+  enumValues: EnumValue[] = [],
+  isPaid = false,
 ): PrintCheckRow[] {
-  return PRINT_BILLING_ROWS.map((row) => ({
-    label: i18n.t(row.labelKey),
-    checked: row.billingDocumentType === billingDocumentType,
-  }));
+  return [
+    ...PRINT_BILLING_ROWS.map((row) => ({
+      label: i18n.t(row.labelKey),
+      checked: row.billingDocumentType === billingDocumentType,
+    })),
+    ...customEnumRows(enumValues, "billingDocumentType", billingDocumentType),
+    { label: i18n.t("workOrders.print.billing.paid"), checked: isPaid },
+  ];
 }
 
 function jobDetailsHasContent(
@@ -309,25 +347,37 @@ function PrintCheckBox({ checked }: { checked: boolean }): React.JSX.Element {
 export function WorkOrderPrintSheet({
   order,
   locations = [],
+  customer = null,
 }: {
   order: WorkOrder;
   locations?: Location[];
+  /** Registry client behind the order, for the PIB / matični broj line. */
+  customer?: Customer | null;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const { pdfSections, billingDefaults, printItemColumns } = useOrganization();
+  const { values: enumValues } = useEnumValues();
   const descriptionLines = buildPrintDescriptionLines(order);
   const itemRows = buildPrintItemRows(order);
   // Guard the shop's configured order so a stale/partial value can never drop a
   // column from the printed nalog.
   const itemColumns = normalizePrintItemColumns(printItemColumns);
   const totalPrice = formatPrintPrice(order.price);
-  const deliveryRows = getPrintDeliveryRows(order.shipping);
+  const deliveryRows = getPrintDeliveryRows(order.shipping, enumValues);
   const billingRows = getPrintBillingRows(
     resolveBillingDocumentType(order, billingDefaults),
+    enumValues,
+    order.isPaid,
   );
   const noteLines = buildPrintNoteLines(order);
   const shippingAddress = resolvePrintShippingAddress(order);
   const clientAddress = resolvePrintClientAddress(order, locations);
+  // Firm identifiers only print for the registry client this order points at,
+  // so a stale/mismatched customer prop never leaks onto the sheet.
+  const printedCustomer =
+    customer && order.customerId && customer.id === order.customerId ? customer : null;
+  const clientPib = printedCustomer?.pib?.trim() || null;
+  const clientMb = printedCustomer?.mb?.trim() || null;
   const plannedDate = order.dueDate ?? order.completionDate;
 
   // Auto-fit the opis posla and stavke text so it never overflows its panel.
@@ -367,6 +417,16 @@ export function WorkOrderPrintSheet({
           {clientAddress && (
             <div className="work-order-print-client-address">
               {clientAddress}
+            </div>
+          )}
+          {(clientPib || clientMb) && (
+            <div className="work-order-print-client-ids">
+              {clientPib && (
+                <span>{t("workOrders.print.pib", { value: clientPib })}</span>
+              )}
+              {clientMb && (
+                <span>{t("workOrders.print.mb", { value: clientMb })}</span>
+              )}
             </div>
           )}
         </div>
@@ -476,40 +536,38 @@ export function WorkOrderPrintSheet({
             </div>
           )}
 
-          {(pdfSections.notes || pdfSections.shippingAddress) && (
-            <div
-              className={
-                pdfSections.notes
-                  ? "work-order-print-notes-row"
-                  : "work-order-print-notes-row work-order-print-notes-row-solo"
-              }
-            >
-              {pdfSections.notes && (
-                <div className="work-order-print-note-box">
-                  <div className="work-order-print-label">
-                    {t("workOrders.print.note")}
-                  </div>
-                  <div className="work-order-print-note-lines">
-                    {noteLines.length > 0
-                      ? noteLines.map((line) => <div key={line}>{line}</div>)
-                      : null}
-                  </div>
-                </div>
-              )}
-              {pdfSections.shippingAddress && (
-                <div className="work-order-print-address-box">
-                  <div className="work-order-print-label">
-                    {t("workOrders.print.shipTo")}
-                  </div>
-                  {shippingAddress && (
-                    <div className="work-order-print-address">
-                      {shippingAddress}
-                    </div>
-                  )}
-                </div>
-              )}
+          {/* The napomena box is not one of the section toggles: it is the only
+              destination for the order's free-text note, so it always renders
+              and the form always offers the field. */}
+          <div
+            className={cn(
+              "work-order-print-notes-row",
+              !pdfSections.shippingAddress && "work-order-print-notes-row-solo",
+            )}
+          >
+            <div className="work-order-print-note-box">
+              <div className="work-order-print-label">
+                {t("workOrders.print.note")}
+              </div>
+              <div className="work-order-print-note-lines">
+                {noteLines.length > 0
+                  ? noteLines.map((line) => <div key={line}>{line}</div>)
+                  : null}
+              </div>
             </div>
-          )}
+            {pdfSections.shippingAddress && (
+              <div className="work-order-print-address-box">
+                <div className="work-order-print-label">
+                  {t("workOrders.print.shipTo")}
+                </div>
+                {shippingAddress && (
+                  <div className="work-order-print-address">
+                    {shippingAddress}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {pdfSections.delivery && (

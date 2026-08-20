@@ -1305,9 +1305,11 @@ components:
     PDFSections:
       type: object
       description: >-
-        Which sections of the work-order printout are rendered. Every field
-        defaults to true for an unconfigured shop.
-      required: [delivery, billing, notes, shippingAddress, completion, signatures]
+        Which optional sections of the work-order printout are rendered. Every
+        field defaults to true for an unconfigured shop. The napomena (notes)
+        box is not listed here: it always renders, because the form always
+        offers a napomena field to fill it.
+      required: [delivery, billing, shippingAddress, completion, signatures]
       properties:
         delivery:
           type: boolean
@@ -1315,9 +1317,6 @@ components:
         billing:
           type: boolean
           description: The billing-document box (invoice / cash collection / proforma).
-        notes:
-          type: boolean
-          description: The notes section.
         shippingAddress:
           type: boolean
           description: The shipping-address box.
@@ -1466,7 +1465,7 @@ components:
     WorkOrder:
       type: object
       required:
-        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, proformaDueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
+        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, proformaDueDate, dueDate, isCompleted, isPaid, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
         id:
           type: string
@@ -1524,6 +1523,13 @@ components:
           example: '2025-04-14'
         isCompleted:
           type: boolean
+        isPaid:
+          type: boolean
+          description: >-
+            Whether the job has been paid for (plaćeno). Independent of
+            billingDocumentType: a proforma or cash-collection order can be
+            paid just as an invoiced one can. Printed as its own ticked row in
+            the nalog's document box.
         status:
           type: string
           enum: [new, assigned, inProgress, completed, cancelled, invoiced]
@@ -1676,6 +1682,11 @@ components:
         dueDate:
           type: [string, 'null']
           format: date
+        isPaid:
+          type: boolean
+          description: >-
+            Whether the job is already paid for (plaćeno). Optional on create;
+            defaults to false.
         price:
           type: [number, 'null']
           format: double
@@ -1746,6 +1757,13 @@ components:
           format: date
         isCompleted:
           type: boolean
+        isPaid:
+          type: boolean
+          description: >-
+            Whether the job has been paid for (plaćeno). Independent of
+            billingDocumentType: a proforma or cash-collection order can be
+            paid just as an invoiced one can. Printed as its own ticked row in
+            the nalog's document box.
         status:
           type: string
           enum: [new, assigned, inProgress, completed, cancelled, invoiced]

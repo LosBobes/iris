@@ -132,6 +132,8 @@ export const workOrderFormSchema = z
     jobDetails: jobDetailsSchema.nullable(),
     billingDocumentType: billingDocumentTypeEnum.nullable(),
     billingDocumentNumber: emptyToNullString,
+    // "Plaćeno" — independent of billingDocumentType, ticked on its own row.
+    isPaid: z.boolean(),
     shipping: shippingSchema,
     assignment: assignmentSchema,
     price: z.number().min(0, { message: i18n.t('validation.priceNegative') }).nullable(),

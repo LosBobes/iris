@@ -29,6 +29,8 @@ function getDuplicateInitialValues(
     jobDetails: source.jobDetails,
     billingDocumentType: source.billingDocumentType,
     billingDocumentNumber: source.billingDocumentNumber,
+    // A duplicate is a fresh job, so it starts unpaid regardless of the source.
+    isPaid: false,
     shipping: source.shipping,
     assignment: {
       ...source.assignment,
@@ -188,6 +190,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
           jobDetails: values.jobDetails,
           billingDocumentType: values.billingDocumentType,
           billingDocumentNumber: values.billingDocumentNumber,
+          isPaid: values.isPaid,
           shipping: values.shipping,
           assignment: values.assignment,
           issuedBy: values.issuedBy || currentUser.username,

@@ -174,27 +174,28 @@ type CatalogItemInput struct {
 // administrator changes it via the organization settings.
 const DefaultFirmName = "Grafika Čobanović"
 
-// PDFSections controls which sections of the work-order printout are rendered.
-// Most sections default to true (see DefaultPDFSections) so an unconfigured shop
-// keeps the full sheet; the free-text notes (napomena) box is the exception and
-// defaults to false, so a shop opts in to it explicitly.
+// PDFSections controls which optional sections of the work-order printout are
+// rendered; all of them default to true (see DefaultPDFSections) so an
+// unconfigured shop keeps the full sheet.
+//
+// The napomena (notes) box is deliberately not toggleable. It is the only
+// destination for the work order's free-text note, so hiding the box would
+// leave the form's napomena field writing to nowhere. The box always renders
+// and the field is always offered.
 type PDFSections struct {
 	Delivery        bool `json:"delivery"`
 	Billing         bool `json:"billing"`
-	Notes           bool `json:"notes"`
 	ShippingAddress bool `json:"shippingAddress"`
 	Completion      bool `json:"completion"`
 	Signatures      bool `json:"signatures"`
 }
 
 // DefaultPDFSections returns the configuration used when a shop has not
-// customized its printout: every section enabled except the notes (napomena)
-// box, which is off until an administrator turns it on.
+// customized its printout: every optional section enabled.
 func DefaultPDFSections() PDFSections {
 	return PDFSections{
 		Delivery:        true,
 		Billing:         true,
-		Notes:           false,
 		ShippingAddress: true,
 		Completion:      true,
 		Signatures:      true,
@@ -506,11 +507,16 @@ type WorkOrder struct {
 	IssueDate             string               `json:"issueDate"`
 	// ProformaDueDate is the deadline to issue the proforma invoice (predračun);
 	// DueDate is the deadline to finish the job.
-	ProformaDueDate *string         `json:"proformaDueDate"`
-	DueDate         *string         `json:"dueDate"`
-	IsCompleted     bool            `json:"isCompleted"`
-	Status          WorkOrderStatus `json:"status"`
-	Price           *float64        `json:"price"`
+	ProformaDueDate *string `json:"proformaDueDate"`
+	DueDate         *string `json:"dueDate"`
+	IsCompleted     bool    `json:"isCompleted"`
+	// IsPaid marks the job as paid for (plaćeno). It is independent of
+	// BillingDocumentType — a proforma or cash-collection order can be paid just
+	// as an invoiced one can — and of InvoiceDraft.Status, which tracks the
+	// invoice document's own lifecycle and is advanced by the server.
+	IsPaid bool            `json:"isPaid"`
+	Status WorkOrderStatus `json:"status"`
+	Price  *float64        `json:"price"`
 	// Profit is the cached margin (sum of (unitPrice-unitCost)*qty over line
 	// items with a captured cost), recomputed server-side on every save.
 	// Admin-only: stripped from responses to non-admin users alongside per-line
@@ -556,6 +562,7 @@ type CreateWorkOrderInput struct {
 	IssueDate             string                `json:"issueDate"`
 	ProformaDueDate       *string               `json:"proformaDueDate"`
 	DueDate               *string               `json:"dueDate"`
+	IsPaid                bool                  `json:"isPaid"`
 	Price                 *float64              `json:"price"`
 	Note                  *string               `json:"note"`
 	InternalNotes         []WorkOrderNote       `json:"internalNotes"`

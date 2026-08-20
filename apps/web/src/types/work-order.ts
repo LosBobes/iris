@@ -246,6 +246,13 @@ export interface WorkOrder {
   dueDate: string | null
   /** True when the order has been completed */
   isCompleted: boolean
+  /**
+   * True when the job has been paid for (plaćeno). Independent of
+   * billingDocumentType — a proforma or otkup order can be paid just as an
+   * invoiced one can — and of invoiceDraft.status, which tracks the invoice
+   * document's own lifecycle and is advanced server-side.
+   */
+  isPaid: boolean
   status: WorkOrderStatus
   /** Null means unbilled / price not yet set */
   price: number | null
@@ -327,6 +334,7 @@ export interface CreateWorkOrderInput {
   issueDate: string
   proformaDueDate: string | null
   dueDate: string | null
+  isPaid: boolean
   price: number | null
   note: string | null
   internalNotes: WorkOrderNote[]
@@ -355,6 +363,7 @@ export interface UpdateWorkOrderInput {
   proformaDueDate?: string | null
   dueDate?: string | null
   isCompleted?: boolean
+  isPaid?: boolean
   status?: WorkOrderStatus
   price?: number | null
   note?: string | null

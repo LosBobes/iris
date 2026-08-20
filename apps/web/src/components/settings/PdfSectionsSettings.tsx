@@ -6,11 +6,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useOrganization } from "@/hooks/useOrganization";
 import type { PDFSections } from "@/types/settings";
 
-// The toggleable sections, in the order they appear on the printout.
+// The toggleable sections, in the order they appear on the printout. The
+// napomena box is absent by design — it always renders, so there is nothing to
+// toggle (see the PDFSections type).
 const SECTION_KEYS: Array<keyof PDFSections> = [
   "delivery",
   "billing",
-  "notes",
   "shippingAddress",
   "completion",
   "signatures",
