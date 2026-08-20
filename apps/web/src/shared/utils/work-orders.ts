@@ -133,6 +133,16 @@ export function getPrimaryWorkOrderTransition(
   return WORK_ORDER_PRIMARY_TRANSITION[status];
 }
 
+/**
+ * True when advancing an order from this status closes it (moves it into
+ * "completed"). Closing is one-way — a completed order can only go on to
+ * "invoiced", never back into work — so the UI confirms it the same way it
+ * confirms cancelling.
+ */
+export function requiresWorkOrderCloseConfirm(status: WorkOrderStatus): boolean {
+  return getPrimaryWorkOrderTransition(status) === "completed";
+}
+
 export function getWorkOrderCustomerNextStep(status: WorkOrderStatus): string {
   return i18n.t(`workOrders.customerNextSteps.${status}`);
 }

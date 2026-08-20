@@ -886,6 +886,12 @@ export const en: typeof sr = {
       confirm: 'Are you sure you want to cancel work order {{order}}? A cancelled order cannot be returned to work.',
       keep: 'Keep it',
     },
+    completeDialog: {
+      title: 'Close work order',
+      confirm: 'Are you sure you want to close work order {{order}}? A closed order cannot be returned to work, it can only be invoiced.',
+      keep: 'Keep it open',
+      confirmAction: 'Close order',
+    },
     notice: {
       workOrder: 'Work order',
       status: 'Status',

@@ -18,6 +18,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { CancelWorkOrderDialog } from "@/components/WorkOrders/CancelWorkOrderDialog";
+import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
@@ -30,6 +31,7 @@ import {
   getWorkOrderDeliveryLabel,
   getWorkOrderStatusLabel,
   getPrimaryWorkOrderTransition,
+  requiresWorkOrderCloseConfirm,
   getAllowedWorkOrderTransitions,
   formatWorkOrderEventLabel,
   formatWorkOrderDate,
@@ -127,6 +129,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   // Deleting is admin-only on the API; gate the button to match.
   const { currentUser } = useAuth();
@@ -135,7 +138,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
     ? getAllowedWorkOrderTransitions(order.status).includes("cancelled")
     : false;
 
-  const handleAdvanceStatus = async (): Promise<void> => {
+  const advanceStatus = async (): Promise<void> => {
     if (!order) return;
     const newStatus = getPrimaryWorkOrderTransition(order.status);
     if (!newStatus) return;
@@ -162,6 +165,22 @@ function WorkOrderDetailPage(): React.JSX.Element {
     } catch {
       toast.error(t("workOrders.toast.statusError"));
     }
+  };
+
+  // Closing the order is one-way, so ask first; the other advances stay
+  // one-click.
+  const handleAdvanceStatus = (): void => {
+    if (!order) return;
+    if (requiresWorkOrderCloseConfirm(order.status)) {
+      setCompleteOpen(true);
+      return;
+    }
+    void advanceStatus();
+  };
+
+  const handleCompleteConfirm = async (): Promise<void> => {
+    await advanceStatus();
+    setCompleteOpen(false);
   };
 
   const handleCancelConfirm = async (): Promise<void> => {
@@ -313,7 +332,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
                 {getPrimaryWorkOrderTransition(order.status) && (
                   <button
                     type="button"
-                    onClick={() => void handleAdvanceStatus()}
+                    onClick={handleAdvanceStatus}
                     className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-accent)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/10"
                   >
                     {t("workOrders.detail.moveTo")}{" "}
@@ -472,6 +491,12 @@ function WorkOrderDetailPage(): React.JSX.Element {
       {order && (
         <WorkOrderPrintSheet order={order} locations={locations} customer={customer} />
       )}
+      <CompleteWorkOrderDialog
+        orderNumber={order?.orderNumber ?? ""}
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        onConfirm={() => void handleCompleteConfirm()}
+      />
       <CancelWorkOrderDialog
         orderNumber={order?.orderNumber ?? ""}
         open={cancelOpen}

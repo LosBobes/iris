@@ -6,12 +6,14 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { WorkOrdersFilters } from "@/components/WorkOrders/WorkOrdersFilters";
 import { WorkOrdersTable } from "@/components/WorkOrders/WorkOrdersTable";
+import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useWorkOrders } from "@/hooks/useWorkOrders";
 import { useAuth } from "@/hooks/useAuth";
 import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
+  requiresWorkOrderCloseConfirm,
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type { WorkOrder } from "@/types/work-order";
@@ -46,6 +48,7 @@ function CostReviewPage(): React.JSX.Element {
   const isAdmin = currentUser.role === "admin";
 
   const [deleteTarget, setDeleteTarget] = useState<WorkOrder | null>(null);
+  const [completeTarget, setCompleteTarget] = useState<WorkOrder | null>(null);
 
   // Pin the cost-review filter so this route only ever lists that queue, even
   // after a reset from the filters bar.
@@ -70,15 +73,8 @@ function CostReviewPage(): React.JSX.Element {
     });
   }, [updateFilters]);
 
-  const handleToggleStatus = useCallback(
+  const advanceStatus = useCallback(
     async (order: WorkOrder) => {
-      if (!canToggleWorkOrderCompletion(order.status)) {
-        toast.info(
-          t("workOrders.toast.statusNotFromList", { order: order.orderNumber }),
-        );
-        return;
-      }
-
       const newStatus = getPrimaryWorkOrderTransition(order.status);
       if (!newStatus) return;
 
@@ -103,6 +99,32 @@ function CostReviewPage(): React.JSX.Element {
     },
     [refreshOrders, t],
   );
+
+  // Closing the order is one-way, so ask first; the other advances stay
+  // one-click.
+  const handleToggleStatus = useCallback(
+    (order: WorkOrder) => {
+      if (!canToggleWorkOrderCompletion(order.status)) {
+        toast.info(
+          t("workOrders.toast.statusNotFromList", { order: order.orderNumber }),
+        );
+        return;
+      }
+
+      if (requiresWorkOrderCloseConfirm(order.status)) {
+        setCompleteTarget(order);
+        return;
+      }
+      void advanceStatus(order);
+    },
+    [advanceStatus, t],
+  );
+
+  const handleCompleteConfirm = useCallback(async () => {
+    if (!completeTarget) return;
+    await advanceStatus(completeTarget);
+    setCompleteTarget(null);
+  }, [advanceStatus, completeTarget]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
@@ -228,6 +250,14 @@ function CostReviewPage(): React.JSX.Element {
         )}
       </div>
 
+      <CompleteWorkOrderDialog
+        orderNumber={completeTarget?.orderNumber ?? ""}
+        open={completeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCompleteTarget(null);
+        }}
+        onConfirm={() => void handleCompleteConfirm()}
+      />
       <DeleteWorkOrderDialog
         orderNumber={deleteTarget?.orderNumber ?? ""}
         open={deleteTarget !== null}
