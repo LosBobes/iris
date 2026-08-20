@@ -304,11 +304,16 @@ func resolveBillingDocumentType(order domain.WorkOrder, defaults domain.BillingD
 	return &docType
 }
 
-// getPrintBillingRows builds the document-type (tip dokumenta) box: the three
-// built-in rows in their established order, followed by any document type the
-// shop added in Settings (e.g. "PLAĆENO" under PROFAKTURA), so a custom option
-// is visible on the nalog instead of silently disappearing.
-func getPrintBillingRows(billingDocType *domain.BillingDocumentType, enumValues []domain.EnumValue) []PrintCheckRow {
+// getPrintBillingRows builds the document box: the three built-in document-type
+// rows in their established order, then any document type the shop added in
+// Settings, and finally PLAĆENO. The paid row is deliberately last and
+// independent — it ticks alongside whichever document type is selected, since a
+// proforma or otkup can be paid just as an invoice can.
+func getPrintBillingRows(
+	billingDocType *domain.BillingDocumentType,
+	enumValues []domain.EnumValue,
+	isPaid bool,
+) []PrintCheckRow {
 	rows := []struct {
 		label  string
 		method domain.BillingDocumentType
@@ -329,7 +334,8 @@ func getPrintBillingRows(billingDocType *domain.BillingDocumentType, enumValues 
 			Checked: checked,
 		}
 	}
-	return append(res, customEnumRows(enumValues, domain.EnumFieldBillingDocumentType, (*string)(billingDocType))...)
+	res = append(res, customEnumRows(enumValues, domain.EnumFieldBillingDocumentType, (*string)(billingDocType))...)
+	return append(res, PrintCheckRow{Label: "PLAĆENO", Checked: isPaid})
 }
 
 func jobDetailsHasContent(details *domain.JobDetails) bool {
@@ -1124,7 +1130,7 @@ func RenderWorkOrderHTML(order domain.WorkOrder, printCtx PrintContext, settings
 		ContactPerson:    uppercaseLine(order.ContactPerson),
 		DeliveryRows:     getPrintDeliveryRows(order.Shipping, printCtx.EnumValues),
 		PlannedDate:      formatOptionalDate(plannedDate),
-		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues),
+		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues, order.IsPaid),
 		NoteLines:        buildPrintNoteLines(order),
 		ShippingAddress:  ResolvePrintShippingAddress(order),
 		Completed:        completed,

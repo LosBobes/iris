@@ -38,6 +38,7 @@ const base = (overrides: Partial<WorkOrder>): WorkOrder => ({
   proformaDueDate: null,
   dueDate: null,
   isCompleted: true,
+  isPaid: false,
   status: 'completed',
   price: 10000,
   note: null,

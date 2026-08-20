@@ -507,11 +507,16 @@ type WorkOrder struct {
 	IssueDate             string               `json:"issueDate"`
 	// ProformaDueDate is the deadline to issue the proforma invoice (predračun);
 	// DueDate is the deadline to finish the job.
-	ProformaDueDate *string         `json:"proformaDueDate"`
-	DueDate         *string         `json:"dueDate"`
-	IsCompleted     bool            `json:"isCompleted"`
-	Status          WorkOrderStatus `json:"status"`
-	Price           *float64        `json:"price"`
+	ProformaDueDate *string `json:"proformaDueDate"`
+	DueDate         *string `json:"dueDate"`
+	IsCompleted     bool    `json:"isCompleted"`
+	// IsPaid marks the job as paid for (plaćeno). It is independent of
+	// BillingDocumentType — a proforma or cash-collection order can be paid just
+	// as an invoiced one can — and of InvoiceDraft.Status, which tracks the
+	// invoice document's own lifecycle and is advanced by the server.
+	IsPaid bool            `json:"isPaid"`
+	Status WorkOrderStatus `json:"status"`
+	Price  *float64        `json:"price"`
 	// Profit is the cached margin (sum of (unitPrice-unitCost)*qty over line
 	// items with a captured cost), recomputed server-side on every save.
 	// Admin-only: stripped from responses to non-admin users alongside per-line
@@ -557,6 +562,7 @@ type CreateWorkOrderInput struct {
 	IssueDate             string                `json:"issueDate"`
 	ProformaDueDate       *string               `json:"proformaDueDate"`
 	DueDate               *string               `json:"dueDate"`
+	IsPaid                bool                  `json:"isPaid"`
 	Price                 *float64              `json:"price"`
 	Note                  *string               `json:"note"`
 	InternalNotes         []WorkOrderNote       `json:"internalNotes"`

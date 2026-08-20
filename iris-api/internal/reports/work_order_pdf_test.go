@@ -46,16 +46,16 @@ func TestPrintHelpers(t *testing.T) {
 
 	// 2. Billing document check rows
 	invoice := domain.BillingDocumentTypeInvoice
-	billingRows := getPrintBillingRows(&invoice, nil)
-	if len(billingRows) != 3 {
-		t.Fatalf("expected 3 billing rows, got %d", len(billingRows))
+	billingRows := getPrintBillingRows(&invoice, nil, false)
+	if len(billingRows) != 4 {
+		t.Fatalf("expected 3 document-type rows + PLAĆENO, got %d", len(billingRows))
 	}
 	if !billingRows[0].Checked || billingRows[0].Label != "FAKTURA" {
 		t.Errorf("expected row 0 (FAKTURA) to be checked, got %+v", billingRows[0])
 	}
 
 	proforma := domain.BillingDocumentTypeProforma
-	billingRowsProforma := getPrintBillingRows(&proforma, nil)
+	billingRowsProforma := getPrintBillingRows(&proforma, nil, false)
 	if !billingRowsProforma[2].Checked || billingRowsProforma[2].Label != "PROFAKTURA" {
 		t.Errorf("expected row 2 (PROFAKTURA) to be checked, got %+v", billingRowsProforma[2])
 	}
@@ -454,18 +454,18 @@ func markAfter(t *testing.T, html, label string) string {
 func TestPrintRowsIncludeCustomEnumValues(t *testing.T) {
 	enumValues := []domain.EnumValue{
 		{Field: domain.EnumFieldBillingDocumentType, Value: "invoice", Label: "Faktura", IsBuiltin: true},
-		{Field: domain.EnumFieldBillingDocumentType, Value: "paid", Label: "Plaćeno"},
+		{Field: domain.EnumFieldBillingDocumentType, Value: "advance", Label: "Avansni račun"},
 		{Field: domain.EnumFieldDeliveryMethod, Value: "courier", Label: "Kurirska služba"},
 		{Field: domain.EnumFieldPostagePaymentType, Value: "split", Label: "Podeljena poštarina"},
 	}
 
-	paid := domain.BillingDocumentType("paid")
-	billingRows := getPrintBillingRows(&paid, enumValues)
-	if len(billingRows) != 4 {
-		t.Fatalf("expected 3 built-in + 1 custom billing row, got %d", len(billingRows))
+	advance := domain.BillingDocumentType("advance")
+	billingRows := getPrintBillingRows(&advance, enumValues, false)
+	if len(billingRows) != 5 {
+		t.Fatalf("expected 3 built-in + 1 custom + PLAĆENO, got %d", len(billingRows))
 	}
-	if billingRows[3].Label != "PLAĆENO" || !billingRows[3].Checked {
-		t.Errorf("expected a checked PLAĆENO row after PROFAKTURA, got %+v", billingRows[3])
+	if billingRows[3].Label != "AVANSNI RAČUN" || !billingRows[3].Checked {
+		t.Errorf("expected a checked AVANSNI RAČUN row after PROFAKTURA, got %+v", billingRows[3])
 	}
 	for _, row := range billingRows[:3] {
 		if row.Checked {
@@ -524,5 +524,27 @@ func TestRenderWorkOrderHTMLClientIdentifiers(t *testing.T) {
 	// The class always appears in the stylesheet; only the rendered div matters.
 	if strings.Contains(withoutIDs, `<div class="work-order-print-client-ids">`) {
 		t.Error("expected no identifier line when the client has no PIB/MB")
+	}
+}
+
+// TestPrintBillingRowsPaidIsIndependent proves PLAĆENO ticks on its own row
+// without disturbing the document type, so a paid proforma prints both marks.
+func TestPrintBillingRowsPaidIsIndependent(t *testing.T) {
+	proforma := domain.BillingDocumentTypeProforma
+
+	paid := getPrintBillingRows(&proforma, nil, true)
+	if len(paid) != 4 {
+		t.Fatalf("expected 3 document-type rows + PLAĆENO, got %d", len(paid))
+	}
+	if paid[2].Label != "PROFAKTURA" || !paid[2].Checked {
+		t.Errorf("expected PROFAKTURA to stay checked, got %+v", paid[2])
+	}
+	if paid[3].Label != "PLAĆENO" || !paid[3].Checked {
+		t.Errorf("expected a checked PLAĆENO row, got %+v", paid[3])
+	}
+
+	unpaid := getPrintBillingRows(&proforma, nil, false)
+	if unpaid[3].Label != "PLAĆENO" || unpaid[3].Checked {
+		t.Errorf("expected the PLAĆENO row present but unticked, got %+v", unpaid[3])
 	}
 }

@@ -488,6 +488,7 @@ func (s *FixtureStore) CreateWorkOrder(
 		ProformaDueDate:       input.ProformaDueDate,
 		DueDate:               input.DueDate,
 		IsCompleted:           false,
+		IsPaid:                input.IsPaid,
 		Status:                domain.WorkOrderStatusNew,
 		Price:                 input.Price,
 		Note:                  input.Note,
@@ -1530,6 +1531,12 @@ func applyWorkOrderChanges(
 				return domain.WorkOrder{}, err
 			}
 			updated.IsCompleted = value
+		case "isPaid":
+			var value bool
+			if err := decodeField(raw, &value); err != nil {
+				return domain.WorkOrder{}, err
+			}
+			updated.IsPaid = value
 		case "status":
 			var value domain.WorkOrderStatus
 			if err := decodeField(raw, &value); err != nil {

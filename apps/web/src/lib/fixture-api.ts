@@ -298,6 +298,8 @@ function normalizeWorkOrder(raw: FixtureWorkOrder): WorkOrder {
     proformaDueDate: normalizeNullableString(raw.proformaDueDate),
     dueDate: normalizeNullableString(raw.dueDate),
     isCompleted: status === 'completed' || status === 'invoiced',
+    // Absent on legacy/fixture rows predating the flag; unpaid is the safe read.
+    isPaid: raw.isPaid === true,
     status,
     price: raw.price ?? null,
     note: normalizeNullableString(raw.note),
@@ -970,6 +972,7 @@ export function createFixtureApi(): Window['api'] {
         status: 'new',
         executedBy: input.executedBy ?? null,
         isCompleted: false,
+        isPaid: input.isPaid ?? false,
         createdAt: now,
         updatedAt: now,
         completionDate: null,

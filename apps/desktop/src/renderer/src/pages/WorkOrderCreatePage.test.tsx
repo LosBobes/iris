@@ -34,6 +34,7 @@ const duplicateSource: WorkOrder = {
   proformaDueDate: null,
   dueDate: '2025-04-14',
   isCompleted: true,
+  isPaid: false,
   status: 'completed',
   price: 12000,
   note: 'Hitno',

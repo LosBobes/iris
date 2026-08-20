@@ -90,10 +90,10 @@ const customEnumValues: EnumValue[] = [
     isBuiltin: true,
   },
   {
-    id: "enum-paid",
+    id: "enum-advance",
     field: "billingDocumentType",
-    value: "paid",
-    label: "Plaćeno",
+    value: "advance",
+    label: "Avansni račun",
     sortOrder: 3,
     isBuiltin: false,
   },
@@ -159,6 +159,7 @@ describe("WorkOrderPrintSheet helpers", () => {
       { label: "FAKTURA", checked: true },
       { label: "OTKUP", checked: false },
       { label: "PROFAKTURA", checked: false },
+      { label: "PLAĆENO", checked: false },
     ]);
 
     expect(getPrintBillingRows("proforma")[2]).toEqual({
@@ -168,14 +169,35 @@ describe("WorkOrderPrintSheet helpers", () => {
   });
 
   it("prints admin-added document types after the built-in rows", () => {
-    // A shop that adds "Plaćeno" in Settings expects it on the nalog under
+    // A document type a shop adds in Settings belongs on the nalog under
     // PROFAKTURA, not silently dropped.
-    const rows = getPrintBillingRows("paid", customEnumValues);
+    const rows = getPrintBillingRows("advance", customEnumValues);
     expect(rows).toEqual([
       { label: "FAKTURA", checked: false },
       { label: "OTKUP", checked: false },
       { label: "PROFAKTURA", checked: false },
+      { label: "AVANSNI RAČUN", checked: true },
+      { label: "PLAĆENO", checked: false },
+    ]);
+  });
+
+  it("ticks PLAĆENO independently of the document type", () => {
+    // Paid is orthogonal to the document type: a proforma can be paid, and
+    // ticking it must not disturb which document-type row is marked.
+    const paidProforma = getPrintBillingRows("proforma", [], true);
+    expect(paidProforma).toEqual([
+      { label: "FAKTURA", checked: false },
+      { label: "OTKUP", checked: false },
+      { label: "PROFAKTURA", checked: true },
       { label: "PLAĆENO", checked: true },
+    ]);
+
+    // ...and an unpaid order still gets the row, just unticked.
+    expect(getPrintBillingRows("proforma", [])).toEqual([
+      { label: "FAKTURA", checked: false },
+      { label: "OTKUP", checked: false },
+      { label: "PROFAKTURA", checked: true },
+      { label: "PLAĆENO", checked: false },
     ]);
   });
 

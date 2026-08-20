@@ -98,6 +98,10 @@ function WorkOrderCreatePage(): React.JSX.Element {
           jobDetails: values.jobDetails,
           billingDocumentType: values.billingDocumentType,
           billingDocumentNumber: values.billingDocumentNumber,
+          // The desktop form does not offer the plaćeno checkbox yet (the web
+          // form does); a desktop-created order starts unpaid and can be marked
+          // paid from the web app.
+          isPaid: false,
           shipping: values.shipping,
           issuedBy: currentUser.username,
           issueDate: values.issueDate,

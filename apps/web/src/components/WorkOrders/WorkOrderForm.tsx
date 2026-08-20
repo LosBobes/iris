@@ -455,6 +455,7 @@ export function WorkOrderForm({
           jobDetails: initialData.jobDetails,
           billingDocumentType: initialData.billingDocumentType,
           billingDocumentNumber: initialData.billingDocumentNumber,
+          isPaid: initialData.isPaid,
           shipping: { ...EMPTY_SHIPPING, ...initialData.shipping },
           assignment: initialData.assignment,
           price: initialData.price,
@@ -487,6 +488,7 @@ export function WorkOrderForm({
           jobDetails: null,
           billingDocumentType: billingDefaults.documentType,
           billingDocumentNumber: null,
+          isPaid: false,
           shipping: { ...EMPTY_SHIPPING },
           assignment: {
             assignedTo: null,
@@ -2088,6 +2090,31 @@ export function WorkOrderForm({
                       ))}
                     </SelectContent>
                   </Select>
+                )}
+              />
+            </FieldShell>
+
+            {/* "Plaćeno" sits beside the document type rather than inside it:
+                the type is single-select, but a proforma or otkup can be paid
+                just as an invoice can. It prints as its own ticked row. */}
+            <FieldShell id="isPaid" label={t("workOrders.form.paidLabel")}>
+              <Controller
+                name="isPaid"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center gap-2 py-2">
+                    <Checkbox
+                      id="isPaid"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                    <label
+                      htmlFor="isPaid"
+                      className="text-[12px] text-[color:var(--iris-ink-soft)]"
+                    >
+                      {t("workOrders.form.paid")}
+                    </label>
+                  </div>
                 )}
               />
             </FieldShell>

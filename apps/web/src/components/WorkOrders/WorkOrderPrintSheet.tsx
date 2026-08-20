@@ -161,13 +161,15 @@ export function resolveBillingDocumentType(
   return order.billingDocumentType ?? billingDefaults.documentType;
 }
 
-// Builds the document-type (tip dokumenta) box: the three built-in rows in
-// their established order, followed by any document type the shop added in
-// Settings (e.g. "PLAĆENO" under PROFAKTURA), so a custom option is visible on
-// the nalog instead of silently disappearing.
+// Builds the document box: the three built-in document-type rows in their
+// established order, then any document type the shop added in Settings, and
+// finally PLAĆENO. The paid row is deliberately last and independent — it ticks
+// alongside whichever document type is selected, since a proforma or otkup can
+// be paid just as an invoice can.
 export function getPrintBillingRows(
   billingDocumentType: BillingDocumentType | null,
   enumValues: EnumValue[] = [],
+  isPaid = false,
 ): PrintCheckRow[] {
   return [
     ...PRINT_BILLING_ROWS.map((row) => ({
@@ -175,6 +177,7 @@ export function getPrintBillingRows(
       checked: row.billingDocumentType === billingDocumentType,
     })),
     ...customEnumRows(enumValues, "billingDocumentType", billingDocumentType),
+    { label: i18n.t("workOrders.print.billing.paid"), checked: isPaid },
   ];
 }
 
@@ -364,6 +367,7 @@ export function WorkOrderPrintSheet({
   const billingRows = getPrintBillingRows(
     resolveBillingDocumentType(order, billingDefaults),
     enumValues,
+    order.isPaid,
   );
   const noteLines = buildPrintNoteLines(order);
   const shippingAddress = resolvePrintShippingAddress(order);

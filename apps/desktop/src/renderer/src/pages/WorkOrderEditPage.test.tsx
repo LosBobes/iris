@@ -76,6 +76,7 @@ const sampleOrder: WorkOrder = {
   proformaDueDate: null,
   dueDate: null,
   isCompleted: false,
+  isPaid: false,
   status: "active",
   price: null,
   note: null,

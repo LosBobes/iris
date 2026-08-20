@@ -81,6 +81,7 @@ function WorkOrderEditPage(): React.JSX.Element {
           jobDescription: values.jobDescription,
           jobDetails: values.jobDetails,
           billingDocumentType: values.billingDocumentType,
+          isPaid: values.isPaid,
           billingDocumentNumber: values.billingDocumentNumber,
           shipping: values.shipping,
           assignment: values.assignment,

@@ -1465,7 +1465,7 @@ components:
     WorkOrder:
       type: object
       required:
-        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, proformaDueDate, dueDate, isCompleted, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
+        [id, orderNumber, customerId, locationId, clientName, contactPerson, jobDescription, jobDetails, billingDocumentType, billingDocumentNumber, shipping, issuedBy, executedBy, assignment, issueDate, proformaDueDate, dueDate, isCompleted, isPaid, status, price, note, createdAt, updatedAt, completionDate, internalNotes, customerNotes, events, attachments, materialUsage, timeEntries, invoiceDraft, communication]
       properties:
         id:
           type: string
@@ -1523,6 +1523,13 @@ components:
           example: '2025-04-14'
         isCompleted:
           type: boolean
+        isPaid:
+          type: boolean
+          description: >-
+            Whether the job has been paid for (plaćeno). Independent of
+            billingDocumentType: a proforma or cash-collection order can be
+            paid just as an invoiced one can. Printed as its own ticked row in
+            the nalog's document box.
         status:
           type: string
           enum: [new, assigned, inProgress, completed, cancelled, invoiced]
@@ -1675,6 +1682,11 @@ components:
         dueDate:
           type: [string, 'null']
           format: date
+        isPaid:
+          type: boolean
+          description: >-
+            Whether the job is already paid for (plaćeno). Optional on create;
+            defaults to false.
         price:
           type: [number, 'null']
           format: double
@@ -1745,6 +1757,13 @@ components:
           format: date
         isCompleted:
           type: boolean
+        isPaid:
+          type: boolean
+          description: >-
+            Whether the job has been paid for (plaćeno). Independent of
+            billingDocumentType: a proforma or cash-collection order can be
+            paid just as an invoiced one can. Printed as its own ticked row in
+            the nalog's document box.
         status:
           type: string
           enum: [new, assigned, inProgress, completed, cancelled, invoiced]
