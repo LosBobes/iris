@@ -1009,7 +1009,7 @@ export const sr = {
       searchCatalog: 'Pretraga kataloga...',
       noCatalog: 'Nema stavki u katalogu.',
       catalogHint: 'Za uslugu koja nije u katalogu koristite „Posebna usluga“.',
-      catalogAlreadyAdded: 'Ta stavka je već na nalogu.',
+      catalogAlreadyAdded: 'Već na nalogu',
       noItems: 'Nema stavki',
       colType: 'Tip',
       colDescription: 'Opis',

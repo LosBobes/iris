@@ -1010,7 +1010,7 @@ export const en: typeof sr = {
       searchCatalog: 'Search catalog...',
       noCatalog: 'No catalog items.',
       catalogHint: 'For a service not in the catalog use “Special service”.',
-      catalogAlreadyAdded: 'That item is already on the order.',
+      catalogAlreadyAdded: 'Already on order',
       noItems: 'No items',
       colType: 'Type',
       colDescription: 'Description',
