@@ -588,8 +588,10 @@ export function WorkOrderForm({
     () => computeLineItemsTotal(invoiceLineItems),
     [invoiceLineItems],
   );
-  // Catalog items already on the order, so the catalog picker can hide them and
-  // the same article/service can't be added twice.
+  // Catalog items already on the order. The picker flags these so the operator
+  // can see a line already exists, but adding the item again is allowed: one
+  // catalog code routinely covers several physically distinct jobs (the same
+  // print at 0.5 m², 6 m² and 12 m²), and each needs its own priced line.
   const usedCatalogItemIds = useMemo(
     () =>
       new Set(
@@ -916,15 +918,6 @@ export function WorkOrderForm({
     null,
   );
 
-  const handleAddCatalogLineItem = (catalogItem: CatalogItem): void => {
-    // Guard against double-adding the same catalog item (the picker also hides
-    // already-added ones, so this only trips on a stale selection).
-    if (usedCatalogItemIds.has(catalogItem.id)) {
-      toast.error(t("workOrders.form.catalogAlreadyAdded"));
-      return;
-    }
-    appendInvoiceLineItem(createInvoiceLineItemFromCatalog(catalogItem));
-  };
   const showShippingAddress =
     deliveryMethod !== null && deliveryMethod !== "pickup";
   const showPostageOptions =
@@ -933,8 +926,9 @@ export function WorkOrderForm({
   // The live PDF preview is available to every role (the API strips money from
   // the render for operators) and can be hidden to give the form full width.
   const [showPreview, setShowPreview] = useState(true);
-  // Line kind (service/article) is locked to a static pill by default; the pen
-  // toggles the line into edit mode where the kind becomes a Select again.
+  // Persisted ids of the catalog lines currently unlocked for editing. Line kind
+  // (service/article) is locked to a static pill by default; the pen toggles the
+  // line into edit mode where the kind becomes a Select again.
   const [editingLineIds, setEditingLineIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -945,6 +939,16 @@ export function WorkOrderForm({
       else next.add(id);
       return next;
     });
+  };
+
+  const handleAddCatalogLineItem = (catalogItem: CatalogItem): void => {
+    const line = createInvoiceLineItemFromCatalog(catalogItem);
+    appendInvoiceLineItem(line);
+    // Catalog lines render locked, but every copy of one item has to be told
+    // apart on the printed nalog ("BANER 0,5 M2" vs "BANER 6 M2"), so a
+    // freshly added line starts unlocked: description, quantity, unit and
+    // price are editable straight away without hunting for the pen.
+    setEditingLineIds((prev) => new Set(prev).add(line.id));
   };
   useEffect(() => {
     const nextAddress = resolveShippingAddress(shippingAddress, deliveryMethod);
@@ -1556,7 +1560,7 @@ export function WorkOrderForm({
                   if (!next) setCatalogPickerKind(null);
                 }}
                 onSelect={handleAddCatalogLineItem}
-                excludeIds={usedCatalogItemIds}
+                usedIds={usedCatalogItemIds}
               />
 
               {invoiceLineItemFields.length === 0 ? (
@@ -1611,8 +1615,13 @@ export function WorkOrderForm({
                     const isCatalogLine = Boolean(
                       invoiceLineItems[index]?.catalogItemId,
                     );
+                    // useFieldArray overwrites `id` on the objects it hands
+                    // back with its own render key, so the unlock set is keyed
+                    // on the line's persisted id from the form values instead —
+                    // that is the one handleAddCatalogLineItem also knows.
+                    const lineId = invoiceLineItems[index]?.id ?? lineItem.id;
                     const isEditingLine =
-                      !isCatalogLine || editingLineIds.has(lineItem.id);
+                      !isCatalogLine || editingLineIds.has(lineId);
 
                     return (
                       <div
@@ -1727,7 +1736,7 @@ export function WorkOrderForm({
                                   { n: index + 1 },
                                 )}
                                 aria-pressed={isEditingLine}
-                                onClick={() => toggleLineEditing(lineItem.id)}
+                                onClick={() => toggleLineEditing(lineId)}
                                 className="iris-focusable iris-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[color:var(--iris-ink-mute)] hover:bg-muted hover:text-foreground"
                               >
                                 {isEditingLine ? (

@@ -14,8 +14,13 @@ interface CatalogPickerDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Chosen item; the dialog closes itself after calling this. */
   onSelect: (item: CatalogItem) => void;
-  /** Ids already on the order, hidden from the results. */
-  excludeIds: Set<string>;
+  /**
+   * Ids already on the order. These stay selectable — one catalog code often
+   * covers several physically distinct jobs (e.g. the same print at 0.5 m²,
+   * 6 m² and 12 m²), each of which needs its own line — so they are only
+   * flagged with a badge, never hidden.
+   */
+  usedIds: Set<string>;
 }
 
 /**
@@ -30,7 +35,7 @@ export function CatalogPickerDialog({
   open,
   onOpenChange,
   onSelect,
-  excludeIds,
+  usedIds,
 }: CatalogPickerDialogProps): React.JSX.Element {
   const { t } = useTranslation();
   const [term, setTerm] = useState("");
@@ -52,7 +57,7 @@ export function CatalogPickerDialog({
         .getCatalogItems({ q: term.trim(), kind, active: true, limit: 20 })
         .then(({ items }) => {
           if (requestId.current !== id) return;
-          setResults(items.filter((item) => !excludeIds.has(item.id)));
+          setResults(items);
           setLoading(false);
         })
         .catch(() => {
@@ -62,7 +67,7 @@ export function CatalogPickerDialog({
         });
     }, 220);
     return () => clearTimeout(handle);
-  }, [open, term, kind, excludeIds]);
+  }, [open, term, kind]);
 
   const title =
     kind === "service"
@@ -109,6 +114,9 @@ export function CatalogPickerDialog({
                   ]
                     .filter(Boolean)
                     .join(" · ");
+                  // Adding the item again is legitimate, so this is a hint that
+                  // the order already has a line for it — not a block.
+                  const alreadyOnOrder = usedIds.has(item.id);
                   return (
                     <button
                       key={item.id}
@@ -121,7 +129,16 @@ export function CatalogPickerDialog({
                         "iris-focusable flex flex-col items-start gap-0.5 border-b border-border/60 px-2 py-2.5 text-left last:border-b-0 hover:bg-[color:var(--iris-accent)]/10",
                       )}
                     >
-                      <span className="text-[13px] text-foreground">{item.name}</span>
+                      <span className="flex w-full items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+                          {item.name}
+                        </span>
+                        {alreadyOnOrder && (
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.4px] text-[color:var(--iris-ink-mute)]">
+                            {t("workOrders.form.catalogAlreadyAdded")}
+                          </span>
+                        )}
+                      </span>
                       {sublabel && (
                         <span className="text-[11px] text-[color:var(--iris-ink-mute)]">
                           {sublabel}
