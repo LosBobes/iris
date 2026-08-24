@@ -8,6 +8,7 @@ import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useAuth } from "@/hooks/useAuth";
 import { getLocalIsoDate } from "@/shared/utils/work-orders";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
+import { formatActionError } from "@/lib/errors";
 import {
   clearWorkOrderDraft,
   readWorkOrderDraft,
@@ -215,8 +216,11 @@ function WorkOrderCreatePage(): React.JSX.Element {
         clearWorkOrderDraft();
         toast.success(t("workOrders.toast.created", { order: result.orderNumber }));
         navigate(`/work-orders/${result.id}`);
-      } catch {
-        toast.error(t("workOrders.toast.createError"));
+      } catch (error) {
+        // Surface what the API rejected (and its request reference) instead of a
+        // bare "greška": a save that will not go through has to tell the
+        // operator which stavka to fix, and give support a code to trace.
+        toast.error(formatActionError(t("workOrders.toast.createError"), error));
       }
     },
     [currentUser.username, isInteractiveTour, navigate, reservedOrderNumber, t],

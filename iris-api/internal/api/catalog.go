@@ -33,7 +33,7 @@ func (s *Server) handleCatalogItems(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.store.CatalogItems(r.Context(), query)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if !isAdmin(r) {
@@ -63,11 +63,11 @@ func (s *Server) handleCatalogItemByID(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := s.store.CatalogItemByID(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if item == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Stavka kataloga nije pronađena."})
+		writeAPIError(w, r, http.StatusNotFound, "Stavka kataloga nije pronađena.", nil)
 		return
 	}
 	if !isAdmin(r) {
@@ -81,7 +81,7 @@ func (s *Server) handleCatalogItemByID(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCatalogItemCostHistory(w http.ResponseWriter, r *http.Request) {
 	history, err := s.store.CatalogItemCostHistory(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": history})
@@ -92,7 +92,7 @@ func (s *Server) handleCatalogItemCostHistory(w http.ResponseWriter, r *http.Req
 // A provided value must be a YYYY-MM-DD date today or later — past dates are
 // rejected so prices can only be scheduled forward, never back-dated. On failure
 // it writes a 400 and returns ok=false.
-func validCatalogEffectiveFrom(w http.ResponseWriter, raw *string) (string, bool) {
+func validCatalogEffectiveFrom(w http.ResponseWriter, r *http.Request, raw *string) (string, bool) {
 	if raw == nil {
 		return "", true
 	}
@@ -102,12 +102,12 @@ func validCatalogEffectiveFrom(w http.ResponseWriter, raw *string) (string, bool
 	}
 	parsed, err := time.Parse("2006-01-02", value)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Datum primene mora biti u formatu GGGG-MM-DD."})
+		writeAPIError(w, r, http.StatusBadRequest, "Datum primene mora biti u formatu GGGG-MM-DD.", nil)
 		return "", false
 	}
 	today := time.Now().UTC().Format("2006-01-02")
 	if parsed.UTC().Format("2006-01-02") < today {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Datum primene ne može biti u prošlosti."})
+		writeAPIError(w, r, http.StatusBadRequest, "Datum primene ne može biti u prošlosti.", nil)
 		return "", false
 	}
 	return value, true
@@ -129,7 +129,7 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	effectiveFrom, ok := validCatalogEffectiveFrom(w, input.EffectiveFrom)
+	effectiveFrom, ok := validCatalogEffectiveFrom(w, r, input.EffectiveFrom)
 	if !ok {
 		return
 	}
@@ -151,7 +151,7 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := s.store.UpsertCatalogItem(r.Context(), item, effectiveFrom)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 	status := http.StatusOK
@@ -168,20 +168,20 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 func (s *Server) updateCatalogItemKind(w http.ResponseWriter, r *http.Request, kind domain.CatalogItemKind) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Nemate dozvolu za ovu akciju."})
+		writeAPIError(w, r, http.StatusForbidden, "Nemate dozvolu za ovu akciju.", nil)
 		return
 	}
 	if kind != domain.CatalogItemKindService && kind != domain.CatalogItemKindArticle {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Neispravna vrsta stavke."})
+		writeAPIError(w, r, http.StatusBadRequest, "Neispravna vrsta stavke.", nil)
 		return
 	}
 	existing, err := s.store.CatalogItemByID(r.Context(), id)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if existing == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Stavka kataloga nije pronađena."})
+		writeAPIError(w, r, http.StatusNotFound, "Stavka kataloga nije pronađena.", nil)
 		return
 	}
 	existing.Kind = kind
@@ -190,7 +190,7 @@ func (s *Server) updateCatalogItemKind(w http.ResponseWriter, r *http.Request, k
 	// pending future schedule).
 	result, err := s.store.UpsertCatalogItem(r.Context(), *existing, "")
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 	// Operators never receive cost data.
@@ -200,7 +200,7 @@ func (s *Server) updateCatalogItemKind(w http.ResponseWriter, r *http.Request, k
 
 func (s *Server) handleDeleteCatalogItem(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.DeleteCatalogItem(r.Context(), chi.URLParam(r, "id")); err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -218,7 +218,7 @@ func catalogCleanupFilter(w http.ResponseWriter, r *http.Request) (store.Catalog
 	for _, value := range query["kind"] {
 		kind := domain.CatalogItemKind(strings.TrimSpace(value))
 		if kind != domain.CatalogItemKindService && kind != domain.CatalogItemKindArticle {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Neispravna vrsta stavke."})
+			writeAPIError(w, r, http.StatusBadRequest, "Neispravna vrsta stavke.", nil)
 			return store.CatalogCleanupFilter{}, false
 		}
 		if !seen[kind] {
@@ -227,7 +227,7 @@ func catalogCleanupFilter(w http.ResponseWriter, r *http.Request) (store.Catalog
 		}
 	}
 	if len(kinds) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Izaberite bar jednu vrstu stavke."})
+		writeAPIError(w, r, http.StatusBadRequest, "Izaberite bar jednu vrstu stavke.", nil)
 		return store.CatalogCleanupFilter{}, false
 	}
 
@@ -235,7 +235,7 @@ func catalogCleanupFilter(w http.ResponseWriter, r *http.Request) (store.Catalog
 	switch missing {
 	case store.CleanupMissingPurchase, store.CleanupMissingSale, store.CleanupMissingBoth:
 	default:
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Neispravan izbor cene za čišćenje."})
+		writeAPIError(w, r, http.StatusBadRequest, "Neispravan izbor cene za čišćenje.", nil)
 		return store.CatalogCleanupFilter{}, false
 	}
 	return store.CatalogCleanupFilter{Kinds: kinds, Missing: missing}, true
@@ -251,7 +251,7 @@ func (s *Server) handleCatalogCleanupPreview(w http.ResponseWriter, r *http.Requ
 	}
 	items, err := s.store.CatalogItemsMissingPrices(r.Context(), filter)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": len(items)})
@@ -268,7 +268,7 @@ func (s *Server) handleCleanupCatalogItems(w http.ResponseWriter, r *http.Reques
 	}
 	deleted, err := s.store.DeleteCatalogItemsMissingPrices(r.Context(), filter)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"deleted": deleted})

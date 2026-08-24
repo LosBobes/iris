@@ -267,3 +267,58 @@ describe('createHttpApi', () => {
     await expect(api.getCatalogItemCostHistory('cat-x')).resolves.toEqual([])
   })
 })
+
+describe('failed requests', () => {
+  it('carries the API message and request reference, and reports them', async () => {
+    const captureException = vi.fn()
+    vi.doMock('@sentry/react', () => ({ captureException }))
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { ApiError, formatActionError } = await import('./errors')
+
+    const fetchMock = vi.fn(async () =>
+      response(
+        {
+          error: 'Jedinica mere „sat“ nije dozvoljena.',
+          requestId: 'AbC123-000042',
+        },
+        { status: 422, headers: { 'X-Request-Id': 'AbC123-000042' } },
+      ),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.createWorkOrder(baseInput).catch((thrown) => thrown)
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(422)
+    expect(error.requestId).toBe('AbC123-000042')
+    // The operator sees which stavka to fix plus a code support can trace.
+    expect(formatActionError('Greška pri kreiranju radnog naloga', error)).toBe(
+      'Greška pri kreiranju radnog naloga: Jedinica mere „sat“ nije dozvoljena. (kod: AbC123-000042)',
+    )
+    expect(captureException).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({ level: 'warning' }),
+    )
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('does not report an expired session', async () => {
+    const captureException = vi.fn()
+    vi.doMock('@sentry/react', () => ({ captureException }))
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Sesija je istekla.' }, { status: 401 }),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getWorkOrders()).rejects.toThrow('Sesija je istekla.')
+    expect(captureException).not.toHaveBeenCalled()
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+})

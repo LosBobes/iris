@@ -19,6 +19,7 @@ import type {
   WorkOrderNote,
 } from "@/types/work-order";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
+import { formatActionError } from "@/lib/errors";
 
 function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
   return notes.filter((note) => note.body.trim() !== "");
@@ -109,8 +110,8 @@ function WorkOrderEditPage(): React.JSX.Element {
         }
         toast.success(t("workOrders.toast.updated", { order: updated.orderNumber }));
         navigate(`/work-orders/${updated.id}`);
-      } catch {
-        toast.error(t("workOrders.toast.updateError"));
+      } catch (error) {
+        toast.error(formatActionError(t("workOrders.toast.updateError"), error));
       }
     },
     [id, order, navigate, t],
@@ -139,8 +140,8 @@ function WorkOrderEditPage(): React.JSX.Element {
           status: getWorkOrderStatusLabel(newStatus),
         }),
       );
-    } catch {
-      toast.error(t("workOrders.toast.statusError"));
+    } catch (error) {
+      toast.error(formatActionError(t("workOrders.toast.statusError"), error));
     }
   }, [id, order, t]);
 

@@ -17,6 +17,7 @@ import { Pager } from "@/components/Pager";
 import { useAuth } from "@/hooks/useAuth";
 import { useCatalogItems } from "@/hooks/useCatalogItems";
 import { formatCatalogPrice, kindLabel } from "@/lib/catalog-format";
+import { formatActionError } from "@/lib/errors";
 import type {
   CatalogItem,
   CatalogItemInput,
@@ -498,13 +499,6 @@ function EmptyListNote({ text }: { text: string }): React.JSX.Element {
 function blankToNull(value: string | null): string | null {
   if (value === null || value.trim() === "") return null;
   return value;
-}
-
-function formatActionError(prefix: string, error: unknown): string {
-  if (error instanceof Error && error.message.trim() !== "") {
-    return `${prefix}: ${error.message}`;
-  }
-  return `${prefix}.`;
 }
 
 export default CatalogPage;

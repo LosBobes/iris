@@ -13,6 +13,7 @@ import {
 } from "@/shared/utils/work-orders";
 import type { WorkOrder } from "@/types/work-order";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
+import { formatActionError } from "@/lib/errors";
 
 function WorkOrderEditPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>();
@@ -85,8 +86,8 @@ function WorkOrderEditPage(): React.JSX.Element {
         }
         toast.success(t("workOrders.edit.updated", { order: updated.orderNumber }));
         navigate("/work-orders");
-      } catch {
-        toast.error(t("workOrders.edit.updateError"));
+      } catch (error) {
+        toast.error(formatActionError(t("workOrders.edit.updateError"), error));
       }
     },
     [id, order, navigate, t],

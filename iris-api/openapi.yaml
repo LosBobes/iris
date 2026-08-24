@@ -1874,3 +1874,14 @@ components:
       properties:
         error:
           type: string
+          description: >-
+            Serbian message safe to show the operator. Internal detail (SQL,
+            file paths, decode errors) is logged and reported to Sentry
+            instead of being returned here.
+        requestId:
+          type: string
+          description: >-
+            Short reference for this failed request, also sent as the
+            X-Request-Id header and attached to the server log line and the
+            Sentry event. Clients show it with the error message so a
+            photographed screen can be traced to the exact request.

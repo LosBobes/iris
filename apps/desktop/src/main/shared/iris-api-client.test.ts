@@ -120,6 +120,22 @@ describe('iris-api-client', () => {
     )
   })
 
+  // A shop terminal reports problems by phone or photo, so the request
+  // reference the API returns has to reach the screen alongside the message.
+  it('appends the request reference to a rejected save', async () => {
+    const fetchFn = vi.fn().mockResolvedValueOnce(
+      jsonResponse(
+        { error: 'Jedinica mere „sat“ nije dozvoljena.', requestId: 'AbC123-000042' },
+        { status: 422 },
+      ),
+    )
+    const client = createIrisApiClient({ baseUrl: 'http://localhost:8080', fetchFn })
+
+    await expect(client.createWorkOrder(sampleCreateInput)).rejects.toThrow(
+      'Jedinica mere „sat“ nije dozvoljena. (kod: AbC123-000042)',
+    )
+  })
+
   it('builds the catalog query string from kind, search, active and pagination', async () => {
     const fetchFn = vi.fn().mockResolvedValueOnce(jsonResponse({ items: [], total: 0 }))
     const client = createIrisApiClient({ baseUrl: 'http://localhost:8080', fetchFn })

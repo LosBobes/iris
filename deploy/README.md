@@ -82,6 +82,17 @@ The frontend DSN is compiled into the static bundle at build time, so it cannot
 be changed by server-side env vars. Changing it means rebuilding the frontend
 image (CI does this on every push to `main`).
 
+Both surfaces report **handled** failures too, not only crashes: every request
+the API rejects or fails (4xx as a warning, 5xx as an error) and every failed
+call the web client turns into a toast becomes a Sentry event. Each failed
+response carries a short request reference (`requestId` in the body, also the
+`X-Request-Id` header) that the apps show next to the error message — for
+example `… (kod: AbC123-000042)`. The same code appears in the API log line for
+that request and as the `request.reference` tag on the Sentry event, so a
+screenshot from the shop leads straight to the event and the log. The desktop
+app has no Sentry SDK; it shows the same message and code, and the failure is
+still reported from the API side.
+
 ### 3a. (Optional) Seed the database from an existing SQLite file
 
 If you already have a SQLite database you want to start from, place it into the

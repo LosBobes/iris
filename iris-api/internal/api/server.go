@@ -16,9 +16,10 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	sentryhttp "github.com/getsentry/sentry-go/http"
 )
 
 // Server owns the HTTP layer for the Iris API.
@@ -211,7 +212,7 @@ func (s *Server) requireAdmin(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := currentUser(r)
 		if user == nil || user.Role != domain.RoleAdmin {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "Nemate dozvolu za ovu akciju."})
+			writeAPIError(w, r, http.StatusForbidden, "Nemate dozvolu za ovu akciju.", nil)
 			return
 		}
 		handler(w, r)
@@ -221,17 +222,17 @@ func (s *Server) requireAdmin(handler http.HandlerFunc) http.HandlerFunc {
 func (s *Server) userFromRequest(w http.ResponseWriter, r *http.Request) (*domain.User, bool) {
 	cookie, err := r.Cookie(s.config.SessionCookieName)
 	if err != nil || cookie.Value == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Potrebna je prijava."})
+		writeAPIError(w, r, http.StatusUnauthorized, "Potrebna je prijava.", nil)
 		return nil, false
 	}
 	user, err := s.store.UserBySessionToken(r.Context(), cookie.Value)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return nil, false
 	}
 	if user == nil {
 		clearSessionCookie(w, s.config)
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Sesija je istekla."})
+		writeAPIError(w, r, http.StatusUnauthorized, "Sesija je istekla.", nil)
 		return nil, false
 	}
 	return user, true
@@ -278,7 +279,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	const invalidCredentials = "Neispravna organizacija, korisničko ime ili lozinka."
 	tenant, err := s.store.TenantBySlug(r.Context(), req.OrgSlug)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if tenant == nil {
@@ -288,7 +289,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.store.AuthenticateUser(r.Context(), tenant.ID, req.Username, req.Password)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -303,7 +304,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	expiresAt := time.Now().UTC().Add(s.config.SessionDuration)
 	token, err := s.store.CreateSession(r.Context(), user.ID, expiresAt)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	setSessionCookie(w, s.config, token, expiresAt)
@@ -321,7 +322,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := s.store.UserBySessionToken(r.Context(), cookie.Value)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if user == nil {
@@ -335,7 +336,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(s.config.SessionCookieName); err == nil && cookie.Value != "" {
 		if err := s.store.DeleteSession(r.Context(), cookie.Value); err != nil {
-			writeServerError(w, err)
+			writeServerError(w, r, err)
 			return
 		}
 	}
@@ -356,7 +357,7 @@ func (s *Server) handleCustomers(w http.ResponseWriter, r *http.Request) {
 		Offset: offset,
 	})
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -368,7 +369,7 @@ func (s *Server) handleLocations(w http.ResponseWriter, r *http.Request) {
 	// whole tenant's location list on every page load.
 	locations, err := s.store.Locations(r.Context(), r.URL.Query().Get("customerId"))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, locations)
@@ -380,11 +381,11 @@ func (s *Server) handleCustomerByID(w http.ResponseWriter, r *http.Request) {
 	}
 	customer, err := s.store.CustomerByID(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if customer == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Klijent nije pronađen."})
+		writeAPIError(w, r, http.StatusNotFound, "Klijent nije pronađen.", nil)
 		return
 	}
 	writeJSON(w, http.StatusOK, customer)
@@ -400,7 +401,7 @@ func (s *Server) handleUpsertCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.store.UpsertCustomer(r.Context(), customer)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -416,7 +417,7 @@ func (s *Server) handleUpsertLocation(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.store.UpsertLocation(r.Context(), location)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -424,7 +425,7 @@ func (s *Server) handleUpsertLocation(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteCustomer(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.DeleteCustomer(r.Context(), chi.URLParam(r, "id")); err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -432,7 +433,7 @@ func (s *Server) handleDeleteCustomer(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteLocation(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.DeleteLocation(r.Context(), chi.URLParam(r, "id")); err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -444,7 +445,7 @@ func (s *Server) handleWorkOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.store.WorkOrders(r.Context(), parseWorkOrderListQuery(r))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -502,7 +503,7 @@ func parseWorkOrderListQuery(r *http.Request) store.WorkOrderListQuery {
 func (s *Server) handleOperators(w http.ResponseWriter, r *http.Request) {
 	operators, err := s.store.Operators(r.Context())
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -516,12 +517,12 @@ func (s *Server) handleWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 	}
 	workOrder, err := s.store.WorkOrderByID(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
 	if workOrder == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
+		writeAPIError(w, r, http.StatusNotFound, "Radni nalog nije pronađen.", nil)
 		return
 	}
 
@@ -542,7 +543,7 @@ func (s *Server) handleReserveOrderNumber(w http.ResponseWriter, r *http.Request
 
 	reserved, err := s.store.ReserveOrderNumber(r.Context(), reservedBy)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 
@@ -562,7 +563,7 @@ func (s *Server) handleReleaseOrderNumber(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := s.store.ReleaseOrderNumber(r.Context(), req.OrderNumber); err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 
@@ -576,13 +577,13 @@ func (s *Server) handleReleaseOrderNumber(w http.ResponseWriter, r *http.Request
 func (s *Server) handleAcquireEditLock(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	if user == nil {
-		writeValidationError(w, "Prijava je istekla.")
+		writeValidationError(w, r, "Prijava je istekla.")
 		return
 	}
 
 	lock, acquired, err := s.store.AcquireEditLock(r.Context(), chi.URLParam(r, "id"), user.Username)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 
@@ -599,12 +600,12 @@ func (s *Server) handleAcquireEditLock(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleReleaseEditLock(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	if user == nil {
-		writeValidationError(w, "Prijava je istekla.")
+		writeValidationError(w, r, "Prijava je istekla.")
 		return
 	}
 
 	if err := s.store.ReleaseEditLock(r.Context(), chi.URLParam(r, "id"), user.Username); err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 
@@ -620,7 +621,7 @@ func (s *Server) handleCreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	workOrder, err := s.store.CreateWorkOrder(r.Context(), req)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 
@@ -640,12 +641,12 @@ func (s *Server) handleUpdateWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	workOrder, err := s.store.UpdateWorkOrder(r.Context(), chi.URLParam(r, "id"), req)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 
 	if workOrder == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
+		writeAPIError(w, r, http.StatusNotFound, "Radni nalog nije pronađen.", nil)
 		return
 	}
 
@@ -660,7 +661,7 @@ func (s *Server) handleUpdateWorkOrder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteWorkOrder(w http.ResponseWriter, r *http.Request) {
 	result, err := s.store.DeleteWorkOrder(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -699,11 +700,11 @@ func (s *Server) workOrderPrintContext(
 func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 	workOrder, err := s.store.WorkOrderByID(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if workOrder == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
+		writeAPIError(w, r, http.StatusNotFound, "Radni nalog nije pronađen.", nil)
 		return
 	}
 
@@ -711,7 +712,7 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 	if workOrder.LocationID != nil {
 		locations, locErr := s.store.Locations(r.Context(), "")
 		if locErr != nil {
-			writeServerError(w, locErr)
+			writeServerError(w, r, locErr)
 			return
 		}
 		for _, location := range locations {
@@ -729,19 +730,19 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 
 	settings, err := s.store.OrganizationSettings(r.Context())
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
 	printCtx, err := s.workOrderPrintContext(r, *workOrder, locationAddress)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
 	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, printCtx, settings)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -766,7 +767,7 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 	if order.LocationID != nil {
 		locations, err := s.store.Locations(r.Context(), "")
 		if err != nil {
-			writeServerError(w, err)
+			writeServerError(w, r, err)
 			return
 		}
 		for _, location := range locations {
@@ -784,19 +785,19 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 
 	settings, err := s.store.OrganizationSettings(r.Context())
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
 	printCtx, err := s.workOrderPrintContext(r, order, locationAddress)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
 	html, err := reports.RenderWorkOrderHTML(order, printCtx, settings)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 
@@ -812,11 +813,11 @@ func (s *Server) handlePublicWorkOrderStatus(w http.ResponseWriter, r *http.Requ
 	token := chi.URLParam(r, "token")
 	workOrder, err := s.store.WorkOrderByPublicToken(r.Context(), token)
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	if workOrder == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Radni nalog nije pronađen."})
+		writeAPIError(w, r, http.StatusNotFound, "Radni nalog nije pronađen.", nil)
 		return
 	}
 	writeJSON(w, http.StatusOK, domain.PublicWorkOrderStatus{
@@ -877,7 +878,9 @@ const maxJSONBodyBytes = 1 << 20
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		// The decode error itself (offending field, byte offset) never reaches the
+		// client, but it is the whole diagnosis, so it is logged and reported.
+		writeAPIError(w, r, http.StatusBadRequest, "Neispravan format zahteva.", err)
 		return false
 	}
 	return true
@@ -891,26 +894,118 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-// writeServerError keeps internal failures in one response shape. The
-// underlying error is logged but never echoed to clients, so internals
-// (SQL fragments, file paths) cannot leak through API responses.
-func writeServerError(w http.ResponseWriter, err error) {
-	log.Printf("internal server error: %v", err)
-	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Došlo je do greške na serveru."})
+// requestReference is the short code echoed to the client and attached to every
+// log line and Sentry event for a failed request. Operators photograph the
+// screen when something goes wrong, so the code has to be readable off a photo:
+// chi's request id is scoped per process ("host/AbC123-000042"), and the part
+// after the slash is what identifies the single request.
+func requestReference(r *http.Request) string {
+	id := middleware.GetReqID(r.Context())
+	if id == "" {
+		return ""
+	}
+	if slash := strings.LastIndex(id, "/"); slash >= 0 && slash+1 < len(id) {
+		return id[slash+1:]
+	}
+	return id
 }
 
-func writeStoreError(w http.ResponseWriter, err error) {
+// writeAPIError is the single exit for every failed request: it echoes a Serbian
+// message plus the request reference, logs the full technical detail (which is
+// never sent to the client), and reports the failure to Sentry.
+//
+// cause carries what the client must not see — the decode error, the SQL
+// failure. It is nil for a plain business rejection.
+func writeAPIError(w http.ResponseWriter, r *http.Request, status int, message string, cause error) {
+	reference := requestReference(r)
+	username := ""
+	if user := currentUser(r); user != nil {
+		username = user.Username
+	}
+	log.Printf(
+		"api error: status=%d ref=%s method=%s path=%s user=%s message=%q cause=%v",
+		status, reference, r.Method, r.URL.Path, username, message, cause,
+	)
+	reportAPIError(r, status, reference, username, message, cause)
+
+	payload := map[string]string{"error": message}
+	if reference != "" {
+		payload["requestId"] = reference
+		w.Header().Set("X-Request-Id", reference)
+	}
+	writeJSON(w, status, payload)
+}
+
+// reportAPIError sends the failure to Sentry. Server faults (5xx) are errors;
+// rejected input (4xx) is a warning, because the clients validate before they
+// submit — a rejection reaching this point means client and API disagree, which
+// is exactly the drift that leaves an operator stuck on a form that will not
+// save. Both carry the reference shown on screen, so a photographed code leads
+// straight to the event. No-op when Sentry was never initialized (no DSN).
+func reportAPIError(r *http.Request, status int, reference, username, message string, cause error) {
+	if status == http.StatusUnauthorized || status == http.StatusNotFound {
+		return
+	}
+	hub := sentry.GetHubFromContext(r.Context())
+	if hub == nil {
+		hub = sentry.CurrentHub()
+	}
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelError)
+		if status < http.StatusInternalServerError {
+			scope.SetLevel(sentry.LevelWarning)
+		}
+		scope.SetTag("http.status", strconv.Itoa(status))
+		scope.SetTag("http.route", r.Method+" "+routePattern(r))
+		if reference != "" {
+			scope.SetTag("request.reference", reference)
+		}
+		if username != "" {
+			scope.SetUser(sentry.User{Username: username})
+		}
+		scope.SetContext("iris", map[string]any{
+			"path":    r.URL.Path,
+			"query":   r.URL.RawQuery,
+			"message": message,
+		})
+		if cause != nil {
+			hub.CaptureException(fmt.Errorf("%s: %w", message, cause))
+			return
+		}
+		hub.CaptureMessage(message)
+	})
+}
+
+// routePattern returns the chi route template ("/work-orders/{id}") so Sentry
+// groups events by endpoint instead of by concrete id.
+func routePattern(r *http.Request) string {
+	if routeCtx := chi.RouteContext(r.Context()); routeCtx != nil {
+		if pattern := routeCtx.RoutePattern(); pattern != "" {
+			return pattern
+		}
+	}
+	return r.URL.Path
+}
+
+// writeServerError keeps internal failures in one response shape. The
+// underlying error is logged and reported but never echoed to clients, so
+// internals (SQL fragments, file paths) cannot leak through API responses.
+func writeServerError(w http.ResponseWriter, r *http.Request, err error) {
+	writeAPIError(w, r, http.StatusInternalServerError, "Došlo je do greške na serveru.", err)
+}
+
+func writeStoreError(w http.ResponseWriter, r *http.Request, err error) {
 	var validationErr *store.ValidationError
 	if errors.As(err, &validationErr) {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": validationErr.Error()})
+		writeAPIError(w, r, http.StatusUnprocessableEntity, validationErr.Error(), nil)
 		return
 	}
 
-	writeServerError(w, err)
+	writeServerError(w, r, err)
 }
 
 // writeValidationError reports a business-rule rejection (422) with a Serbian
 // message, for guards enforced in the handler rather than the store.
-func writeValidationError(w http.ResponseWriter, message string) {
-	writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": message})
+func writeValidationError(w http.ResponseWriter, r *http.Request, message string) {
+	writeAPIError(w, r, http.StatusUnprocessableEntity, message, nil)
 }

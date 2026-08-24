@@ -15,7 +15,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, err := s.store.OrganizationSettings(r.Context())
 	if err != nil {
-		writeServerError(w, err)
+		writeServerError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
@@ -30,7 +30,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, err := s.store.UpdateOrganizationSettings(r.Context(), input)
 	if err != nil {
-		writeStoreError(w, err)
+		writeStoreError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)

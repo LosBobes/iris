@@ -29,8 +29,34 @@ import type {
   UpdateUserInput,
 } from '@/types/user'
 import i18n from '@/i18n'
+import { ApiError, reportApiError } from '@/lib/errors'
 
 type FetchLike = typeof fetch
+
+function errorField(payload: unknown, field: 'error' | 'requestId'): string | undefined {
+  if (typeof payload !== 'object' || payload === null || !(field in payload)) {
+    return undefined
+  }
+  const value = (payload as Record<string, unknown>)[field]
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+// fail builds the error, reports it, and throws it, so every failed call lands
+// in Sentry with its request reference instead of only in a toast.
+function fail(
+  message: string,
+  response: Response,
+  payload: unknown,
+): never {
+  const error = new ApiError(message, {
+    status: response.status,
+    requestId:
+      errorField(payload, 'requestId') ?? response.headers.get('X-Request-Id'),
+    url: response.url,
+  })
+  reportApiError(error)
+  throw error
+}
 
 async function readJSON<T>(response: Response): Promise<T> {
   // Error responses are not guaranteed to be JSON (e.g. an HTML page from a
@@ -43,15 +69,15 @@ async function readJSON<T>(response: Response): Promise<T> {
   }
 
   if (!response.ok) {
-    const message =
-      typeof payload === 'object' && payload !== null && 'error' in payload
-        ? (payload as { error?: string }).error
-        : undefined
-    throw new Error(message ?? `HTTP ${response.status}`)
+    fail(
+      errorField(payload, 'error') ?? `HTTP ${response.status}`,
+      response,
+      payload,
+    )
   }
 
   if (payload === undefined) {
-    throw new Error('Neispravan odgovor servera.')
+    fail('Neispravan odgovor servera.', response, payload)
   }
 
   return payload as T
