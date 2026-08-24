@@ -113,9 +113,6 @@ export function slugId(prefix: string, value: string): string {
   return `${prefix}-${slug || Date.now().toString(36)}`;
 }
 
-export function formatActionError(prefix: string, error: unknown): string {
-  if (error instanceof Error && error.message.trim() !== "") {
-    return `${prefix}: ${error.message}`;
-  }
-  return `${prefix}.`;
-}
+// Re-exported so the existing per-module import sites keep working; the
+// implementation is shared because it now also renders the request reference.
+export { formatActionError } from '@/lib/errors'

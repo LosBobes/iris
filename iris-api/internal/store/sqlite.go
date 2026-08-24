@@ -779,7 +779,7 @@ func (s *SQLiteStore) CreateWorkOrder(
 	if err != nil {
 		return nil, err
 	}
-	custom, err := s.customEnums(ctx)
+	custom, err := s.workOrderEnums(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -881,7 +881,7 @@ func (s *SQLiteStore) UpdateWorkOrder(
 	if err != nil || current == nil {
 		return current, err
 	}
-	custom, err := s.customEnums(ctx)
+	custom, err := s.workOrderEnums(ctx)
 	if err != nil {
 		return nil, err
 	}

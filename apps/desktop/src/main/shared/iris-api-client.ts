@@ -134,14 +134,31 @@ function getErrorMessage(payload: unknown): string | undefined {
   return undefined
 }
 
+// getRequestReference reads the short code the API returns with every failed
+// request. It is appended to the message shown on the shop terminal so a problem
+// reported by phone or photo can be traced to the exact request in the server
+// log and in Sentry.
+function getRequestReference(payload: unknown): string | undefined {
+  if (typeof payload !== 'object' || payload === null || !('requestId' in payload)) {
+    return undefined
+  }
+  const value = (payload as { requestId?: unknown }).requestId
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+function withReference(message: string, payload: unknown): string {
+  const reference = getRequestReference(payload)
+  return reference ? `${message} (kod: ${reference})` : message
+}
+
 function getHttpErrorMessage(status: number, payload: unknown): string {
   const payloadMessage = getErrorMessage(payload)
   if (payloadMessage) {
-    return payloadMessage
+    return withReference(payloadMessage, payload)
   }
 
   if (status === 400 || status === 422) {
-    return BACKEND_ERROR_MESSAGES.invalidData
+    return withReference(BACKEND_ERROR_MESSAGES.invalidData, payload)
   }
 
   if (status === 404) {
@@ -149,10 +166,10 @@ function getHttpErrorMessage(status: number, payload: unknown): string {
   }
 
   if (status >= 500) {
-    return BACKEND_ERROR_MESSAGES.server
+    return withReference(BACKEND_ERROR_MESSAGES.server, payload)
   }
 
-  return BACKEND_ERROR_MESSAGES.generic
+  return withReference(BACKEND_ERROR_MESSAGES.generic, payload)
 }
 
 async function readJsonPayload(response: Response): Promise<unknown> {

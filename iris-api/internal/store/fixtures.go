@@ -615,10 +615,16 @@ func (s *FixtureStore) Operators(_ context.Context) ([]string, error) {
 	return operators, nil
 }
 
-// customEnumSetLocked builds the custom-value lookup. Callers must already hold
-// s.mu.
+// customEnumSetLocked builds the value set work-order validation runs against:
+// the admin-created picklist values plus every unit the catalog already uses, so
+// a line prefilled from the catalog is accepted as entered. Callers must already
+// hold s.mu.
 func (s *FixtureStore) customEnumSetLocked() customEnumSet {
-	return customEnumSetFromValues(s.enumValues)
+	units := make([]string, 0, len(s.catalogItems))
+	for _, item := range s.catalogItems {
+		units = append(units, item.Unit)
+	}
+	return customEnumSetFromValues(s.enumValues).withCatalogUnits(units)
 }
 
 // EnumValues returns the built-in defaults merged with admin-created values.
@@ -1722,15 +1728,20 @@ func validateInvoiceDraft(value domain.InvoiceDraft, custom customEnumSet) error
 	if value.Status != "" && !isValidInvoiceDraftStatus(value.Status) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
+	// A rejected line names the offending unit: the operator sees which stavka to
+	// fix instead of a blanket "podaci nisu ispravni" on the whole nalog.
 	for _, line := range value.LineItems {
 		if line.Kind != "" && !isValidInvoiceLineItemKind(line.Kind) {
 			return newValidationError(invalidWorkOrderMessage)
 		}
 		if line.Unit != "" && !isValidInvoiceUnit(line.Unit, custom) {
-			return newValidationError(invalidWorkOrderMessage)
+			return newValidationError(fmt.Sprintf(
+				"Jedinica mere „%s“ nije dozvoljena. Dodajte je u podešavanjima ili izaberite drugu.",
+				line.Unit,
+			))
 		}
 		if line.Kind != "" && line.Unit != "" && !isInvoiceUnitAllowed(line.Kind, line.Unit) {
-			return newValidationError(invalidWorkOrderMessage)
+			return newValidationError("Jedinica mere „set“ je dozvoljena samo za usluge.")
 		}
 	}
 	return nil

@@ -56,6 +56,10 @@ Dependency: `github.com/getsentry/sentry-go` (+ `/http` middleware). Run
   r.Use(sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle)
   ```
   It is a no-op when Sentry was not initialized, so it is always safe to add.
+  Note it only catches **panics**: handled failures are reported separately by
+  `reportAPIError` in `internal/api/server.go`, which every error response goes
+  through (`writeAPIError`). A new surface needs the same — an SDK that only
+  sees crashes will stay silent on the failure a user actually reports.
 - **`backend/Dockerfile`**: `ARG SENTRY_DSN=""` then add `SENTRY_DSN` to the
   runtime `ENV` block. Runtime env can still override the baked value.
 - **`deploy/docker-compose.yml`**: do **not** set `SENTRY_DSN` in the backend

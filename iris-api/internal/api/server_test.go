@@ -61,7 +61,7 @@ func TestLoginEndpoints(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			assertBody: func(t *testing.T, body []byte) {
 				t.Helper()
-				assertErrorResponse(t, body, "invalid JSON body")
+				assertErrorResponse(t, body, "Neispravan format zahteva.")
 			},
 		},
 	}
@@ -1032,5 +1032,72 @@ func TestWebFallbackRejectsPathTraversal(t *testing.T) {
 	}
 	if strings.Contains(recorder.Body.String(), "top secret") {
 		t.Fatal("response leaked file contents outside WebDir")
+	}
+}
+
+// TestCreateWorkOrderAcceptsCatalogUnit covers the shop's everyday billing flow
+// end to end: a service billed by the hour is added to the catalog with the unit
+// the legacy catalog carries ("sat"), then picked onto a work order. The line
+// keeps that unit, and the order must save.
+func TestCreateWorkOrderAcceptsCatalogUnit(t *testing.T) {
+	server := newTestServer(t)
+
+	catalogResponse := performRequest(t, server, http.MethodPost, "/catalog-items",
+		`{"code":"USL-SAT","name":"Izrada logotipa","kind":"service","unit":"sat","salePrice":3600}`)
+	if catalogResponse.Code != http.StatusCreated {
+		t.Fatalf("catalog status = %d, want %d (%s)", catalogResponse.Code, http.StatusCreated, catalogResponse.Body.String())
+	}
+	var item domain.CatalogItem
+	if err := json.Unmarshal(catalogResponse.Body.Bytes(), &item); err != nil {
+		t.Fatalf("decode catalog item: %v", err)
+	}
+
+	payload := `{"clientName":"Iskra ordinacija","jobDescription":"Izrada grafičkog identiteta",` +
+		`"shipping":{"deliveryMethod":null,"hasPackaging":false,"hasLabeling":false,"isFragile":false,` +
+		`"requiresSignature":false,"hasInsurance":false,"shippingAddress":null},` +
+		`"issuedBy":"daniel","issueDate":"2026-08-24","invoiceDraft":{"status":"draft","lineItems":[` +
+		`{"id":"line-1","kind":"service","description":"Izrada logotipa","quantity":2,"unit":"sat",` +
+		`"unitPrice":3600,"catalogItemId":"` + item.ID + `"}]}}`
+
+	response := performRequest(t, server, http.MethodPost, "/work-orders", payload)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (%s)", response.Code, http.StatusCreated, response.Body.String())
+	}
+	var created domain.WorkOrder
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(created.InvoiceDraft.LineItems) != 1 || created.InvoiceDraft.LineItems[0].Unit != "sat" {
+		t.Fatalf("line items = %#v, want the catalog unit preserved", created.InvoiceDraft.LineItems)
+	}
+}
+
+// A rejected save has to be diagnosable from a photo of the screen: the message
+// names the offending value and the response carries a request reference that
+// matches the logged and reported event.
+func TestErrorResponseNamesUnitAndCarriesRequestReference(t *testing.T) {
+	payload := `{"clientName":"Iskra ordinacija","jobDescription":"Izrada logotipa",` +
+		`"shipping":{"deliveryMethod":null,"hasPackaging":false,"hasLabeling":false,"isFragile":false,` +
+		`"requiresSignature":false,"hasInsurance":false,"shippingAddress":null},` +
+		`"issuedBy":"daniel","issueDate":"2026-08-24","invoiceDraft":{"status":"draft","lineItems":[` +
+		`{"id":"line-1","kind":"service","description":"Izrada logotipa","quantity":2,"unit":"nepoznato","unitPrice":3600}]}}`
+
+	response := performRequest(t, newTestServer(t), http.MethodPost, "/work-orders", payload)
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d (%s)", response.Code, http.StatusUnprocessableEntity, response.Body.String())
+	}
+
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !strings.Contains(body["error"], "nepoznato") {
+		t.Fatalf("error = %q, want it to name the rejected unit", body["error"])
+	}
+	if body["requestId"] == "" {
+		t.Fatalf("body = %#v, want a request reference", body)
+	}
+	if header := response.Header().Get("X-Request-Id"); header != body["requestId"] {
+		t.Fatalf("X-Request-Id = %q, want %q", header, body["requestId"])
 	}
 }

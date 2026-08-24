@@ -24,6 +24,37 @@ func (c customEnumSet) has(field domain.EnumField, value string) bool {
 	return ok
 }
 
+// add registers one extra accepted value for a field. It is used to fold values
+// that are legitimate but live outside the managed-enum table (notably catalog
+// units) into the same lookup the validators consult.
+func (c customEnumSet) add(field domain.EnumField, value string) {
+	if c == nil || value == "" {
+		return
+	}
+	if c[field] == nil {
+		c[field] = make(map[string]struct{})
+	}
+	c[field][value] = struct{}{}
+}
+
+// withCatalogUnits accepts every unit of measure that the shop's catalog
+// already uses as a valid invoice-line unit.
+//
+// The catalog is admin-managed and its unit field is free-form (the legacy print
+// catalog carries values such as "sat" or "radni sat"), so an item picked from
+// the catalog prefills a work-order line with a unit that is neither built-in
+// nor necessarily registered as a custom `invoiceUnit`. Without this, saving a
+// perfectly ordinary catalog line was rejected as invalid data.
+func (c customEnumSet) withCatalogUnits(units []string) customEnumSet {
+	if c == nil {
+		c = make(customEnumSet)
+	}
+	for _, unit := range units {
+		c.add(domain.EnumFieldInvoiceUnit, unit)
+	}
+	return c
+}
+
 // customEnumSetFromValues builds a lookup set from the stored custom values.
 func customEnumSetFromValues(values []domain.EnumValue) customEnumSet {
 	set := make(customEnumSet)

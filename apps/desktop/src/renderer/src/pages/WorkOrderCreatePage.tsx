@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getLocalIsoDate } from "@/shared/utils/work-orders";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
 import type { WorkOrder } from "@/types/work-order";
+import { formatActionError } from "@/lib/errors";
 
 function getDuplicateInitialValues(
   source: WorkOrder | null,
@@ -116,8 +117,10 @@ function WorkOrderCreatePage(): React.JSX.Element {
         consumedRef.current = true;
         toast.success(t("workOrders.create.created", { order: result.orderNumber }));
         navigate("/work-orders");
-      } catch {
-        toast.error(t("workOrders.create.createError"));
+      } catch (error) {
+        // Show what the API rejected (with its request reference) rather than a
+        // bare "greška": a nalog that will not save has to say why.
+        toast.error(formatActionError(t("workOrders.create.createError"), error));
       }
     },
     [currentUser.username, navigate, reservedOrderNumber, t],
