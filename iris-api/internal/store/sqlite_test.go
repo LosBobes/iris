@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -424,4 +426,87 @@ func newSQLiteStoreForTest(t *testing.T, ctx context.Context, path string) *SQLi
 // SQLite-backed store tests use for every tenant-scoped call.
 func testTenantContext() context.Context {
 	return ContextWithTenant(context.Background(), DemoTenantID)
+}
+
+// TestSQLiteStoreCreateWorkOrderAcceptsCatalogUnit covers the print shop's real
+// billing flow: a catalog service billed by the hour (legacy JMERE "sat") is
+// picked into a work order, which prefills the line with that unit. The unit is
+// neither built-in (kom/m2/set) nor registered as a custom `invoiceUnit`, and
+// rejecting it made the nalog unsavable with a generic "podaci nisu ispravni".
+func TestSQLiteStoreCreateWorkOrderAcceptsCatalogUnit(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	salePrice := 3600.0
+	item, err := sqliteStore.UpsertCatalogItem(ctx, domain.CatalogItem{
+		Code:      "USL-SAT",
+		Name:      "Izrada logotipa",
+		Kind:      domain.CatalogItemKindService,
+		Unit:      "sat",
+		SalePrice: &salePrice,
+		IsActive:  true,
+	}, "")
+	if err != nil {
+		t.Fatalf("UpsertCatalogItem() returned error: %v", err)
+	}
+
+	created, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Iskra ordinacija",
+		JobDescription: "Izrada grafičkog identiteta",
+		IssuedBy:       "daniel",
+		IssueDate:      "2026-08-24",
+		InvoiceDraft: domain.InvoiceDraft{
+			Status: domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{{
+				ID:            "line-1",
+				Kind:          domain.InvoiceLineItemKindService,
+				Description:   "Izrada logotipa",
+				Quantity:      2,
+				Unit:          domain.InvoiceUnit(item.Unit),
+				UnitPrice:     salePrice,
+				CatalogItemID: &item.ID,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() returned error: %v", err)
+	}
+	if len(created.InvoiceDraft.LineItems) != 1 ||
+		created.InvoiceDraft.LineItems[0].Unit != domain.InvoiceUnit("sat") {
+		t.Fatalf("line items = %#v, want the catalog unit preserved", created.InvoiceDraft.LineItems)
+	}
+}
+
+// A unit that no catalog item and no managed enum knows is still rejected, and
+// the message names it so the operator can see which stavka to fix.
+func TestSQLiteStoreCreateWorkOrderRejectsUnknownUnitByName(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	_, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Iskra ordinacija",
+		JobDescription: "Izrada grafičkog identiteta",
+		IssuedBy:       "daniel",
+		IssueDate:      "2026-08-24",
+		InvoiceDraft: domain.InvoiceDraft{
+			Status: domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{{
+				ID:          "line-1",
+				Kind:        domain.InvoiceLineItemKindService,
+				Description: "Izrada logotipa",
+				Quantity:    2,
+				Unit:        "nepoznato",
+				UnitPrice:   3600,
+			}},
+		},
+	})
+	var validationErr *ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("CreateWorkOrder() error = %v, want validation error", err)
+	}
+	if !strings.Contains(validationErr.Error(), "nepoznato") {
+		t.Fatalf("message = %q, want it to name the rejected unit", validationErr.Error())
+	}
 }

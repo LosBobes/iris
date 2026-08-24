@@ -29,6 +29,51 @@ func (s *SQLiteStore) customEnums(ctx context.Context) (customEnumSet, error) {
 	return customEnumSetFromValues(values), nil
 }
 
+// workOrderEnums is the value set work-order validation runs against: the
+// admin-created picklist values plus every unit the tenant's catalog already
+// uses, so a line prefilled from the catalog is accepted as entered.
+func (s *SQLiteStore) workOrderEnums(ctx context.Context) (customEnumSet, error) {
+	custom, err := s.customEnums(ctx)
+	if err != nil {
+		return nil, err
+	}
+	units, err := s.catalogUnits(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return custom.withCatalogUnits(units), nil
+}
+
+// catalogUnits lists the distinct units of measure used by the tenant's catalog.
+func (s *SQLiteStore) catalogUnits(ctx context.Context) ([]string, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT DISTINCT unit FROM catalog_items WHERE tenant_id = ? AND unit <> ''`,
+		tenantID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list catalog units: %w", err)
+	}
+	defer rows.Close()
+
+	units := make([]string, 0)
+	for rows.Next() {
+		var unit string
+		if err := rows.Scan(&unit); err != nil {
+			return nil, fmt.Errorf("scan catalog unit: %w", err)
+		}
+		units = append(units, unit)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read catalog units: %w", err)
+	}
+	return units, nil
+}
+
 // EnumValues returns the built-in defaults merged with admin-created values.
 func (s *SQLiteStore) EnumValues(ctx context.Context) ([]domain.EnumValue, error) {
 	custom, err := s.listCustomEnumValues(ctx)
