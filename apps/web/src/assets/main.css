@@ -186,19 +186,53 @@
     --iris-dur-base: 220ms;
     --iris-dur-slow: 360ms;
     --iris-dur-page: 520ms;
+    /* Start-state offsets for entrance motion. Keyframes read their travel
+       from these rather than hard-coding it, so reduced motion can collapse
+       every distance to nothing and still leave the fade intact. */
+    --iris-lift: 6px;
+    --iris-shift: 10px;
+    --iris-rule-scale: 0;
   }
 
-  /* Honor reduced-motion: disable all animations and instant-snap transitions.
-     Elements marked [data-allow-motion] are exempt — used for essential
-     navigation affordances (the mobile drawer slide + backdrop fade) where the
-     motion communicates where the panel comes from. */
+  /* Honor reduced-motion without going silent. "Reduce motion" asks us to drop
+     *movement* — travel, zoom, spin — not every hint that the screen changed.
+     So rather than freezing every animation at 0.01ms (which made the whole app
+     snap), collapse the distance each one travels and let the opacity half play
+     out: entrances become clean cross-fades, the accepted reduced-motion
+     substitute. This matters more on phones than it looks — iOS reports this
+     preference while Low Power Mode is on, so a blanket kill switch silently
+     strips the animation from every battery-saving visitor. */
   @media (prefers-reduced-motion: reduce) {
-    *:not([data-allow-motion]),
+    :root {
+      --iris-lift: 0px;
+      --iris-shift: 0px;
+      --iris-rule-scale: 1;
+    }
+
+    /* tw-animate-css sets its travel/zoom/spin on the element itself, so an
+       inherited :root value can't reach it — override the custom properties
+       where they land. Neutralizing them turns every shadcn overlay (dialog,
+       select, popover, tooltip) into a plain fade. */
+    *,
     *::before,
     *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      --tw-enter-translate-x: 0 !important;
+      --tw-enter-translate-y: 0 !important;
+      --tw-enter-scale: 1 !important;
+      --tw-enter-rotate: 0 !important;
+      --tw-exit-translate-x: 0 !important;
+      --tw-exit-translate-y: 0 !important;
+      --tw-exit-scale: 1 !important;
+      --tw-exit-rotate: 0 !important;
+    }
+
+    /* Looping and attention-seeking motion has no calm equivalent — drop it. */
+    .iris-tour-spotlight,
+    .animate-iris-shake {
+      animation: none !important;
+    }
+
+    html {
       scroll-behavior: auto !important;
     }
   }
@@ -219,11 +253,26 @@
   @keyframes iris-fade-up {
     from {
       opacity: 0;
-      transform: translate3d(0, 6px, 0);
+      transform: translate3d(0, var(--iris-lift), 0);
     }
     to {
       opacity: 1;
       transform: translate3d(0, 0, 0);
+    }
+  }
+
+  /* Drawer rows settle in just behind the panel itself, so opening the mobile
+     menu reads as one gesture instead of a block of text appearing at once.
+     Animates `translate` (not `transform`) on purpose: `.iris-press` owns
+     `transform` for its tap nudge, and a filled animation would pin it. */
+  @keyframes iris-drawer-item {
+    from {
+      opacity: 0;
+      translate: calc(-1 * var(--iris-shift)) 0;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
     }
   }
 
@@ -246,7 +295,7 @@
 
   @keyframes iris-rule-grow {
     from {
-      transform: scaleX(0);
+      transform: scaleX(var(--iris-rule-scale));
       opacity: 0;
     }
     to {
@@ -274,6 +323,15 @@
 
   .animate-iris-fade {
     animation: iris-fade-in var(--iris-dur-base) var(--iris-ease-out) both;
+  }
+
+  /* Runs only while the drawer is open, and only at drawer widths — so it
+     replays on every open and never touches the docked desktop sidebar. */
+  @media (max-width: 1023px) {
+    [data-mobile-open="true"] .iris-drawer-item {
+      animation: iris-drawer-item var(--iris-dur-slow) var(--iris-ease-out) both;
+      animation-delay: calc(90ms + var(--iris-stagger-index, 0) * 35ms);
+    }
   }
 
   .animate-iris-shake {
