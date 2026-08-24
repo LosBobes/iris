@@ -14,7 +14,6 @@ strings stay Serbian (sr-Latn). See CLAUDE.md and REPO_MAP.md.
 
 - [ ] API (`iris-api/`)
 - [ ] Web (`apps/web/`)
-- [ ] Desktop (`apps/desktop/`)
 - [ ] Docs / tooling only
 
 ## What changed
@@ -33,7 +32,6 @@ strings stay Serbian (sr-Latn). See CLAUDE.md and REPO_MAP.md.
 - [ ] `iris-api/internal/domain/types.go`
 - [ ] `iris-api/internal/store/` (+ `migrations.go` if persisted)
 - [ ] `apps/web/src/types/` + zod validation
-- [ ] `apps/desktop/model/`
 - [ ] Fixtures & tests
 - [ ] N/A — change touches a single surface only
 
@@ -44,7 +42,6 @@ strings stay Serbian (sr-Latn). See CLAUDE.md and REPO_MAP.md.
 
 - [ ] Backend: `go test ./...` (from `iris-api/`)
 - [ ] Web: `npm run lint && npm test && npm run build` (from `apps/web/`)
-- [ ] Desktop: `npm run typecheck && npm test && npm run lint && npm run build` (from `apps/desktop/`)
 
 ## Screenshots / notes
 

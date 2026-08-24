@@ -91,7 +91,3 @@ npm test        # logic tests (sr default keeps label assertions valid)
   `typeof sr`.
 - Commit per surface (e.g. `i18n(web): translate the Users page`) so the diff
   stays reviewable.
-- The desktop renderer (`apps/desktop/src/renderer`) duplicates many components
-  and is a **separate** i18n effort — it needs its own react-i18next setup
-  mirrored before its strings can be migrated; call that out rather than assuming
-  a web change covers it.

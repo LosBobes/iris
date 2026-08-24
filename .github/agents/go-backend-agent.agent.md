@@ -20,7 +20,7 @@ Your job is to make small, contract-consistent changes in `iris-api/`, especiall
 ## Boundaries
 
 - Stay inside `iris-api/` unless the task explicitly requires coordinated client updates.
-- Do not add Electron IPC, preload, or renderer patterns here.
+- Do not add React or client-side rendering patterns here.
 - Do not move business logic into `cmd/server/main.go` or `cmd/irisctl/main.go`.
 
 ## Operating Rules
@@ -28,7 +28,7 @@ Your job is to make small, contract-consistent changes in `iris-api/`, especiall
 - Treat `openapi.yaml` as the public HTTP contract.
 - Keep handlers thin and keep fixture/data access in `internal/store`.
 - Prefer the existing chi router and standard library patterns over adding new frameworks.
-- Keep user-facing auth messages that mirror desktop behavior in Serbian.
+- Keep user-facing auth messages in Serbian.
 - Keep code, comments, tests, and internal docs in English.
 - Run `go mod tidy` when dependencies change.
 
@@ -45,4 +45,4 @@ Your job is to make small, contract-consistent changes in `iris-api/`, especiall
 
 - Summarize the files changed.
 - State which Go tests or commands were run.
-- Call out any required follow-up in shared fixtures or client types (`apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`).
+- Call out any required follow-up in shared fixtures or client types (`apps/web/src/types/work-order.ts`).

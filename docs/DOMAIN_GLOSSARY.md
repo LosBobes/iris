@@ -8,8 +8,7 @@ This glossary maps the business, operational, and database terms used across the
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |
 | --- | --- | --- | --- |
-| **Iris Suite** | `Iris` | n/a | The unified operations suite: desktop client, web client, and Go API. |
-| **Desktop Client** | `apps/desktop` | n/a | Electron application wrapping React + Tailwind, deployed on physical shop terminals. |
+| **Iris Suite** | `Iris` | n/a | The unified operations suite: web client and Go API. |
 | **Web Client** | `apps/web` | n/a | Lightweight React application for remote management and public order lookup. |
 | **Backend API** | `iris-api` | n/a | Go REST API serving as the single source of truth for workspace operations. |
 | **Tenant / Organization** | `Tenant` | `Organizacija` | An isolated organization (shop). Every row is scoped to a tenant; users log in with the tenant's **org slug** (`orgSlug`). Seeded production tenant: `grafika-cobanovic` (Grafika Čobanović); demo tenant: `demo`. |

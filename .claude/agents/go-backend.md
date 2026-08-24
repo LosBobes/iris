@@ -21,7 +21,7 @@ rules. Key files you typically touch:
 
 - Stay inside `iris-api/` unless the task explicitly requires coordinated client
   updates.
-- No Electron IPC, preload, or React patterns here.
+- No React or client-side rendering patterns here.
 - No business logic in `cmd/server/main.go` or `cmd/irisctl/main.go`.
 
 ## Operating rules
@@ -49,5 +49,4 @@ rules. Key files you typically touch:
 - Summarize files changed.
 - State which Go tests/commands ran and their result.
 - Call out any required follow-up in shared fixtures, web types
-  (`apps/web/src/types/work-order.ts`), or desktop model
-  (`apps/desktop/model/work-order.ts`).
+  (`apps/web/src/types/work-order.ts`).

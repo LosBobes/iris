@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// FixtureDir locates the shared desktop fixture directory for tests.
+// FixtureDir locates the shared fixture directory for tests.
 func FixtureDir(t *testing.T) string {
 	t.Helper()
 

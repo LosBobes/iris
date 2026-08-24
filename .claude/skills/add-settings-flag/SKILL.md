@@ -42,7 +42,6 @@ unconfigured shop gets the simpler form.
 | 5 | `iris-api/internal/store/fixtures.go` | add the backing field to the fixture settings struct |
 | 6 | `iris-api/internal/api/permissions_test.go` | extend `TestOrganizationSettings`: assert the default, assert an invalid value is rejected `422`, assert a field-only update persists without wiping siblings |
 | 7 | `apps/web/src/types/settings.ts` | type + `DEFAULT_*` |
-| 8 | `apps/desktop/model/settings.ts` + `apps/desktop/src/renderer/src/types/settings.ts` | same type + default (contract-sync; keep both in step) |
 | 9 | `apps/web/src/contexts/OrganizationContext.ts` | add `value` + `setValue` to the context type |
 | 10 | `apps/web/src/App.tsx` | provider state, hydrate from loaded settings, add to provider value |
 | 11 | `apps/web/src/lib/fixture-api.ts` | module var + map it in `getSettings`/`updateSettings` |
@@ -76,26 +75,18 @@ grep -rn "billingDocumentType" src --include="*.ts" --include="*.tsx"
 
 Read the setting in components via `const { <value> } = useOrganization();`.
 
-> The **desktop renderer has no `OrganizationContext`.** By repo precedent the
-> on/off control is web-only; the desktop form keeps showing the field (don't
-> silently remove a terminal capability with no way to bring it back). Keep the
-> desktop **type** in contract-sync (step #8) and call out the gap in your report.
-> Wiring desktop to fetch org settings is a separate, larger task.
-
 ## 3. Validate
 
 ```bash
 cd iris-api && go build ./... && go test ./...
 cd apps/web && npx tsc --noEmit && npm run lint && npx vitest run && npm run build
-cd apps/desktop && npm run typecheck && npm test
 ```
 
 ## 4. Report
 
 - List the plumbing files touched against the table in step 1 (confirm none
-  skipped, especially the desktop type mirror and both i18n bundles).
+  skipped, especially both i18n bundles).
 - List **every dependent UI surface** you swept and how you gated it, plus any
   you deliberately left (with the reason — e.g. CSV export kept as a superset).
 - State the default value and where the admin toggle lives
   (`Settings → <Serbian card title>`).
-- Flag the desktop web-only caveat.

@@ -5,8 +5,8 @@ work-order handling, and public tracking.
 
 ## Runtime Modes
 
-`src/lib/web-api.ts` installs the same `window.api` shape used by the Electron
-renderer.
+`src/lib/web-api.ts` installs the `window.api` shape feature code calls, so the
+transport stays swappable.
 
 - `VITE_IRIS_API_MODE=http`: calls `iris-api` through `src/lib/api-client.ts`.
 - `VITE_IRIS_API_MODE=fixtures`: runs against a stateful in-browser fixture

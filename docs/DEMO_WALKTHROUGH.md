@@ -173,8 +173,6 @@ Open **Klijenti** from the sidebar — titled **Klijenti i lokacije**.
    and appears in the customer filter / dashboard grouping.
 
 What it demonstrates: customer + location CRUD feeding the rest of the app.
-(Web has full customer management; the desktop client currently stops at work
-orders + dashboard.)
 
 ---
 
@@ -264,5 +262,3 @@ login screen.
 - Some seeded orders have a blank **operater/issuer** (e.g. "još nije
   dodeljeno"); these remain fully editable — updating an existing order does not
   require an issuer (only creation does).
-- The desktop client (`apps/desktop`) mirrors the dashboard and work-order
-  surfaces but does not yet include customer management or public tracking.

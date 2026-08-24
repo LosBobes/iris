@@ -1,6 +1,5 @@
 // Catalog of admin-managed articles and services. Mirrors the CatalogItem
-// schema in iris-api/openapi.yaml — a contract-sync point with the Go domain and
-// the desktop model (apps/desktop/model/catalog.ts).
+// schema in iris-api/openapi.yaml — a contract-sync point with the Go domain.
 
 export type CatalogItemKind = 'service' | 'article'
 

@@ -1,5 +1,5 @@
 // Shop-wide organization settings. Contract-sync point with the OrganizationSettings
-// schema in iris-api/openapi.yaml and apps/desktop/model/settings.ts.
+// schema in iris-api/openapi.yaml.
 
 import type { BillingDocumentType, WorkOrderPriority } from '@/types/work-order'
 

@@ -1,7 +1,7 @@
 # Iris API — backend guidance
 
 Scope: everything under `iris-api/`. Start with
-[README.md](README.md) and [openapi.yaml](openapi.yaml). Treat the desktop docs
+[README.md](README.md) and [openapi.yaml](openapi.yaml). Treat the client docs
 as secondary for backend-only tasks.
 
 Stack: Go 1.26, `chi` router, `modernc.org/sqlite`, `golang.org/x/crypto`.
@@ -12,7 +12,7 @@ note in older docs is stale; fixtures are for tests and `seed-demo`).
 
 - Work inside `iris-api/` unless the task explicitly includes coordinated client
   updates.
-- No Electron, preload, or React concerns in Go code.
+- No React or client-side rendering concerns in Go code.
 - Keep `cmd/server/main.go` and `cmd/irisctl/main.go` as process wiring only.
 
 ## Layering
@@ -43,8 +43,8 @@ together:
 If request/response shapes change, also update `internal/domain/types.go`. If
 persisted behavior changes, update `internal/store/sqlite.go` + `migrations.go`
 (and `fixtures.go` + tests for the fixture store). Shape changes ripple to the
-clients — see the contract-sync rule in the root [CLAUDE.md](../CLAUDE.md); call
-out required web/desktop follow-up rather than leaving drift.
+client — see the contract-sync rule in the root [CLAUDE.md](../CLAUDE.md); call
+out required web follow-up rather than leaving drift.
 
 ## Auth & data rules
 

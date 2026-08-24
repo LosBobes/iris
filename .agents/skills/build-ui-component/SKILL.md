@@ -1,20 +1,15 @@
 ---
 name: build-ui-component
-description: Build or modify a React UI component, page, or shadcn primitive in the Iris frontends (apps/web and/or apps/desktop renderer) following this repo's conventions — shadcn/ui, Tailwind v4, Serbian UI strings, react-hook-form + zod, window.api data, and the web↔desktop duplication rule.
+description: Build or modify a React UI component, page, or shadcn primitive in the Iris web app (apps/web) following this repo's conventions — shadcn/ui, Tailwind v4, Serbian UI strings, react-hook-form + zod, and window.api data.
 ---
 
 # Build an Iris UI component / page
 
-Applies to `apps/web/src/` and `apps/desktop/src/renderer/src/`. React 19 + TS +
-Tailwind v4. Read the surface guide first (`apps/web/AGENTS.md` or
-`apps/desktop/AGENTS.md`).
+Applies to `apps/web/src/`. React 19 + TS + Tailwind v4. Read the surface guide
+first (`apps/web/AGENTS.md`).
 
 ## Before writing — decide scope
 
-- **Which surface(s)?** The two frontends duplicate components/hooks/dashboard
-  libs. If the feature must exist in both, plan the matching edit in the other tree
-  (web ↔ desktop) and keep the components in step. If only one surface is in scope,
-  say so and don't preemptively edit the other.
 - **Reuse first.** Check `components/ui/` (shadcn primitives) and existing feature
   components before creating anything. Prefer composing primitives over new CSS.
 
@@ -46,10 +41,7 @@ Tailwind v4. Read the surface guide first (`apps/web/AGENTS.md` or
 
 ## Adding a new page/route
 
-- Web: add the route with `react-router-dom`; pages live in `src/pages/`.
-- Desktop: add the route in `src/renderer/src/App.tsx` (`MemoryRouter`). If the page
-  needs new main-process data, wire the IPC handler too — see the `add-desktop-ipc`
-  skill.
+Add the route with `react-router-dom`; pages live in `src/pages/`.
 
 ## Adding a new shadcn primitive
 
@@ -59,14 +51,10 @@ and keep it presentational (no data fetching). Reuse it from feature components.
 ## Test & check
 
 - Vitest, colocated `*.test.tsx`, written in English. Stub the API surface with
-  `vi.stubGlobal('api', { method: vi.fn() })`. Desktop also has jsdom +
-  `@testing-library/react`.
+  `vi.stubGlobal('api', { method: vi.fn() })`.
 
 ```bash
-# web
 cd apps/web && npm run lint && npm test
-# desktop
-cd apps/desktop && npm run typecheck && npm test
 ```
 
 ## Report

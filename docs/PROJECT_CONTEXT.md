@@ -5,25 +5,19 @@ Cobanovic.
 
 ## Project Overview
 
-| Aspect | Desktop Client | Web Client | Backend API |
-| --- | --- | --- | --- |
-| Path | `apps/desktop` | `apps/web` | `iris-api` |
-| Runtime | Electron 39 / electron-vite 5 | Vite | Go 1.26 |
-| UI | React 19 / TypeScript 5.9 | React 19 / TypeScript 5.9 | OpenAPI v3 contract |
-| Styling | Tailwind CSS 4 | Tailwind CSS 4 | N/A |
-| Data access | IPC to `IrisApiClient` | HTTP or fixture adapter | SQLite or fixture store |
+| Aspect | Web Client | Backend API |
+| --- | --- | --- |
+| Path | `apps/web` | `iris-api` |
+| Runtime | Vite | Go 1.26 |
+| UI | React 19 / TypeScript 5.9 | OpenAPI v3 contract |
+| Styling | Tailwind CSS 4 | N/A |
+| Data access | HTTP or fixture adapter | SQLite or fixture store |
 
 ## Repository Structure
 
 ```text
 .
 ├── apps/
-│   ├── desktop/                Electron desktop app
-│   │   ├── model/              Desktop-facing domain types
-│   │   └── src/
-│   │       ├── main/           Main process, IPC handlers, API client
-│   │       ├── preload/        Typed context bridge
-│   │       └── renderer/src/   React renderer
 │   └── web/                    Browser client
 │       ├── src/
 │       │   ├── components/     UI widgets, forms, dashboard charts
@@ -47,14 +41,6 @@ Cobanovic.
 ```
 
 ## Runtime Boundaries
-
-### Desktop Client
-
-- Renderer code calls `window.api`.
-- The preload bridge exposes only typed IPC methods.
-- The main process owns privileged Electron access and the HTTP API client.
-- API base URL configuration is resolved in
-  `apps/desktop/src/main/shared/runtime-config.ts`.
 
 ### Web Client
 
@@ -100,16 +86,6 @@ Keep TypeScript types, Go structs, OpenAPI schemas, fixture data, and tests in
 sync when any domain field changes.
 
 ## Command Map
-
-Desktop:
-
-```bash
-cd apps/desktop
-npm run lint
-npm run typecheck
-npm test
-npm run build
-```
 
 Web:
 
