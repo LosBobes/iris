@@ -214,8 +214,12 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
       <aside
         id="app-sidebar"
         data-allow-motion
+        data-mobile-open={mobileMenuOpen ? "true" : "false"}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-5 py-4 transition-[transform,width,padding] duration-300 ease-[var(--iris-ease-out-decisive)]",
+          // `translate` — not `transform`. Tailwind v4 compiles `translate-x-*`
+          // to the standalone `translate` property, so a transition list naming
+          // only `transform` left the drawer snapping open with no motion.
+          "fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-5 py-4 transition-[translate,width,padding] duration-300 ease-[var(--iris-ease-out-decisive)]",
           mobileMenuOpen
             ? "translate-x-0"
             : "-translate-x-full pointer-events-none",
@@ -270,9 +274,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                   to={item.to}
                   end={item.end}
                   onClick={closeMobileMenu}
+                  style={{ "--iris-stagger-index": idx } as React.CSSProperties}
                   className={() =>
                     cn(
-                      "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
+                      "iris-drawer-item iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
                       isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
                       idx === activeNavIndex
                         ? cn(
@@ -319,10 +324,15 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           })}
         </nav>
 
-        <div className={cn(
-          "mt-auto flex flex-col gap-0.5 border-t border-[color:var(--iris-border-soft)] pt-3 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)]",
-          "lg:border-t-0 lg:pt-0",
-        )}>
+        <div
+          style={
+            { "--iris-stagger-index": navItems.length } as React.CSSProperties
+          }
+          className={cn(
+            "iris-drawer-item mt-auto flex flex-col gap-0.5 border-t border-[color:var(--iris-border-soft)] pt-3 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)]",
+            "lg:border-t-0 lg:pt-0",
+          )}
+        >
           {currentUser.role === "admin" && (
             <SidebarTooltip label={t("nav.users")} enabled={isSidebarCollapsed}>
               <NavLink
