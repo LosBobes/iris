@@ -1,8 +1,8 @@
 # Iris API
 
 Go HTTP API for Iris operations. It owns authentication, work-order data,
-customer/location records, public tracking, and the persistence boundary shared
-by the desktop and web clients.
+customer/location records, public tracking, and the persistence boundary behind
+the web client.
 
 ## Runtime Model
 

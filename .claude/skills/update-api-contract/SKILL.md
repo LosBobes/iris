@@ -33,10 +33,9 @@ or the surfaces drift silently.
 
 **If a shared domain shape changes**, it also ripples to the clients (see the
 contract-sync rule in the repo root `CLAUDE.md`):
-- `apps/web/src/types/work-order.ts`
-- `apps/desktop/model/work-order.ts` (+ default in `normalizeWorkOrder()` for new
+- `apps/web/src/types/work-order.ts` (+ default in `normalizeWorkOrder()` for new
   required fields)
-- fixtures consumed by each app
+- fixtures consumed by the app
 
 ## 3. Conventions
 
@@ -59,6 +58,6 @@ go test ./...
 
 - Files changed.
 - Validation run and result.
-- Any remaining client follow-up (web types, desktop model, app fixtures) — call
+- Any remaining client follow-up (web types, app fixtures) — call
   it out explicitly instead of leaving drift. If the change crosses surfaces,
   consider whether the user wanted that or a backend-only change.

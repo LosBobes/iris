@@ -5,13 +5,13 @@ applyTo: "iris-api/**"
 ---
 # Iris API Backend Instructions
 
-Start with [iris-api/README.md](../../iris-api/README.md) and [iris-api/openapi.yaml](../../iris-api/openapi.yaml). Treat the desktop docs as secondary for backend-only tasks.
+Start with [iris-api/README.md](../../iris-api/README.md) and [iris-api/openapi.yaml](../../iris-api/openapi.yaml). Treat the client docs as secondary for backend-only tasks.
 
 ## Boundaries
 
 - Work inside `iris-api/` unless the task explicitly includes coordinated client updates.
-- Do not add Electron, preload, or renderer concerns to Go code.
-- The web and desktop clients both call this HTTP API at runtime (web via `fetch`, desktop via main `IrisApiClient`); avoid changing the contract without coordinating the clients.
+- Do not add React or client-side rendering concerns to Go code.
+- The web client calls this HTTP API at runtime via `fetch`; avoid changing the contract without coordinating the client.
 
 ## Architecture
 
@@ -31,7 +31,7 @@ Start with [iris-api/README.md](../../iris-api/README.md) and [iris-api/openapi.
 ## Data Rules
 
 - Production data lives in SQLite (`DATABASE_PATH`); JSON fixtures under `testdata/fixtures/` back tests and `irisctl seed-demo`.
-- Shape changes ripple to the clients (`apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`) and their fixtures; do not leave the projects drifting silently.
+- Shape changes ripple to the client (`apps/web/src/types/work-order.ts`) and its fixtures; do not leave the projects drifting silently.
 - User-facing auth messages that mirror client behavior stay in Serbian. Code, comments, tests, and internal docs stay in English.
 
 ## Commands

@@ -23,7 +23,7 @@ Requirements:
 - If persisted behavior changes, update [sqlite.go](../../iris-api/internal/store/sqlite.go) + [migrations.go](../../iris-api/internal/store/migrations.go) (and [fixtures.go](../../iris-api/internal/store/fixtures.go) + relevant tests).
 - Keep handlers thin and keep data access in `internal/store/`.
 - Run validation from `iris-api/` using the narrowest useful `go test` command first.
-- If shared shape changes require client follow-up (`apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`, fixtures), call that out explicitly instead of leaving drift.
+- If shared shape changes require client follow-up (`apps/web/src/types/work-order.ts`, fixtures), call that out explicitly instead of leaving drift.
 
 Return:
 

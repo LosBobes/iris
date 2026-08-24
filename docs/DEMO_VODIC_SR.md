@@ -35,7 +35,7 @@
 - **PDF izveštaj** i **štampu** radnog naloga,
 - (admin) **finansije i trendove**.
 
-Arhitektura: web + desktop (Electron) + Go API + SQLite — sve deli istu bazu.
+Arhitektura: web + Go API + SQLite — sve deli istu bazu.
 
 ---
 
@@ -251,56 +251,7 @@ sequenceDiagram
     UI-->>Op: Login ekran
 ```
 
-### 2. Desktop — isti API preko Electron IPC
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Op as "Operater (desktop)"
-    participant UI as "Renderer (React)"
-    participant Preload as "Preload window.api"
-    participant Main as "Main IrisApiClient"
-    participant API as iris-api
-    participant DB as SQLite
-
-    Note over Op,DB: Pokretanje - nema restore sesije u UI
-    Op->>UI: Otvori Electron app
-    UI->>Preload: getBackendStatus()
-    Preload->>Main: "IPC app:getBackendStatus"
-    Main->>API: GET /healthz
-    API-->>Main: status ok
-    Main-->>UI: ready true
-    UI-->>Op: Login ekran
-
-    Note over Op,DB: Prijava i rad sa nalozima
-    Op->>UI: credentials
-    UI->>Preload: login()
-    Preload->>Main: "IPC auth:login"
-    Main->>API: POST /auth/login
-    API->>DB: AuthenticateUser + CreateSession
-    API-->>Main: user + session
-    Main-->>UI: LoginResponse
-    UI-->>Op: Kontrolna tabla
-
-    Op->>UI: Otvori radne naloge
-    UI->>Preload: getWorkOrders()
-    Preload->>Main: "IPC workorders:getAll"
-    Main->>API: GET /work-orders
-    API->>DB: ListWorkOrders
-    DB-->>API: nalogi
-    API-->>UI: JSON lista
-    UI-->>Op: Tabela naloga
-
-    Op->>UI: Sačuvaj izmene
-    UI->>Preload: updateWorkOrder(id, changes)
-    Preload->>Main: "IPC workorders:update"
-    Main->>API: PATCH /work-orders/id
-    API->>DB: UpdateWorkOrder
-    DB-->>API: ažuriran nalog
-    API-->>UI: WorkOrder JSON
-```
-
-### 3. Javno praćenje — bez prijave
+### 2. Javno praćenje — bez prijave
 
 ```mermaid
 sequenceDiagram
@@ -325,8 +276,7 @@ sequenceDiagram
 ```
 
 **Napomene:**
-- Web i desktop dele **isti REST API** i **istu SQLite** bazu.
-- Web čuva sesiju u **HTTP-only cookie** (`iris_session`); desktop drži korisnika u **memoriji renderera** posle logina.
+- Web čuva sesiju u **HTTP-only cookie** (`iris_session`).
 - Dashboard metrike se **računaju u browseru** — server vraća sirove naloge.
 - Javni endpoint vraća samo polja bezbedna za klijenta (bez internih beleški).
 
@@ -353,7 +303,7 @@ sequenceDiagram
 
 **Šta reći:**
 
-> „Danas vam pokazujem **Iris** — sistem koji smo napravili za vođenje radnih naloga u štampariji. Sve je na srpskom, prilagođeno vašem poslu: vizitkarte, katalozi, plakati, isporuka, fakturisanje. Imate **web aplikaciju** za kancelariju i **desktop** za rad u štampariji — obe koriste istu bazu.“
+> „Danas vam pokazujem **Iris** — sistem koji smo napravili za vođenje radnih naloga u štampariji. Sve je na srpskom, prilagođeno vašem poslu: vizitkarte, katalozi, plakati, isporuka, fakturisanje. Radi u pretraživaču — i u kancelariji i u štampariji, nad istom bazom.“
 
 **Ne otvaraj još aplikaciju** dok ne kažeš kontekst.
 
@@ -529,7 +479,7 @@ sequenceDiagram
 
 **Šta reći:**
 
-> „Iris pokriva put od **poziva klijenta** do **fakturisanog naloga**, sa **javnim praćenjem** za klijenta i **tablom** za vas. Web za kancelariju, desktop za rad u štampariji — ista baza, isti podaci. Spremni smo za vaše specifične zahteve oko integracija i obuke tima.“
+> „Iris pokriva put od **poziva klijenta** do **fakturisanog naloga**, sa **javnim praćenjem** za klijenta i **tablom** za vas. Ista aplikacija u kancelariji i u štampariji — ista baza, isti podaci. Spremni smo za vaše specifične zahteve oko integracija i obuke tima.“
 
 **Odjava** — pokaži da sesija sigurno izlazi.
 
@@ -570,7 +520,6 @@ sequenceDiagram
 | P2 | Dupliraj / Izmeni | Ponavljanje i korekcije |
 | P2 | Finansije i trendovi | Za vlasnika |
 | P3 | Podešavanja — veličina teksta | Shop floor |
-| P3 | Desktop aplikacija | Samo ako pitaju |
 
 ---
 
@@ -581,7 +530,7 @@ sequenceDiagram
 - **Ne pokazuj** pogrešan URL `/track/...` — ispravno: `/public/work-orders/{token}`
 - **Ne ulazi** u fixture mod ako obećavaš PDF i pravi javni link
 - **Ne gubi se** u svim poljima forme — pokaži strukturu sekcija
-- **Ne pričaj** o SQLite, Go, Electron — fokus na posao
+- **Ne pričaj** o SQLite ili Go — fokus na posao
 - **Ne demo-uj** `user` ulogu na početku — nema **Finansije i trendovi**
 
 ---
@@ -621,16 +570,6 @@ sequenceDiagram
 
 **„Šta operater vidi vs admin?“**  
 → Operater: naloge, klijente, dashboard bez **Finansije i trendovi**. Admin: sve.
-
----
-
-## Desktop aplikacija (samo ako pitaju)
-
-- Putanja: `apps/desktop` → `npm run dev` (API na `:8080`)
-- Isti **backend check** na startu (*Povezivanje sa backend servisom…*)
-- **Samo admin** može da se uloguje; `user` vidi *Nemate dozvolu*
-- Ima: dashboard, radni nalozi — **nema** klijente, podešavanja, javnog linka
-- Poruka: „Terminal u štampariji — isti podaci, fokus na izvršenje“
 
 ---
 

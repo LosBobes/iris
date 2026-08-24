@@ -89,9 +89,7 @@ response carries a short request reference (`requestId` in the body, also the
 `X-Request-Id` header) that the apps show next to the error message — for
 example `… (kod: AbC123-000042)`. The same code appears in the API log line for
 that request and as the `request.reference` tag on the Sentry event, so a
-screenshot from the shop leads straight to the event and the log. The desktop
-app has no Sentry SDK; it shows the same message and code, and the failure is
-still reported from the API side.
+screenshot from the shop leads straight to the event and the log.
 
 ### 3a. (Optional) Seed the database from an existing SQLite file
 

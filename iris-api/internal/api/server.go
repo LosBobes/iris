@@ -632,7 +632,7 @@ func (s *Server) handleCreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, workOrder)
 }
 
-// handleUpdateWorkOrder applies a partial update and preserves 404 -> null semantics for desktop callers.
+// handleUpdateWorkOrder applies a partial update and preserves 404 -> null semantics for callers.
 func (s *Server) handleUpdateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	var req domain.UpdateWorkOrderInput
 	if !decodeJSONBody(w, r, &req) {

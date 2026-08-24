@@ -1,6 +1,6 @@
 ---
 name: sync-domain-contract
-description: Add or change a shared domain field (e.g. a WorkOrder or Customer field) consistently across the Go API, both frontends, and fixtures. Use when a field must exist end to end and you need to avoid silent drift between surfaces.
+description: Add or change a shared domain field (e.g. a WorkOrder or Customer field) consistently across the Go API, the web app, and fixtures. Use when a field must exist end to end and you need to avoid silent drift between surfaces.
 ---
 
 # Sync a shared domain shape across all surfaces
@@ -19,8 +19,6 @@ field is added, removed, renamed, or retyped.
 | 4 | `iris-api/internal/store/fixtures.go` + `iris-api/testdata/fixtures/` | test/seed data |
 | 5 | `apps/web/src/types/work-order.ts` | web type |
 | 6 | `apps/web/src/fixtures/` | web fixture-mode seed |
-| 7 | `apps/desktop/model/work-order.ts` | desktop type |
-| 8 | `apps/desktop/src/renderer/src/types/work-order.ts` | renderer type — keep in sync with #7 |
 
 ## Procedure
 
@@ -29,7 +27,7 @@ field is added, removed, renamed, or retyped.
 3. If persisted: add a new migration in `migrations.go` and read/write it in
    `sqlite.go`. Update the SQLite store tests.
 4. Update both store fixtures and the API fixture tests.
-5. Update web + desktop types and their fixtures.
+5. Update the web types and their fixtures.
 6. **New required field** → add a sensible default in the web
    `normalizeWorkOrder()` (`apps/web/src/lib/api-client.ts` and `fixture-api.ts`)
    so API/fixture data loading doesn't break; decide a default for existing rows
@@ -41,7 +39,6 @@ field is added, removed, renamed, or retyped.
 ```bash
 cd iris-api && go test ./...
 cd apps/web && npm test && npm run build
-cd apps/desktop && npm run typecheck && npm test
 ```
 
 ## Report

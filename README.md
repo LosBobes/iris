@@ -2,7 +2,7 @@
 
 Iris is a full-stack operations workspace for **Stamparija Cobanovic**, a print-shop environment. It covers the complete work-order lifecycle — from intake through invoicing — alongside customer master data, dashboard analytics, and a public order-tracking portal for customers.
 
-The repository is a **monorepo** comprising three deployable surfaces that share one Go REST API and one SQLite database. The system is **multi-tenant**: all data is isolated per organization ("tenant"), and users sign in with an organization slug alongside their username and password.
+The repository is a **monorepo** comprising two deployable surfaces that share one Go REST API and one SQLite database. The system is **multi-tenant**: all data is isolated per organization ("tenant"), and users sign in with an organization slug alongside their username and password.
 
 ---
 
@@ -13,12 +13,10 @@ The repository is a **monorepo** comprising three deployable surfaces that share
 - [Installation](#installation)
   - [Backend API](#backend-api)
   - [Web Client](#web-client)
-  - [Desktop Client](#desktop-client)
   - [Docker (production-like)](#docker-production-like)
 - [Usage](#usage)
   - [Running the Backend API](#running-the-backend-api)
   - [Running the Web Client](#running-the-web-client)
-  - [Running the Desktop Client](#running-the-desktop-client)
   - [CLI Administration](#cli-administration)
 - [Project Structure](#project-structure)
 - [Configuration Reference](#configuration-reference)
@@ -44,14 +42,13 @@ Iris manages the day-to-day operations of a commercial print shop:
 ### Architecture at a Glance
 
 ```
-┌─────────────────────┐      ┌─────────────────────┐
-│  apps/web           │      │  apps/desktop        │
-│  Vite · React 19    │      │  Electron 39         │
-│  TypeScript · TW 4  │      │  React 19 · TW 4     │
-└────────┬────────────┘      └──────────┬───────────┘
-         │  HTTP (fetch + cookie)        │  IPC → IrisApiClient
-         └─────────────┬────────────────┘
-                       ▼
+             ┌─────────────────────┐
+             │  apps/web           │
+             │  Vite · React 19    │
+             │  TypeScript · TW 4  │
+             └──────────┬──────────┘
+                        │  HTTP (fetch + cookie)
+                        ▼
              ┌─────────────────┐
              │   iris-api      │
              │  Go · chi       │
@@ -59,7 +56,7 @@ Iris manages the day-to-day operations of a commercial print shop:
              └─────────────────┘
 ```
 
-The web client and the desktop renderer share the same `window.api` call contract; the Electron main process translates IPC calls to HTTP. All API contracts are governed by `iris-api/openapi.yaml`.
+Feature code calls a `window.api` surface installed by `src/lib/web-api.ts`, which keeps the transport (HTTP or in-browser fixtures) swappable. All API contracts are governed by `iris-api/openapi.yaml`.
 
 ---
 
@@ -68,7 +65,7 @@ The web client and the desktop renderer share the same `window.api` call contrac
 | Dependency | Minimum Version | Purpose |
 |-----------|----------------|---------|
 | **Go** | 1.26 | Backend API and CLI |
-| **Node.js** | 20 LTS | Web and desktop clients |
+| **Node.js** | 20 LTS | Web client |
 | **npm** | 10 | Package management |
 | **Docker & Docker Compose** | 24 / v2 | Production-like deployment |
 | **Git** | any | Version control |
@@ -92,22 +89,6 @@ go mod download
 
 ```bash
 cd apps/web
-npm install
-```
-
-### Desktop Client
-
-Before installing, create a local environment file to configure the API endpoint:
-
-```bash
-# apps/desktop/.env
-IRIS_API_BASE_URL=http://localhost:8080
-```
-
-Then install dependencies:
-
-```bash
-cd apps/desktop
 npm install
 ```
 
@@ -190,29 +171,6 @@ http://localhost:5173/track/{public-token}
 
 ---
 
-### Running the Desktop Client
-
-The desktop client is an Electron application pointing at the same Go API.
-
-```bash
-cd apps/desktop
-
-# Start the Electron app in development mode
-npm run dev
-```
-
-To build a distributable package:
-
-```bash
-# macOS (produces a .dmg and .app inside out/)
-npm run build:mac
-
-# Windows
-npm run build:win
-```
-
----
-
 ### Using Docker Helper Scripts
 
 ```bash
@@ -263,14 +221,6 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup -out ./backups/iris.db
 ```
 iris/
 ├── apps/
-│   ├── desktop/                    # Electron desktop client
-│   │   ├── config/                 #   API URL defaults (dev vs prod)
-│   │   ├── model/                  #   TypeScript domain types
-│   │   └── src/
-│   │       ├── main/               #   Main process: IPC handlers, IrisApiClient
-│   │       ├── preload/            #   window.api typed bridge
-│   │       └── renderer/src/       #   React UI (pages, hooks, dashboard)
-│   │
 │   └── web/                        # Vite browser client
 │       └── src/
 │           ├── components/         #   Reusable UI widgets and forms
@@ -337,12 +287,6 @@ iris/
 | `VITE_IRIS_API_MODE` | `http` or `fixtures` | see `.env.development` |
 | `VITE_IRIS_API_BASE_URL` | API origin | `http://localhost:8080` |
 
-### Desktop Client (`apps/desktop`)
-
-| Variable | Description |
-|----------|------------|
-| `IRIS_API_BASE_URL` | API base URL (set in `.env` or `config/development.ts`) |
-
 ---
 
 ## Testing
@@ -357,17 +301,12 @@ go test ./...
 # Web client tests (Vitest, 35 tests)
 cd apps/web
 npm test
-
-# Desktop client tests (Vitest, 54 tests)
-cd apps/desktop
-npm test
 ```
 
 Type-checking (TypeScript strict mode):
 
 ```bash
 cd apps/web && npx tsc --noEmit
-cd apps/desktop && npx tsc --noEmit
 ```
 
 ---
@@ -384,7 +323,6 @@ cd apps/desktop && npx tsc --noEmit
 | [docs/deployment-hetzner.md](docs/deployment-hetzner.md) | Hetzner shared-host production deployment guide |
 | [iris-api/README.md](iris-api/README.md) | Backend configuration, CLI reference, and endpoint index |
 | [apps/web/README.md](apps/web/README.md) | Web client runtime modes and build instructions |
-| [apps/desktop/README.md](apps/desktop/README.md) | Electron setup, data flow, and packaging |
 
 ### AI Contributor Profiles
 
@@ -393,7 +331,6 @@ Specialized Copilot and agent profiles live under `.github/`:
 - [.github/copilot-instructions.md](.github/copilot-instructions.md) — general contributor guidance
 - [.github/agents/react-frontend-agent.agent.md](.github/agents/react-frontend-agent.agent.md)
 - [.github/agents/go-backend-agent.agent.md](.github/agents/go-backend-agent.agent.md)
-- [.github/agents/electron-code-review-mode.md](.github/agents/electron-code-review-mode.md)
 
 ---
 

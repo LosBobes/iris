@@ -28,4 +28,3 @@ out/
 **/*.log
 .env
 .env.*
-apps/desktop/.eslintcache

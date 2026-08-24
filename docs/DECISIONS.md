@@ -10,7 +10,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ---
 
 ## D-001: Build the primary desktop product as an Electron application
-- **Status**: `accepted`
+- **Status**: `superseded` (by [D-015](#d-015-retire-the-electron-desktop-client))
 - **Context**: The local print shop (Stamparija Cobanovic) operates on-premise physical terminals that require local application reliability and easy operating system integration.
 - **Decision**: Wrap the React user interface in an Electron shell (`apps/desktop`), utilizing a multi-process architecture for native operations.
 - **Consequences**:
@@ -20,7 +20,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ---
 
 ## D-002: Maintain a strict three-layer Electron split
-- **Status**: `accepted`
+- **Status**: `superseded` (by [D-015](#d-015-retire-the-electron-desktop-client))
 - **Context**: Electron applications combine privileged Node.js APIs and unprivileged browser runtimes, representing a significant security boundary.
 - **Decision**: Physically partition `apps/desktop` into:
   - `src/main/` (privileged main process)
@@ -33,7 +33,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ---
 
 ## D-003: Communication via typed IPC through `window.api`
-- **Status**: `accepted`
+- **Status**: `superseded` (by [D-015](#d-015-retire-the-electron-desktop-client))
 - **Context**: The desktop React interface must execute actions or request data from the local operating system without violating runtime isolation rules.
 - **Decision**: Expose structured functions on the global `window.api` within preload scripts, mapping them via `ipcRenderer.invoke(...)` to `ipcMain.handle(...)` functions in the main process.
 - **Consequences**:
@@ -75,7 +75,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ## D-007: Perform analytical dashboard aggregates in the renderer
 - **Status**: `accepted`
 - **Context**: Top client lists, monthly revenue buckets, and order status counts are computed from the same raw work-order dataset.
-- **Decision**: Fetch raw work-orders, then perform functional aggregations inside renderer-side pure functions (`apps/web/src/lib/dashboard/` and `apps/desktop/src/renderer/src/lib/dashboard/`).
+- **Decision**: Fetch raw work-orders, then perform functional aggregations inside client-side pure functions (`apps/web/src/lib/dashboard/`).
 - **Consequences**:
   - Eliminates server load for repetitive analytical reports.
   - Simplifies testing via pure unit tests on simple data inputs.
@@ -103,7 +103,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ---
 
 ## D-011: Desktop connection via IPC-HTTP client forwarding
-- **Status**: `accepted`
+- **Status**: `superseded` (by [D-015](#d-015-retire-the-electron-desktop-client))
 - **Context**: The desktop client needs to fetch data from the shared Go backend while maintaining unprivileged React safety.
 - **Decision**: Rather than the renderer querying `iris-api` over the network directly, the renderer communicates over IPC to the Electron main process, which executes HTTP calls via a typed `IrisApiClient`.
 - **Consequences**:
@@ -139,6 +139,17 @@ This document records the project-level architectural decisions (ADRs) that shap
 - **Consequences**:
   - The two statuses were removed from the Go domain/store, OpenAPI enums, both TypeScript contracts, badges, dashboard attention signals, fixtures, and seed data.
   - Old persisted rows remain valid: they read back as `inProgress`.
+
+---
+
+## D-015: Retire the Electron desktop client
+- **Status**: `accepted` (supersedes [D-001](#d-001-build-the-primary-desktop-product-as-an-electron-application), [D-002](#d-002-maintain-a-strict-three-layer-electron-split), [D-003](#d-003-communication-via-typed-ipc-through-windowapi), [D-011](#d-011-desktop-connection-via-ipc-http-client-forwarding))
+- **Context**: `apps/desktop` was never deployed to a shop terminal. It duplicated the web client's components, hooks, and dashboard libraries behind a second `window.api` transport, so every shared change needed two edits, and it always trailed the web client in features (no customers CRUD, no public tracking, no organization settings). Its whole surface — a browser UI over the same REST API — is already served by `apps/web`.
+- **Decision**: Delete `apps/desktop` and the Electron-specific tooling around it (the IPC skill, the Electron review agent, the desktop-only Copilot setup step). The web client is the single operator UI; shop terminals run it in a browser against the same `iris-api`.
+- **Consequences**:
+  - The contract-sync rule loses its desktop legs: a domain change now lands in OpenAPI, Go domain types, the store, `apps/web/src/types/`, and fixtures.
+  - No native OS packaging or auto-update path; on-prem terminals need a browser and network reach to `iris-api`.
+  - D-002 and D-003 (the main/preload/renderer split and typed IPC) no longer apply to any code in this repo. The `window.api` name survives in `apps/web/src/lib/web-api.ts` as the web client's own transport seam, not as an IPC bridge.
 
 ---
 

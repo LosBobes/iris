@@ -5,8 +5,8 @@ Tailwind v4 browser client. Start with [README.md](README.md).
 
 ## Runtime modes
 
-`src/lib/web-api.ts` installs the same `window.api` shape the desktop renderer
-uses, so feature code stays transport-agnostic:
+`src/lib/web-api.ts` installs the `window.api` shape feature code calls, so it
+stays transport-agnostic:
 
 - `VITE_IRIS_API_MODE=http` → `src/lib/api-client.ts` → `fetch` with
   `credentials: 'include'` against `iris-api`.
@@ -28,8 +28,8 @@ vars and must not be committed.
 - Pages/routes in `src/pages/` (incl. `PublicWorkOrderPage`, `CustomersPage`);
   routing via `react-router-dom`.
 - Domain types in `src/types/work-order.ts` — a contract-sync point with
-  `iris-api/openapi.yaml` and `apps/desktop/model/`. See the contract-sync rule in
-  the root [CLAUDE.md](../../CLAUDE.md).
+  `iris-api/openapi.yaml`. See the contract-sync rule in the root
+  [CLAUDE.md](../../CLAUDE.md).
 - Shop-wide **organization settings** (`src/types/settings.ts`) flow through
   `src/contexts/OrganizationContext.ts` (firm name, PDF sections, billing/priority
   defaults, shipping-options toggle). Gate dependent form fields/columns/filters on
@@ -62,5 +62,3 @@ npm run preview               # preview production build
 
 - Authorization gating here is UI-only (`role === 'admin'`) — not a security
   boundary; the API enforces it.
-- `apps/web` and `apps/desktop/src/renderer` duplicate components/hooks/dashboard
-  libs; a shared change often needs the matching desktop edit too.

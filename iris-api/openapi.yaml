@@ -29,7 +29,7 @@ paths:
   /auth/login:
     post:
       tags: [Auth]
-      summary: Authenticate a desktop user
+      summary: Authenticate a user
       operationId: login
       requestBody:
         required: true

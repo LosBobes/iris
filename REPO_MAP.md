@@ -18,11 +18,10 @@ password; all data access is filtered by the tenant resolved from the session.
 See [§4a](#4a-multi-tenancy). The seeded production tenant is `grafika-cobanovic`
 (Grafika Čobanović); the demo tenant is `demo`.
 
-Three deployable surfaces share one **Go REST API** and **SQLite** database:
+Two deployable surfaces share one **Go REST API** and **SQLite** database:
 
 | Surface | Path | Role |
 | --- | --- | --- |
-| Desktop | `apps/desktop` | Electron app for on-prem shop terminals |
 | Web | `apps/web` | Browser ops UI + public tracking |
 | API | `iris-api` | Auth, persistence, OpenAPI contract, optional static web hosting |
 
@@ -34,8 +33,7 @@ Three deployable surfaces share one **Go REST API** and **SQLite** database:
 | --- | --- |
 | **Backend** | Go **1.26**, `chi` router, `modernc.org/sqlite`, `golang.org/x/crypto` |
 | **Web** | **Vite 8**, **React 19**, **TypeScript ~6**, **Tailwind CSS 4**, Vitest, ESLint |
-| **Desktop** | **Electron 39**, **electron-vite 5**, React 19, TS 5.9, Tailwind 4, Vitest, electron-builder |
-| **Package managers** | **npm** per frontend app (`package-lock.json` in `apps/web`, `apps/desktop`); **Go modules** in `iris-api/` |
+| **Package managers** | **npm** for the web app (`package-lock.json` in `apps/web`); **Go modules** in `iris-api/` |
 | **Monorepo** | Logical monorepo; **no root `package.json`**. Each app is installed and run independently. |
 
 **Production runtime:** single **distroless** Docker image builds `iris-api` + embedded `apps/web/dist`; serves API and SPA from one process on `:8080`.
@@ -47,13 +45,6 @@ Three deployable surfaces share one **Go REST API** and **SQLite** database:
 ```text
 iris/
 ├── apps/
-│   ├── desktop/                 Electron: main / preload / renderer
-│   │   ├── config/                dev vs prod API defaults
-│   │   ├── model/                 Desktop domain types (mirror API)
-│   │   └── src/
-│   │       ├── main/              IPC handlers, IrisApiClient, runtime-config
-│   │       ├── preload/           window.api bridge (typed)
-│   │       └── renderer/src/      React UI (pages, hooks, dashboard lib)
 │   └── web/                       Vite SPA
 │       └── src/
 │           ├── components/        Feature UI + shadcn primitives
@@ -76,7 +67,7 @@ iris/
 └── docker-compose.yml             Local API + SQLite volume
 ```
 
-**Contract sync points** (change together): `iris-api/openapi.yaml`, `iris-api/internal/domain/types.go`, `apps/web/src/types/work-order.ts`, `apps/desktop/model/work-order.ts`, fixtures, and tests. Shared **settings** shapes live in `apps/web/src/types/settings.ts` ↔ `apps/desktop/model/settings.ts` and mirror the `OrganizationSettings` schema.
+**Contract sync points** (change together): `iris-api/openapi.yaml`, `iris-api/internal/domain/types.go`, `apps/web/src/types/work-order.ts`, fixtures, and tests. The **settings** shape lives in `apps/web/src/types/settings.ts` and mirrors the `OrganizationSettings` schema.
 
 ---
 
@@ -85,9 +76,8 @@ iris/
 ### Authenticated API path (canonical)
 
 ```text
-Client (web or desktop renderer)
+Web client
   → window.api
-  → [desktop only: preload IPC → main IrisApiClient]
   → HTTP + credentials (iris_session cookie)
   → iris-api (chi → handler → store.Store)
   → SQLite (DATABASE_PATH)
@@ -97,17 +87,6 @@ Client (web or desktop renderer)
 
 - `VITE_IRIS_API_MODE=http` → `createHttpApi(baseUrl)` → `fetch` with `credentials: 'include'`
 - `VITE_IRIS_API_MODE=fixtures` (dev only) → in-memory store from `src/fixtures/`
-
-### Desktop boot
-
-```text
-IRIS_API_BASE_URL (.env or config)
-  → runtime-config.ts
-  → iris-api-client.ts
-  → IPC handlers (workorders:*, auth:login, app:*)
-  → preload window.api
-  → React hooks/pages
-```
 
 ### Auth
 
@@ -163,8 +142,7 @@ IRIS_API_BASE_URL (.env or config)
   `pdfSections`, `billingDefaults { documentType }`,
   `priorityDefaults { priority, allowOverride }`, and `showShippingOptions`.
   `OrganizationSettingsUpdate` uses optional/pointer fields (nil = "leave unchanged").
-- Web surfaces them through `OrganizationContext`; desktop mirrors the **types only**
-  (the toggles are web-only). See the `add-settings-flag` skill.
+- Web surfaces them through `OrganizationContext`. See the `add-settings-flag` skill.
 
 ---
 
@@ -174,7 +152,6 @@ IRIS_API_BASE_URL (.env or config)
 
 - **Node.js 18+** (Docker web build uses Node 24)
 - **Go 1.26+**
-- For desktop dev: OS that can run Electron
 
 ### Backend (`iris-api/`)
 
@@ -201,20 +178,6 @@ npm run lint && npm test && npm run build
 npm run preview                             # production build preview
 ```
 
-### Desktop (`apps/desktop/`)
-
-Create `apps/desktop/.env`:
-
-```env
-IRIS_API_BASE_URL=http://localhost:8080
-```
-
-```bash
-cd apps/desktop && npm install && npm run dev
-npm run typecheck && npm test && npm run lint && npm run build
-npm run build:mac|build:win|build:linux     # electron-builder artifacts
-```
-
 ### Docker (API + embedded web)
 
 ```bash
@@ -234,10 +197,8 @@ curl http://localhost:8080/healthz
 | --- | --- |
 | `iris-api` `go test ./...` | **Pass** (46 tests, 6 packages) |
 | `apps/web` lint / test / build | **Pass** (35 tests) |
-| `apps/desktop` typecheck / test | **Pass** (54 tests) |
-| `apps/desktop` lint | Not confirmed (ESLint hung >60s in this environment) |
 
-**CI gap:** `.github/workflows/` only has manual `copilot-setup-steps` (desktop npm install). No automated monorepo test/lint workflow on push/PR.
+**CI gap:** `.github/workflows/` only has manual `copilot-setup-steps` (web npm install). No automated monorepo test/lint workflow on push/PR.
 
 ---
 
@@ -266,17 +227,9 @@ Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Comp
 | `VITE_IRIS_API_MODE` | `http` \| `fixtures` |
 | `VITE_IRIS_API_BASE_URL` | API origin (prod: same-origin or split API host) |
 
-### Desktop (`apps/desktop`)
-
-| Variable | Purpose |
-| --- | --- |
-| `IRIS_API_BASE_URL` | API base (via `.env` or `config/development.ts` / `production.ts`) |
-| `NODE_ENV` / `ELECTRON_RENDERER_URL` | Dev vs prod config selection |
-
 ### Other config
 
 - `iris-api/openapi.yaml` - API contract
-- `apps/desktop/electron-builder.yml`, `dev-app-update.yml` - packaging / updater (placeholder metadata)
 - `apps/*/eslint.config.*`, `vitest.config.*`, `tsconfig*.json` - tooling per app
 
 ---
@@ -288,7 +241,6 @@ Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Comp
 | **SQLite** | Sole production database (`modernc.org/sqlite`); file on disk or Docker volume |
 | **HTTP session cookies** | Auth; no JWT/OAuth providers in tree |
 | **CORS** | Browser clients on different origin than API |
-| **electron-updater** | Desktop auto-update hook (config largely placeholder) |
 
 **Not present:** PostgreSQL, Redis, message queues, S3, Stripe, email/SMS providers, external IdP.
 
@@ -300,26 +252,21 @@ Demo seed credentials (non-production): `admin` / `admin123`.
 
 | Area | Notes |
 | --- | --- |
-| **Dual frontend duplication** | Large parallel trees (`apps/web` vs `apps/desktop/renderer`) - components, dashboard libs, hooks. Changes often need two edits; no shared UI package. |
 | **Client-side authorization** | Admin dashboard gating is UI-only ([D-006](docs/DECISIONS.md) `temporary`). API enforces session + admin on destructive routes, but not all read paths may match product intent. |
-| **Feature parity** | Web has **customers** CRUD and **public tracking**; desktop routes stop at work orders + dashboard (no customer IPC surface). |
-| **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `docs/ARCHITECTURE.md` / `docs/CONTRIBUTING.md` remain desktop-first and partly predate the SQLite API and multi-tenancy - trust `REPO_MAP.md`, `openapi.yaml`, and the Go/web source when they conflict. |
-| **Electron security** | `sandbox: false` in `BrowserWindow`; preload isolation is good, but not hardened to modern Electron defaults. |
+| **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `docs/ARCHITECTURE.md` / `docs/CONTRIBUTING.md` partly predate the SQLite API and multi-tenancy - trust `REPO_MAP.md`, `openapi.yaml`, and the Go/web source when they conflict. |
 | **No monorepo CI** | Regressions rely on manual verification per package. |
 | **Legacy statuses** | API accepts/normalizes `draft` / `active` for old fixtures. |
-| **Packaging** | `electron-builder.yml` uses placeholder `com.electron.app` / example author; `notarize: false` on macOS. |
 | **SQLite ops** | Single-file DB + volume backups - no replication, migration rollback story, or hosted DB runbook in repo. |
-| **Contract discipline** | Four+ places must stay aligned on domain changes; easy to miss one in review. |
+| **Contract discipline** | Several places must stay aligned on domain changes; easy to miss one in review. |
 
 ---
 
-## 9. Suggested first five improvements
+## 9. Suggested first improvements
 
-1. **Add a GitHub Actions workflow** - matrix: `go test ./...`, `apps/web` lint/test/build, `apps/desktop` typecheck/test (with `ELECTRON_SKIP_BINARY_DOWNLOAD` where needed).
-2. **Extract a shared `@iris/contracts` or `packages/shared`** - work-order types, status enums, date helpers, and dashboard aggregation to cut web/desktop drift.
-3. **Reconcile documentation** - standardize on `DATABASE_PATH`, update Copilot/desktop README, add root `.env.example` for Compose.
-4. **Harden auth story** - document and test server-side rules for admin-only reads; reduce reliance on renderer `role === 'admin'` ([D-006](docs/DECISIONS.md)).
-5. **Desktop feature parity or explicit scope** - either expose customers/public flows via IPC + pages, or document desktop as work-order-only and trim duplicate UI investment.
+1. **Add a GitHub Actions workflow** - `go test ./...` plus `apps/web` lint/test/build on push/PR.
+2. **Generate the web domain types from `openapi.yaml`** - work-order types and status enums are hand-mirrored today, so the contract can drift silently.
+3. **Reconcile documentation** - standardize on `DATABASE_PATH`, add root `.env.example` for Compose.
+4. **Harden auth story** - document and test server-side rules for admin-only reads; reduce reliance on the client `role === 'admin'` ([D-006](docs/DECISIONS.md)).
 
 ---
 
@@ -329,4 +276,4 @@ Demo seed credentials (non-production): `admin` / `admin123`.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - topology and flows
 - [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) - Serbian UI ↔ English code
 - [iris-api/README.md](iris-api/README.md) - endpoints and Docker smoke checks
-- [apps/desktop/README.md](apps/desktop/README.md) · [apps/web/README.md](apps/web/README.md)
+- [apps/web/README.md](apps/web/README.md) - web client setup and runtime modes
