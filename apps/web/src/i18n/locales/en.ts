@@ -398,7 +398,7 @@ export const en: typeof sr = {
     notFound: 'Client not found.',
     backToClients: 'Back to clients',
     eyebrow: 'Iris · client',
-    locationsAfterSave: 'You can add locations after saving the client.',
+    locationsSavedWithClient: 'Add addresses now — they are saved together with the client.',
     overview: 'Overview',
     pib: 'PIB',
     mb: 'Registration number',

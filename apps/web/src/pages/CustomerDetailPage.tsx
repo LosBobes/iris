@@ -23,6 +23,7 @@ import {
   emptyLocation,
   formatActionError,
   getMissingLocationFields,
+  nextLocationId,
   normalizeCustomerCollections,
   removeLocation,
   slugId,
@@ -102,10 +103,16 @@ function CustomerDetailPage(): React.JSX.Element {
         mb: blankToNull(customer.mb),
       });
       const saved = await window.api.upsertCustomer(payload);
-      toast.success(t("customerDetail.saved"));
       if (isNew) {
+        // Locations typed while creating the client were only held in state —
+        // they get a customer id for the first time here, once it exists.
+        for (const location of locations) {
+          await window.api.upsertLocation({ ...location, customerId: saved.id });
+        }
+        toast.success(t("customerDetail.saved"));
         navigate(`/customers/${encodeURIComponent(saved.id)}`, { replace: true });
       } else {
+        toast.success(t("customerDetail.saved"));
         setCustomer(saved);
       }
     } catch (error) {
@@ -113,7 +120,7 @@ function CustomerDetailPage(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [customer, isNew, navigate, t]);
+  }, [customer, isNew, locations, navigate, t]);
 
   const saveLocation = useCallback(async () => {
     if (!locationDraft) return;
@@ -122,13 +129,24 @@ function CustomerDetailPage(): React.JSX.Element {
       toast.error(t("customerDetail.locMissing", { fields: missing.join(", ") }));
       return;
     }
+    const payload: Location = {
+      ...locationDraft,
+      id: locationDraft.id || nextLocationId(locations, locationDraft.name),
+      customerId: customer.id,
+      address: blankToNull(locationDraft.address),
+    };
+    if (isNew) {
+      // The client has no id yet; hold the location until the client is saved.
+      setLocations((current) => {
+        const exists = current.some((location) => location.id === payload.id);
+        return exists
+          ? current.map((location) => (location.id === payload.id ? payload : location))
+          : [...current, payload];
+      });
+      setLocationDraft(null);
+      return;
+    }
     try {
-      const payload: Location = {
-        ...locationDraft,
-        id: locationDraft.id || slugId("loc", locationDraft.name),
-        customerId: customer.id,
-        address: blankToNull(locationDraft.address),
-      };
       const saved = await window.api.upsertLocation(payload);
       setLocations((current) => {
         const exists = current.some((location) => location.id === saved.id);
@@ -141,7 +159,7 @@ function CustomerDetailPage(): React.JSX.Element {
     } catch (error) {
       toast.error(formatActionError(t("customerDetail.locSaveError"), error));
     }
-  }, [locationDraft, customer.id, t]);
+  }, [locationDraft, locations, customer.id, isNew, t]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
@@ -152,7 +170,8 @@ function CustomerDetailPage(): React.JSX.Element {
         navigate("/customers");
         return;
       }
-      await window.api.deleteLocation(deleteTarget.id);
+      // An unsaved client's locations never reached the API — drop them locally.
+      if (!isNew) await window.api.deleteLocation(deleteTarget.id);
       setLocations((current) => removeLocation(current, deleteTarget.id));
       toast.success(t("customerDetail.locDeleted"));
     } catch {
@@ -160,7 +179,7 @@ function CustomerDetailPage(): React.JSX.Element {
     } finally {
       setDeleteTarget(null);
     }
-  }, [deleteTarget, customer.id, navigate, t]);
+  }, [deleteTarget, customer.id, isNew, navigate, t]);
 
   const title = isNew
     ? t("customers.newClient")
@@ -219,25 +238,22 @@ function CustomerDetailPage(): React.JSX.Element {
           <div className="space-y-8 px-5 pb-10 sm:px-8">
             <DetailsForm value={customer} onChange={setCustomer} />
 
-            {isNew ? (
-              <p className="border border-dashed border-border bg-background px-4 py-3 text-[12px] text-[color:var(--iris-ink-soft)]">
-                {t("customerDetail.locationsAfterSave")}
-              </p>
-            ) : (
-              <LocationsSection
-                locations={locations}
-                draft={locationDraft}
-                isAdmin={isAdmin}
-                onAdd={() => setLocationDraft(emptyLocation(customer.id))}
-                onEdit={(location) => setLocationDraft(location)}
-                onCancel={() => setLocationDraft(null)}
-                onChangeDraft={setLocationDraft}
-                onSave={saveLocation}
-                onDelete={(location) =>
-                  setDeleteTarget({ kind: "location", id: location.id, name: location.name })
-                }
-              />
-            )}
+            <LocationsSection
+              locations={locations}
+              draft={locationDraft}
+              // Locations of a not-yet-saved client exist only in this form, so
+              // anyone filling it in may remove a row they just added.
+              canDelete={isAdmin || isNew}
+              hint={isNew ? t("customerDetail.locationsSavedWithClient") : null}
+              onAdd={() => setLocationDraft(emptyLocation(customer.id))}
+              onEdit={(location) => setLocationDraft(location)}
+              onCancel={() => setLocationDraft(null)}
+              onChangeDraft={setLocationDraft}
+              onSave={saveLocation}
+              onDelete={(location) =>
+                setDeleteTarget({ kind: "location", id: location.id, name: location.name })
+              }
+            />
           </div>
 
           <aside className="border-t border-border bg-card p-6 lg:sticky lg:top-0 lg:self-start lg:border-l lg:border-t-0 lg:p-8">
@@ -255,12 +271,10 @@ function CustomerDetailPage(): React.JSX.Element {
                 <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.contacts")}</dt>
                 <dd className="tnum text-foreground">{customer.contacts.length}</dd>
               </div>
-              {!isNew && (
-                <div className="flex items-center justify-between">
-                  <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.locations")}</dt>
-                  <dd className="tnum text-foreground">{locations.length}</dd>
-                </div>
-              )}
+              <div className="flex items-center justify-between">
+                <dt className="text-[color:var(--iris-ink-soft)]">{t("customerDetail.locations")}</dt>
+                <dd className="tnum text-foreground">{locations.length}</dd>
+              </div>
             </dl>
 
             <div className="mt-6 flex flex-col gap-2">
@@ -521,7 +535,8 @@ function ContactsEditor({
 function LocationsSection({
   locations,
   draft,
-  isAdmin,
+  canDelete,
+  hint,
   onAdd,
   onEdit,
   onCancel,
@@ -531,7 +546,8 @@ function LocationsSection({
 }: {
   locations: Location[];
   draft: Location | null;
-  isAdmin: boolean;
+  canDelete: boolean;
+  hint: string | null;
   onAdd: () => void;
   onEdit: (location: Location) => void;
   onCancel: () => void;
@@ -555,6 +571,10 @@ function LocationsSection({
           </button>
         )}
       </div>
+
+      {hint !== null && (
+        <p className="mb-3 text-[11px] text-[color:var(--iris-ink-soft)]">{hint}</p>
+      )}
 
       {draft !== null && (
         <form
@@ -626,7 +646,7 @@ function LocationsSection({
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
-                {isAdmin && (
+                {canDelete && (
                   <button
                     type="button"
                     onClick={() => onDelete(location)}

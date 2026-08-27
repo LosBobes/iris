@@ -95,6 +95,20 @@ export function getMissingLocationFields(location: Location): string[] {
   return missing;
 }
 
+/**
+ * Builds a location id that does not collide with the ids already held in the
+ * editor. New clients keep their locations client-side until the client itself
+ * is saved, so several rows can be created before any of them reaches the API.
+ */
+export function nextLocationId(existing: Location[], name: string): string {
+  const base = slugId("loc", name);
+  const taken = new Set(existing.map((location) => location.id));
+  if (!taken.has(base)) return base;
+  let suffix = 2;
+  while (taken.has(`${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
+}
+
 export function removeLocation(locations: Location[], id: string): Location[] {
   return locations.filter((location) => location.id !== id);
 }

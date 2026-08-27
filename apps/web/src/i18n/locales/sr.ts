@@ -397,7 +397,7 @@ export const sr = {
     notFound: 'Klijent nije pronađen.',
     backToClients: 'Nazad na klijente',
     eyebrow: 'Iris · klijent',
-    locationsAfterSave: 'Lokacije možete dodati nakon što sačuvate klijenta.',
+    locationsSavedWithClient: 'Adrese unesite odmah — biće sačuvane zajedno sa klijentom.',
     overview: 'Pregled',
     pib: 'PIB',
     mb: 'Matični broj',
