@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getMissingLocationFields,
+  nextLocationId,
   removeLocation,
   slugId,
   validateCustomerIdentifiers,
@@ -56,6 +57,26 @@ describe("getMissingLocationFields", () => {
 
   it("flags a blank name", () => {
     expect(getMissingLocationFields({ ...base, name: "  " })).toEqual(["Naziv"]);
+  });
+});
+
+describe("nextLocationId", () => {
+  const existing: Location[] = [
+    { id: "loc-centrala", customerId: "cust-1", name: "Centrala", address: null },
+  ];
+
+  it("derives the id from the location name", () => {
+    expect(nextLocationId(existing, "Magacin")).toBe("loc-magacin");
+  });
+
+  it("suffixes ids that are already taken by an unsaved sibling", () => {
+    expect(nextLocationId(existing, "Centrala")).toBe("loc-centrala-2");
+    expect(
+      nextLocationId(
+        [...existing, { id: "loc-centrala-2", customerId: "cust-1", name: "Centrala", address: null }],
+        "Centrala",
+      ),
+    ).toBe("loc-centrala-3");
   });
 });
 
