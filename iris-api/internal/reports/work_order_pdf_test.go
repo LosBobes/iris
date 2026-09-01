@@ -2,6 +2,9 @@ package reports
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -546,5 +549,47 @@ func TestPrintBillingRowsPaidIsIndependent(t *testing.T) {
 	unpaid := getPrintBillingRows(&proforma, nil, false)
 	if unpaid[3].Label != "PLAĆENO" || unpaid[3].Checked {
 		t.Errorf("expected the PLAĆENO row present but unticked, got %+v", unpaid[3])
+	}
+}
+
+func TestResolveBrowserPathHonorsEnvOverride(t *testing.T) {
+	// A stand-in "browser": resolveBrowserPath only checks that the configured
+	// value is executable, it never launches it.
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fake-chrome")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake browser: %v", err)
+	}
+
+	t.Setenv(browserExecPathEnv, fake)
+
+	path, err := resolveBrowserPath()
+	if err != nil {
+		t.Fatalf("resolveBrowserPath: %v", err)
+	}
+	if path != fake {
+		t.Errorf("path = %q, want %q", path, fake)
+	}
+}
+
+func TestResolveBrowserPathRejectsMisconfiguredOverride(t *testing.T) {
+	t.Setenv(browserExecPathEnv, filepath.Join(t.TempDir(), "does-not-exist"))
+
+	if _, err := resolveBrowserPath(); !errors.Is(err, ErrBrowserUnavailable) {
+		t.Fatalf("err = %v, want ErrBrowserUnavailable", err)
+	}
+}
+
+func TestRenderWorkOrderPDFReportsMissingBrowser(t *testing.T) {
+	t.Setenv(browserExecPathEnv, filepath.Join(t.TempDir(), "does-not-exist"))
+
+	_, err := RenderWorkOrderPDF(
+		context.Background(),
+		domain.WorkOrder{ID: "rn-1", OrderNumber: "RN-2026-00001"},
+		PrintContext{},
+		printSettings(domain.DefaultPDFSections(), "Grafika Čobanović", domain.DefaultBillingDefaults()),
+	)
+	if !errors.Is(err, ErrBrowserUnavailable) {
+		t.Fatalf("err = %v, want ErrBrowserUnavailable", err)
 	}
 }

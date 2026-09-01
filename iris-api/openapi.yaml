@@ -782,6 +782,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: >-
+            The server has no headless Chrome/Chromium available, so the PDF
+            step cannot run. The HTML preview (POST /work-orders/preview) still
+            works and can be printed from the browser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /work-orders/preview:
     post:
       tags: [Work Orders]

@@ -30,6 +30,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	fonts-liberation \
 	&& rm -rf /var/lib/apt/lists/*
 
+# chromium is what renders GET /work-orders/{id}/report (chromedp). Pin it
+# behind a stable path so the image never depends on chromedp guessing a
+# binary name, and so a package that stops shipping one fails the build here
+# rather than the first print at runtime.
+RUN chrome="$(command -v chromium || command -v chromium-browser)" \
+	&& test -x "$chrome" \
+	&& ln -sf "$chrome" /usr/local/bin/iris-chrome
+
 RUN groupadd -g 65532 nonroot && \
 	useradd -r -u 65532 -g nonroot nonroot && \
 	mkdir -p /app /data && \
@@ -46,6 +54,7 @@ COPY --from=web-build --chown=65532:65532 /src/apps/web/dist ./web
 ENV IRIS_API_ADDR=:8080
 ENV DATABASE_PATH=/data/iris.db
 ENV IRIS_WEB_DIR=/app/web
+ENV IRIS_CHROME_PATH=/usr/local/bin/iris-chrome
 
 EXPOSE 8080
 

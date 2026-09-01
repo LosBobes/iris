@@ -778,6 +778,14 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 
 	pdfBytes, err := reports.RenderWorkOrderPDF(r.Context(), *workOrder, printCtx, settings)
 	if err != nil {
+		// A missing headless browser is a deployment fault, not a broken
+		// request: the sheet itself rendered. Answer 503 with a message that
+		// tells the operator what to do (print from the browser preview)
+		// instead of the generic "server error" that hid the real cause.
+		if errors.Is(err, reports.ErrBrowserUnavailable) {
+			writeAPIError(w, r, http.StatusServiceUnavailable, "Štampa u PDF trenutno nije dostupna na serveru. Koristite pregled naloga za štampu.", err)
+			return
+		}
 		writeServerError(w, r, err)
 		return
 	}

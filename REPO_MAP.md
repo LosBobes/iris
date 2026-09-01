@@ -215,6 +215,7 @@ curl http://localhost:8080/healthz
 | `IRIS_API_ADDR` | Listen address (default `:8080`) |
 | `IRIS_ALLOWED_ORIGINS` | CORS allowlist (comma-separated) |
 | `IRIS_WEB_DIR` | Serve built SPA + fallback routing (Docker: `/app/web`) |
+| `IRIS_CHROME_PATH` | Chrome/Chromium binary for PDF rendering (Docker: `/usr/local/bin/iris-chrome`); unset = search `chromium`, `google-chrome`, … on `$PATH` |
 
 Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Compose (gitignored; do not commit secrets).
 
