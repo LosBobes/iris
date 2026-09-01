@@ -3,9 +3,12 @@ package reports
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html/template"
 	"math"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -1151,14 +1154,86 @@ func RenderWorkOrderHTML(order domain.WorkOrder, printCtx PrintContext, settings
 	return sb.String(), nil
 }
 
+// ErrBrowserUnavailable reports that no headless Chrome/Chromium binary could
+// be found on this machine, so the PDF step cannot run at all. It is a
+// deployment fault, not a bad request: the HTML sheet renders fine, only the
+// browser that converts it to PDF is missing. Callers use it to answer with a
+// "print is unavailable" message instead of a generic server error.
+var ErrBrowserUnavailable = errors.New("no Chrome/Chromium executable found for PDF rendering")
+
+// browserExecPathEnv names the environment variable that pins the browser
+// binary. It exists because chromedp's own search only probes a fixed list of
+// names on $PATH and silently falls back to "google-chrome" when none match —
+// which is what produced `exec: "google-chrome": executable file not found in
+// $PATH` in production, where the image ships Chromium under a different name.
+const browserExecPathEnv = "IRIS_CHROME_PATH"
+
+// browserCandidates are the binaries tried, in order, when the environment
+// variable is unset. Chromium comes first because that is what the container
+// images install; the Google Chrome names follow for developer machines.
+var browserCandidates = []string{
+	"chromium",
+	"chromium-browser",
+	"headless_shell",
+	"headless-shell",
+	"google-chrome",
+	"google-chrome-stable",
+	"chrome",
+	"/usr/bin/chromium-browser",
+	"/usr/bin/chromium",
+	"/usr/bin/google-chrome",
+	"/Applications/Chromium.app/Contents/MacOS/Chromium",
+	"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+}
+
+// resolveBrowserPath returns an absolute path to the browser used for PDF
+// rendering. IRIS_CHROME_PATH wins when set (and is an error when it points at
+// nothing, so a typo in deployment config is loud rather than silently ignored);
+// otherwise the candidates above are probed on $PATH. It returns
+// ErrBrowserUnavailable when nothing is installed, so the failure is reported
+// before Chrome is launched rather than as an opaque exec error afterwards.
+func resolveBrowserPath() (string, error) {
+	if configured := strings.TrimSpace(os.Getenv(browserExecPathEnv)); configured != "" {
+		path, err := exec.LookPath(configured)
+		if err != nil {
+			return "", fmt.Errorf("%w: %s=%q is not executable: %v", ErrBrowserUnavailable, browserExecPathEnv, configured, err)
+		}
+		return path, nil
+	}
+
+	for _, candidate := range browserCandidates {
+		if path, err := exec.LookPath(candidate); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("%w (%s is unset; searched: %s)", ErrBrowserUnavailable, browserExecPathEnv, strings.Join(browserCandidates, ", "))
+}
+
+// CheckBrowserAvailable reports whether a browser for the PDF step is present,
+// returning an error wrapping ErrBrowserUnavailable when it is not. The server
+// calls it at startup so a misbuilt image is visible in the logs immediately
+// instead of on the first print, and tests use it to skip PDF assertions on
+// machines with no browser installed.
+func CheckBrowserAvailable() error {
+	_, err := resolveBrowserPath()
+	return err
+}
+
 func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, printCtx PrintContext, settings domain.OrganizationSettings) ([]byte, error) {
 	htmlContent, err := RenderWorkOrderHTML(order, printCtx, settings)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render HTML template: %w", err)
 	}
 
+	execPath, err := resolveBrowserPath()
+	if err != nil {
+		return nil, err
+	}
+
 	// Create allocator context with no-sandbox flag to run reliably inside Docker environments.
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(execPath),
 		chromedp.NoSandbox,
 		chromedp.DisableGPU,
 	)

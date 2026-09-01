@@ -90,6 +90,7 @@ iris-api/
 | `IRIS_SESSION_SECRET` | Required production secret for session-capable runtime. | empty |
 | `IRIS_ALLOWED_ORIGINS` | Comma-separated CORS origins. Empty allows local dev origins. | empty |
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |
+| `IRIS_CHROME_PATH` | Chrome/Chromium binary used to render work-order PDFs (`GET /work-orders/{id}/report`). When empty the usual names (`chromium`, `chromium-browser`, `google-chrome`, …) are searched on `$PATH`; when nothing is found the endpoint answers `503` instead of rendering. | empty |
 
 ## Commands
 
