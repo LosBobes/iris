@@ -18,7 +18,8 @@ password; all data access is filtered by the tenant resolved from the session.
 See [§4a](#4a-multi-tenancy). The seeded production tenant is `grafika-cobanovic`
 (Grafika Čobanović); the demo tenant is `demo`.
 
-Two deployable surfaces share one **Go REST API** and **SQLite** database:
+Two deployable surfaces share one **Go REST API** and one database — **SQLite**
+or **PostgreSQL**, chosen at startup (`DATABASE_URL` selects Postgres):
 
 | Surface | Path | Role |
 | --- | --- | --- |
@@ -31,7 +32,7 @@ Two deployable surfaces share one **Go REST API** and **SQLite** database:
 
 | Layer | Stack |
 | --- | --- |
-| **Backend** | Go **1.26**, `chi` router, `modernc.org/sqlite`, `golang.org/x/crypto` |
+| **Backend** | Go **1.26**, `chi` router, `modernc.org/sqlite` + `jackc/pgx/v5`, `golang.org/x/crypto` |
 | **Web** | **Vite 8**, **React 19**, **TypeScript ~6**, **Tailwind CSS 4**, Vitest, ESLint |
 | **Package managers** | **npm** for the web app (`package-lock.json` in `apps/web`); **Go modules** in `iris-api/` |
 | **Monorepo** | Logical monorepo; **no root `package.json`**. Each app is installed and run independently. |
@@ -58,7 +59,7 @@ iris/
 │   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup
 │   ├── internal/api/            Routes, auth middleware, handlers
 │   ├── internal/domain/         Go structs (contract with OpenAPI)
-│   ├── internal/store/          SQLite + fixture store (tests)
+│   ├── internal/store/          SQL store (SQLite/Postgres) + fixture store
 │   ├── testdata/fixtures/       JSON fixtures for tests / seed-demo source
 │   └── openapi.yaml             HTTP contract (source of truth with domain types)
 ├── docs/                          ARCHITECTURE, DECISIONS, DOMAIN_GLOSSARY, CONTRIBUTING
@@ -80,7 +81,7 @@ Web client
   → window.api
   → HTTP + credentials (iris_session cookie)
   → iris-api (chi → handler → store.Store)
-  → SQLite (DATABASE_PATH)
+  → SQLite (DATABASE_PATH) or PostgreSQL (DATABASE_URL)
 ```
 
 ### Web boot (`apps/web/src/lib/web-api.ts`)
@@ -95,7 +96,7 @@ Web client
   **`iris_session`** cookie (12h default). Unknown org and bad credentials return
   the **same** generic Serbian error, so the form never reveals which orgs exist.
 - Protected routes use `requireAuth`; admin-only routes use `requireAdmin`
-- No OAuth / SSO - username/password in SQLite
+- No OAuth / SSO - username/password in the database
 
 ### 4a. Multi-tenancy
 
@@ -208,6 +209,7 @@ curl http://localhost:8080/healthz
 
 | Variable | Purpose |
 | --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string. When set, it wins over `DATABASE_PATH` |
 | `DATABASE_PATH` | **Primary** SQLite path (default dev: `./data/iris.db`) |
 | `IRIS_DB_PATH` | Legacy fallback if `DATABASE_PATH` unset |
 | `IRIS_ENV` | `development` \| `production` - production requires explicit DB path + session secret; blocks demo `admin`/`admin123` |
@@ -238,7 +240,8 @@ Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Comp
 
 | Integration | Usage |
 | --- | --- |
-| **SQLite** | Sole production database (`modernc.org/sqlite`); file on disk or Docker volume |
+| **SQLite** | Default database (`modernc.org/sqlite`); file on disk or Docker volume |
+| **PostgreSQL** | Alternative production database (`jackc/pgx/v5`), selected by `DATABASE_URL`; statements are translated from the SQLite dialect in the driver |
 | **HTTP session cookies** | Auth; no JWT/OAuth providers in tree |
 | **CORS** | Browser clients on different origin than API |
 
@@ -256,7 +259,7 @@ Demo seed credentials (non-production): `admin` / `admin123`.
 | **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `docs/ARCHITECTURE.md` / `docs/CONTRIBUTING.md` partly predate the SQLite API and multi-tenancy - trust `REPO_MAP.md`, `openapi.yaml`, and the Go/web source when they conflict. |
 | **No monorepo CI** | Regressions rely on manual verification per package. |
 | **Legacy statuses** | API accepts/normalizes `draft` / `active` for old fixtures. |
-| **SQLite ops** | Single-file DB + volume backups - no replication, migration rollback story, or hosted DB runbook in repo. |
+| **SQLite ops** | Single-file DB + volume backups - no replication or migration rollback story. On PostgreSQL, `irisctl backup` does not apply; use `pg_dump` (see `deploy/POSTGRES.md`). |
 | **Contract discipline** | Several places must stay aligned on domain changes; easy to miss one in review. |
 
 ---

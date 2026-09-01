@@ -20,6 +20,11 @@ RUN go mod download
 COPY iris-api/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
     -o /out/iris-api ./cmd/server
+# irisctl ships alongside the server so migrations, backups and the SQLite ->
+# Postgres data migration can be run on the box (docker compose run --rm
+# backend irisctl ...) without a Go toolchain there.
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /out/irisctl ./cmd/irisctl
 
 # --- Final stage ------------------------------------------------------------
 # alpine (not distroless) so the compose healthcheck can use the bundled
@@ -31,8 +36,9 @@ RUN apk add --no-cache ca-certificates \
     && mkdir -p /data \
     && chown nonroot:nonroot /data
 
-# Copy only the compiled binary from the build stage.
+# Copy the compiled binaries from the build stage.
 COPY --from=build /out/iris-api /usr/local/bin/iris-api
+COPY --from=build /out/irisctl /usr/local/bin/irisctl
 
 # Sentry DSN baked in at build time from the SENTRY_DSN GitHub Actions secret
 # (see .github/workflows/build.yml). A DSN is an ingestion key, not a secret,
@@ -41,7 +47,9 @@ COPY --from=build /out/iris-api /usr/local/bin/iris-api
 ARG SENTRY_DSN=""
 
 # The SQLite database lives under /data, which is backed by a named volume so
-# it survives container recreation (see docker-compose.yml).
+# it survives container recreation (see docker-compose.yml). Setting
+# DATABASE_URL at runtime switches the API to Postgres and leaves this file
+# untouched as a rollback target.
 ENV IRIS_API_ADDR=":8080" \
     DATABASE_PATH="/data/iris.db" \
     SENTRY_DSN="${SENTRY_DSN}"

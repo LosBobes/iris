@@ -4,9 +4,17 @@ Scope: everything under `iris-api/`. Start with
 [README.md](README.md) and [openapi.yaml](openapi.yaml). Treat the client docs
 as secondary for backend-only tasks.
 
-Stack: Go 1.26, `chi` router, `modernc.org/sqlite`, `golang.org/x/crypto`.
-The API is **SQLite-backed and stateful** (not fixture-backed at runtime — that
-note in older docs is stale; fixtures are for tests and `seed-demo`).
+Stack: Go 1.26, `chi` router, `modernc.org/sqlite` + `jackc/pgx/v5`,
+`golang.org/x/crypto`. The API is **database-backed and stateful** (not
+fixture-backed at runtime — that note in older docs is stale; fixtures are for
+tests and `seed-demo`).
+
+**Two engines, one set of statements.** SQLite is the default; `DATABASE_URL`
+selects PostgreSQL. Queries are written once in the SQLite dialect and rewritten
+for Postgres inside the driver (`internal/store/postgres_sql.go`) — so when you
+add a query, do not branch on the engine. If it uses a construct the translator
+does not cover, add a rule plus a case in `postgres_sql_test.go`. New migrations
+(13+) go in `sqliteMigrations` only, never in `postgresSchema`.
 
 ## Boundaries
 
@@ -20,10 +28,10 @@ note in older docs is stale; fixtures are for tests and `seed-demo`).
 | Path | Role |
 | --- | --- |
 | `cmd/server/` | HTTP server wiring |
-| `cmd/irisctl/` | CLI: migrate, seed-demo, create-tenant, import-csv, create-user, backup |
+| `cmd/irisctl/` | CLI: migrate, seed-demo, create-tenant, import-csv, create-user, backup, migrate-to-postgres |
 | `internal/api/` | chi router, auth middleware, handlers (thin) |
 | `internal/domain/` | Go structs — contract with OpenAPI |
-| `internal/store/` | SQLite store, migrations, seed; fixture store for tests |
+| `internal/store/` | SQL store (SQLite + Postgres), migrations, seed; fixture store for tests |
 | `internal/reports/` | work-order PDF generation |
 | `internal/testutil/` | shared test helpers |
 

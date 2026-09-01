@@ -45,11 +45,12 @@ func main() {
 		}
 	}
 
+	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	dbPath, explicitDBPath := databasePathFromEnv(env)
 	sessionSecret := os.Getenv("IRIS_SESSION_SECRET")
 	if env == "production" {
-		if !explicitDBPath {
-			log.Fatal("DATABASE_PATH is required in production")
+		if databaseURL == "" && !explicitDBPath {
+			log.Fatal("DATABASE_URL (postgres) or DATABASE_PATH (sqlite) is required in production")
 		}
 		if sessionSecret == "" {
 			log.Fatal("IRIS_SESSION_SECRET is required in production")
@@ -57,13 +58,13 @@ func main() {
 	}
 
 	var persistence store.Store
-	sqliteStore, err := store.OpenSQLite(ctx, dbPath)
+	dataStore, err := openStore(ctx, databaseURL, dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer sqliteStore.Close()
+	defer dataStore.Close()
 	if env == "production" {
-		hasDemoAdmin, err := sqliteStore.HasUserPassword(ctx, "admin", "admin123")
+		hasDemoAdmin, err := dataStore.HasUserPassword(ctx, "admin", "admin123")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -71,7 +72,7 @@ func main() {
 			log.Fatal("refusing production startup with demo admin credentials")
 		}
 	}
-	persistence = sqliteStore
+	persistence = dataStore
 
 	server := api.NewServer(persistence, api.Config{
 		AllowedOrigins:    splitCSV(os.Getenv("IRIS_ALLOWED_ORIGINS")),
@@ -100,6 +101,18 @@ func main() {
 	if err := httpServer.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// openStore picks the storage engine. DATABASE_URL selects Postgres and wins
+// when both are set; otherwise the SQLite file at dbPath is used. Both return
+// the same store type, so nothing downstream depends on the choice.
+func openStore(ctx context.Context, databaseURL string, dbPath string) (*store.SQLStore, error) {
+	if databaseURL != "" {
+		log.Printf("using postgres storage")
+		return store.OpenPostgres(ctx, databaseURL)
+	}
+	log.Printf("using sqlite storage at %s", dbPath)
+	return store.OpenSQLite(ctx, dbPath)
 }
 
 func databasePathFromEnv(env string) (string, bool) {
