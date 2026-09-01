@@ -31,10 +31,33 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
 # wget against /healthz. ca-certificates is added for any outbound TLS.
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates \
+# chromium is a runtime dependency, not a nicety: GET /work-orders/{id}/report
+# renders the print sheet through headless Chrome (chromedp). Without it the
+# endpoint failed in production with
+#   chromedp failed to render PDF: exec: "google-chrome": executable file not
+#   found in $PATH
+# because this image shipped only the Go binary. The font packages are what
+# make the sheet render as text rather than tofu boxes: ttf-liberation covers
+# Latin, font-noto adds the Serbian Cyrillic/Latin diacritics (Č, Ć, Š, Ž, Đ).
+RUN apk add --no-cache \
+        ca-certificates \
+        chromium \
+        freetype \
+        harfbuzz \
+        nss \
+        ttf-liberation \
+        font-noto \
     && adduser -D -u 65532 nonroot \
     && mkdir -p /data \
     && chown nonroot:nonroot /data
+
+# Pin the browser behind a stable path. Alpine has shipped the binary as both
+# `chromium` and `chromium-browser` across releases, so resolve it here: the
+# build fails loudly if the package ever stops providing either name, instead
+# of the container starting fine and only failing on the first print.
+RUN chrome="$(command -v chromium-browser || command -v chromium)" \
+    && test -x "$chrome" \
+    && ln -sf "$chrome" /usr/local/bin/iris-chrome
 
 # Copy the compiled binaries from the build stage.
 COPY --from=build /out/iris-api /usr/local/bin/iris-api
@@ -52,7 +75,8 @@ ARG SENTRY_DSN=""
 # untouched as a rollback target.
 ENV IRIS_API_ADDR=":8080" \
     DATABASE_PATH="/data/iris.db" \
-    SENTRY_DSN="${SENTRY_DSN}"
+    SENTRY_DSN="${SENTRY_DSN}" \
+    IRIS_CHROME_PATH="/usr/local/bin/iris-chrome"
 
 USER nonroot
 

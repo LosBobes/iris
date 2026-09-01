@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/api"
+	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
 	"github.com/getsentry/sentry-go"
 )
@@ -95,6 +96,13 @@ func main() {
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+	}
+
+	// PDF printing shells out to headless Chrome. Say so at startup: a missing
+	// browser is a deployment fault (the image forgot to install one), and this
+	// turns it into one line in the logs instead of a 5xx on the first print.
+	if err := reports.CheckBrowserAvailable(); err != nil {
+		log.Printf("warning: PDF printing is unavailable: %v", err)
 	}
 
 	log.Printf("iris-api listening on %s", addr)

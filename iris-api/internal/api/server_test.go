@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
+	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
 	"github.com/LosBobes/iris/iris-api/internal/testutil"
 )
@@ -628,37 +629,61 @@ func TestWorkOrderPreviewEndpoint(t *testing.T) {
 	}
 }
 
+func TestReportReportsMissingBrowserAsUnavailable(t *testing.T) {
+	// Production ran without a headless browser in the image, and the report
+	// endpoint answered a generic 500 ("Došlo je do greške na serveru.") that
+	// said nothing about the real cause. Point the resolver at a path that does
+	// not exist to reproduce that environment.
+	t.Setenv("IRIS_CHROME_PATH", filepath.Join(t.TempDir(), "no-such-chrome"))
+
+	response := performRequest(t, newTestServer(t), http.MethodGet, "/work-orders/1/report", "")
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusServiceUnavailable)
+	}
+	assertErrorResponse(t, response.Body.Bytes(), "Štampa u PDF trenutno nije dostupna na serveru. Koristite pregled naloga za štampu.")
+}
+
 func TestReportAndPublicTrackingEndpoints(t *testing.T) {
 	server := newTestServer(t)
 
-	reportResponse := performRequest(t, server, http.MethodGet, "/work-orders/1/report", "")
-	if reportResponse.Code != http.StatusOK {
-		t.Fatalf("report status = %d, want %d", reportResponse.Code, http.StatusOK)
-	}
-	if contentType := reportResponse.Header().Get("Content-Type"); contentType != "application/pdf" {
-		t.Fatalf("Content-Type = %q, want application/pdf", contentType)
-	}
-	if !bytes.HasPrefix(reportResponse.Body.Bytes(), []byte("%PDF-")) {
-		t.Fatalf("report body prefix = %q, want PDF header", reportResponse.Body.String()[:5])
-	}
+	// The PDF step shells out to headless Chrome. Keep it in a subtest that
+	// skips where no browser is installed, so the public-tracking assertions
+	// below still run on a bare machine; the missing-browser response itself is
+	// covered by TestReportReportsMissingBrowserAsUnavailable.
+	t.Run("pdf report", func(t *testing.T) {
+		if err := reports.CheckBrowserAvailable(); err != nil {
+			t.Skipf("no browser available for PDF rendering: %v", err)
+		}
 
-	reportHTMLResponse := performRequestWithHeaders(
-		t,
-		server,
-		http.MethodGet,
-		"/work-orders/1/report",
-		"",
-		map[string]string{"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
-	)
-	if reportHTMLResponse.Code != http.StatusOK {
-		t.Fatalf("report html accept status = %d, want %d", reportHTMLResponse.Code, http.StatusOK)
-	}
-	if contentType := reportHTMLResponse.Header().Get("Content-Type"); contentType != "application/pdf" {
-		t.Fatalf("Content-Type with html accept = %q, want application/pdf", contentType)
-	}
-	if !bytes.HasPrefix(reportHTMLResponse.Body.Bytes(), []byte("%PDF-")) {
-		t.Fatalf("report html accept body prefix = %q, want PDF header", reportHTMLResponse.Body.String()[:5])
-	}
+		reportResponse := performRequest(t, server, http.MethodGet, "/work-orders/1/report", "")
+		if reportResponse.Code != http.StatusOK {
+			t.Fatalf("report status = %d, want %d", reportResponse.Code, http.StatusOK)
+		}
+		if contentType := reportResponse.Header().Get("Content-Type"); contentType != "application/pdf" {
+			t.Fatalf("Content-Type = %q, want application/pdf", contentType)
+		}
+		if !bytes.HasPrefix(reportResponse.Body.Bytes(), []byte("%PDF-")) {
+			t.Fatalf("report body prefix = %q, want PDF header", reportResponse.Body.String()[:5])
+		}
+
+		reportHTMLResponse := performRequestWithHeaders(
+			t,
+			server,
+			http.MethodGet,
+			"/work-orders/1/report",
+			"",
+			map[string]string{"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+		)
+		if reportHTMLResponse.Code != http.StatusOK {
+			t.Fatalf("report html accept status = %d, want %d", reportHTMLResponse.Code, http.StatusOK)
+		}
+		if contentType := reportHTMLResponse.Header().Get("Content-Type"); contentType != "application/pdf" {
+			t.Fatalf("Content-Type with html accept = %q, want application/pdf", contentType)
+		}
+		if !bytes.HasPrefix(reportHTMLResponse.Body.Bytes(), []byte("%PDF-")) {
+			t.Fatalf("report html accept body prefix = %q, want PDF header", reportHTMLResponse.Body.String()[:5])
+		}
+	})
 
 	workOrderResponse := performRequest(t, server, http.MethodGet, "/work-orders/1", "")
 	var workOrder domain.WorkOrder
