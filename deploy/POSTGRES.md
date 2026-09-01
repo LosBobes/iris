@@ -48,22 +48,40 @@ Expect a short read-only window: the API is stopped for the copy so nothing can
 write to SQLite behind the migration's back. The copy itself is fast — the
 dataset is small — so the window is dominated by pulling the image.
 
-### 1. Add the database password
+**Nothing here happens by itself.** `deploy.yml` runs a plain
+`docker compose up -d` on every merge to `main`, so the PostgreSQL service sits
+behind a compose profile and the API keeps using SQLite until `DATABASE_URL` is
+set. Merging the migration changes nothing on the box; the steps below are what
+change it.
+
+### 1. Turn the profile on and set a password
 
 ```bash
+cat >> .env <<'EOF'
+COMPOSE_PROFILES=postgres
+EOF
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
 ```
+
+`COMPOSE_PROFILES` is read by compose itself, so every later
+`docker compose up -d` — including the one `deploy.yml` runs — manages the
+database from now on.
+
+**Do not set `DATABASE_URL` yet.** That is step 6, after the data is copied;
+setting it now would point the API at an empty database.
 
 `POSTGRES_DB` and `POSTGRES_USER` default to `iris`; set them in `.env` only if
 you want different values.
 
 ### 2. Take a SQLite backup you can actually roll back to
 
+The image's entrypoint is the API server, so `--entrypoint irisctl` is what
+selects the CLI. Writing straight into a bind mount puts the copy on the host:
+
 ```bash
 docker compose -f docker-compose.prod.yml run --rm \
-  backend irisctl backup -out /data/backups/pre-postgres.db
-docker compose -f docker-compose.prod.yml run --rm \
-  -v "$PWD:/out" backend cp /data/backups/pre-postgres.db /out/
+  --entrypoint irisctl -v "$PWD:/backup" \
+  backend backup -out /backup/pre-postgres.db
 ```
 
 Copy that file off the box before continuing.
@@ -84,21 +102,31 @@ docker compose -f docker-compose.prod.yml stop backend frontend
 ### 5. Copy the data
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm backend \
-  irisctl migrate-to-postgres -from /data/iris.db
+source .env
+docker compose -f docker-compose.prod.yml run --rm \
+  --entrypoint irisctl backend migrate-to-postgres \
+    -from /data/iris.db \
+    -to "postgres://iris:${POSTGRES_PASSWORD}@db:5432/iris?sslmode=disable"
 ```
 
-`DATABASE_URL` comes from the compose environment, so `-to` is not needed. The
-command prints a row count per table and then re-counts both databases
+`-to` is passed explicitly because the API's own `DATABASE_URL` is still empty
+at this point — that is what keeps the running site on SQLite until the copy has
+actually succeeded.
+
+The command prints a row count per table and then re-counts both databases
 independently; it exits non-zero if any table disagrees. It refuses to run
 against a database that already holds data, so a re-run cannot double the rows.
 
 The whole copy is one transaction: if it fails, PostgreSQL is left untouched and
 you can simply restart the backend on SQLite.
 
-### 6. Start the API on PostgreSQL
+### 6. Point the API at PostgreSQL
+
+Only now, once the copy has been verified:
 
 ```bash
+source .env
+echo "DATABASE_URL=postgres://iris:${POSTGRES_PASSWORD}@db:5432/iris?sslmode=disable" >> .env
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml logs backend | head
 ```
@@ -112,9 +140,10 @@ Keep the `iris_sqlite_data` volume until you are confident. It is the rollback.
 
 ## Rolling back
 
-Remove (or comment out) `DATABASE_URL` in the backend service and recreate it:
+Remove the `DATABASE_URL` line from `.env` and recreate the backend:
 
 ```bash
+sed -i '/^DATABASE_URL=/d' .env
 docker compose -f docker-compose.prod.yml up -d --force-recreate backend
 ```
 

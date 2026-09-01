@@ -22,6 +22,12 @@
 
 services:
   db:
+    # Opt-in. This service only starts when the "postgres" profile is active,
+    # which is switched on by putting COMPOSE_PROFILES=postgres in the server's
+    # .env at cutover time. That matters because deploy.yml runs a plain
+    # `docker compose up -d` on every merge to main: until an operator has
+    # actually migrated, merging this must change nothing on the box.
+    profiles: ["postgres"]
     # Debian-based rather than -alpine on purpose: the schema creates an ICU
     # collation ("nocase") for the case-insensitive ordering and lookups the
     # store relies on, and the Debian image ships ICU without extra packages.
@@ -30,7 +36,11 @@ services:
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-iris}"
       POSTGRES_USER: "${POSTGRES_USER:-iris}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+      # Not `:?` — compose interpolates the whole file before it filters by
+      # profile, so a required variable here would break every deploy that has
+      # not opted in yet. Unset simply means the container refuses to
+      # initialise, which is only reachable once the profile is on.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-}"
       # Keeps the on-disk encoding/collation predictable regardless of the
       # host locale, so a restore onto another box compares strings the same way.
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
@@ -53,18 +63,21 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    # Deliberately no depends_on for db: it lives behind a compose profile, and
+    # depending on it would drag it into every deploy. `restart: unless-stopped`
+    # covers the boot-ordering case — if Postgres is not up yet, the API exits
+    # and is restarted until it connects.
     environment:
       IRIS_ENV: "${IRIS_ENV:-production}"
       # Must be a strong random value in production (openssl rand -hex 32).
       # Kept in the server's .env (gitignored), never committed.
       IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:?set IRIS_SESSION_SECRET in .env}"
-      # DATABASE_URL selects Postgres and takes precedence over DATABASE_PATH.
-      # Unset it to fall back to the SQLite file, which is the rollback path:
-      # the volume below is kept so the pre-migration database is still there.
-      DATABASE_URL: "postgres://${POSTGRES_USER:-iris}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-iris}?sslmode=disable"
+      # Empty by default, which means SQLite. Set it in the server's .env only
+      # AFTER the data has been copied across (deploy/POSTGRES.md):
+      #   DATABASE_URL=postgres://iris:<password>@db:5432/iris?sslmode=disable
+      # Clearing it again is the rollback: the SQLite volume below is retained
+      # and the migration only ever read from it.
+      DATABASE_URL: "${DATABASE_URL:-}"
       DATABASE_PATH: "/data/iris.db"
       # Same-origin: the browser hits Caddy -> nginx -> /api/, so no
       # cross-origin allow-list is needed.
