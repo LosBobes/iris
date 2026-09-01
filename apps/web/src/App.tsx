@@ -6,6 +6,7 @@ import { Login } from "@/components/Login/Login";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/CommandPalette";
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { InteractiveTourProvider } from "@/components/tour/InteractiveTourProvider";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
@@ -212,51 +213,53 @@ function App(): React.JSX.Element {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<RouteLoadingScreen />}>
-        <Routes>
-          <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
-          <Route
-            path="*"
-            element={
-              !currentUser ? (
-                <Login onLoginSuccess={handleLoginSuccess} />
-              ) : (
-                <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-                  <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, printItemColumns, setPrintItemColumns, showShippingOptions, setShowShippingOptions }}>
-                  <TooltipProvider>
-                    <InteractiveTourProvider>
-                      <Routes>
-                        <Route path="/" element={<DashboardPage />} />
-                        <Route path="/customers" element={<CustomersPage />} />
-                        <Route path="/customers/new" element={<CustomerDetailPage />} />
-                        <Route path="/customers/:id" element={<CustomerDetailPage />} />
-                        <Route path="/catalog" element={<CatalogPage />} />
-                        <Route path="/catalog/new" element={<CatalogDetailPage />} />
-                        <Route path="/catalog/:id" element={<CatalogDetailPage />} />
-                        <Route path="/work-orders" element={<WorkOrdersPage />} />
-                        <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
-                        <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
-                        <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
-                        <Route path="/settings" element={<SettingsPage />} />
-                        <Route path="/help" element={<HelpPage />} />
-                        {currentUser.role === "admin" && (
-                          <>
-                            <Route path="/cost-review" element={<CostReviewPage />} />
-                            <Route path="/users" element={<UsersPage />} />
-                          </>
-                        )}
-                      </Routes>
-                      <CommandPalette />
-                    </InteractiveTourProvider>
-                    <Toaster />
-                  </TooltipProvider>
-                  </OrganizationContext.Provider>
-                </AuthContext.Provider>
-              )
-            }
-          />
-        </Routes>
-      </Suspense>
+      <RouteErrorBoundary>
+        <Suspense fallback={<RouteLoadingScreen />}>
+          <Routes>
+            <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
+            <Route
+              path="*"
+              element={
+                !currentUser ? (
+                  <Login onLoginSuccess={handleLoginSuccess} />
+                ) : (
+                  <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
+                    <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, printItemColumns, setPrintItemColumns, showShippingOptions, setShowShippingOptions }}>
+                    <TooltipProvider>
+                      <InteractiveTourProvider>
+                        <Routes>
+                          <Route path="/" element={<DashboardPage />} />
+                          <Route path="/customers" element={<CustomersPage />} />
+                          <Route path="/customers/new" element={<CustomerDetailPage />} />
+                          <Route path="/customers/:id" element={<CustomerDetailPage />} />
+                          <Route path="/catalog" element={<CatalogPage />} />
+                          <Route path="/catalog/new" element={<CatalogDetailPage />} />
+                          <Route path="/catalog/:id" element={<CatalogDetailPage />} />
+                          <Route path="/work-orders" element={<WorkOrdersPage />} />
+                          <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
+                          <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
+                          <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
+                          <Route path="/settings" element={<SettingsPage />} />
+                          <Route path="/help" element={<HelpPage />} />
+                          {currentUser.role === "admin" && (
+                            <>
+                              <Route path="/cost-review" element={<CostReviewPage />} />
+                              <Route path="/users" element={<UsersPage />} />
+                            </>
+                          )}
+                        </Routes>
+                        <CommandPalette />
+                      </InteractiveTourProvider>
+                      <Toaster />
+                    </TooltipProvider>
+                    </OrganizationContext.Provider>
+                  </AuthContext.Provider>
+                )
+              }
+            />
+          </Routes>
+        </Suspense>
+      </RouteErrorBoundary>
     </BrowserRouter>
   );
 }

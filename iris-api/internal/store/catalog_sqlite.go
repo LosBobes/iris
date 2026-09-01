@@ -73,8 +73,8 @@ func (s *SQLiteStore) CatalogItems(
 	if err := rows.Err(); err != nil {
 		return CatalogItemListResult{}, err
 	}
-	// Release the single SQLite connection before the as-of-today lookup issues
-	// its own query (SetMaxOpenConns(1) would otherwise self-deadlock).
+	// Release this connection back to the pool before the as-of-today lookup
+	// issues its own query, so a small pool is not held by a finished read.
 	if err := rows.Close(); err != nil {
 		return CatalogItemListResult{}, fmt.Errorf("list catalog items: %w", err)
 	}

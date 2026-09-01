@@ -8,5 +8,17 @@
 # this domain.
 
 iris-application.com {
-    reverse_proxy localhost:3001
+    # Compress responses to the browser. nginx already gzips inside the stack;
+    # Caddy passes an already-encoded response through untouched, so this
+    # mainly covers anything nginx does not compress itself.
+    encode zstd gzip
+
+    reverse_proxy localhost:3001 {
+        # Absorb the few seconds when compose is recreating the containers
+        # during a deploy. Without this, every request in that window is a
+        # hard 502 — which is what an operator sees as "the page didn't load,
+        # but it works if I refresh".
+        lb_try_duration 10s
+        lb_try_interval 500ms
+    }
 }

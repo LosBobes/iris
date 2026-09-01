@@ -9,12 +9,20 @@
 # reachable from the internet except through Caddy. The Go backend and the
 # SQLite volume stay on Iris's private compose network.
 #
-# Build context is the repository root (.), and the images are built ON THE
-# SERVER from source (docker compose ... up --build), the same as gamgee.
-# This is independent of the GHCR images built by .github/workflows/build.yml.
+# Images are BUILT IN CI (.github/workflows/build.yml) and pulled from GHCR,
+# not built on this box. Building here meant every deploy ran `npm ci`, a Vite
+# build and a Go build on the same two shared cores that serve Iris and gamgee,
+# so the app got slow or unresponsive for the length of the build.
+#
+# `image:` is what the server uses. The `build:` blocks are kept so that
+# `docker compose -f docker-compose.prod.yml build` still works from a clean
+# checkout (local troubleshooting, or a manual rebuild if GHCR is unreachable).
+# IRIS_IMAGE_TAG pins the release: the deploy workflow sets it to git-<sha7> so
+# a deploy is immutable and a rollback is just re-running with an older tag.
 
 services:
   backend:
+    image: "ghcr.io/losbobes/iris-backend:${IRIS_IMAGE_TAG:-latest}"
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -39,13 +47,17 @@ services:
       # `docker compose down -v` would delete it.
       - iris_sqlite_data:/data
     healthcheck:
+      # frontend waits on this check before it starts, so the interval is the
+      # floor on deploy downtime: at 30s a recreate blacked the site out for
+      # half a minute even though the API was up in well under a second.
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
 
   frontend:
+    image: "ghcr.io/losbobes/iris-frontend:${IRIS_IMAGE_TAG:-latest}"
     build:
       context: .
       dockerfile: frontend/Dockerfile

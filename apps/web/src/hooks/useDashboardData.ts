@@ -42,7 +42,12 @@ export function useDashboardData() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([window.api.getWorkOrders(), window.api.getWorkOrderOperators()])
+    // The dashboard aggregates over every order, so it cannot page — but it
+    // reads no per-order history, so it asks for the summary projection.
+    Promise.all([
+      window.api.getWorkOrders({ view: 'summary' }),
+      window.api.getWorkOrderOperators(),
+    ])
       .then(([orders, ops]) => {
         setAllOrders(orders.items)
         setOperators(ops)

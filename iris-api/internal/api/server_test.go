@@ -1101,3 +1101,102 @@ func TestErrorResponseNamesUnitAndCarriesRequestReference(t *testing.T) {
 		t.Fatalf("X-Request-Id = %q, want %q", header, body["requestId"])
 	}
 }
+
+func TestWorkOrderListSummaryView(t *testing.T) {
+	decodeList := func(t *testing.T, path string) store.WorkOrderListResult {
+		t.Helper()
+		response := performRequest(t, newTestServer(t), http.MethodGet, path, "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+		var result store.WorkOrderListResult
+		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return result
+	}
+
+	full := decodeList(t, "/work-orders")
+	summary := decodeList(t, "/work-orders?view=summary")
+
+	if summary.Total != full.Total || len(summary.Items) != len(full.Items) {
+		t.Fatalf(
+			"summary returned %d/%d items/total, want %d/%d — the projection must not change which orders match",
+			len(summary.Items), summary.Total, len(full.Items), full.Total,
+		)
+	}
+
+	// Guard the guard: if the fixtures ever stop carrying these collections,
+	// the assertions below would pass vacuously.
+	var fullHasDetail bool
+	for _, order := range full.Items {
+		if len(order.StatusHistory) > 0 || len(order.Events) > 0 {
+			fullHasDetail = true
+			break
+		}
+	}
+	if !fullHasDetail {
+		t.Fatal("no fixture work order carries statusHistory or events; the summary assertions would be vacuous")
+	}
+
+	for _, order := range summary.Items {
+		if len(order.StatusHistory) > 0 ||
+			len(order.InternalNotes) > 0 ||
+			len(order.CustomerNotes) > 0 ||
+			len(order.Events) > 0 ||
+			len(order.Attachments) > 0 ||
+			len(order.MaterialUsage) > 0 ||
+			len(order.TimeEntries) > 0 {
+			t.Fatalf("order %s still carries detail collections in the summary view", order.ID)
+		}
+	}
+
+	// invoiceDraft drives the dashboard profit widgets, so it must survive.
+	byID := make(map[string]domain.WorkOrder, len(summary.Items))
+	for _, order := range summary.Items {
+		byID[order.ID] = order
+	}
+	var comparedLineItems bool
+	for _, order := range full.Items {
+		if len(order.InvoiceDraft.LineItems) == 0 {
+			continue
+		}
+		got, ok := byID[order.ID]
+		if !ok {
+			t.Fatalf("order %s missing from the summary view", order.ID)
+		}
+		if len(got.InvoiceDraft.LineItems) != len(order.InvoiceDraft.LineItems) {
+			t.Fatalf(
+				"order %s has %d summary line items, want %d",
+				order.ID, len(got.InvoiceDraft.LineItems), len(order.InvoiceDraft.LineItems),
+			)
+		}
+		comparedLineItems = true
+	}
+	if !comparedLineItems {
+		t.Fatal("no fixture work order carries invoice line items; the invoiceDraft assertion would be vacuous")
+	}
+}
+
+func TestParseWorkOrderListQueryClampsLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{name: "absent limit stays unbounded", query: "", want: 0},
+		{name: "negative limit floors to zero", query: "?limit=-5", want: 0},
+		{name: "limit within range is kept", query: "?limit=25", want: 25},
+		{name: "limit at the cap is kept", query: "?limit=500", want: maxWorkOrderListLimit},
+		{name: "oversized limit is clamped", query: "?limit=100000", want: maxWorkOrderListLimit},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/work-orders"+test.query, nil)
+			if got := parseWorkOrderListQuery(req).Limit; got != test.want {
+				t.Fatalf("Limit = %d, want %d", got, test.want)
+			}
+		})
+	}
+}

@@ -50,6 +50,13 @@ export const en: typeof sr = {
     backendCheckError:
       'Error checking the backend service. Verify the configuration and try again.',
     retry: 'Try again',
+    errorEyebrow: 'Iris · error',
+    errorTitle: 'The page did not load',
+    errorMessage:
+      'An unexpected error occurred while rendering this page. Reload and try again.',
+    errorStaleVersionMessage:
+      'The app was updated in the meantime. Reload the page to load the new version.',
+    reload: 'Reload page',
   },
   settings: {
     header: {
