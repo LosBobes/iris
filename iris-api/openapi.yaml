@@ -598,9 +598,15 @@ paths:
             type: boolean
         - name: limit
           in: query
+          description: >-
+            Page size. `0` (or omitted) applies no LIMIT and returns every
+            match — intended for the dashboard, which aggregates over all
+            orders and should pair it with `view=summary`. Explicit values
+            above 500 are clamped to 500.
           schema:
             type: integer
             minimum: 0
+            maximum: 500
         - name: offset
           in: query
           schema:
@@ -611,9 +617,24 @@ paths:
           schema:
             type: string
             example: -issueDate
+        - name: view
+          in: query
+          description: >-
+            Response projection. `summary` omits the per-order history
+            collections (`statusHistory`, `internalNotes`, `customerNotes`,
+            `events`, `attachments`, `materialUsage`, `timeEntries`), which
+            only the detail page reads. `invoiceDraft` is retained because the
+            dashboard derives profit from its line items. Omitted (`full`)
+            returns every collection.
+          schema:
+            type: string
+            enum: [full, summary]
+            default: full
       responses:
         '200':
-          description: Filtered work-order page
+          description: >-
+            Filtered work-order page. With `view=summary` the omitted
+            collections are absent from each item.
           content:
             application/json:
               schema:

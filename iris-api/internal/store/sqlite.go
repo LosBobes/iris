@@ -31,12 +31,14 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("create sqlite directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", buildDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	maxOpen := maxOpenConnsFromEnv()
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxOpen)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	if err := configureSQLite(ctx, db); err != nil {
 		_ = db.Close()
@@ -51,16 +53,78 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 	return &SQLiteStore{db: db}, nil
 }
 
-func configureSQLite(ctx context.Context, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
-		return fmt.Errorf("set sqlite busy timeout: %w", err)
+// Connection-pool sizing. WAL lets readers run concurrently, so pinning the pool
+// to a single connection (as this store originally did) made every request —
+// including the session lookup on each authenticated route — queue behind
+// whatever slow query happened to be running. Writes still serialize inside
+// SQLite itself; see buildDSN for how that is kept deadlock-free.
+const (
+	defaultMaxOpenConns = 8
+	maxOpenConnsEnv     = "IRIS_DB_MAX_OPEN_CONNS"
+	busyTimeoutMS       = 5000
+)
+
+// buildDSN appends the connection settings that must hold on *every* pooled
+// connection. They cannot be set with ExecContext once the pool has more than
+// one connection: a PRAGMA applies only to the connection that runs it, so a
+// connection opened later would silently come up without them.
+//
+// The driver splits the DSN at the first '?' and, for a non-"file:" DSN, opens
+// the bare path — so a plain filesystem path stays a plain path here.
+//
+//   - busy_timeout: wait rather than failing instantly when another connection
+//     holds the write lock.
+//   - foreign_keys: SQLite defaults this to OFF per connection.
+//   - journal_mode=WAL: persisted in the database file, re-asserted per
+//     connection so a fresh database also comes up in WAL.
+//   - synchronous=NORMAL: the safe pairing with WAL (durable across process
+//     crashes; only a host power loss can lose the last commits).
+//   - _txlock=immediate: every transaction takes its write lock up front. With
+//     deferred transactions, two concurrent writers can both start as readers
+//     and then deadlock on the upgrade, which busy_timeout cannot resolve.
+func buildDSN(path string) string {
+	params := []string{
+		fmt.Sprintf("_pragma=busy_timeout(%d)", busyTimeoutMS),
+		"_pragma=foreign_keys(ON)",
+		"_pragma=journal_mode(WAL)",
+		"_pragma=synchronous(NORMAL)",
+		"_txlock=immediate",
 	}
-	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
-		return fmt.Errorf("enable sqlite foreign keys: %w", err)
+	return path + "?" + strings.Join(params, "&")
+}
+
+// maxOpenConnsFromEnv reads the pool size override, falling back to the default
+// for an unset, unparseable, or non-positive value.
+func maxOpenConnsFromEnv() int {
+	value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(maxOpenConnsEnv)))
+	if err != nil || value <= 0 {
+		return defaultMaxOpenConns
+	}
+	return value
+}
+
+// configureSQLite verifies that the DSN settings actually took effect, so a
+// driver change that silently drops a query parameter fails at startup instead
+// of degrading correctness (foreign keys) or throughput (WAL) in production.
+func configureSQLite(ctx context.Context, db *sql.DB) error {
+	var busyTimeout int
+	if err := db.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		return fmt.Errorf("read sqlite busy timeout: %w", err)
+	}
+	if busyTimeout != busyTimeoutMS {
+		return fmt.Errorf("set sqlite busy timeout: busy_timeout is %d", busyTimeout)
+	}
+
+	var foreignKeys int
+	if err := db.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+		return fmt.Errorf("read sqlite foreign keys: %w", err)
+	}
+	if foreignKeys != 1 {
+		return fmt.Errorf("enable sqlite foreign keys: foreign_keys is %d", foreignKeys)
 	}
 
 	var journalMode string
-	if err := db.QueryRowContext(ctx, `PRAGMA journal_mode = WAL`).Scan(&journalMode); err != nil {
+	if err := db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
 		return fmt.Errorf("enable sqlite WAL: %w", err)
 	}
 	if !strings.EqualFold(journalMode, "wal") {

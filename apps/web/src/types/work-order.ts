@@ -411,6 +411,13 @@ export interface WorkOrderListQuery {
   limit?: number
   offset?: number
   sort?: string
+  /**
+   * Response projection. 'summary' omits the per-order history collections
+   * (statusHistory, notes, events, attachments, materialUsage, timeEntries)
+   * that only the detail page reads, keeping invoiceDraft for the dashboard
+   * profit widgets. Defaults to 'full' when omitted.
+   */
+  view?: 'full' | 'summary'
 }
 
 export interface WorkOrderListResult {

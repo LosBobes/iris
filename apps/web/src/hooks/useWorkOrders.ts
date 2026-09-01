@@ -287,7 +287,10 @@ export function useWorkOrders(): UseWorkOrdersResult {
     try {
       setLoading(true);
       setError(null);
-      const data = await window.api.getWorkOrders();
+      // Filtering, sorting and paging happen client-side over the full set
+      // (search is scoped to visible columns, and export covers every page),
+      // so this asks for all orders — but only the fields the table reads.
+      const data = await window.api.getWorkOrders({ view: "summary" });
       setOrders(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : i18n.t("common.unknownError"));

@@ -49,6 +49,13 @@ export const sr = {
     backendCheckError:
       'Greška pri proveri backend servisa. Proverite konfiguraciju i pokušajte ponovo.',
     retry: 'Pokušaj ponovo',
+    errorEyebrow: 'Iris · greška',
+    errorTitle: 'Stranica nije učitana',
+    errorMessage:
+      'Došlo je do neočekivane greške pri prikazu stranice. Osvežite stranicu i pokušajte ponovo.',
+    errorStaleVersionMessage:
+      'Aplikacija je u međuvremenu ažurirana. Osvežite stranicu da biste učitali novu verziju.',
+    reload: 'Osveži stranicu',
   },
   settings: {
     header: {

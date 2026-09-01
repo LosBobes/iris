@@ -146,16 +146,34 @@ systemctl reload caddy
 
 ---
 
-## 5. Build and start the Iris stack
+## 5. Log in to GHCR and start the Iris stack
+
+The images are built in CI and published to GHCR (see
+`.github/workflows/build.yml`); the server pulls them instead of building.
+Building on this box used both of its shared cores for the length of every
+deploy, which made the live app — and gamgee alongside it — slow or
+unresponsive.
+
+Log in once with a GitHub personal access token that has `read:packages`
+(the deploy workflow logs in with its own short-lived token, so this is only
+needed for manual `docker compose` runs on the server):
+
+```bash
+echo "<YOUR_PAT>" | docker login ghcr.io -u <YOUR_GITHUB_USER> --password-stdin
+```
+
+Then start the stack:
 
 ```bash
 cd /opt/iris
-docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-- `--build` builds the Go backend and the frontend images from source (needed
-  on first deploy and after code changes).
+- `pull` fetches the prebuilt images while nothing is taken down.
 - `-d` runs detached.
+- `IRIS_IMAGE_TAG` selects the release (defaults to `latest`; the deploy
+  workflow pins `git-<sha7>`).
 - Only `127.0.0.1:3001` is published, so the stack is reachable only through
   Caddy, never directly from the internet.
 
@@ -173,8 +191,10 @@ curl -sS https://iris-application.com/api/healthz               # backend reacha
 
 ## 6. (Optional) Automatic deploys via GitHub Actions
 
-`.github/workflows/deploy.yml` redeploys Iris on every push to `main` by SSHing
-in, pulling, and rebuilding, exactly like gamgee. Set these repository secrets
+`.github/workflows/deploy.yml` redeploys Iris after the image build succeeds:
+it waits for **Build and push images** to finish, then SSHes in, pulls the
+image for that exact commit, and recreates the containers. Set these repository
+secrets
 under **GitHub -> repo -> Settings -> Secrets and variables -> Actions**:
 
 | Secret | Value |
@@ -195,9 +215,16 @@ Manually on the server:
 
 ```bash
 cd /opt/iris
-git pull
-docker compose -f docker-compose.prod.yml up --build -d
+git pull                                            # compose files and docs
+docker compose -f docker-compose.prod.yml pull      # new images
+docker compose -f docker-compose.prod.yml up -d
 ```
+
+There is deliberately no `docker compose down` in this sequence: `up -d`
+recreates only what changed and starts the replacement straight away, so the
+gap is a container start rather than a full teardown. Caddy retries across that
+window (`lb_try_duration` in the Caddyfile), so operators should not see a 502
+during a deploy.
 
 Or from your laptop, using the `Makefile` (set `HETZNER_HOST` / `HETZNER_USER`
 in your shell profile first):
@@ -234,7 +261,7 @@ docker run --rm -v iris_iris_sqlite_data:/data -v "$PWD:/seed" alpine \
   sh -c "cp /seed/iris.db /data/iris.db && chown 65532:65532 /data/iris.db"
 
 # 3. Start again
-docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 To back up the live database to your laptop, use `make db-pull` (writes
@@ -259,17 +286,21 @@ journalctl -u caddy -f
 
 ## Rollback
 
-Iris builds from source on the server, so to roll back, check out a known-good
-commit and rebuild:
+Every CI build publishes an immutable `git-<sha7>` tag, so a rollback is just
+running an older one — no rebuild:
 
 ```bash
 cd /opt/iris
-git checkout <known-good-sha>
-docker compose -f docker-compose.prod.yml up --build -d
+IRIS_IMAGE_TAG=git-<known-good-sha7> docker compose -f docker-compose.prod.yml pull
+IRIS_IMAGE_TAG=git-<known-good-sha7> docker compose -f docker-compose.prod.yml up -d
 ```
 
-Return to automatic updates by checking out `main` again and pushing (or
-`make deploy`).
+Or run the **Deploy to Hetzner** workflow manually from the Actions tab and
+enter that tag as the `image_tag` input.
+
+To make the pin stick across later manual `docker compose` runs on the server,
+set `IRIS_IMAGE_TAG` in `/opt/iris/.env`. Return to automatic updates by
+clearing it (or setting `latest`) and pushing to `main`.
 
 ---
 

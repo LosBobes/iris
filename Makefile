@@ -18,9 +18,15 @@ ssh:
 logs:
 	ssh $(HOST) "cd $(DEPLOY_PATH) && docker compose -f docker-compose.prod.yml logs -f"
 
-# Manual deploy (the GitHub Action does this automatically on push to main).
+# Manual deploy (the GitHub Action does this automatically after CI publishes
+# the images). Pulls the prebuilt GHCR images rather than building on the
+# server, so it needs a `docker login ghcr.io` on the box first. Override the
+# release with IRIS_IMAGE_TAG=git-<sha7> to deploy or roll back to a specific
+# build.
+IRIS_IMAGE_TAG ?= latest
+
 deploy:
-	ssh $(HOST) "cd $(DEPLOY_PATH) && git fetch origin main && git reset --hard origin/main && docker compose -f docker-compose.prod.yml up --build -d --remove-orphans && docker image prune -f"
+	ssh $(HOST) "cd $(DEPLOY_PATH) && git fetch origin main && git reset --hard origin/main && IRIS_IMAGE_TAG=$(IRIS_IMAGE_TAG) docker compose -f docker-compose.prod.yml pull && IRIS_IMAGE_TAG=$(IRIS_IMAGE_TAG) docker compose -f docker-compose.prod.yml up -d --remove-orphans && docker image prune -f"
 
 # Back up the live SQLite database to ./iris-backup-<date>.db locally.
 db-pull:

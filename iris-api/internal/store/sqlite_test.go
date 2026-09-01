@@ -2,10 +2,13 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -508,5 +511,91 @@ func TestSQLiteStoreCreateWorkOrderRejectsUnknownUnitByName(t *testing.T) {
 	}
 	if !strings.Contains(validationErr.Error(), "nepoznato") {
 		t.Fatalf("message = %q, want it to name the rejected unit", validationErr.Error())
+	}
+}
+
+// TestOpenSQLiteAppliesPragmasToEveryPooledConnection guards the DSN-based
+// configuration. PRAGMAs apply per connection, so once the pool holds more than
+// one connection, settings applied with a single ExecContext would silently be
+// missing on every connection opened afterwards.
+func TestOpenSQLiteAppliesPragmasToEveryPooledConnection(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	if got := sqliteStore.db.Stats().MaxOpenConnections; got < 2 {
+		t.Fatalf("MaxOpenConnections = %d, want at least 2 so reads can overlap", got)
+	}
+
+	// Hold several connections open at once, so each check below runs on its
+	// own connection rather than repeatedly on the first one.
+	const connections = 4
+	conns := make([]*sql.Conn, 0, connections)
+	for i := 0; i < connections; i++ {
+		conn, err := sqliteStore.db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("Conn() returned error: %v", err)
+		}
+		defer conn.Close()
+		conns = append(conns, conn)
+	}
+
+	for i, conn := range conns {
+		var busyTimeout int
+		if err := conn.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+			t.Fatalf("connection %d: PRAGMA busy_timeout returned error: %v", i, err)
+		}
+		if busyTimeout != busyTimeoutMS {
+			t.Fatalf("connection %d: busy_timeout = %d, want %d", i, busyTimeout, busyTimeoutMS)
+		}
+
+		var foreignKeys int
+		if err := conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+			t.Fatalf("connection %d: PRAGMA foreign_keys returned error: %v", i, err)
+		}
+		if foreignKeys != 1 {
+			t.Fatalf("connection %d: foreign_keys = %d, want 1", i, foreignKeys)
+		}
+	}
+}
+
+// TestSQLiteStoreHandlesConcurrentWrites covers the _txlock=immediate setting:
+// with deferred transactions, writers that begin as readers can deadlock on the
+// lock upgrade instead of waiting out busy_timeout.
+func TestSQLiteStoreHandlesConcurrentWrites(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	const writers = 8
+	errs := make(chan error, writers)
+	var start sync.WaitGroup
+	start.Add(1)
+	for i := 0; i < writers; i++ {
+		go func(i int) {
+			start.Wait()
+			_, err := sqliteStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+				ClientName:     fmt.Sprintf("Concurrent Co %d", i),
+				JobDescription: "concurrent write",
+				IssuedBy:       "admin",
+				IssueDate:      time.Now().UTC().Format("2006-01-02"),
+			})
+			errs <- err
+		}(i)
+	}
+	start.Done()
+
+	for i := 0; i < writers; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent CreateWorkOrder returned error: %v", err)
+		}
+	}
+
+	listed, err := sqliteStore.WorkOrders(ctx, WorkOrderListQuery{})
+	if err != nil {
+		t.Fatalf("WorkOrders() returned error: %v", err)
+	}
+	if listed.Total != writers {
+		t.Fatalf("Total = %d, want %d", listed.Total, writers)
 	}
 }

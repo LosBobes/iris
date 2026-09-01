@@ -1,21 +1,56 @@
 name: Deploy to Hetzner
 
-# Builds the Iris stack on the server from source, exactly like gamgee.
-# This is separate from build.yml (which publishes GHCR images); the Hetzner
-# host builds locally with docker compose, so no registry pull is involved.
+# Deploys by pulling the images that build.yml published to GHCR, rather than
+# building on the server. Two reasons:
+#
+#  1. The Hetzner box is shared with gamgee. Running `npm ci`, a Vite build and
+#     a Go build on it made the live app slow or unresponsive for the duration
+#     of every deploy.
+#  2. Pulling is fast, so the recreate window — the only real downtime — is
+#     seconds rather than minutes.
+#
+# This runs after "Build and push images" succeeds, so the tag it deploys is
+# guaranteed to exist in the registry.
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build and push images"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g. git-a1b2c3d, or latest). Use an older git-<sha7> to roll back.'
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+  packages: read
 
 jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # On the workflow_run trigger, only deploy a build that actually succeeded.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
 
     steps:
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.image_tag }}"
+          else
+            # Deploy exactly the commit that was just built, so the running
+            # release is identifiable and re-deployable.
+            tag="git-$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)"
+          fi
+          echo "tag=${tag:-latest}" >> "$GITHUB_OUTPUT"
+
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -24,36 +59,58 @@ jobs:
           key:      ${{ secrets.HETZNER_SSH_KEY }}
           port:     ${{ secrets.HETZNER_PORT || 22 }}
           script_stop: true
+          # GHCR_TOKEN is this run's GITHUB_TOKEN, which carries packages:read.
+          # It is short-lived, so no long-lived registry secret has to live on
+          # the server.
+          envs: GHCR_TOKEN,GHCR_USER,IRIS_IMAGE_TAG
           script: |
             set -e
             cd "${{ secrets.DEPLOY_PATH }}"
 
-            echo "▶ Pulling latest code..."
+            echo "▶ Pulling latest code (compose files, docs)..."
             git fetch origin main
             git reset --hard origin/main
 
-            echo "▶ Building images..."
-            # Secrets (IRIS_SESSION_SECRET etc.) live in the box's .env file
-            # next to docker-compose.prod.yml; compose reads them automatically.
-            # Build first, while the current containers keep serving — this keeps
-            # downtime to the brief recreate window below, not the whole build.
-            docker compose -f docker-compose.prod.yml build
+            echo "▶ Logging in to GHCR..."
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
-            echo "▶ Recreating containers..."
-            # Tear the stack down before bringing it back up. A plain
-            # `up --build --remove-orphans` recreates in place, and an
-            # interrupted recreate can leave a temporarily-renamed
-            # `<hash>_iris-backend-1` container behind, which then conflicts on
-            # every subsequent deploy ("container name is already in use").
-            # `down` removes the project's containers (including that leftover)
-            # for a clean slate. The named volume iris_sqlite_data is NOT
-            # touched by `down` (only `down -v` would), so the SQLite DB
-            # survives.
-            docker compose -f docker-compose.prod.yml down --remove-orphans
+            echo "▶ Pulling images (${IRIS_IMAGE_TAG})..."
+            # Pull first, while the current containers keep serving. Nothing is
+            # taken down until the new images are already on disk.
+            docker compose -f docker-compose.prod.yml pull
+
+            echo "▶ Starting new containers..."
+            # No `docker compose down` here. `up -d` recreates only what
+            # changed and starts the replacement immediately, so the gap is a
+            # container start rather than a full teardown; Caddy retries across
+            # it (see Caddyfile). The named volume iris_sqlite_data is not
+            # touched either way.
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            echo "▶ Waiting for the backend to report healthy..."
+            for i in $(seq 1 30); do
+              status="$(docker compose -f docker-compose.prod.yml ps \
+                --format '{{.Service}} {{.Health}}' | awk '$1=="backend"{print $2}')"
+              if [ "$status" = "healthy" ]; then
+                echo "backend healthy after ${i}s"
+                break
+              fi
+              if [ "$i" = "30" ]; then
+                echo "backend did not become healthy; recent logs:"
+                docker compose -f docker-compose.prod.yml logs --tail 50 backend
+                exit 1
+              fi
+              sleep 1
+            done
 
             echo "▶ Pruning old images..."
             docker image prune -f
 
             echo "▶ Running containers:"
             docker compose -f docker-compose.prod.yml ps
+
+            docker logout ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          IRIS_IMAGE_TAG: ${{ steps.tag.outputs.tag }}

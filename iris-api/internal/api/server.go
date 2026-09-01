@@ -449,13 +449,40 @@ func (s *Server) handleWorkOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isAdmin(r) {
-		for i := range result.Items {
+	admin := isAdmin(r)
+	summary := r.URL.Query().Get("view") == workOrderViewSummary
+	for i := range result.Items {
+		if !admin {
 			stripWorkOrderCost(&result.Items[i])
+		}
+		if summary {
+			stripWorkOrderDetail(&result.Items[i])
 		}
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+// workOrderViewSummary is the `view` value that asks for the list projection:
+// every matching order, but without the per-order history collections.
+const workOrderViewSummary = "summary"
+
+// stripWorkOrderDetail drops the collections that only the work-order detail
+// page reads. The list and dashboard screens fetch every order to filter and
+// aggregate client-side, and these arrays dominate a work order's payload —
+// carrying them made a full list response many times larger than the fields
+// those screens actually use.
+//
+// The selling side is deliberately left intact: InvoiceDraft (and its line
+// items) drives the dashboard's per-item and per-company profit breakdowns.
+func stripWorkOrderDetail(workOrder *domain.WorkOrder) {
+	workOrder.StatusHistory = nil
+	workOrder.InternalNotes = nil
+	workOrder.CustomerNotes = nil
+	workOrder.Events = nil
+	workOrder.Attachments = nil
+	workOrder.MaterialUsage = nil
+	workOrder.TimeEntries = nil
 }
 
 // stripWorkOrderCost removes the admin-only cost and margin figures (cached
@@ -474,12 +501,21 @@ func stripWorkOrderCost(workOrder *domain.WorkOrder) {
 	}
 }
 
+// maxWorkOrderListLimit caps an explicitly requested page size.
+const maxWorkOrderListLimit = 500
+
 func parseWorkOrderListQuery(r *http.Request) store.WorkOrderListQuery {
 	values := r.URL.Query()
 	limit, _ := strconv.Atoi(values.Get("limit"))
 	offset, _ := strconv.Atoi(values.Get("offset"))
 	if limit < 0 {
 		limit = 0
+	}
+	// A caller cannot make the server materialize an arbitrarily large page.
+	// Limit 0 still means "no LIMIT clause" — the dashboard aggregates over
+	// every order — but that path is meant to be paired with view=summary.
+	if limit > maxWorkOrderListLimit {
+		limit = maxWorkOrderListLimit
 	}
 	if offset < 0 {
 		offset = 0
