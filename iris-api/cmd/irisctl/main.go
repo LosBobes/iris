@@ -29,24 +29,24 @@ func main() {
 	ctx := context.Background()
 	switch os.Args[1] {
 	case "migrate":
-		sqliteStore := mustOpen(ctx, dbPathFromEnv())
-		defer sqliteStore.Close()
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
 		fmt.Println("Migracije su primenjene.")
 	case "seed-demo":
 		cmd := flag.NewFlagSet("seed-demo", flag.ExitOnError)
 		fixtureDir := cmd.String("fixtures", "testdata/fixtures", "putanja do JSON demo podataka")
 		_ = cmd.Parse(os.Args[2:])
-		sqliteStore := mustOpen(ctx, dbPathFromEnv())
-		defer sqliteStore.Close()
-		must(store.SeedDemoFromFixtures(ctx, sqliteStore, *fixtureDir))
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(store.SeedDemoFromFixtures(ctx, dataStore, *fixtureDir))
 		fmt.Println("Demo podaci su upisani u SQLite bazu.")
 	case "seed-cobanovic":
 		cmd := flag.NewFlagSet("seed-cobanovic", flag.ExitOnError)
 		dir := cmd.String("dir", cobanovic.DefaultDataDir, "putanja do generisanog Čobanović seed skupa")
 		_ = cmd.Parse(os.Args[2:])
-		sqliteStore := mustOpen(ctx, dbPathFromEnv())
-		defer sqliteStore.Close()
-		must(cobanovic.Seed(ctx, sqliteStore, *dir))
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(cobanovic.Seed(ctx, dataStore, *dir))
 		fmt.Println("Čobanović podaci su upisani u SQLite bazu.")
 	case "create-tenant":
 		cmd := flag.NewFlagSet("create-tenant", flag.ExitOnError)
@@ -59,18 +59,18 @@ func main() {
 		if *slug == "" || *name == "" {
 			log.Fatal("koristite --slug i --name")
 		}
-		sqliteStore := mustOpen(ctx, dbPathFromEnv())
-		defer sqliteStore.Close()
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
 		if *id == "" {
 			*id = "tenant-" + strings.ToLower(strings.TrimSpace(*slug))
 		}
-		tenant, err := sqliteStore.CreateTenant(ctx, *id, *slug, *name)
+		tenant, err := dataStore.CreateTenant(ctx, *id, *slug, *name)
 		must(err)
 		fmt.Printf("Organizacija %q (%s) je kreirana.\n", tenant.Name, tenant.Slug)
 		if *adminUsername != "" && *adminPassword != "" {
 			tenantCtx := store.ContextWithTenant(ctx, tenant.ID)
 			adminID := userID(tenant.Slug, *adminUsername)
-			must(sqliteStore.CreateUser(tenantCtx, adminID, *adminUsername, *adminPassword, domain.RoleAdmin, false))
+			must(dataStore.CreateUser(tenantCtx, adminID, *adminUsername, *adminPassword, domain.RoleAdmin, false))
 			fmt.Printf("Administrator %s je sačuvan.\n", *adminUsername)
 		}
 	case "create-user":
@@ -81,13 +81,13 @@ func main() {
 		password := cmd.String("password", "", "lozinka")
 		role := cmd.String("role", "user", "admin ili user")
 		_ = cmd.Parse(os.Args[2:])
-		sqliteStore := mustOpen(ctx, dbPathFromEnv())
-		defer sqliteStore.Close()
-		tenantCtx := mustTenantContext(ctx, sqliteStore, *tenantSlug)
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		tenantCtx := mustTenantContext(ctx, dataStore, *tenantSlug)
 		if *id == "" {
 			*id = userID(strings.TrimSpace(*tenantSlug), *username)
 		}
-		must(sqliteStore.CreateUser(tenantCtx, *id, *username, *password, domain.UserRole(*role), false))
+		must(dataStore.CreateUser(tenantCtx, *id, *username, *password, domain.UserRole(*role), false))
 		fmt.Printf("Korisnik %s je sačuvan.\n", *username)
 	case "backup":
 		cmd := flag.NewFlagSet("backup", flag.ExitOnError)
@@ -96,10 +96,54 @@ func main() {
 		if *out == "" {
 			*out = filepath.Join("backups", "iris-"+time.Now().UTC().Format("20060102-150405")+".db")
 		}
-		sqliteStore := mustOpen(ctx, dbPathFromEnv())
-		defer sqliteStore.Close()
-		must(sqliteStore.Backup(ctx, *out))
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(dataStore.Backup(ctx, *out))
 		fmt.Printf("Backup je sačuvan: %s\n", *out)
+	case "migrate-to-postgres":
+		cmd := flag.NewFlagSet("migrate-to-postgres", flag.ExitOnError)
+		from := cmd.String("from", "", "putanja SQLite baze (podrazumevano DATABASE_PATH)")
+		to := cmd.String("to", "", "Postgres veza (podrazumevano DATABASE_URL)")
+		_ = cmd.Parse(os.Args[2:])
+
+		sourcePath := strings.TrimSpace(*from)
+		if sourcePath == "" {
+			sourcePath = dbPathFromEnv()
+		}
+		targetURL := strings.TrimSpace(*to)
+		if targetURL == "" {
+			targetURL = strings.TrimSpace(os.Getenv("DATABASE_URL"))
+		}
+		if targetURL == "" {
+			log.Fatal("koristite -to postgres://... ili podesite DATABASE_URL")
+		}
+
+		// The source is opened explicitly as SQLite: this command only ever
+		// copies a file into Postgres, never the reverse.
+		source := mustOpenSQLite(ctx, sourcePath)
+		defer source.Close()
+		target, err := store.OpenPostgres(ctx, targetURL)
+		must(err)
+		defer target.Close()
+
+		counts, err := store.MigrateToPostgres(ctx, source, target)
+		must(err)
+
+		total := 0
+		for _, count := range counts {
+			fmt.Printf("  %-32s %6d\n", count.Table, count.Rows)
+			total += count.Rows
+		}
+
+		mismatches, err := store.VerifyMigration(ctx, source, target)
+		must(err)
+		if len(mismatches) > 0 {
+			for _, mismatch := range mismatches {
+				log.Printf("NESLAGANJE: %s", mismatch)
+			}
+			log.Fatal("provera nakon migracije nije uspela")
+		}
+		fmt.Printf("Migracija je završena: %d redova, sve tabele se poklapaju.\n", total)
 	case "import-csv":
 		cmd := flag.NewFlagSet("import-csv", flag.ExitOnError)
 		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
@@ -110,15 +154,15 @@ func main() {
 		if !*dryRun && !*apply {
 			log.Fatal("koristite --dry-run ili --apply")
 		}
-		sqliteStore := mustOpen(ctx, dbPathFromEnv())
-		defer sqliteStore.Close()
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
 		// A dry-run only validates CSV shape and never touches the DB, so it does
 		// not need a tenant; --apply writes rows and requires one.
 		importCtx := ctx
 		if *apply {
-			importCtx = mustTenantContext(ctx, sqliteStore, *tenantSlug)
+			importCtx = mustTenantContext(ctx, dataStore, *tenantSlug)
 		}
-		report, err := importCSV(importCtx, sqliteStore, *dir, *apply)
+		report, err := importCSV(importCtx, dataStore, *dir, *apply)
 		must(err)
 		fmt.Print(report)
 	default:
@@ -127,7 +171,7 @@ func main() {
 	}
 }
 
-func importCSV(ctx context.Context, sqliteStore *store.SQLiteStore, dir string, apply bool) (string, error) {
+func importCSV(ctx context.Context, dataStore *store.SQLStore, dir string, apply bool) (string, error) {
 	var report strings.Builder
 	customers, err := readCustomersCSV(filepath.Join(dir, "customers.csv"))
 	if err != nil {
@@ -149,17 +193,17 @@ func importCSV(ctx context.Context, sqliteStore *store.SQLiteStore, dir string, 
 	}
 
 	for _, customer := range customers {
-		if _, err := sqliteStore.UpsertCustomer(ctx, customer); err != nil {
+		if _, err := dataStore.UpsertCustomer(ctx, customer); err != nil {
 			return "", err
 		}
 	}
 	for _, location := range locations {
-		if _, err := sqliteStore.UpsertLocation(ctx, location); err != nil {
+		if _, err := dataStore.UpsertLocation(ctx, location); err != nil {
 			return "", err
 		}
 	}
 	for _, workOrder := range workOrders {
-		if err := sqliteStore.PutWorkOrder(ctx, workOrder); err != nil {
+		if err := dataStore.PutWorkOrder(ctx, workOrder); err != nil {
 			return "", err
 		}
 	}
@@ -339,10 +383,22 @@ func dbPathFromEnv() string {
 	return defaultDatabasePath
 }
 
-func mustOpen(ctx context.Context, path string) *store.SQLiteStore {
-	sqliteStore, err := store.OpenSQLite(ctx, path)
+// mustOpenStore opens whichever engine is configured: DATABASE_URL selects
+// Postgres, otherwise the SQLite file. Every subcommand goes through this, so
+// the CLI manages a Postgres deployment exactly as it did a SQLite one.
+func mustOpenStore(ctx context.Context) *store.SQLStore {
+	if databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL")); databaseURL != "" {
+		dataStore, err := store.OpenPostgres(ctx, databaseURL)
+		must(err)
+		return dataStore
+	}
+	return mustOpenSQLite(ctx, dbPathFromEnv())
+}
+
+func mustOpenSQLite(ctx context.Context, path string) *store.SQLStore {
+	dataStore, err := store.OpenSQLite(ctx, path)
 	must(err)
-	return sqliteStore
+	return dataStore
 }
 
 func must(err error) {
@@ -362,11 +418,11 @@ func userID(tenantSlug, username string) string {
 // mustTenantContext resolves an organization slug to a tenant-scoped context,
 // exiting with an error when the slug is empty or unknown. Used by the CLI
 // commands that write tenant-owned data.
-func mustTenantContext(ctx context.Context, sqliteStore *store.SQLiteStore, slug string) context.Context {
+func mustTenantContext(ctx context.Context, dataStore *store.SQLStore, slug string) context.Context {
 	if strings.TrimSpace(slug) == "" {
 		log.Fatal("koristite --tenant <oznaka organizacije>")
 	}
-	tenant, err := sqliteStore.TenantBySlug(ctx, slug)
+	tenant, err := dataStore.TenantBySlug(ctx, slug)
 	must(err)
 	if tenant == nil {
 		log.Fatalf("organizacija %q ne postoji", slug)
@@ -384,6 +440,9 @@ func usage() {
   irisctl import-csv -tenant oznaka --dry-run --dir import/
   irisctl import-csv -tenant oznaka --apply --dir import/
   irisctl backup [-out backups/iris.db]
+  irisctl migrate-to-postgres [-from ./data/iris.db] [-to postgres://...]
 
-DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
+DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.
+DATABASE_URL bira Postgres umesto SQLite za sve komande osim migrate-to-postgres,
+koja uvek čita iz SQLite fajla i upisuje u Postgres.`)
 }

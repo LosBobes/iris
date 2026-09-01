@@ -8,7 +8,7 @@ the web client.
 
 - Router: `chi`, declared in `internal/api/server.go`.
 - Contract: `openapi.yaml`.
-- Persistence: SQLite at `DATABASE_PATH`; local development defaults to
+- Persistence: PostgreSQL at `DATABASE_URL` when set, otherwise SQLite at `DATABASE_PATH`; local development defaults to
   `./data/iris.db`.
 - Test persistence: fixture-backed store under `testdata/fixtures`.
 - Multi-tenancy: every row is scoped to a tenant (organization). `POST /auth/login`
@@ -72,7 +72,7 @@ iris-api/
 ├── internal/
 │   ├── api/              # routes, auth middleware, handlers, reports
 │   ├── domain/           # request/response/domain types
-│   ├── store/            # Store interface, fixtures, SQLite
+│   ├── store/            # Store interface, fixtures, SQLite + Postgres
 │   └── testutil/         # test fixture helpers
 ├── testdata/fixtures/    # fixture data for tests and local fallback
 ├── go.mod
@@ -84,6 +84,7 @@ iris-api/
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `IRIS_API_ADDR` | HTTP listen address | `:8080` |
+| `DATABASE_URL` | PostgreSQL connection string. When set, Postgres is used and `DATABASE_PATH` is ignored. See `deploy/POSTGRES.md`. | empty |
 | `DATABASE_PATH` | SQLite database path. Docker uses `/data/iris.db`. | `./data/iris.db` outside production |
 | `IRIS_DB_PATH` | Legacy SQLite database path fallback when `DATABASE_PATH` is empty. | empty |
 | `IRIS_ENV` | Runtime environment. `production` requires explicit database path and session secret. | `development` |
@@ -174,7 +175,9 @@ For a non-demo user, run:
 docker compose run --rm --entrypoint irisctl iris-api create-user -tenant demo -username milica -password '<secret>' -role admin
 ```
 
-SQLite migrations run idempotently on startup before the API begins serving.
+Migrations run idempotently on startup before the API begins serving. A fresh
+PostgreSQL database is created at the consolidated v12 schema and stamped as
+such; migrations 13+ are shared by both engines.
 They create missing tables and indexes without destructive rebuilds.
 
 ## Local Smoke Checks

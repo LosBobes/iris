@@ -19,9 +19,18 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type SQLiteStore struct {
-	db *sql.DB
+// SQLStore is the shared SQL-backed store. It serves both SQLite and Postgres:
+// the statements are written once, in the SQLite dialect, and translated for
+// Postgres inside the driver (see postgres_driver.go). Only the handful of
+// genuinely engine-specific behaviours branch on the dialect field.
+type SQLStore struct {
+	db      *sql.DB
+	dialect dialect
 }
+
+// SQLiteStore is the original name of this type, kept as an alias so existing
+// call sites and tests keep compiling.
+type SQLiteStore = SQLStore
 
 func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 	if strings.TrimSpace(path) == "" {
@@ -50,7 +59,7 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 		return nil, err
 	}
 
-	return &SQLiteStore{db: db}, nil
+	return &SQLStore{db: db, dialect: dialectSQLite}, nil
 }
 
 // Connection-pool sizing. WAL lets readers run concurrently, so pinning the pool
@@ -1176,6 +1185,11 @@ func (s *SQLiteStore) HasUserPassword(ctx context.Context, username string, pass
 }
 
 func (s *SQLiteStore) Backup(ctx context.Context, path string) error {
+	if s.dialect == dialectPostgres {
+		// VACUUM INTO has no Postgres equivalent, and a logical dump belongs to
+		// the server's own tooling rather than a half-copy from the API process.
+		return fmt.Errorf("backup is not supported on postgres: use pg_dump (see deploy/POSTGRES.md)")
+	}
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("backup path is required")
 	}
@@ -1195,7 +1209,7 @@ func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
 		ctx,
 		`SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1
 		 FROM work_orders
-		 WHERE id GLOB '[0-9]*'`,
+		 WHERE id <> '' AND id NOT GLOB '*[^0-9]*'`,
 	).Scan(&next); err != nil {
 		return 0, fmt.Errorf("next work-order sequence: %w", err)
 	}
