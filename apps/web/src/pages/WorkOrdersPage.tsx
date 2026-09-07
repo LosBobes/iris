@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Coins, Download, Inbox, Loader2, Plus, SearchX } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { WorkOrdersFilters } from "@/components/WorkOrders/WorkOrdersFilters";
 import { WorkOrdersTable } from "@/components/WorkOrders/WorkOrdersTable";
@@ -178,7 +177,7 @@ function WorkOrdersPage(): React.JSX.Element {
     filters.needsCostReview;
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div
           data-tour="work-orders-overview"
@@ -345,7 +344,7 @@ function WorkOrdersPage(): React.JSX.Element {
         }}
         onConfirm={handleDeleteConfirm}
       />
-    </AppShell>
+    </>
   );
 }
 

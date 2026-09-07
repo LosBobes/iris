@@ -1,13 +1,14 @@
-import { lazy, Suspense, startTransition, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { Login } from "@/components/Login/Login";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/CommandPalette";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { InteractiveTourProvider } from "@/components/tour/InteractiveTourProvider";
+import { AppShell } from "@/components/layout/AppShell";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
 import {
@@ -56,6 +57,20 @@ function StartupLoadingScreen(): React.JSX.Element {
         <span>Povezivanje sa backend servisom...</span>
       </div>
     </main>
+  );
+}
+
+/**
+ * Pathless layout route: renders the sidebar/shell once and keeps it mounted
+ * across page navigations (the pages render into `<Outlet />`), instead of
+ * every page remounting its own `<AppShell>` and refiring shell-level effects
+ * (e.g. the cost-review badge count) on every route change.
+ */
+function AppShellLayout(): React.JSX.Element {
+  return (
+    <AppShell>
+      <Outlet />
+    </AppShell>
   );
 }
 
@@ -196,6 +211,39 @@ function App(): React.JSX.Element {
     [],
   );
 
+  const authContextValue = useMemo(
+    () =>
+      currentUser
+        ? { currentUser, onLogout: handleLogout }
+        : null,
+    [currentUser, handleLogout],
+  );
+
+  const organizationContextValue = useMemo(
+    () => ({
+      firmName,
+      setFirmName,
+      pdfSections,
+      setPdfSections,
+      billingDefaults,
+      setBillingDefaults,
+      priorityDefaults,
+      setPriorityDefaults,
+      printItemColumns,
+      setPrintItemColumns,
+      showShippingOptions,
+      setShowShippingOptions,
+    }),
+    [
+      firmName,
+      pdfSections,
+      billingDefaults,
+      priorityDefaults,
+      printItemColumns,
+      showShippingOptions,
+    ],
+  );
+
   if (bootstrapState.kind === "loading") {
     return <StartupLoadingScreen />;
   }
@@ -223,30 +271,32 @@ function App(): React.JSX.Element {
                 !currentUser ? (
                   <Login onLoginSuccess={handleLoginSuccess} />
                 ) : (
-                  <AuthContext.Provider value={{ currentUser, onLogout: handleLogout }}>
-                    <OrganizationContext.Provider value={{ firmName, setFirmName, pdfSections, setPdfSections, billingDefaults, setBillingDefaults, priorityDefaults, setPriorityDefaults, printItemColumns, setPrintItemColumns, showShippingOptions, setShowShippingOptions }}>
+                  <AuthContext.Provider value={authContextValue}>
+                    <OrganizationContext.Provider value={organizationContextValue}>
                     <TooltipProvider>
                       <InteractiveTourProvider>
                         <Routes>
-                          <Route path="/" element={<DashboardPage />} />
-                          <Route path="/customers" element={<CustomersPage />} />
-                          <Route path="/customers/new" element={<CustomerDetailPage />} />
-                          <Route path="/customers/:id" element={<CustomerDetailPage />} />
-                          <Route path="/catalog" element={<CatalogPage />} />
-                          <Route path="/catalog/new" element={<CatalogDetailPage />} />
-                          <Route path="/catalog/:id" element={<CatalogDetailPage />} />
-                          <Route path="/work-orders" element={<WorkOrdersPage />} />
-                          <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
-                          <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
-                          <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
-                          <Route path="/settings" element={<SettingsPage />} />
-                          <Route path="/help" element={<HelpPage />} />
-                          {currentUser.role === "admin" && (
-                            <>
-                              <Route path="/cost-review" element={<CostReviewPage />} />
-                              <Route path="/users" element={<UsersPage />} />
-                            </>
-                          )}
+                          <Route element={<AppShellLayout />}>
+                            <Route path="/" element={<DashboardPage />} />
+                            <Route path="/customers" element={<CustomersPage />} />
+                            <Route path="/customers/new" element={<CustomerDetailPage />} />
+                            <Route path="/customers/:id" element={<CustomerDetailPage />} />
+                            <Route path="/catalog" element={<CatalogPage />} />
+                            <Route path="/catalog/new" element={<CatalogDetailPage />} />
+                            <Route path="/catalog/:id" element={<CatalogDetailPage />} />
+                            <Route path="/work-orders" element={<WorkOrdersPage />} />
+                            <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
+                            <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
+                            <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
+                            <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/help" element={<HelpPage />} />
+                            {currentUser.role === "admin" && (
+                              <>
+                                <Route path="/cost-review" element={<CostReviewPage />} />
+                                <Route path="/users" element={<UsersPage />} />
+                              </>
+                            )}
+                          </Route>
                         </Routes>
                         <CommandPalette />
                       </InteractiveTourProvider>

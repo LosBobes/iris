@@ -1,6 +1,5 @@
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { AppShell } from '@/components/layout/AppShell'
 import { DashboardActionSection } from '@/components/dashboard/DashboardActionSection'
 import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
 import { OperatorQueueGrid } from '@/components/dashboard/OperatorQueueGrid'
@@ -42,7 +41,7 @@ function DashboardPage(): React.JSX.Element {
   const showDashboard = !loading && !error && hasSourceData
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div
           data-tour="dashboard-overview"
@@ -127,7 +126,7 @@ function DashboardPage(): React.JSX.Element {
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   )
 }
 

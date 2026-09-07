@@ -4,7 +4,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
 import { startOfDay } from "date-fns";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PriceHistoryPanel } from "@/components/Catalog/PriceHistoryPanel";
 import {
@@ -122,18 +121,18 @@ function CatalogDetailPage(): React.JSX.Element {
 
   if (loading) {
     return (
-      <AppShell>
+      <>
         <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           {t("catalog.detail.loading")}
         </div>
-      </AppShell>
+      </>
     );
   }
 
   if (notFound) {
     return (
-      <AppShell>
+      <>
         <div className="px-8 py-20 text-center text-sm text-muted-foreground">
           <p>{t("catalog.detail.notFound")}</p>
           <button
@@ -145,12 +144,12 @@ function CatalogDetailPage(): React.JSX.Element {
             {t("catalog.detail.backToCatalog")}
           </button>
         </div>
-      </AppShell>
+      </>
     );
   }
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-6">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <button
@@ -272,7 +271,7 @@ function CatalogDetailPage(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppShell>
+    </>
   );
 }
 

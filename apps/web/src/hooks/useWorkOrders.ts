@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type {
   WorkOrder,
@@ -9,6 +9,7 @@ import type {
 import {
   compareWorkOrderNumbers,
   getLocalIsoDate,
+  workOrderCollator,
   WORK_ORDER_STATUS_ORDER,
 } from "@/shared/utils/work-orders";
 import { readStoredDefaultPageSize } from "@/lib/list-preferences";
@@ -283,6 +284,15 @@ export function useWorkOrders(): UseWorkOrdersResult {
   );
   const { visibleColumnSet } = useColumnVisibility();
 
+  // Mirrors `filters` for callbacks (`updateFilters`, the URL-sync effect
+  // below) that need the latest value without depending on `filters` itself
+  // — that dependency would otherwise force `updateFilters` to be recreated
+  // on every filter change.
+  const filtersRef = useRef(filters);
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
@@ -307,11 +317,13 @@ export function useWorkOrders(): UseWorkOrdersResult {
     const nextFilters = filtersFromSearchParams(
       new URLSearchParams(searchParamsKey),
     );
-    setFilters((prev) => {
-      if (areFiltersEqual(prev, nextFilters)) return prev;
-      setCurrentPage(1);
-      return nextFilters;
-    });
+    // Compare against the latest filters first so the `setFilters` updater
+    // stays a pure state transition — `setCurrentPage` is only called here,
+    // never from inside an updater function.
+    if (areFiltersEqual(filtersRef.current, nextFilters)) return;
+    filtersRef.current = nextFilters;
+    setFilters(nextFilters);
+    setCurrentPage(1);
   }, [searchParamsKey]);
 
   const filteredOrders = useMemo(() => {
@@ -362,7 +374,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
       const cmp =
         typeof aVal === "number" && typeof bVal === "number"
           ? aVal - bVal
-          : String(aVal).localeCompare(String(bVal), "sr-Latn");
+          : workOrderCollator.compare(String(aVal), String(bVal));
 
       return sortDirection === "asc" ? cmp : -cmp;
     });
@@ -392,6 +404,7 @@ export function useWorkOrders(): UseWorkOrdersResult {
   );
 
   const resetFilters = useCallback(() => {
+    filtersRef.current = INITIAL_FILTERS;
     setFilters(INITIAL_FILTERS);
     setCurrentPage(1);
     setSearchParams(new URLSearchParams(), { replace: true });
@@ -399,16 +412,21 @@ export function useWorkOrders(): UseWorkOrdersResult {
 
   const updateFilters = useCallback(
     (patch: Partial<WorkOrdersFiltersState>) => {
+      // Reads the latest filters off the ref (instead of depending on
+      // `filters`) so this callback stays referentially stable across filter
+      // changes — it is passed down to memoized filter UI.
+      const prev = filtersRef.current;
       const nextFilters = {
-        ...filters,
+        ...prev,
         ...patch,
-        customerId: patch.search !== undefined ? "" : (patch.customerId ?? filters.customerId),
+        customerId: patch.search !== undefined ? "" : (patch.customerId ?? prev.customerId),
       };
+      filtersRef.current = nextFilters;
       setFilters(nextFilters);
       setCurrentPage(1);
       setSearchParams(filtersToSearchParams(nextFilters), { replace: true });
     },
-    [filters, setSearchParams],
+    [setSearchParams],
   );
 
   const handlePageSizeChange = useCallback((nextPageSize: PageSize) => {

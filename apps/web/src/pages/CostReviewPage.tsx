@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Coins, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { WorkOrdersFilters } from "@/components/WorkOrders/WorkOrdersFilters";
 import { WorkOrdersTable } from "@/components/WorkOrders/WorkOrdersTable";
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
@@ -49,6 +48,12 @@ function CostReviewPage(): React.JSX.Element {
 
   const [deleteTarget, setDeleteTarget] = useState<WorkOrder | null>(null);
   const [completeTarget, setCompleteTarget] = useState<WorkOrder | null>(null);
+
+  // Stable reference so the memoized WorkOrdersTable rows don't re-render on
+  // every parent render (an inline arrow here would defeat React.memo).
+  const handleDeleteClick = useCallback((order: WorkOrder) => {
+    setDeleteTarget(order);
+  }, []);
 
   // Pin the cost-review filter so this route only ever lists that queue, even
   // after a reset from the filters bar.
@@ -167,7 +172,7 @@ function CostReviewPage(): React.JSX.Element {
   );
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div className="flex flex-col gap-1">
@@ -239,7 +244,7 @@ function CostReviewPage(): React.JSX.Element {
               onPageChange={setCurrentPage}
               pageSize={pageSize}
               onPageSizeChange={setPageSize}
-              onDelete={(order) => setDeleteTarget(order)}
+              onDelete={handleDeleteClick}
               onDuplicate={handleDuplicate}
               onEdit={handleEdit}
               onToggleStatus={handleToggleStatus}
@@ -266,7 +271,7 @@ function CostReviewPage(): React.JSX.Element {
         }}
         onConfirm={handleDeleteConfirm}
       />
-    </AppShell>
+    </>
   );
 }
 

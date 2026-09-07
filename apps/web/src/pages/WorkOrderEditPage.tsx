@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
@@ -166,7 +165,7 @@ function WorkOrderEditPage(): React.JSX.Element {
   }, [navigate]);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <header className="animate-iris-enter border-b border-border px-10 pt-8 pb-7">
           <button
@@ -245,7 +244,7 @@ function WorkOrderEditPage(): React.JSX.Element {
         onOpenChange={setCompleteOpen}
         onConfirm={() => void handleCompleteConfirm()}
       />
-    </AppShell>
+    </>
   );
 }
 

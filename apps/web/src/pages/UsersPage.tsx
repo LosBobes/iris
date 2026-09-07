@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Plus, Save, Shield, Trash2, User as UserIcon, X } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,7 +59,7 @@ function UsersPage(): React.JSX.Element {
   }, [deleteTarget, load, t]);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
@@ -178,7 +177,7 @@ function UsersPage(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppShell>
+    </>
   );
 }
 

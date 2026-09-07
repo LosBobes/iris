@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { CancelWorkOrderDialog } from "@/components/WorkOrders/CancelWorkOrderDialog";
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
@@ -289,7 +288,6 @@ function WorkOrderDetailPage(): React.JSX.Element {
   return (
     <>
       <div className="work-order-screen-root">
-        <AppShell>
           <div className="flex items-stretch">
           <div className="min-w-0 flex-1">
         <div className="animate-iris-enter border-b border-border px-10 pt-5 pb-6">
@@ -486,7 +484,6 @@ function WorkOrderDetailPage(): React.JSX.Element {
             </aside>
           )}
           </div>
-        </AppShell>
       </div>
       {order && (
         <WorkOrderPrintSheet order={order} locations={locations} customer={customer} />

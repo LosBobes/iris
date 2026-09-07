@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useAuth } from "@/hooks/useAuth";
 import { getLocalIsoDate } from "@/shared/utils/work-orders";
@@ -231,7 +230,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
   }, [navigate]);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <header className="animate-iris-enter border-b border-border px-10 pt-8 pb-7">
           <button
@@ -284,7 +283,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
           />
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 
