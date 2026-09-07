@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import {
@@ -37,6 +37,7 @@ import {
   WORK_ORDER_COLUMNS,
   columnLabel,
   type WorkOrderColumnKey,
+  type WorkOrderColumnMeta,
 } from "@/lib/work-order-columns";
 import {
   canToggleWorkOrderCompletion,
@@ -161,6 +162,161 @@ function SortIcon({
   );
 }
 
+interface WorkOrderRowProps {
+  order: WorkOrder;
+  columns: WorkOrderColumnMeta[];
+  rowHeightClass: string;
+  /** Row index within the current page, used for the first-paint stagger delay. */
+  index: number;
+  /** Only true on the very first paint — later sort/filter/page swaps skip the animation. */
+  shouldStagger: boolean;
+  onOpen?: (order: WorkOrder) => void;
+  onToggleStatus: (order: WorkOrder) => void;
+  onEdit: (order: WorkOrder) => void;
+  onDuplicate: (order: WorkOrder) => void;
+  onDelete: (order: WorkOrder) => void;
+  canDelete: boolean;
+}
+
+/**
+ * A single table row, memoized so paging/sorting/filtering only re-renders
+ * the rows whose data or visible columns actually changed, instead of every
+ * row on the page (handlers passed in are expected to be stable, i.e.
+ * `useCallback`-wrapped in the parent page).
+ */
+const WorkOrderRow = memo(function WorkOrderRow({
+  order,
+  columns,
+  rowHeightClass,
+  index,
+  shouldStagger,
+  onOpen,
+  onToggleStatus,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  canDelete,
+}: WorkOrderRowProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const canToggleStatus = canToggleWorkOrderCompletion(order.status);
+  const statusTransition = getPrimaryWorkOrderTransition(order.status);
+  const statusActionLabel = canToggleStatus
+    ? t("workOrders.table.changeStatusTo", { status: getWorkOrderStatusLabel(statusTransition!) })
+    : t("workOrders.table.statusNotFromList");
+  // Cap stagger so a 100-row page doesn't take 3s to settle.
+  const rowDelayMs = Math.min(index, 12) * 22;
+
+  return (
+    <tr
+      onClick={onOpen ? () => onOpen(order) : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-label={
+        onOpen
+          ? t("workOrders.table.openRow", { order: order.orderNumber, client: order.clientName })
+          : undefined
+      }
+      onKeyDown={
+        onOpen
+          ? (e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen(order);
+              }
+            }
+          : undefined
+      }
+      style={
+        shouldStagger
+          ? {
+              animation: "iris-fade-up 360ms var(--iris-ease-out) both",
+              animationDelay: `${rowDelayMs}ms`,
+            }
+          : undefined
+      }
+      className={`${rowHeightClass} border-b border-[color:var(--iris-border-soft)] transition-colors duration-150 last:border-b-0 ${
+        onOpen
+          ? "cursor-pointer hover:bg-black/[0.025] focus-visible:bg-black/[0.025] focus-visible:outline-none focus-visible:shadow-[inset_2px_0_0_var(--iris-accent)]"
+          : ""
+      }`}
+    >
+      {columns.map((col) => {
+        const cell = renderColumnCell(order, col.key);
+        return (
+          <td key={col.key} className={cell.className} title={cell.title}>
+            {cell.content}
+          </td>
+        );
+      })}
+      <td
+        className="sticky right-0 z-10 bg-card px-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-end gap-1 text-[color:var(--iris-ink-soft)]">
+          <ActionTooltip label={statusActionLabel}>
+            <button
+              type="button"
+              disabled={!canToggleStatus}
+              aria-label={statusActionLabel}
+              onClick={() => onToggleStatus(order)}
+              className="iris-focusable iris-press relative grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Check
+                className={`absolute h-[18px] w-[18px] transition-all duration-200 ease-out ${
+                  order.status === "completed"
+                    || order.status === "invoiced"
+                    ? "scale-100 opacity-100"
+                    : "scale-50 opacity-0"
+                }`}
+              />
+              <Circle
+                className={`absolute h-[18px] w-[18px] transition-all duration-200 ease-out ${
+                  order.status === "completed"
+                    || order.status === "invoiced"
+                    ? "scale-50 opacity-0"
+                    : "scale-100 opacity-100"
+                }`}
+              />
+            </button>
+          </ActionTooltip>
+          <ActionTooltip label={t("common.edit")}>
+            <button
+              type="button"
+              aria-label={t("common.edit")}
+              onClick={() => onEdit(order)}
+              className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
+            >
+              <Pencil className="h-[18px] w-[18px]" />
+            </button>
+          </ActionTooltip>
+          <ActionTooltip label={t("workOrders.detail.duplicate")}>
+            <button
+              type="button"
+              aria-label={t("workOrders.detail.duplicate")}
+              onClick={() => onDuplicate(order)}
+              className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
+            >
+              <Copy className="h-[18px] w-[18px]" />
+            </button>
+          </ActionTooltip>
+          {canDelete && (
+            <ActionTooltip label={t("common.delete")}>
+              <button
+                type="button"
+                aria-label={t("common.delete")}
+                onClick={() => onDelete(order)}
+                className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+              >
+                <Trash2 className="h-[18px] w-[18px]" />
+              </button>
+            </ActionTooltip>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export function WorkOrdersTable({
   orders,
   totalFiltered,
@@ -193,8 +349,13 @@ export function WorkOrdersTable({
 
   const { isVisible } = useColumnVisibility();
   // The price column is the selling price, which every role may see; only
-  // cost/margin is admin-only and it has no column here.
-  const dataColumns = WORK_ORDER_COLUMNS.filter((col) => isVisible(col.key));
+  // cost/margin is admin-only and it has no column here. Memoized so the
+  // array reference (used by memoized rows below) only changes when column
+  // visibility actually changes.
+  const dataColumns = useMemo(
+    () => WORK_ORDER_COLUMNS.filter((col) => isVisible(col.key)),
+    [isVisible],
+  );
 
   // When the user pages while scrolled to the pagination bar, bring the top
   // of the new page back into view instead of leaving them at the bottom.
@@ -261,126 +422,22 @@ export function WorkOrdersTable({
           </tr>
         </thead>
         <tbody>
-          {orders.map((order, idx) => {
-            const canToggleStatus = canToggleWorkOrderCompletion(order.status);
-            const statusTransition = getPrimaryWorkOrderTransition(order.status);
-            const statusActionLabel = canToggleStatus
-              ? t("workOrders.table.changeStatusTo", { status: getWorkOrderStatusLabel(statusTransition!) })
-              : t("workOrders.table.statusNotFromList");
-            // Cap stagger so a 100-row page doesn't take 3s to settle.
-            const rowDelayMs = Math.min(idx, 12) * 22;
-            return (
-              <tr
-                key={order.id}
-                onClick={onOpen ? () => onOpen(order) : undefined}
-                tabIndex={onOpen ? 0 : undefined}
-                aria-label={
-                  onOpen
-                    ? t("workOrders.table.openRow", { order: order.orderNumber, client: order.clientName })
-                    : undefined
-                }
-                onKeyDown={
-                  onOpen
-                    ? (e) => {
-                        if (e.target !== e.currentTarget) return;
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onOpen(order);
-                        }
-                      }
-                    : undefined
-                }
-                style={
-                  shouldStagger
-                    ? {
-                        animation:
-                          "iris-fade-up 360ms var(--iris-ease-out) both",
-                        animationDelay: `${rowDelayMs}ms`,
-                      }
-                    : undefined
-                }
-                className={`${rowHeightClass} border-b border-[color:var(--iris-border-soft)] transition-colors duration-150 last:border-b-0 ${
-                  onOpen
-                    ? "cursor-pointer hover:bg-black/[0.025] focus-visible:bg-black/[0.025] focus-visible:outline-none focus-visible:shadow-[inset_2px_0_0_var(--iris-accent)]"
-                    : ""
-                }`}
-              >
-                {dataColumns.map((col) => {
-                  const cell = renderColumnCell(order, col.key);
-                  return (
-                    <td key={col.key} className={cell.className} title={cell.title}>
-                      {cell.content}
-                    </td>
-                  );
-                })}
-                <td
-                  className="sticky right-0 z-10 bg-card px-3"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-end gap-1 text-[color:var(--iris-ink-soft)]">
-                    <ActionTooltip label={statusActionLabel}>
-                      <button
-                        type="button"
-                        disabled={!canToggleStatus}
-                        aria-label={statusActionLabel}
-                        onClick={() => onToggleStatus(order)}
-                        className="iris-focusable iris-press relative grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <Check
-                          className={`absolute h-[18px] w-[18px] transition-all duration-200 ease-out ${
-                            order.status === "completed"
-                              || order.status === "invoiced"
-                              ? "scale-100 opacity-100"
-                              : "scale-50 opacity-0"
-                          }`}
-                        />
-                        <Circle
-                          className={`absolute h-[18px] w-[18px] transition-all duration-200 ease-out ${
-                            order.status === "completed"
-                              || order.status === "invoiced"
-                              ? "scale-50 opacity-0"
-                              : "scale-100 opacity-100"
-                          }`}
-                        />
-                      </button>
-                    </ActionTooltip>
-                    <ActionTooltip label={t("common.edit")}>
-                      <button
-                        type="button"
-                        aria-label={t("common.edit")}
-                        onClick={() => onEdit(order)}
-                        className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
-                      >
-                        <Pencil className="h-[18px] w-[18px]" />
-                      </button>
-                    </ActionTooltip>
-                    <ActionTooltip label={t("workOrders.detail.duplicate")}>
-                      <button
-                        type="button"
-                        aria-label={t("workOrders.detail.duplicate")}
-                        onClick={() => onDuplicate(order)}
-                        className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 hover:bg-black/[0.05] hover:text-foreground"
-                      >
-                        <Copy className="h-[18px] w-[18px]" />
-                      </button>
-                    </ActionTooltip>
-                    {canDelete && (
-                      <ActionTooltip label={t("common.delete")}>
-                        <button
-                          type="button"
-                          aria-label={t("common.delete")}
-                          onClick={() => onDelete(order)}
-                          className="iris-focusable iris-press grid size-9 place-items-center rounded-sm bg-transparent p-0 text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
-                        >
-                          <Trash2 className="h-[18px] w-[18px]" />
-                        </button>
-                      </ActionTooltip>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+          {orders.map((order, idx) => (
+            <WorkOrderRow
+              key={order.id}
+              order={order}
+              columns={dataColumns}
+              rowHeightClass={rowHeightClass}
+              index={idx}
+              shouldStagger={shouldStagger}
+              onOpen={onOpen}
+              onToggleStatus={onToggleStatus}
+              onEdit={onEdit}
+              onDuplicate={onDuplicate}
+              onDelete={onDelete}
+              canDelete={canDelete}
+            />
+          ))}
         </tbody>
       </table>
 

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { Pager } from "@/components/Pager";
 import type { Customer } from "@/types/work-order";
 
@@ -44,7 +43,7 @@ function CustomersPage(): React.JSX.Element {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="animate-iris-enter flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div>
@@ -140,7 +139,7 @@ function CustomersPage(): React.JSX.Element {
           </section>
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 

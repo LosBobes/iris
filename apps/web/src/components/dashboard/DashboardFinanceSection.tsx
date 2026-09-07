@@ -1,7 +1,7 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 import { DashboardCompanyProfit } from "@/components/dashboard/DashboardCompanyProfit";
 import { DashboardFilters } from "@/components/dashboard/DashboardFilters";
 import { DashboardItemBreakdown } from "@/components/dashboard/DashboardItemBreakdown";
@@ -15,6 +15,15 @@ import type {
   ProfitTotals,
 } from "@/lib/dashboard/profit";
 import type { DashboardFilters as DashboardFiltersState, DashboardSummary } from "@/types/work-order";
+
+// Recharts (pulled in by DashboardCharts) is only needed once an operator
+// opens the collapsed "details" trends section, so it is split into its own
+// chunk instead of shipping with the rest of the dashboard.
+const DashboardCharts = lazy(() =>
+  import("@/components/dashboard/DashboardCharts").then((module) => ({
+    default: module.DashboardCharts,
+  })),
+);
 
 interface DashboardFinanceSectionProps {
   summary: DashboardSummary;
@@ -57,6 +66,15 @@ export function DashboardFinanceSection({
   const selectedCompanyName =
     companyProfit.find((company) => company.groupKey === selectedCompanyKey)
       ?.name ?? null;
+  // Charts mount lazily the first time the trends `<details>` is opened, and
+  // stay mounted afterwards so collapsing it again doesn't drop/refetch them.
+  const [chartsOpened, setChartsOpened] = useState(false);
+  const handleDetailsToggle = useCallback(
+    (event: React.SyntheticEvent<HTMLDetailsElement>) => {
+      if (event.currentTarget.open) setChartsOpened(true);
+    },
+    [],
+  );
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -102,7 +120,7 @@ export function DashboardFinanceSection({
           />
 
           {/* Secondary trends, collapsed by default to keep the heroes prominent. */}
-          <details className="group border-t border-border pt-4">
+          <details className="group border-t border-border pt-4" onToggle={handleDetailsToggle}>
             <summary className="iris-focusable flex cursor-pointer list-none items-center justify-between gap-4 py-2 text-[12px] text-[color:var(--iris-ink-soft)]">
               <span>{t("dashboard.finance.detailToggle")}</span>
               <ChevronDown className="h-4 w-4 text-[color:var(--iris-ink-mute)] transition-transform duration-200 group-open:rotate-180" />
@@ -110,13 +128,24 @@ export function DashboardFinanceSection({
             <div className="space-y-6 pt-4">
               <DashboardSummaryCards summary={summary} />
               <div className="animate-iris-enter" style={{ animationDelay: "120ms" }}>
-                <DashboardCharts
-                  monthlyOrders={monthlyOrders}
-                  monthlyRevenue={monthlyRevenue}
-                  deliveryDistribution={deliveryDistribution}
-                  topClients={topClients}
-                  summary={summary}
-                />
+                {chartsOpened && (
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>{t("dashboard.loading")}</span>
+                      </div>
+                    }
+                  >
+                    <DashboardCharts
+                      monthlyOrders={monthlyOrders}
+                      monthlyRevenue={monthlyRevenue}
+                      deliveryDistribution={deliveryDistribution}
+                      topClients={topClients}
+                      summary={summary}
+                    />
+                  </Suspense>
+                )}
               </div>
             </div>
           </details>

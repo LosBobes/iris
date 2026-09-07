@@ -482,6 +482,33 @@ export function WorkOrdersFilters({
   const { isVisible } = useColumnVisibility();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Local echo of the search field so typing stays instant; the committed
+  // filter (which drives the URL and the full re-filter/re-sort) is written
+  // after a short debounce instead of on every keystroke.
+  const [searchValue, setSearchValue] = useState(filters.search);
+  // The last value this input committed. Lets the sync effect below tell an
+  // external change (reset, back/forward) apart from the echo of its own
+  // commit, so a keystroke landing right as a commit propagates is never
+  // overwritten with the older committed text.
+  const committedSearchRef = useRef(filters.search);
+
+  // Keep the local field in sync when the filter changes from outside this
+  // input (reset, browser back/forward, etc.).
+  useEffect(() => {
+    if (filters.search === committedSearchRef.current) return;
+    committedSearchRef.current = filters.search;
+    setSearchValue(filters.search);
+  }, [filters.search]);
+
+  useEffect(() => {
+    if (searchValue === filters.search) return;
+    const handle = setTimeout(() => {
+      committedSearchRef.current = searchValue;
+      updateFilters({ search: searchValue });
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [searchValue, filters.search, updateFilters]);
+
   // Option lists with i18n labels; "all" sentinels reuse the per-filter
   // "all…" copy, the rest reuse the shared status/billing/delivery labels.
   const statusOptions = useMemo(
@@ -576,21 +603,25 @@ export function WorkOrdersFilters({
           ref={searchInputRef}
           type="text"
           placeholder={t("workOrders.filters.searchPlaceholder")}
-          value={filters.search}
-          onChange={(e) => updateFilters({ search: e.target.value })}
+          value={searchValue}
+          onChange={(e) => setSearchValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Escape" && filters.search !== "") {
+            if (e.key === "Escape" && searchValue !== "") {
               e.stopPropagation();
+              committedSearchRef.current = "";
+              setSearchValue("");
               updateFilters({ search: "" });
             }
           }}
           className="w-full border-none bg-transparent text-[12px] text-foreground placeholder:text-[color:var(--iris-ink-mute)] focus:outline-none"
         />
-        {filters.search !== "" ? (
+        {searchValue !== "" ? (
           <button
             type="button"
             aria-label={t("workOrders.filters.clearSearch")}
             onClick={() => {
+              committedSearchRef.current = "";
+              setSearchValue("");
               updateFilters({ search: "" });
               searchInputRef.current?.focus();
             }}

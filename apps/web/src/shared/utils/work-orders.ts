@@ -164,26 +164,35 @@ export function isWorkOrderStatusTerminal(status: WorkOrderStatus): boolean {
   return WORK_ORDER_TRANSITIONS[status].length === 0;
 }
 
+// Hoisted module-level `Intl` instances: constructing these is comparatively
+// expensive, and these helpers run per row/cell across large work-order
+// lists, so building one formatter/collator once beats allocating a fresh
+// one on every call.
+const workOrderDateTimeFormatter = new Intl.DateTimeFormat("sr-Latn-RS", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const workOrderPriceFormatter = new Intl.NumberFormat("sr-Latn-RS", {
+  style: "decimal",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/** Shared collator for sorting/comparing Serbian (Latin) text, e.g. order numbers. */
+export const workOrderCollator = new Intl.Collator("sr-Latn");
+
 export function formatWorkOrderDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("sr-Latn-RS", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return workOrderDateTimeFormatter.format(new Date(iso));
 }
 
 export function formatWorkOrderPrice(price: number | null): string {
   if (price === null) return "-";
 
-  return (
-    new Intl.NumberFormat("sr-Latn-RS", {
-      style: "decimal",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(price) + " RSD"
-  );
+  return workOrderPriceFormatter.format(price) + " RSD";
 }
 
 export function formatWorkOrderDate(dateStr: string): string {
@@ -213,7 +222,7 @@ export function compareWorkOrderNumbers(a: string, b: string): number {
       if (diff !== 0) return diff;
       continue;
     }
-    const cmp = segA.localeCompare(segB, "sr-Latn");
+    const cmp = workOrderCollator.compare(segA, segB);
     if (cmp !== 0) return cmp;
   }
   return segmentsA.length - segmentsB.length;

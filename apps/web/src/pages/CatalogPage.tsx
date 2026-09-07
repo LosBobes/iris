@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ChevronRight, Loader2, Plus, Search, Trash2 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import { Pager } from "@/components/Pager";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
 import { CatalogCleanupDialog } from "@/components/Catalog/CatalogCleanupDialog";
@@ -68,7 +67,7 @@ function CatalogPage(): React.JSX.Element {
   }, []);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="animate-iris-enter flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div>
@@ -207,7 +206,7 @@ function CatalogPage(): React.JSX.Element {
         onDeleted={(deleted) => void handleCleanupDone(deleted)}
         onError={(message) => toast.error(message)}
       />
-    </AppShell>
+    </>
   );
 }
 
