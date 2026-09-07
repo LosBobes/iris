@@ -273,6 +273,110 @@ func TestSQLiteStoreAuthSessionsAndBackup(t *testing.T) {
 	}
 }
 
+// TestSQLiteStoreCreateSessionSweepsExpiredSessions guards the fix for
+// unbounded session-table growth: sessions were previously only deleted on
+// logout or when an already-expired token happened to be looked up, so an
+// install where operators just close the tab would never shrink the table.
+// CreateSession now sweeps expired rows on every login.
+func TestSQLiteStoreCreateSessionSweepsExpiredSessions(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	if err := sqliteStore.CreateUser(ctx, "u-gc", "gc-user", "sifra", domain.RoleUser, false); err != nil {
+		t.Fatalf("CreateUser() returned error: %v", err)
+	}
+	user, err := sqliteStore.AuthenticateUser(ctx, DemoTenantID, "gc-user", "sifra")
+	if err != nil || user == nil {
+		t.Fatalf("AuthenticateUser() = %v, %v", user, err)
+	}
+
+	// A session that already expired an hour ago, as if the process was never
+	// asked to log the user out and the token was never looked up again.
+	expiredToken, err := sqliteStore.CreateSession(ctx, user.ID, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession(expired) returned error: %v", err)
+	}
+
+	// A fresh login must sweep rows whose expires_at has already passed.
+	if _, err := sqliteStore.CreateSession(ctx, user.ID, time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("CreateSession(fresh) returned error: %v", err)
+	}
+
+	var remaining int
+	if err := sqliteStore.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM sessions WHERE token = ?`,
+		expiredToken,
+	).Scan(&remaining); err != nil {
+		t.Fatalf("count expired session returned error: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("expired session still present after a new login, want swept")
+	}
+}
+
+// TestSQLiteStoreWorkOrderByPublicToken covers the indexed public_token column:
+// lookups must find a work order right after it is created, follow the token
+// when it changes on update, and stop resolving once the token is cleared. The
+// lookup is intentionally cross-tenant (the public tracking endpoint has no
+// session), so it is exercised with a context carrying no tenant at all.
+func TestSQLiteStoreWorkOrderByPublicToken(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+
+	workOrder := domain.WorkOrder{
+		ID:             "wo-token",
+		OrderNumber:    "RN-2024-00100",
+		ClientName:     "Token Co",
+		JobDescription: "token order",
+		IssuedBy:       "admin",
+		IssueDate:      "2024-01-01",
+		Status:         domain.WorkOrderStatusNew,
+		Communication:  domain.CustomerCommunication{PublicToken: "tok-abc123"},
+	}
+	if err := sqliteStore.PutWorkOrder(ctx, workOrder); err != nil {
+		t.Fatalf("PutWorkOrder() returned error: %v", err)
+	}
+
+	found, err := sqliteStore.WorkOrderByPublicToken(context.Background(), "tok-abc123")
+	if err != nil {
+		t.Fatalf("WorkOrderByPublicToken() returned error: %v", err)
+	}
+	if found == nil || found.ID != "wo-token" {
+		t.Fatalf("WorkOrderByPublicToken() = %#v, want wo-token", found)
+	}
+
+	if missing, err := sqliteStore.WorkOrderByPublicToken(context.Background(), "does-not-exist"); err != nil || missing != nil {
+		t.Fatalf("WorkOrderByPublicToken(missing) = %#v, %v; want nil, nil", missing, err)
+	}
+
+	// Changing the token on update must move the lookup: the old token stops
+	// resolving and the new one starts.
+	workOrder.Communication.PublicToken = "tok-def456"
+	if err := sqliteStore.PutWorkOrder(ctx, workOrder); err != nil {
+		t.Fatalf("PutWorkOrder(update) returned error: %v", err)
+	}
+	if stale, err := sqliteStore.WorkOrderByPublicToken(context.Background(), "tok-abc123"); err != nil || stale != nil {
+		t.Fatalf("WorkOrderByPublicToken(old token) = %#v, %v; want nil, nil", stale, err)
+	}
+	found, err = sqliteStore.WorkOrderByPublicToken(context.Background(), "tok-def456")
+	if err != nil || found == nil || found.ID != "wo-token" {
+		t.Fatalf("WorkOrderByPublicToken(new token) = %#v, %v; want wo-token", found, err)
+	}
+
+	// Clearing the token must clear the indexed column too, so the work order
+	// is no longer findable by its former token.
+	workOrder.Communication.PublicToken = ""
+	if err := sqliteStore.PutWorkOrder(ctx, workOrder); err != nil {
+		t.Fatalf("PutWorkOrder(clear) returned error: %v", err)
+	}
+	if cleared, err := sqliteStore.WorkOrderByPublicToken(context.Background(), "tok-def456"); err != nil || cleared != nil {
+		t.Fatalf("WorkOrderByPublicToken(cleared token) = %#v, %v; want nil, nil", cleared, err)
+	}
+}
+
 func TestSQLiteStoreEmptyListsAreNonNil(t *testing.T) {
 	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))

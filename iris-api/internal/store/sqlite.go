@@ -175,6 +175,17 @@ func (s *SQLiteStore) CreateSession(
 	if err != nil {
 		return "", err
 	}
+	// Sessions are otherwise only deleted on logout or when an already-expired
+	// token happens to be looked up, so an install with no explicit logouts
+	// would grow this table forever. Sweep expired rows once per login instead
+	// of adding a background job.
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM sessions WHERE expires_at <= ?`,
+		time.Now().UTC().Format(time.RFC3339),
+	); err != nil {
+		return "", fmt.Errorf("sweep expired sessions: %w", err)
+	}
 	if _, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO sessions(token, user_id, expires_at) VALUES (?, ?, ?)`,
@@ -281,26 +292,24 @@ func (s *SQLiteStore) WorkOrderByPublicToken(ctx context.Context, token string) 
 	if token == "" {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT payload FROM work_orders`)
+	var payload string
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT payload FROM work_orders WHERE public_token = ? LIMIT 1`,
+		token,
+	).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("scan work orders for public token: %w", err)
+		return nil, fmt.Errorf("load work order by public token: %w", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var payload string
-		if err := rows.Scan(&payload); err != nil {
-			return nil, fmt.Errorf("scan work order: %w", err)
-		}
-		var workOrder domain.WorkOrder
-		if err := json.Unmarshal([]byte(payload), &workOrder); err != nil {
-			return nil, fmt.Errorf("decode work order payload: %w", err)
-		}
-		if workOrder.Communication.PublicToken == token {
-			workOrder = normalizeStoredWorkOrder(workOrder)
-			return &workOrder, nil
-		}
+	var workOrder domain.WorkOrder
+	if err := json.Unmarshal([]byte(payload), &workOrder); err != nil {
+		return nil, fmt.Errorf("decode work order payload: %w", err)
 	}
-	return nil, rows.Err()
+	workOrder = normalizeStoredWorkOrder(workOrder)
+	return &workOrder, nil
 }
 
 func (s *SQLiteStore) Customers(ctx context.Context, query CustomerQuery) (CustomerListResult, error) {
@@ -782,8 +791,16 @@ func (s *SQLiteStore) WorkOrderByID(ctx context.Context, id string) (*domain.Wor
 	if err != nil {
 		return nil, err
 	}
+	return workOrderByID(ctx, s.db, tenantID, id)
+}
+
+// workOrderByID is the query-only core of WorkOrderByID, factored out so
+// UpdateWorkOrder can read the current row inside the same transaction it later
+// writes to (see sqlExecutor / dbExecQuerier for why *sql.DB and *sql.Tx can
+// share this helper).
+func workOrderByID(ctx context.Context, db dbExecQuerier, tenantID, id string) (*domain.WorkOrder, error) {
 	var payload string
-	err = s.db.QueryRowContext(
+	err := db.QueryRowContext(
 		ctx,
 		`SELECT payload FROM work_orders WHERE id = ? AND tenant_id = ?`,
 		id,
@@ -852,8 +869,9 @@ func (s *SQLiteStore) CreateWorkOrder(
 	}
 
 	// Look up catalog cost prices before opening the write transaction: the
-	// SQLite pool is single-connection, so querying inside the open tx would
-	// deadlock waiting for the connection the tx already holds.
+	// pool holds several connections (see maxOpenConnsFromEnv), so this only
+	// reads already-committed data on a connection of its own and keeps the
+	// exclusive write lock the transaction below takes as short as possible.
 	draft := normalizeInvoiceDraft(input.InvoiceDraft, input.JobDescription, input.Price)
 	costs, err := s.catalogCostsAsOf(ctx, catalogItemIDs(draft.LineItems), input.IssueDate)
 	if err != nil {
@@ -941,11 +959,26 @@ func (s *SQLiteStore) UpdateWorkOrder(
 	id string,
 	changes domain.UpdateWorkOrderInput,
 ) (*domain.WorkOrder, error) {
-	current, err := s.WorkOrderByID(ctx, id)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// The read, validation, cost lookup, and write all share one transaction so
+	// a concurrent update to the same work order (or a concurrent catalog cost
+	// change) cannot interleave between the read this method starts from and
+	// the write it ends with.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin update work order: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	current, err := workOrderByID(ctx, tx, tenantID, id)
 	if err != nil || current == nil {
 		return current, err
 	}
-	custom, err := s.workOrderEnums(ctx)
+	custom, err := workOrderEnums(ctx, tx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -968,7 +1001,7 @@ func (s *SQLiteStore) UpdateWorkOrder(
 			costDate = time.Now().UTC().Format("2006-01-02")
 		}
 	}
-	costs, err := s.catalogCostsAsOf(ctx, catalogItemIDs(updated.InvoiceDraft.LineItems), costDate)
+	costs, err := catalogCostsAsOf(ctx, tx, tenantID, catalogItemIDs(updated.InvoiceDraft.LineItems), costDate)
 	if err != nil {
 		return nil, err
 	}
@@ -982,8 +1015,11 @@ func (s *SQLiteStore) UpdateWorkOrder(
 	}
 	updated.Events = applyCostReviewEvents(updated.Events, wasNeeded, updated.NeedsCostReview, actor, updated.UpdatedAt)
 
-	if err := s.PutWorkOrder(ctx, updated); err != nil {
+	if err := putWorkOrder(ctx, tx, tenantID, updated); err != nil {
 		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit update work order: %w", err)
 	}
 	return cloneWorkOrder(updated), nil
 }
@@ -1062,13 +1098,14 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 		return fmt.Errorf("encode work order payload: %w", err)
 	}
 	assignedTo := ptrStringValue(workOrder.Assignment.AssignedTo)
+	publicToken := nullIfEmpty(workOrder.Communication.PublicToken)
 	if _, err := db.ExecContext(
 		ctx,
 		`INSERT INTO work_orders(
 		   id, tenant_id, order_number, customer_id, location_id, client_name, job_description,
 		   issued_by, assigned_to, status, issue_date, due_date, price, needs_cost_review,
-		   payload, created_at, updated_at
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		   payload, created_at, updated_at, public_token
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   order_number = excluded.order_number,
 		   customer_id = excluded.customer_id,
@@ -1084,7 +1121,8 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 		   needs_cost_review = excluded.needs_cost_review,
 		   payload = excluded.payload,
 		   created_at = excluded.created_at,
-		   updated_at = excluded.updated_at
+		   updated_at = excluded.updated_at,
+		   public_token = excluded.public_token
 		 WHERE work_orders.tenant_id = excluded.tenant_id`,
 		workOrder.ID,
 		tenantID,
@@ -1103,10 +1141,20 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 		string(payload),
 		workOrder.CreatedAt,
 		workOrder.UpdatedAt,
+		publicToken,
 	); err != nil {
 		return fmt.Errorf("put work order: %w", err)
 	}
 	return nil
+}
+
+// nullIfEmpty returns nil for a blank string so callers can bind it as SQL NULL
+// rather than persisting an empty string in a nullable column.
+func nullIfEmpty(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
 }
 
 func (s *SQLiteStore) CreateUser(
@@ -1217,13 +1265,22 @@ func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
 // numbers are reclaimed and abandoned forms only ever leave a gap.
 func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year int, now string) (string, error) {
 	prefix := fmt.Sprintf("RN-%d-", year)
+	// order_number LIKE 'RN-2026-%' cannot use the (tenant_id, order_number)
+	// index: SQLite's LIKE is case-insensitive by default, and it only rewrites
+	// a prefix LIKE into an index range when the column uses NOCASE collation,
+	// which order_number (BINARY) does not. Expressing the same prefix match as
+	// an explicit half-open range (prefix <= order_number < prefixEnd) always
+	// uses the index. prefixEnd increments the prefix's last byte, e.g.
+	// "RN-2026-" -> "RN-2026." ('-' + 1 == '.'), which sorts just past every
+	// string starting with the prefix.
+	prefixEnd := prefix[:len(prefix)-1] + string(prefix[len(prefix)-1]+1)
 	var next sql.NullInt64
 	if err := db.QueryRowContext(
 		ctx,
 		`SELECT COALESCE(MAX(seq), 0) + 1 FROM (
 		   SELECT CAST(substr(order_number, ?) AS INTEGER) AS seq
 		     FROM work_orders
-		     WHERE tenant_id = ? AND order_number LIKE ?
+		     WHERE tenant_id = ? AND order_number >= ? AND order_number < ?
 		   UNION ALL
 		   SELECT sequence AS seq
 		     FROM work_order_number_reservations
@@ -1231,7 +1288,8 @@ func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year 
 		 )`,
 		len(prefix)+1, // substr is 1-indexed: start just past the "RN-<year>-" prefix
 		tenantID,
-		prefix+"%",
+		prefix,
+		prefixEnd,
 		tenantID,
 		year,
 		now,

@@ -22,7 +22,15 @@ func isUniqueConstraintError(err error) bool {
 // customEnums loads the admin-created values into a fast lookup set used during
 // work-order validation.
 func (s *SQLiteStore) customEnums(ctx context.Context) (customEnumSet, error) {
-	values, err := s.listCustomEnumValues(ctx)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return customEnums(ctx, s.db, tenantID)
+}
+
+func customEnums(ctx context.Context, db dbExecQuerier, tenantID string) (customEnumSet, error) {
+	values, err := listCustomEnumValues(ctx, db, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -33,11 +41,22 @@ func (s *SQLiteStore) customEnums(ctx context.Context) (customEnumSet, error) {
 // admin-created picklist values plus every unit the tenant's catalog already
 // uses, so a line prefilled from the catalog is accepted as entered.
 func (s *SQLiteStore) workOrderEnums(ctx context.Context) (customEnumSet, error) {
-	custom, err := s.customEnums(ctx)
+	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	units, err := s.catalogUnits(ctx)
+	return workOrderEnums(ctx, s.db, tenantID)
+}
+
+// workOrderEnums is the query-only core of the method above, factored out so
+// UpdateWorkOrder can validate against the same transaction it reads and writes
+// the work order in.
+func workOrderEnums(ctx context.Context, db dbExecQuerier, tenantID string) (customEnumSet, error) {
+	custom, err := customEnums(ctx, db, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	units, err := catalogUnits(ctx, db, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +69,11 @@ func (s *SQLiteStore) catalogUnits(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(
+	return catalogUnits(ctx, s.db, tenantID)
+}
+
+func catalogUnits(ctx context.Context, db dbExecQuerier, tenantID string) ([]string, error) {
+	rows, err := db.QueryContext(
 		ctx,
 		`SELECT DISTINCT unit FROM catalog_items WHERE tenant_id = ? AND unit <> ''`,
 		tenantID,
@@ -88,7 +111,11 @@ func (s *SQLiteStore) listCustomEnumValues(ctx context.Context) ([]domain.EnumVa
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(
+	return listCustomEnumValues(ctx, s.db, tenantID)
+}
+
+func listCustomEnumValues(ctx context.Context, db dbExecQuerier, tenantID string) ([]domain.EnumValue, error) {
+	rows, err := db.QueryContext(
 		ctx,
 		`SELECT id, field, value, label, sort_order, created_at, updated_at
 		 FROM enum_values WHERE tenant_id = ? ORDER BY field, sort_order, label`,

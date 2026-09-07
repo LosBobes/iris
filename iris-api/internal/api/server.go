@@ -73,6 +73,10 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// gzip/deflate compresses only chi's default content-type list (text/*,
+	// application/json, javascript, etc.) — application/pdf is not in that
+	// list, so PDF report/preview responses pass through unmodified.
+	r.Use(middleware.Compress(5))
 	// Report panics to Sentry, then re-panic so chi's Recoverer still writes
 	// the 500. This is a no-op when Sentry was not initialized (no DSN), so it
 	// is always safe to register. Must sit inside Recoverer so it sees the
@@ -746,7 +750,11 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 
 	var locationAddress *string
 	if workOrder.LocationID != nil {
-		locations, locErr := s.store.Locations(r.Context(), "")
+		customerID := ""
+		if workOrder.CustomerID != nil {
+			customerID = *workOrder.CustomerID
+		}
+		locations, locErr := s.store.Locations(r.Context(), customerID)
 		if locErr != nil {
 			writeServerError(w, r, locErr)
 			return
@@ -809,7 +817,11 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 
 	var locationAddress *string
 	if order.LocationID != nil {
-		locations, err := s.store.Locations(r.Context(), "")
+		customerID := ""
+		if order.CustomerID != nil {
+			customerID = *order.CustomerID
+		}
+		locations, err := s.store.Locations(r.Context(), customerID)
 		if err != nil {
 			writeServerError(w, r, err)
 			return
