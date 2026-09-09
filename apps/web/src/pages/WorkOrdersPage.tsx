@@ -19,6 +19,7 @@ import {
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type { WorkOrder } from "@/types/work-order";
+import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 
 function WorkOrdersPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -85,8 +86,9 @@ function WorkOrdersPage(): React.JSX.Element {
             status: getWorkOrderStatusLabel(newStatus),
           }),
         );
-      } catch {
-        toast.error(t("workOrders.toast.statusError"));
+      } catch (error: unknown) {
+        reportUnexpectedError("WorkOrdersPage.advanceStatus", error);
+        toast.error(formatActionError(t("workOrders.toast.statusError"), error));
       }
     },
     [refreshOrders, t],
@@ -136,8 +138,9 @@ function WorkOrdersPage(): React.JSX.Element {
       toast.success(
         t("workOrders.toast.deleted", { order: deleteTarget.orderNumber }),
       );
-    } catch {
-      toast.error(t("workOrders.toast.deleteUnexpected"));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrdersPage.delete", error);
+      toast.error(formatActionError(t("workOrders.toast.deleteUnexpected"), error));
     }
   }, [deleteTarget, refreshOrders, t]);
 

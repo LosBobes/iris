@@ -268,10 +268,23 @@ describe('createHttpApi', () => {
   })
 })
 
+// The api-client reaches for several Sentry entry points now (exceptions,
+// breadcrumbs, identity), so the mock has to stand in for all of them —
+// a missing export surfaces as an unrelated assertion failure.
+function mockSentry(captureException = vi.fn()) {
+  vi.doMock('@sentry/react', () => ({
+    captureException,
+    addBreadcrumb: vi.fn(),
+    setUser: vi.fn(),
+    setTag: vi.fn(),
+    init: vi.fn(),
+  }))
+  return captureException
+}
+
 describe('failed requests', () => {
   it('carries the API message and request reference, and reports them', async () => {
-    const captureException = vi.fn()
-    vi.doMock('@sentry/react', () => ({ captureException }))
+    const captureException = mockSentry()
     vi.resetModules()
     const { createHttpApi: createApi } = await import('./api-client')
     const { ApiError, formatActionError } = await import('./errors')
@@ -304,9 +317,43 @@ describe('failed requests', () => {
     vi.resetModules()
   })
 
+  it('names the failing call in the Sentry title and fingerprint', async () => {
+    const captureException = mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Interna greška.' }, { status: 500 }),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getWorkOrderById('179').catch((thrown) => thrown)
+
+    // The issue title is the error name, so it has to identify the failure on
+    // its own: production bundles are minified and carry no source maps.
+    expect(error.name).toBe(
+      'ApiError 500 GET /work-orders/:id (getWorkOrderById)',
+    )
+    expect(error.operation).toBe('getWorkOrderById')
+    expect(error.route).toBe('/work-orders/:id')
+    // The operator still reads exactly what the server said.
+    expect(error.message).toBe('Interna greška.')
+    expect(captureException).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({
+        level: 'error',
+        // Grouping by route pattern keeps one broken endpoint as one issue
+        // rather than one issue per work order.
+        fingerprint: ['api', 'getWorkOrderById', '/work-orders/:id', '500'],
+      }),
+    )
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
   it('does not report an expired session', async () => {
-    const captureException = vi.fn()
-    vi.doMock('@sentry/react', () => ({ captureException }))
+    const captureException = mockSentry()
     vi.resetModules()
     const { createHttpApi: createApi } = await import('./api-client')
 
@@ -317,6 +364,116 @@ describe('failed requests', () => {
 
     await expect(api.getWorkOrders()).rejects.toThrow('Sesija je istekla.')
     expect(captureException).not.toHaveBeenCalled()
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('announces an expired session so the app can force a re-login', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { subscribeSessionExpired } = await import('./session')
+
+    const expired = vi.fn()
+    const unsubscribe = subscribeSessionExpired(expired)
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Potrebna je prijava.' }, { status: 401 }),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getLocations()).rejects.toThrow('Potrebna je prijava.')
+    expect(expired).toHaveBeenCalledTimes(1)
+
+    unsubscribe()
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('does not announce an expired session for a rejected login', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { subscribeSessionExpired } = await import('./session')
+
+    const expired = vi.fn()
+    const unsubscribe = subscribeSessionExpired(expired)
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Neispravna lozinka.' }, { status: 401 }),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(
+      api.login({ orgSlug: 'demo', username: 'admin', password: 'wrong' }),
+    ).rejects.toThrow('Neispravna lozinka.')
+    // Bouncing someone off the login form they are already looking at helps
+    // nobody.
+    expect(expired).not.toHaveBeenCalled()
+
+    unsubscribe()
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('turns an unreachable server into an error that names the call', async () => {
+    const captureException = mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { ApiNetworkError } = await import('./errors')
+
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getCustomers().catch((thrown) => thrown)
+    expect(error).toBeInstanceOf(ApiNetworkError)
+    // `TypeError: Failed to fetch` says nothing about what the app was doing.
+    expect(error.name).toBe('ApiNetworkError GET /customers (getCustomers)')
+    expect(captureException).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({
+        fingerprint: ['api-network', 'getCustomers', '/customers'],
+      }),
+    )
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('reports a repeated network failure once per operation', async () => {
+    const captureException = mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    await api.getCustomers().catch(() => undefined)
+    await api.getCustomers().catch(() => undefined)
+    await api.getCustomers().catch(() => undefined)
+
+    // An operator whose connection drops fails every request on the page; one
+    // event per operation keeps a real outage visible without a flood.
+    expect(captureException).toHaveBeenCalledTimes(1)
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('keeps the synchronous URL builders synchronous', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const api = createApi('http://127.0.0.1:8080', vi.fn())
+
+    expect(api.getWorkOrderReportUrl('179')).toBe(
+      'http://127.0.0.1:8080/work-orders/179/report',
+    )
 
     vi.doUnmock('@sentry/react')
     vi.resetModules()

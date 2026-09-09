@@ -24,6 +24,7 @@ export const en: typeof sr = {
     loadCatalogError: 'Error loading the catalog.',
     backendUnavailable: 'The backend service is unavailable. Start iris-api and try again.',
     previewError: 'Error generating the preview.',
+    networkError: 'No connection to the server. Check your internet connection and try again.',
   },
   validation: {
     quantityInteger: 'Quantity must be a whole number',
@@ -589,6 +590,9 @@ export const en: typeof sr = {
     resetNotice: 'To reset your password, contact the system administrator.',
     loginError: 'Sign-in failed.',
     backendError: 'Error communicating with the backend service.{{details}}',
+    sessionExpiredTitle: 'Your session expired',
+    sessionExpiredNotice: 'Sign in again to pick up where you left off.',
+    sessionExpiredToast: 'Your session expired. Please sign in again.',
   },
   nav: {
     dashboard: 'Dashboard',

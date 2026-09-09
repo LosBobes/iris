@@ -24,6 +24,7 @@ import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Customer, Location, WorkOrder } from "@/types/work-order";
+import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 import {
   buildWorkOrderCustomerNotice,
   getWorkOrderBillingDocumentLabel,
@@ -161,8 +162,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
           status: getWorkOrderStatusLabel(newStatus),
         }),
       );
-    } catch {
-      toast.error(t("workOrders.toast.statusError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrderDetailPage.advanceStatus", error);
+      toast.error(formatActionError(t("workOrders.toast.statusError"), error));
     }
   };
 
@@ -197,8 +199,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
       toast.success(
         t("workOrders.toast.cancelled", { order: updated.orderNumber }),
       );
-    } catch {
-      toast.error(t("workOrders.toast.cancelError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrderDetailPage.cancel", error);
+      toast.error(formatActionError(t("workOrders.toast.cancelError"), error));
     }
   };
 
@@ -215,8 +218,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
         t("workOrders.toast.deleted", { order: order.orderNumber }),
       );
       navigate("/work-orders");
-    } catch {
-      toast.error(t("workOrders.toast.deleteUnexpected"));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrderDetailPage.delete", error);
+      toast.error(formatActionError(t("workOrders.toast.deleteUnexpected"), error));
     }
   };
 
@@ -244,10 +248,11 @@ function WorkOrderDetailPage(): React.JSX.Element {
           return;
         }
         setOrder(data);
-      } catch {
+      } catch (error: unknown) {
+        reportUnexpectedError("WorkOrderDetailPage.load", error);
         if (!cancelled) {
           setOrder(null);
-          setError(t("workOrders.detail.loadError"));
+          setError(formatActionError(t("workOrders.detail.loadError"), error));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -260,8 +265,26 @@ function WorkOrderDetailPage(): React.JSX.Element {
     };
   }, [id, t]);
 
+  // Locations only enrich the printout's delivery address, so failing to load
+  // them costs a line on the page rather than the page itself. Before this had
+  // a catch, an expired session turned that rejection into an unhandled promise
+  // rejection — the operator saw a generic load error with no mention of the
+  // login that had actually lapsed.
   useEffect(() => {
-    void window.api.getLocations().then(setLocations);
+    let active = true;
+    window.api
+      .getLocations()
+      .then((next) => {
+        if (active) setLocations(next);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLocations([]);
+        reportUnexpectedError("WorkOrderDetailPage.loadLocations", error);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {

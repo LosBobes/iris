@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Eye, EyeOff } from "lucide-react";
+import { rememberOrganizationSlug } from "@/lib/session";
 
 interface LoginProps {
-  onLoginSuccess: (user: AuthenticatedUser) => void;
+  onLoginSuccess: (user: AuthenticatedUser, orgSlug: string) => void;
+  /**
+   * True when the operator is here because their session lapsed rather than
+   * because they signed out. The form then explains why it appeared, instead of
+   * looking like the app forgot them for no reason.
+   */
+  sessionExpired?: boolean;
 }
 
 const REMEMBER_DEVICE_KEY = "iris.rememberDevice";
@@ -47,7 +54,10 @@ function storeRememberedLogin(
   }
 }
 
-export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
+export function Login({
+  onLoginSuccess,
+  sessionExpired = false,
+}: LoginProps): React.JSX.Element {
   const { t } = useTranslation();
   const [orgSlug, setOrgSlug] = useState("");
   const [username, setUsername] = useState("");
@@ -100,8 +110,10 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
       });
 
       if (result.success && result.user) {
-        storeRememberedLogin(username, orgSlug.trim(), rememberDevice);
-        onLoginSuccess(result.user);
+        const trimmedOrg = orgSlug.trim();
+        storeRememberedLogin(username, trimmedOrg, rememberDevice);
+        rememberOrganizationSlug(trimmedOrg);
+        onLoginSuccess(result.user, trimmedOrg);
       } else {
         setError(result.error ?? t("auth.loginError"));
         setErrorKey((k) => k + 1);
@@ -168,6 +180,21 @@ export function Login({ onLoginSuccess }: LoginProps): React.JSX.Element {
           }}
         >
           {/* Use ref so the shake animation can be re-triggered on subsequent errors. */}
+          {sessionExpired ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-5 border-l-2 border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-3 py-2.5"
+            >
+              <div className="text-[12px] font-medium text-foreground">
+                {t("auth.sessionExpiredTitle")}
+              </div>
+              <p className="mt-1 text-[12px] leading-5 text-[color:var(--iris-ink-soft)]">
+                {t("auth.sessionExpiredNotice")}
+              </p>
+            </div>
+          ) : null}
+
           <div className="mb-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             {t("auth.eyebrow")}
           </div>

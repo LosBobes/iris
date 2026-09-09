@@ -16,6 +16,7 @@ import {
   getWorkOrderStatusLabel,
 } from "@/shared/utils/work-orders";
 import type { WorkOrder } from "@/types/work-order";
+import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 
 /**
  * Admin-only queue of work orders awaiting cost entry (line items with no
@@ -98,8 +99,9 @@ function CostReviewPage(): React.JSX.Element {
             status: getWorkOrderStatusLabel(newStatus),
           }),
         );
-      } catch {
-        toast.error(t("workOrders.toast.statusError"));
+      } catch (error: unknown) {
+        reportUnexpectedError("CostReviewPage.advanceStatus", error);
+        toast.error(formatActionError(t("workOrders.toast.statusError"), error));
       }
     },
     [refreshOrders, t],
@@ -145,8 +147,9 @@ function CostReviewPage(): React.JSX.Element {
       toast.success(
         t("workOrders.toast.deleted", { order: deleteTarget.orderNumber }),
       );
-    } catch {
-      toast.error(t("workOrders.toast.deleteUnexpected"));
+    } catch (error: unknown) {
+      reportUnexpectedError("CostReviewPage.delete", error);
+      toast.error(formatActionError(t("workOrders.toast.deleteUnexpected"), error));
     }
   }, [deleteTarget, refreshOrders, t]);
 

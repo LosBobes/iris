@@ -160,7 +160,11 @@ function WorkOrderCreatePage(): React.JSX.Element {
     if (isInteractiveTour) return;
     return () => {
       if (reservedRef.current && !consumedRef.current) {
-        void window.api.releaseWorkOrderNumber(reservedRef.current);
+        void window.api.releaseWorkOrderNumber(reservedRef.current).catch(() => {
+          // The reservation expires on its own, so a failed release only means
+          // one order number is skipped. The page is already unmounting; an
+          // unhandled rejection here would be reported as a crash instead.
+        });
         clearWorkOrderDraft();
       }
     };

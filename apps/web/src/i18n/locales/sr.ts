@@ -23,6 +23,7 @@ export const sr = {
     loadCatalogError: 'Greška pri učitavanju kataloga.',
     backendUnavailable: 'Backend servis nije dostupan. Pokrenite iris-api i pokušajte ponovo.',
     previewError: 'Greška pri generisanju pregleda.',
+    networkError: 'Nema veze sa serverom. Proverite internet konekciju i pokušajte ponovo.',
   },
   validation: {
     quantityInteger: 'Količina mora biti ceo broj',
@@ -588,6 +589,10 @@ export const sr = {
     resetNotice: 'Za reset lozinke obratite se administratoru sistema.',
     loginError: 'Greška pri prijavljivanju.',
     backendError: 'Greška u komunikaciji sa backend servisom.{{details}}',
+    sessionExpiredTitle: 'Sesija je istekla',
+    sessionExpiredNotice:
+      'Prijavite se ponovo da biste nastavili tamo gde ste stali.',
+    sessionExpiredToast: 'Sesija je istekla. Prijavite se ponovo.',
   },
   nav: {
     dashboard: 'Kontrolna tabla',

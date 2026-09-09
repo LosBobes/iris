@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { CatalogItem, CatalogItemQuery } from '@/types/catalog'
 import i18n from '@/i18n'
+import { formatActionError, reportUnexpectedError } from '@/lib/errors'
 
 interface UseCatalogItemsResult {
   items: CatalogItem[]
@@ -28,8 +29,9 @@ export function useCatalogItems(query: CatalogItemQuery = {}): UseCatalogItemsRe
       const result = await window.api.getCatalogItems(JSON.parse(queryKey) as CatalogItemQuery)
       setItems(result.items)
       setTotal(result.total)
-    } catch {
-      toast.error(i18n.t('common.loadCatalogError'))
+    } catch (error: unknown) {
+      reportUnexpectedError('useCatalogItems.load', error)
+      toast.error(formatActionError(i18n.t('common.loadCatalogError'), error))
     } finally {
       setLoading(false)
     }

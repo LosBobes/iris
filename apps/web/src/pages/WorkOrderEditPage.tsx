@@ -18,7 +18,7 @@ import type {
   WorkOrderNote,
 } from "@/types/work-order";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
-import { formatActionError } from "@/lib/errors";
+import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 
 function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
   return notes.filter((note) => note.body.trim() !== "");
@@ -53,9 +53,10 @@ function WorkOrderEditPage(): React.JSX.Element {
         }
 
         setOrder(data);
-      } catch {
+      } catch (error: unknown) {
+        reportUnexpectedError("WorkOrderEditPage.load", error);
         if (!isCancelled) {
-          setError(t("workOrders.detail.loadError"));
+          setError(formatActionError(t("workOrders.detail.loadError"), error));
         }
       } finally {
         if (!isCancelled) {
