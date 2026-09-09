@@ -29,6 +29,7 @@ import {
 } from "@/lib/catalog";
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
 import { cn } from "@/lib/utils";
+import { reportUnexpectedError } from "@/lib/errors";
 
 function CatalogDetailPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -61,8 +62,9 @@ function CatalogDetailPage(): React.JSX.Element {
         return;
       }
       setItem(found);
-    } catch {
-      toast.error(t("catalog.detail.loadError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("CatalogDetailPage.load", error);
+      toast.error(formatActionError(t("catalog.detail.loadError"), error));
     } finally {
       setLoading(false);
     }
@@ -110,8 +112,9 @@ function CatalogDetailPage(): React.JSX.Element {
       await window.api.deleteCatalogItem(item.id);
       toast.success(t("catalog.detail.deleted"));
       navigate("/catalog");
-    } catch {
-      toast.error(t("catalog.detail.deleteError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("CatalogDetailPage.delete", error);
+      toast.error(formatActionError(t("catalog.detail.deleteError"), error));
     } finally {
       setConfirmDelete(false);
     }

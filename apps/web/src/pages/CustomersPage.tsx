@@ -5,6 +5,7 @@ import { ChevronRight, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Pager } from "@/components/Pager";
 import type { Customer } from "@/types/work-order";
+import { reportUnexpectedError, formatActionError } from "@/lib/errors";
 
 const PAGE_SIZE = 25;
 
@@ -29,8 +30,9 @@ function CustomersPage(): React.JSX.Element {
       const result = await window.api.getCustomers(JSON.parse(queryKey));
       setCustomers(result.items);
       setTotal(result.total);
-    } catch {
-      toast.error(t("customers.loadError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("CustomersPage.load", error);
+      toast.error(formatActionError(t("customers.loadError"), error));
     } finally {
       setLoading(false);
     }

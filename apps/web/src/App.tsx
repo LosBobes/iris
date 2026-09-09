@@ -1,7 +1,7 @@
-import { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, useNavigate } from "react-router-dom";
 import { Login } from "@/components/Login/Login";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,6 +25,16 @@ import {
   type PriorityDefaults,
 } from "@/types/settings";
 import i18n from "@/i18n";
+import { clearSentryUser, setSentryUser } from "@/lib/sentry";
+import {
+  activeOrganizationSlug,
+  clearReturnLocation,
+  currentLocation,
+  isRestorableLocation,
+  subscribeSessionExpired,
+  takeReturnLocation,
+} from "@/lib/session";
+import { reportUnexpectedError } from "@/lib/errors";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
@@ -118,6 +128,41 @@ function BackendUnavailableScreen({
   );
 }
 
+/**
+ * The login screen, plus the return trip afterwards.
+ *
+ * The login form replaces the whole app at whatever URL the operator was on, so
+ * signing back in normally puts them exactly where they were with no navigation
+ * at all. The remembered location is the fallback for the cases where the URL
+ * did not survive — a reload that landed on the root, or a tab opened fresh.
+ */
+function LoginRoute({
+  sessionExpired,
+  onLoginSuccess,
+}: {
+  sessionExpired: boolean;
+  onLoginSuccess: (user: AuthenticatedUser, orgSlug: string) => void;
+}): React.JSX.Element {
+  const navigate = useNavigate();
+
+  const handleSuccess = useCallback(
+    (user: AuthenticatedUser, orgSlug: string) => {
+      const returnTo = takeReturnLocation();
+      onLoginSuccess(user, orgSlug);
+      // Staying put is the common case and the correct one: the address bar
+      // still points at the page the session expired on.
+      if (returnTo && !isRestorableLocation(currentLocation())) {
+        navigate(returnTo, { replace: true });
+      }
+    },
+    [navigate, onLoginSuccess],
+  );
+
+  return (
+    <Login onLoginSuccess={handleSuccess} sessionExpired={sessionExpired} />
+  );
+}
+
 function App(): React.JSX.Element {
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(
     null,
@@ -125,6 +170,7 @@ function App(): React.JSX.Element {
   const [bootstrapState, setBootstrapState] = useState<AppBootstrapState>({
     kind: "loading",
   });
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [firmName, setFirmName] = useState(DEFAULT_FIRM_NAME);
   const [pdfSections, setPdfSections] =
     useState<PDFSections>(DEFAULT_PDF_SECTIONS);
@@ -161,6 +207,11 @@ function App(): React.JSX.Element {
 
       const session = await window.api.getCurrentSession();
       const authed = session.success && session.user ? session.user : null;
+      if (authed) {
+        setSentryUser(authed, activeOrganizationSlug());
+      } else {
+        clearSentryUser();
+      }
 
       // The firm name is shop branding shown across the app; load it once the
       // session is known. A failure just keeps the default name.
@@ -203,13 +254,55 @@ function App(): React.JSX.Element {
   }, [checkBackendStatus]);
 
   const handleLogout = useCallback(() => {
-    void window.api.logout().finally(() => setCurrentUser(null));
+    // A deliberate sign-out is not a session to resume, so the remembered page
+    // goes with it — otherwise the next login would silently reopen it.
+    clearReturnLocation();
+    setSessionExpired(false);
+    clearSentryUser();
+    void window.api
+      .logout()
+      .catch((error: unknown) => {
+        // The cookie is cleared server-side or it is not; either way the
+        // operator asked to be signed out, so the UI honours it regardless.
+        reportUnexpectedError("App.logout", error);
+      })
+      .finally(() => setCurrentUser(null));
   }, []);
 
   const handleLoginSuccess = useCallback(
-    (user: AuthenticatedUser) => setCurrentUser(user),
+    (user: AuthenticatedUser, orgSlug: string) => {
+      setSessionExpired(false);
+      setSentryUser(user, orgSlug);
+      setCurrentUser(user);
+    },
     [],
   );
+
+  /**
+   * Forces a re-login the moment the API says the session is gone.
+   *
+   * Several requests are usually in flight when a session lapses, so this fires
+   * once per failed request; the ref keeps that to a single transition. The page
+   * the operator was on is captured by `notifySessionExpired` before this runs.
+   */
+  const sessionExpiryHandled = useRef(false);
+  useEffect(() => {
+    return subscribeSessionExpired(() => {
+      if (sessionExpiryHandled.current) return;
+      sessionExpiryHandled.current = true;
+      clearSentryUser();
+      startTransition(() => {
+        setSessionExpired(true);
+        setCurrentUser(null);
+      });
+    });
+  }, []);
+
+  // Arms the guard again once the operator is back in, so a second expiry in
+  // the same tab is handled like the first.
+  useEffect(() => {
+    if (currentUser) sessionExpiryHandled.current = false;
+  }, [currentUser]);
 
   const authContextValue = useMemo(
     () =>
@@ -269,7 +362,10 @@ function App(): React.JSX.Element {
               path="*"
               element={
                 !currentUser ? (
-                  <Login onLoginSuccess={handleLoginSuccess} />
+                  <LoginRoute
+                    sessionExpired={sessionExpired}
+                    onLoginSuccess={handleLoginSuccess}
+                  />
                 ) : (
                   <AuthContext.Provider value={authContextValue}>
                     <OrganizationContext.Provider value={organizationContextValue}>

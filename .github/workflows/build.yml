@@ -68,6 +68,13 @@ jobs:
           # only declares the ARG it needs (backend: SENTRY_DSN; frontend:
           # VITE_SENTRY_DSN), so passing both to both matrix entries is
           # harmless — the unused one is ignored.
+          #
+          # The release is the commit the image was built from. The frontend
+          # Dockerfile already declared this ARG but nothing ever supplied it,
+          # so every event arrived with an empty release: Sentry could not say
+          # which deploy first produced an issue, or whether one still happens
+          # on the current build.
           build-args: |
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             VITE_SENTRY_DSN=${{ secrets.SENTRY_DSN_FRONTEND }}
+            VITE_SENTRY_RELEASE=${{ github.sha }}

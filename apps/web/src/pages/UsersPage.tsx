@@ -14,13 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
 import type { ManagedUser, UserRole } from "@/types/user";
-
-function formatActionError(prefix: string, error: unknown): string {
-  if (error instanceof Error && error.message.trim() !== "") {
-    return `${prefix}: ${error.message}`;
-  }
-  return `${prefix}.`;
-}
+import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 
 function UsersPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -34,8 +28,9 @@ function UsersPage(): React.JSX.Element {
     setLoading(true);
     try {
       setUsers(await window.api.listUsers());
-    } catch {
-      toast.error(t("users.loadError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("UsersPage.load", error);
+      toast.error(formatActionError(t("users.loadError"), error));
     } finally {
       setLoading(false);
     }

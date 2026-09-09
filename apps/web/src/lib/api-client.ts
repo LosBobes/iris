@@ -29,7 +29,14 @@ import type {
   UpdateUserInput,
 } from '@/types/user'
 import i18n from '@/i18n'
-import { ApiError, reportApiError } from '@/lib/errors'
+import {
+  addApiBreadcrumb,
+  ApiError,
+  ApiNetworkError,
+  reportApiError,
+  reportNetworkError,
+} from '@/lib/errors'
+import { notifySessionExpired } from '@/lib/session'
 
 type FetchLike = typeof fetch
 
@@ -41,20 +48,55 @@ function errorField(payload: unknown, field: 'error' | 'requestId'): string | un
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
-// fail builds the error, reports it, and throws it, so every failed call lands
-// in Sentry with its request reference instead of only in a toast.
+/**
+ * The method and URL each response was actually requested with.
+ *
+ * A `Response` carries neither its method nor, reliably, its URL: `response.url`
+ * is empty on a synthesised response and follows redirects on a real one. The
+ * error is built where only the response is in scope, so the request details are
+ * recorded here as the response comes back. Keying by the response object keeps
+ * the answer right when several requests are in flight, and the weak reference
+ * means nothing is retained after the response is discarded.
+ */
+const requestDetails = new WeakMap<Response, { method: string; url: string }>()
+
+/**
+ * Every route behind `requireAuth` answers 401 once the session cookie is gone,
+ * and only those routes ever do — `/auth/*` reports a rejected login as a 200
+ * with `success: false`. So a 401 here always means "this session ended", which
+ * the app shell turns into a forced re-login. The check on `/auth/` is
+ * belt-and-braces: a future auth route that did answer 401 must not bounce the
+ * operator off the login form they are already looking at.
+ */
+function announceIfSessionExpired(status: number, url: string): void {
+  if (status !== 401) return
+  let path = url
+  try {
+    path = new URL(url).pathname
+  } catch {
+    // Relative or unparseable; match on whatever we were given.
+  }
+  if (path.startsWith('/auth/')) return
+  notifySessionExpired()
+}
+
+// fail builds the error and throws it. Reporting happens in the operation
+// wrapper below, which is the only place that knows which client method the
+// call came from.
 function fail(
   message: string,
   response: Response,
   payload: unknown,
 ): never {
+  const request = requestDetails.get(response)
   const error = new ApiError(message, {
     status: response.status,
     requestId:
       errorField(payload, 'requestId') ?? response.headers.get('X-Request-Id'),
-    url: response.url,
+    url: request?.url || response.url,
+    method: request?.method,
   })
-  reportApiError(error)
+  announceIfSessionExpired(error.status, error.url)
   throw error
 }
 
@@ -154,10 +196,83 @@ function catalogCleanupQuery(filter: CatalogCleanupFilter): string {
   return params.toString()
 }
 
-export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Window['api'] {
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
+
+/**
+ * Names every failure after the client method that produced it, and reports it.
+ *
+ * Reporting lives here rather than at the throw site because this is the only
+ * layer that knows a request was `getLocations` and not just `GET /locations`.
+ * A Sentry event that says `getLocations` is one an engineer can grep for; a
+ * minified frame called `ns` is not, and production bundles have no source maps.
+ *
+ * Synchronous members (the URL builders) are passed through untouched, so
+ * wrapping does not turn them into promises.
+ */
+function withOperationReporting(api: Window['api']): Window['api'] {
+  const report = (operation: string, error: unknown): void => {
+    if (error instanceof ApiError) {
+      error.withOperation(operation)
+      addApiBreadcrumb(operation, error.method, error.url, error.status)
+      reportApiError(error)
+      return
+    }
+    if (error instanceof ApiNetworkError) {
+      error.withOperation(operation)
+      addApiBreadcrumb(operation, error.method, error.url, null)
+      reportNetworkError(error)
+    }
+  }
+
+  const entries = Object.entries(api).map(([operation, value]) => {
+    if (typeof value !== 'function') return [operation, value] as const
+
+    const original = value as (...args: never[]) => unknown
+    const wrapped = (...args: never[]): unknown => {
+      let result: unknown
+      try {
+        result = original(...args)
+      } catch (error) {
+        report(operation, error)
+        throw error
+      }
+      if (result instanceof Promise) {
+        return result.catch((error: unknown) => {
+          report(operation, error)
+          throw error
+        })
+      }
+      return result
+    }
+    return [operation, wrapped] as const
+  })
+
+  return Object.fromEntries(entries) as Window['api']
+}
+
+export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Window['api'] {
   const url = (path: string): string => joinUrl(baseUrl, path)
 
-  return {
+  // Records the method each response was fetched with, and turns a transport
+  // failure — offline, DNS, a blocked response — into an error that names the
+  // route instead of the bare `TypeError: Failed to fetch` the browser throws.
+  const fetchImpl: FetchLike = async (input, init) => {
+    const method = (init?.method ?? 'GET').toUpperCase()
+    try {
+      const response = await baseFetch(input, init)
+      requestDetails.set(response, { method, url: requestUrl(input) })
+      return response
+    } catch (cause) {
+      if (cause instanceof ApiNetworkError) throw cause
+      throw new ApiNetworkError({ url: requestUrl(input), method, cause })
+    }
+  }
+
+  return withOperationReporting({
     async getAppVersion() {
       return '0.1.0-dev'
     },
@@ -463,7 +578,11 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async getWorkOrderPreviewHtml(order: WorkOrder) {
       const response = await fetchImpl(url('/work-orders/preview'), jsonRequest('POST', order))
-      if (!response.ok) throw new Error(i18n.t('common.previewError'))
+      // The response is HTML rather than JSON, but the failure path is the same
+      // one every other call uses: a bare `Error` here would carry no status and
+      // no request reference, and would look like a defect rather than a session
+      // that lapsed.
+      if (!response.ok) fail(i18n.t('common.previewError'), response, undefined)
       return response.text()
     },
 
@@ -484,5 +603,5 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     getWorkOrderReportUrl(id: string) {
       return url(`/work-orders/${encodeURIComponent(id)}/report`)
     },
-  }
+  })
 }

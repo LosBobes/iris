@@ -34,6 +34,7 @@ import type {
   CustomerEmail,
   Location,
 } from "@/types/work-order";
+import { reportUnexpectedError } from "@/lib/errors";
 
 type DeleteTarget =
   | { kind: "customer" }
@@ -69,8 +70,9 @@ function CustomerDetailPage(): React.JSX.Element {
       }
       setCustomer(found);
       setLocations(allLocations.filter((location) => location.customerId === routeId));
-    } catch {
-      toast.error(t("customerDetail.loadError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("CustomerDetailPage.load", error);
+      toast.error(formatActionError(t("customerDetail.loadError"), error));
     } finally {
       setLoading(false);
     }
@@ -173,8 +175,9 @@ function CustomerDetailPage(): React.JSX.Element {
       if (!isNew) await window.api.deleteLocation(deleteTarget.id);
       setLocations((current) => removeLocation(current, deleteTarget.id));
       toast.success(t("customerDetail.locDeleted"));
-    } catch {
-      toast.error(t("customerDetail.deleteError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("CustomerDetailPage.delete", error);
+      toast.error(formatActionError(t("customerDetail.deleteError"), error));
     } finally {
       setDeleteTarget(null);
     }
