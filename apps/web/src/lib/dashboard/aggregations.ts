@@ -6,6 +6,7 @@ import type {
   DeliveryMethod
 } from '@/types/work-order'
 import {
+  countsTowardWorkQueue,
   getLocalIsoDate,
   WORK_ORDER_STATUS_ORDER,
 } from '@/shared/utils/work-orders'
@@ -142,6 +143,11 @@ export function getWorkOrderAttentionSignals(
   today = getLocalIsoDate(),
 ): AttentionSignal[] {
   const signals: AttentionSignal[] = []
+
+  // A cancelled nalog raises no signal at all — no deadline to miss and nobody
+  // left to assign it to.
+  if (!countsTowardWorkQueue(order)) return signals
+
   const dueDate = getAttentionDueDate(order)
 
   if (dueDate !== null) {

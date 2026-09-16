@@ -164,6 +164,19 @@ export function isWorkOrderStatusTerminal(status: WorkOrderStatus): boolean {
   return WORK_ORDER_TRANSITIONS[status].length === 0;
 }
 
+/**
+ * Cancelled orders are abandoned work, not pending work: nobody owes anything
+ * on them, so they are kept out of every queue/attention bucket ("Kasni",
+ * "Danas", "Ove nedelje", "Nedodeljeni") on the dashboard and in the list
+ * filters those tiles link to. Shared so the counts and the filtered lists
+ * cannot drift apart.
+ */
+export function countsTowardWorkQueue(
+  order: Pick<WorkOrder, "status">,
+): boolean {
+  return order.status !== "cancelled";
+}
+
 // Hoisted module-level `Intl` instances: constructing these is comparatively
 // expensive, and these helpers run per row/cell across large work-order
 // lists, so building one formatter/collator once beats allocating a fresh

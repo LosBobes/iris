@@ -8,6 +8,7 @@ import type {
 } from "@/types/work-order";
 import {
   compareWorkOrderNumbers,
+  countsTowardWorkQueue,
   getLocalIsoDate,
   workOrderCollator,
   WORK_ORDER_STATUS_ORDER,
@@ -233,6 +234,11 @@ export function filterWorkOrdersForList(
       return false;
     if (filters.queue !== "all") {
       const dueDate = order.dueDate;
+      // The queue buckets mirror the dashboard tiles, which leave cancelled
+      // orders out — an explicit status filter is how you go looking for them.
+      if (!countsTowardWorkQueue(order)) {
+        return false;
+      }
       if (filters.queue === "unassigned" && order.assignment.assignedTo) {
         return false;
       }
