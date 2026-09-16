@@ -25,6 +25,7 @@ import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPrevie
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Customer, Location, WorkOrder } from "@/types/work-order";
 import { formatActionError, reportUnexpectedError } from "@/lib/errors";
+import { lineMargin, workOrderMargin } from "@/lib/work-orders/margin";
 import {
   buildWorkOrderCustomerNotice,
   countsTowardWorkQueue,
@@ -580,6 +581,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
   const base = total / 1.2;
   const pdv = total - base;
 
+  // Razlika u ceni: admin-only. The API nulls out unitCost/profit for operators,
+  // so this breakdown is empty for them anyway — the isAdmin gate keeps the
+  // columns and the summary out of their view entirely.
+  const margin = workOrderMargin(order);
+
   const timeline: Array<{
     time: string;
     label: string;
@@ -743,6 +749,18 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.amount")}
                 </th>
+                {/* Cost and margin per line are admin-only; operators see the
+                    same three columns they always have. */}
+                {isAdmin && (
+                  <>
+                    <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.detail.lineCost")}
+                    </th>
+                    <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.detail.lineMargin")}
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -758,22 +776,44 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                       unitPrice: order.price ?? 0,
                     },
                   ]
-              ).map((line) => (
-                <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
-                  <td className="py-3 text-foreground">
-                    <div>{line.description}</div>
-                    <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
-                      {t(`workOrders.lineKind.${line.kind}`)}
-                    </div>
-                  </td>
-                  <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
-                    {line.quantity} {line.unit}
-                  </td>
-                  <td className="tnum py-3 text-right font-medium text-foreground">
-                    {formatWorkOrderPrice(line.quantity * line.unitPrice)}
-                  </td>
-                </tr>
-              ))}
+              ).map((line) => {
+                const lineTotals = lineMargin(line);
+                return (
+                  <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
+                    <td className="py-3 text-foreground">
+                      <div>{line.description}</div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
+                        {t(`workOrders.lineKind.${line.kind}`)}
+                      </div>
+                    </td>
+                    <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                      {line.quantity} {line.unit}
+                    </td>
+                    <td className="tnum py-3 text-right font-medium text-foreground">
+                      {formatWorkOrderPrice(lineTotals.revenue)}
+                    </td>
+                    {isAdmin && (
+                      <>
+                        <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                          {/* An uncaptured cost renders as "—", never as 0 — a
+                              zero here would read as pure profit. */}
+                          {lineTotals.cost === null
+                            ? "—"
+                            : formatWorkOrderPrice(lineTotals.cost)}
+                        </td>
+                        <td
+                          className="tnum py-3 text-right font-medium"
+                          style={{ color: marginColor(lineTotals.margin) }}
+                        >
+                          {lineTotals.margin === null
+                            ? "—"
+                            : formatWorkOrderPrice(lineTotals.margin)}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
@@ -826,10 +866,81 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
               </div>
             </div>
           )}
+
+          {/* Razlika u ceni (prodajna - nabavna). Admin-only and shown on every
+              order, not just finished ones, so the margin is on screen whenever
+              an admin opens the nalog. */}
+          {isAdmin && (
+            <div className="mt-6 flex justify-end">
+              <div className="w-64 border border-[color:var(--iris-border-soft)] px-3.5 py-3 text-[12px]">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+                  <Coins className="h-3 w-3" />
+                  {t("workOrders.detail.marginTitle")}
+                </div>
+
+                {margin.hasCostedLines ? (
+                  <>
+                    <div className="mt-2.5 flex justify-between py-1 text-[color:var(--iris-ink-soft)]">
+                      <span>{t("workOrders.detail.marginRevenue")}</span>
+                      <span className="tnum">
+                        {formatWorkOrderPrice(margin.costedRevenue)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 text-[color:var(--iris-ink-soft)]">
+                      <span>{t("workOrders.detail.marginCost")}</span>
+                      <span className="tnum">{formatWorkOrderPrice(margin.cost)}</span>
+                    </div>
+                    <div className="mt-1 flex items-baseline justify-between border-t border-[color:var(--iris-border-soft)] pt-2">
+                      <span className="font-medium text-foreground">
+                        {t("workOrders.detail.marginProfit")}
+                      </span>
+                      <span
+                        className="tnum text-[14px] font-medium"
+                        style={{ color: marginColor(margin.profit) }}
+                      >
+                        {formatWorkOrderPrice(margin.profit)}
+                      </span>
+                    </div>
+                    {margin.marginRatio !== null && (
+                      <div className="tnum mt-0.5 text-right text-[11px] text-[color:var(--iris-ink-mute)]">
+                        {t("workOrders.detail.marginPct", {
+                          pct: Math.round(margin.marginRatio * 100),
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="mt-2.5 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)]">
+                    {t("workOrders.detail.marginEmpty")}
+                  </div>
+                )}
+
+                {/* Lines still awaiting a cost are left out of the totals, so
+                    say the figure is provisional rather than quietly
+                    understating the cost. */}
+                {margin.uncostedLineCount > 0 && (
+                  <div className="mt-2.5 border-t border-[color:var(--iris-border-soft)] pt-2 text-[11px] leading-[1.5] text-[color:var(--iris-accent)]">
+                    {t("workOrders.detail.marginProvisional", {
+                      count: margin.uncostedLineCount,
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
   );
+}
+
+/**
+ * Color for a margin figure: green when the order earns, red when the cost
+ * outruns the sale price, muted when the cost has not been captured yet.
+ */
+function marginColor(value: number | null): string {
+  if (value === null) return "var(--iris-ink-mute)";
+  return value < 0 ? "var(--iris-status-cancelled)" : "var(--iris-status-done)";
 }
 
 function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Element {

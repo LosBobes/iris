@@ -1107,6 +1107,22 @@ export const en: typeof sr = {
       base: 'Base',
       vat: 'VAT (20%)',
       toPay: 'To pay',
+      lineCost: 'Cost',
+      lineMargin: 'Margin',
+      marginTitle: 'Price difference',
+      marginRevenue: 'Sale (revenue)',
+      marginCost: 'Purchase (cost)',
+      marginProfit: 'Profit',
+      marginPct: 'Margin {{pct}}%',
+      marginEmpty: 'No line item has a captured cost, so the price difference cannot be shown.',
+      marginProvisional_one:
+        'Provisional — {{count}} line item still awaits a cost and is not included.',
+      // English has no "few" category — the key exists only to mirror the
+      // Serbian bundle's shape (this file is type-checked against it).
+      marginProvisional_few:
+        'Provisional — {{count}} line items still await a cost and are not included.',
+      marginProvisional_other:
+        'Provisional — {{count}} line items still await a cost and are not included.',
       notFound: 'Work order not found',
       loadError: 'Error loading the work order',
       copyUnavailable: 'Copying is not available in this environment.',

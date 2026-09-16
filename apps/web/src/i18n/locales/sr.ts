@@ -1107,6 +1107,21 @@ export const sr = {
       base: 'Osnovica',
       vat: 'PDV (20%)',
       toPay: 'Za uplatu',
+      lineCost: 'Trošak',
+      lineMargin: 'Razlika',
+      marginTitle: 'Razlika u ceni',
+      marginRevenue: 'Prodajna (prihod)',
+      marginCost: 'Nabavna (trošak)',
+      marginProfit: 'Zarada',
+      marginPct: 'Marža {{pct}}%',
+      marginEmpty: 'Trošak nije unet ni za jednu stavku, pa se razlika u ceni ne može prikazati.',
+      // Serbian plural forms: one (1, 21...), few (2-4), other (5+).
+      marginProvisional_one:
+        'Provizorno — {{count}} stavka još čeka unos troška i nije uračunata.',
+      marginProvisional_few:
+        'Provizorno — {{count}} stavke još čekaju unos troška i nisu uračunate.',
+      marginProvisional_other:
+        'Provizorno — {{count}} stavki još čeka unos troška i nije uračunato.',
       notFound: 'Radni nalog nije pronađen',
       loadError: 'Greška pri učitavanju radnog naloga',
       copyUnavailable: 'Kopiranje nije dostupno u ovom okruženju.',
