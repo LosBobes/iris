@@ -319,7 +319,7 @@ export const en: typeof sr = {
         unassigned: 'Unassigned',
       },
       descriptions: {
-        overdue: 'Orders past their due date and not yet completed.',
+        overdue: 'Orders past their due date, not yet completed and not cancelled.',
         dueToday: 'Orders due for delivery today.',
         dueThisWeek: 'Orders due in the next 7 days.',
         unassigned: 'Orders not yet assigned to an operator.',

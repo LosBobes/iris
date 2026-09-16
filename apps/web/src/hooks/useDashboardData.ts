@@ -21,7 +21,7 @@ import {
   totalRevenue,
   workOrderGroupKey,
 } from '@/lib/dashboard/profit'
-import { getLocalIsoDate } from '@/shared/utils/work-orders'
+import { countsTowardWorkQueue, getLocalIsoDate } from '@/shared/utils/work-orders'
 import { useAuth } from '@/hooks/useAuth'
 
 const DEFAULT_FILTERS: DashboardFilters = {
@@ -123,8 +123,13 @@ export function useDashboardData() {
     const today = getLocalIsoDate()
     const me = currentUser.username
     const dueDateOf = (order: WorkOrder): string | null => order.dueDate
+    // Cancelled orders drop out of the operator's queue the same way completed
+    // ones do — neither is work still waiting on them.
     const mineOpen = allOrders.filter(
-      (order) => order.assignment.assignedTo === me && !order.isCompleted,
+      (order) =>
+        order.assignment.assignedTo === me &&
+        !order.isCompleted &&
+        countsTowardWorkQueue(order),
     )
     return {
       assignedToMe: mineOpen.length,
@@ -135,20 +140,24 @@ export function useDashboardData() {
       }).length,
       inProgress: mineOpen.filter((order) => order.status === 'inProgress').length,
       available: allOrders.filter(
-        (order) => !order.assignment.assignedTo && !order.isCompleted,
+        (order) =>
+          !order.assignment.assignedTo &&
+          !order.isCompleted &&
+          countsTowardWorkQueue(order),
       ).length,
     }
   }, [allOrders, currentUser.username])
 
   const queueSummary = useMemo(() => {
     const today = getLocalIsoDate()
+    const queueable = allOrders.filter(countsTowardWorkQueue)
     return {
-      today: allOrders.filter((order) => order.dueDate === today).length,
-      overdue: allOrders.filter((order) => {
+      today: queueable.filter((order) => order.dueDate === today).length,
+      overdue: queueable.filter((order) => {
         const dueDate = order.dueDate
         return Boolean(dueDate && dueDate < today && !order.isCompleted)
       }).length,
-      unassigned: allOrders.filter((order) => !order.assignment.assignedTo).length,
+      unassigned: queueable.filter((order) => !order.assignment.assignedTo).length,
     }
   }, [allOrders])
 

@@ -318,7 +318,7 @@ export const sr = {
         unassigned: 'Nedodeljeni',
       },
       descriptions: {
-        overdue: 'Nalozi kojima je rok prošao, a još nisu završeni.',
+        overdue: 'Nalozi kojima je rok prošao, a nisu završeni ni otkazani.',
         dueToday: 'Nalozi sa rokom isporuke za danas.',
         dueThisWeek: 'Nalozi sa rokom u narednih 7 dana.',
         unassigned: 'Nalozi koji još nisu dodeljeni operateru.',

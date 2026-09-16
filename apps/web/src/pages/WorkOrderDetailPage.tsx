@@ -27,6 +27,7 @@ import type { Customer, Location, WorkOrder } from "@/types/work-order";
 import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 import {
   buildWorkOrderCustomerNotice,
+  countsTowardWorkQueue,
   getWorkOrderBillingDocumentLabel,
   getWorkOrderDeliveryLabel,
   getWorkOrderStatusLabel,
@@ -835,7 +836,10 @@ function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Elemen
   const { t } = useTranslation();
   const customerDueDate = order.dueDate;
   const isOverdue = Boolean(
-    customerDueDate && customerDueDate < getLocalIsoDate() && !order.isCompleted,
+    customerDueDate &&
+      customerDueDate < getLocalIsoDate() &&
+      !order.isCompleted &&
+      countsTowardWorkQueue(order),
   );
   const customerNotice = buildWorkOrderCustomerNotice(order);
 

@@ -97,6 +97,33 @@ describe("dashboard attention aggregations", () => {
     ).toContain("unassigned");
   });
 
+  it("raises no attention signal for a cancelled order", () => {
+    expect(
+      getWorkOrderAttentionSignals(
+        makeOrder({
+          dueDate: "2026-06-02",
+          status: "cancelled",
+          assignment: { assignedTo: null, priority: "normal" },
+        }),
+        today,
+      ),
+    ).toEqual([]);
+
+    expect(
+      buildSignalCounts(
+        [
+          makeOrder({ id: "open", dueDate: "2026-06-02" }),
+          makeOrder({
+            id: "cancelled",
+            dueDate: "2026-06-02",
+            status: "cancelled",
+          }),
+        ],
+        today,
+      ).overdue,
+    ).toBe(1);
+  });
+
   it("groups by customer id before normalized legacy client names", () => {
     const rows = buildClientAttentionRows(
       [
