@@ -20,6 +20,7 @@ import {
   DEFAULT_SHOW_SHIPPING_OPTIONS,
   normalizePrintItemColumns,
   type BillingDefaults,
+  type OrganizationSettings,
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
@@ -187,6 +188,48 @@ function App(): React.JSX.Element {
     DEFAULT_SHOW_SHIPPING_OPTIONS,
   );
 
+  /**
+   * Applies a settings response, falling back to the default for anything the
+   * response does not carry. Every field is written on every apply: the values
+   * are per-tenant, so leaving a stale one in place would let one shop's
+   * branding and toggles survive into the next sign-in in the same tab.
+   * Passing null resets the app to the defaults.
+   */
+  const applyOrganizationSettings = useCallback(
+    (settings: OrganizationSettings | null | undefined) => {
+      setFirmName(settings?.firmName || DEFAULT_FIRM_NAME);
+      setPdfSections(settings?.pdfSections ?? DEFAULT_PDF_SECTIONS);
+      setBillingDefaults(settings?.billingDefaults ?? DEFAULT_BILLING_DEFAULTS);
+      setPriorityDefaults(
+        settings?.priorityDefaults ?? DEFAULT_PRIORITY_DEFAULTS,
+      );
+      setPrintItemColumns(
+        normalizePrintItemColumns(settings?.printItemColumns),
+      );
+      setShowShippingOptions(
+        typeof settings?.showShippingOptions === "boolean"
+          ? settings.showShippingOptions
+          : DEFAULT_SHOW_SHIPPING_OPTIONS,
+      );
+    },
+    [],
+  );
+
+  /**
+   * Loads the shop-wide settings for the signed-in session. `GET /settings` is
+   * session-scoped, so this runs on every path that starts a session — the
+   * bootstrap below when the cookie is already valid, and the login handler
+   * when the operator signs in on a page that bootstrapped signed-out.
+   */
+  const loadOrganizationSettings = useCallback(async () => {
+    try {
+      applyOrganizationSettings(await window.api.getSettings());
+    } catch {
+      // Keep whatever the app already has (the defaults on a fresh boot); the
+      // next sign-in tries again.
+    }
+  }, [applyOrganizationSettings]);
+
   const checkBackendStatus = useCallback(async () => {
     startTransition(() => {
       setBootstrapState({ kind: "loading" });
@@ -213,26 +256,10 @@ function App(): React.JSX.Element {
         clearSentryUser();
       }
 
-      // The firm name is shop branding shown across the app; load it once the
-      // session is known. A failure just keeps the default name.
+      // Settings are shop-wide branding and form policy shown across the app;
+      // load them before the app renders so nothing flashes the defaults first.
       if (authed) {
-        try {
-          const settings = await window.api.getSettings();
-          if (settings?.firmName) setFirmName(settings.firmName);
-          if (settings?.pdfSections) setPdfSections(settings.pdfSections);
-          if (settings?.billingDefaults)
-            setBillingDefaults(settings.billingDefaults);
-          if (settings?.priorityDefaults)
-            setPriorityDefaults(settings.priorityDefaults);
-          if (settings?.printItemColumns)
-            setPrintItemColumns(
-              normalizePrintItemColumns(settings.printItemColumns),
-            );
-          if (typeof settings?.showShippingOptions === "boolean")
-            setShowShippingOptions(settings.showShippingOptions);
-        } catch {
-          // Keep the default firm name.
-        }
+        await loadOrganizationSettings();
       }
 
       startTransition(() => {
@@ -247,7 +274,7 @@ function App(): React.JSX.Element {
         });
       });
     }
-  }, []);
+  }, [loadOrganizationSettings]);
 
   useEffect(() => {
     void checkBackendStatus();
@@ -266,16 +293,26 @@ function App(): React.JSX.Element {
         // operator asked to be signed out, so the UI honours it regardless.
         reportUnexpectedError("App.logout", error);
       })
-      .finally(() => setCurrentUser(null));
-  }, []);
+      .finally(() => {
+        setCurrentUser(null);
+        // The settings belong to the organization that just signed out, so they
+        // go with it: the next sign-in loads its own.
+        applyOrganizationSettings(null);
+      });
+  }, [applyOrganizationSettings]);
 
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser, orgSlug: string) => {
       setSessionExpired(false);
       setSentryUser(user, orgSlug);
       setCurrentUser(user);
+      // Signing in here is the start of a session the bootstrap never saw: the
+      // page loaded signed-out, so it skipped the settings load. Without this
+      // the whole session would run on the defaults — shipping options hidden,
+      // document type back to proforma, default branding — until a reload.
+      void loadOrganizationSettings();
     },
-    [],
+    [loadOrganizationSettings],
   );
 
   /**
