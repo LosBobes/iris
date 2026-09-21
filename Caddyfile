@@ -18,7 +18,16 @@ iris-application.com {
         # during a deploy. Without this, every request in that window is a
         # hard 502 — which is what an operator sees as "the page didn't load,
         # but it works if I refresh".
-        lb_try_duration 10s
+        #
+        # Deliberately shorter than a request timeout anyone monitors this
+        # domain with (Sentry's uptime check gives up at 10s). Retrying for
+        # that long turns a real outage into a request that just hangs: the
+        # monitor reports "timeout, no status code", which says nothing about
+        # what broke, and a visitor watches a blank tab. Five seconds still
+        # covers a container recreate — the frontend's start gate clears in
+        # ~2s (see the healthcheck in docker-compose.prod.yml) — and anything
+        # longer than that is an outage worth seeing as a 502.
+        lb_try_duration 5s
         lb_try_interval 500ms
     }
 }

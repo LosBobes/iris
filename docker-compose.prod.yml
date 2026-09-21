@@ -49,10 +49,14 @@ services:
     healthcheck:
       # frontend waits on this check before it starts, so the interval is the
       # floor on deploy downtime: at 30s a recreate blacked the site out for
-      # half a minute even though the API was up in well under a second.
+      # half a minute even though the API was up in well under a second. At 2s
+      # the gate clears inside the 5s window Caddy retries across, so a deploy
+      # stays invisible rather than surfacing as a 502 or a hung request. The
+      # check is a local wget against an in-process handler — it costs
+      # nothing to run this often.
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
-      interval: 5s
-      timeout: 3s
+      interval: 2s
+      timeout: 2s
       retries: 5
       start_period: 30s
 
@@ -62,6 +66,11 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
+    # Ordering for `compose up` only. It is NOT honoured when the Docker
+    # daemon restarts the stack itself (a host reboot), where the restart
+    # policy can start this container before the backend exists — so nginx
+    # must not depend on the backend being resolvable at startup. It doesn't:
+    # see the resolver comment in frontend/nginx.conf.
     depends_on:
       backend:
         condition: service_healthy
