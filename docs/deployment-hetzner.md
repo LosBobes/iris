@@ -284,6 +284,67 @@ journalctl -u caddy -f
 
 ---
 
+## Triaging a downtime alert
+
+Sentry's uptime check GETs `https://iris-application.com` and opens an issue in
+the `iris-be` project when the request fails. A report of **`timeout - Request
+timed out`** with **no status code** and a duration of ~10s means the check got
+nothing back at all, so the failure is in front of the app: Caddy could not
+hand the request to anything, and held it until the monitor gave up.
+
+Walk the chain from the outside in.
+
+```bash
+# 1. Is it still down, and does it answer at all?
+curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' https://iris-application.com
+curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' https://iris-application.com/api/healthz
+
+# On the server:
+cd /opt/iris
+
+# 2. Are both containers up, and is the backend healthy?
+docker compose -f docker-compose.prod.yml ps
+
+# 3. Did either restart? A non-zero restart count, or a Started timestamp
+#    around the alert, is the answer most of the time.
+docker inspect -f '{{.Name}} restarts={{.RestartCount}} started={{.State.StartedAt}} exit={{.State.ExitCode}}' \
+  iris-backend-1 iris-frontend-1
+
+# 4. What did they say at the time of the alert?
+docker compose -f docker-compose.prod.yml logs --since 2h frontend backend
+
+# 5. Was it the box rather than Iris? A reboot, an OOM kill, or the other
+#    stack on this host saturating the two shared cores looks identical
+#    from outside.
+uptime && last reboot | head -3
+journalctl --since '2 hours ago' -k | grep -i -E 'oom|killed process'
+journalctl -u caddy --since '2 hours ago' | tail -50
+docker stats --no-stream
+```
+
+If gamgee is also affected in the same window, the cause is the host, not Iris.
+
+**What the stack already does about this class of failure**
+
+- nginx resolves the backend per request through Docker's embedded DNS, so the
+  container serving the SPA starts (and keeps serving) even when the backend is
+  missing, still starting, or has been recreated with a new IP. With the
+  backend's name written literally into `proxy_pass`, nginx exits at startup
+  with `host not found in upstream "backend"` — and then nothing answers on
+  `127.0.0.1:3001` at all, which is precisely the hanging-request signature
+  above. `depends_on` does not cover this: it orders `compose up`, not the
+  restart policy after a host reboot.
+- nginx and Caddy both fail fast — 3s to connect, 35s to read, a 5s retry
+  window — so an outage arrives as a 502/504 with a status code instead of a
+  request that hangs past the monitor's patience.
+
+Neither prevents the box itself from stalling. If the alert repeats on a
+schedule (nightly, say), look for something host-level on that schedule —
+unattended upgrades and their reboot, a backup, or gamgee's own cron — before
+looking for a bug in Iris.
+
+---
+
 ## Rollback
 
 Every CI build publishes an immutable `git-<sha7>` tag, so a rollback is just
