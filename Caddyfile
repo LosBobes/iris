@@ -23,11 +23,13 @@ iris-application.com {
         # domain with (Sentry's uptime check gives up at 10s). Retrying for
         # that long turns a real outage into a request that just hangs: the
         # monitor reports "timeout, no status code", which says nothing about
-        # what broke, and a visitor watches a blank tab. Five seconds still
-        # covers a container recreate — the frontend's start gate clears in
-        # ~2s (see the healthcheck in docker-compose.prod.yml) — and anything
-        # longer than that is an outage worth seeing as a 502.
-        lb_try_duration 5s
+        # what broke, and a visitor watches a blank tab. Below that ceiling
+        # the window has to clear an actual recreate: deploy run 35 took 5.9s
+        # from "frontend recreated" to "frontend started", nearly all of it
+        # waiting on the backend's health gate (see docker-compose.prod.yml).
+        # Seven seconds covers that with room to spare and still leaves the
+        # monitor ~3s to receive the 502 an outage deserves to be.
+        lb_try_duration 7s
         lb_try_interval 500ms
     }
 }

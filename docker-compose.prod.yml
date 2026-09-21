@@ -49,13 +49,16 @@ services:
     healthcheck:
       # frontend waits on this check before it starts, so the interval is the
       # floor on deploy downtime: at 30s a recreate blacked the site out for
-      # half a minute even though the API was up in well under a second. At 2s
-      # the gate clears inside the 5s window Caddy retries across, so a deploy
-      # stays invisible rather than surfacing as a 502 or a hung request. The
-      # check is a local wget against an in-process handler — it costs
-      # nothing to run this often.
+      # half a minute even though the API was up in well under a second. It is
+      # also pure latency — the API is serving before Docker asks — so it is
+      # polled at 1s. Measured on deploy run 35, at 2s the gate took 5.6s of
+      # the 5.9s the site spent unreachable; the rest is the container start
+      # itself. What matters is that the total stays inside the window Caddy
+      # retries across (Caddyfile), or a deploy shows up as 502s. The check is
+      # a local wget against an in-process handler, so polling it this often
+      # costs nothing.
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
-      interval: 2s
+      interval: 1s
       timeout: 2s
       retries: 5
       start_period: 30s
