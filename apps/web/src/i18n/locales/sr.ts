@@ -790,8 +790,18 @@ export const sr = {
       prev: '← Prethodna',
       next: 'Sledeća →',
       perPage: 'Po strani',
+      card: {
+        dueLabel: 'Rok',
+        overdue: 'Kasni',
+        noDueDate: 'Bez roka',
+        unassigned: 'Nedodeljeno',
+        assignee: 'Zaduženi',
+        listLabel: 'Radni nalozi',
+      },
     },
     filters: {
+      toggle: 'Filteri',
+      toggleActive: 'Filteri ({{count}})',
       searchPlaceholder: 'Pretraži po nalogu, klijentu, opisu, operateru, ceni…',
       clearSearch: 'Obriši pretragu',
       allStatuses: 'Svi statusi',

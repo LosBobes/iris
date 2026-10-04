@@ -351,7 +351,7 @@ function WorkOrderDetailPage(): React.JSX.Element {
                   <span className="text-foreground">{order.clientName}</span>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <div className="flex w-full flex-wrap items-center justify-start gap-1.5 max-sm:[&_button]:min-h-11 sm:w-auto sm:justify-end">
                 {getPrimaryWorkOrderTransition(order.status) && (
                   <button
                     type="button"
@@ -635,8 +635,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
         ))}
       </div>
 
-      <div className="grid grid-cols-[1fr_1.6fr]">
-        <div className="border-r border-border p-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.6fr]">
+        <div className="min-w-0 border-b border-border p-5 sm:p-8 lg:border-r lg:border-b-0">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             {t("workOrders.detail.workflow")}
           </div>
@@ -733,11 +733,12 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           )}
         </div>
 
-        <div className="p-8">
+        <div className="min-w-0 p-5 sm:p-8">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             {t("workOrders.detail.items")}
           </div>
-          <table className="w-full border-collapse text-[12px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="py-2 text-left text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
@@ -816,6 +817,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
               })}
             </tbody>
           </table>
+          </div>
 
           {/* Material usage, time entries, and attachments are not captured by
               the order form, so those (always-empty) sections were dropped. The

@@ -790,8 +790,18 @@ export const en: typeof sr = {
       prev: '← Previous',
       next: 'Next →',
       perPage: 'Per page',
+      card: {
+        dueLabel: 'Due',
+        overdue: 'Overdue',
+        noDueDate: 'No due date',
+        unassigned: 'Unassigned',
+        assignee: 'Assignee',
+        listLabel: 'Work orders',
+      },
     },
     filters: {
+      toggle: 'Filters',
+      toggleActive: 'Filters ({{count}})',
       searchPlaceholder: 'Search by order, client, description, operator, price…',
       clearSearch: 'Clear search',
       allStatuses: 'All statuses',

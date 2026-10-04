@@ -194,7 +194,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           aria-expanded={mobileMenuOpen}
           aria-controls="app-sidebar"
           aria-label={mobileMenuOpen ? t("shell.closeMenu") : t("shell.openMenu")}
-          className="iris-focusable iris-press -ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-black/[0.03]"
+          className="iris-focusable iris-press -ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-black/[0.03]"
         >
           {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
@@ -215,6 +215,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
         id="app-sidebar"
         data-allow-motion
         data-mobile-open={mobileMenuOpen ? "true" : "false"}
+        inert={!mobileMenuOpen && !isLg}
         className={cn(
           // `translate` — not `transform`. Tailwind v4 compiles `translate-x-*`
           // to the standalone `translate` property, so a transition list naming
