@@ -40,7 +40,7 @@ export function Pager({
           className="iris-focusable iris-press inline-flex items-center gap-1 border border-border px-2 py-1 disabled:opacity-40"
           aria-label={t("pager.prevAria")}
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           {t("pager.prev")}
         </button>
         <span className="tnum">
@@ -54,7 +54,7 @@ export function Pager({
           aria-label={t("pager.nextAria")}
         >
           {t("pager.next")}
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>

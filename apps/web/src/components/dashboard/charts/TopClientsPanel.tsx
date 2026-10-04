@@ -8,6 +8,7 @@ import {
   YAxis,
 } from 'recharts'
 import { useTranslation } from 'react-i18next'
+import { describeSeries } from './utils'
 import type { ClientCount } from '@/lib/dashboard/aggregations'
 
 interface TopClientsPanelProps {
@@ -23,11 +24,21 @@ export function TopClientsPanel({ topClients }: TopClientsPanelProps): React.JSX
       </h2>
       {topClients.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          Nema podataka za prikaz.
+          {t('dashboard.charts.noData')}
         </p>
       ) : (
+        <div
+          role="img"
+          aria-label={t('dashboard.charts.aria', {
+            title: t('dashboard.charts.topClients'),
+            data: describeSeries(
+              topClients.map((c) => ({ label: c.clientName, value: c.count })),
+            ),
+          })}
+        >
         <ResponsiveContainer width="100%" height={Math.max(160, topClients.length * 36)}>
           <BarChart
+            accessibilityLayer={false}
             data={topClients.map(({ clientName, count }) => ({ label: clientName, count }))}
             layout="vertical"
             margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
@@ -59,6 +70,7 @@ export function TopClientsPanel({ topClients }: TopClientsPanelProps): React.JSX
             <Bar dataKey="count" fill="#22c55e" radius={[0, 3, 3, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       )}
     </div>
   )

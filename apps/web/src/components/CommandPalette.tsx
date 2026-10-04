@@ -135,13 +135,13 @@ export function CommandPalette(): React.JSX.Element | null {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Komandna paleta"
+        aria-label={t("command.paletteAria")}
         className="w-full max-w-lg overflow-hidden border border-border bg-popover shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-          <Search className="h-4 w-4 text-[color:var(--iris-ink-mute)]" />
+          <Search className="h-4 w-4 text-[color:var(--iris-ink-mute)]" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
@@ -176,7 +176,7 @@ export function CommandPalette(): React.JSX.Element | null {
                       : "text-[color:var(--iris-ink-soft)]"
                   }`}
                 >
-                  <Icon className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)]" />
+                  <Icon className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)]" aria-hidden="true" />
                   <span className="flex-1">{command.label}</span>
                   {command.hint && (
                     <span className="text-[11px] text-[color:var(--iris-ink-faint)]">

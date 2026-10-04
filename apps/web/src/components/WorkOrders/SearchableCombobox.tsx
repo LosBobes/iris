@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { ChevronsUpDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { ComboboxPanel, type ComboboxRow } from "./ComboboxPanel";
 
 export interface ComboboxItem {
   id: string;
@@ -42,15 +44,17 @@ export function SearchableCombobox({
   items,
   value,
   onSelect,
-  placeholder = "Izaberite stavku",
-  searchPlaceholder = "Pretraga...",
-  emptyText = "Nema rezultata.",
+  placeholder,
+  searchPlaceholder,
+  emptyText,
   clearLabel,
   triggerId,
   triggerClassName,
   disabled = false,
   limit = 50,
 }: SearchableComboboxProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const listId = useId();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -71,6 +75,27 @@ export function SearchableCombobox({
     setSearch("");
   };
 
+  const rows: ComboboxRow[] = [
+    ...(clearLabel
+      ? [
+          {
+            id: "__clear",
+            label: clearLabel,
+            selected: value === null,
+            isClear: true,
+            onChoose: () => choose(null),
+          },
+        ]
+      : []),
+    ...filtered.map((item) => ({
+      id: item.id,
+      label: item.label,
+      sublabel: item.sublabel,
+      selected: item.id === value,
+      onChoose: () => choose(item.id),
+    })),
+  ];
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -78,64 +103,31 @@ export function SearchableCombobox({
           type="button"
           id={triggerId}
           disabled={disabled}
+          role="combobox"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
           className={cn(
             "iris-focusable flex w-full items-center justify-between gap-2 border-b border-border bg-transparent px-0 py-2 text-left text-[13px] text-foreground disabled:opacity-50",
             triggerClassName,
           )}
         >
           <span className={cn("truncate", selected ? "" : "text-[color:var(--iris-ink-mute)]")}>
-            {selected ? selected.label : placeholder}
+            {selected ? selected.label : (placeholder ?? t("combobox.placeholder"))}
           </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Search className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)]" />
-          <input
-            autoFocus
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="w-full bg-transparent text-[13px] text-foreground outline-none"
-          />
-        </div>
-        <div className="max-h-64 overflow-y-auto py-1">
-          {clearLabel && (
-            <button
-              type="button"
-              onClick={() => choose(null)}
-              className="iris-focusable flex w-full items-center justify-between px-3 py-2 text-left text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-[color:var(--iris-accent)]/10"
-            >
-              {clearLabel}
-              {value === null && <Check className="h-4 w-4" />}
-            </button>
-          )}
-          {filtered.length === 0 ? (
-            <div className="px-3 py-6 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
-              {emptyText}
-            </div>
-          ) : (
-            filtered.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => choose(item.id)}
-                className="iris-focusable flex w-full items-start justify-between gap-2 px-3 py-2 text-left hover:bg-[color:var(--iris-accent)]/10"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] text-foreground">{item.label}</span>
-                  {item.sublabel && (
-                    <span className="block truncate text-[11px] text-[color:var(--iris-ink-soft)]">
-                      {item.sublabel}
-                    </span>
-                  )}
-                </span>
-                {item.id === value && <Check className="mt-0.5 h-4 w-4 shrink-0" />}
-              </button>
-            ))
-          )}
-        </div>
+        <ComboboxPanel
+          listId={listId}
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder={searchPlaceholder ?? t("combobox.searchPlaceholder")}
+          rows={rows}
+          showEmpty={filtered.length === 0}
+          emptyText={emptyText ?? t("combobox.empty")}
+        />
       </PopoverContent>
     </Popover>
   );
