@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, ChevronsUpDown, Loader2, Search } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronsUpDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { ComboboxItem } from "./SearchableCombobox";
+import { ComboboxPanel, type ComboboxRow } from "./ComboboxPanel";
 
 interface AsyncComboboxProps {
   /** Label for the current selection (it may not be in the latest results). */
@@ -35,9 +37,9 @@ export function AsyncCombobox({
   selectedLabel,
   onSearch,
   onSelect,
-  placeholder = "Izaberite stavku",
-  searchPlaceholder = "Pretraga...",
-  emptyText = "Nema rezultata.",
+  placeholder: placeholderProp,
+  searchPlaceholder,
+  emptyText,
   clearLabel,
   onClear,
   resetAfterSelect = false,
@@ -45,6 +47,9 @@ export function AsyncCombobox({
   triggerClassName,
   disabled = false,
 }: AsyncComboboxProps): React.JSX.Element {
+  const { t } = useTranslation();
+  const listId = useId();
+  const placeholder = placeholderProp ?? t("combobox.placeholder");
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<ComboboxItem[]>([]);
@@ -88,6 +93,31 @@ export function AsyncCombobox({
   const triggerLabel = resetAfterSelect ? placeholder : (selectedLabel ?? placeholder);
   const hasSelection = !resetAfterSelect && selectedLabel !== null;
 
+  const rows: ComboboxRow[] = [
+    ...(clearLabel
+      ? [
+          {
+            id: "__clear",
+            label: clearLabel,
+            selected: false,
+            isClear: true,
+            onChoose: () => {
+              const typed = term.trim();
+              choose(null);
+              onClear?.(typed);
+            },
+          },
+        ]
+      : []),
+    ...results.map((item) => ({
+      id: item.id,
+      label: item.label,
+      sublabel: item.sublabel,
+      selected: !resetAfterSelect && item.label === selectedLabel,
+      onChoose: () => choose(item),
+    })),
+  ];
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -95,6 +125,10 @@ export function AsyncCombobox({
           type="button"
           id={triggerId}
           disabled={disabled}
+          role="combobox"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
           className={cn(
             "iris-focusable flex w-full items-center justify-between gap-2 border-b border-border bg-transparent px-0 py-2 text-left text-[13px] text-foreground disabled:opacity-50",
             triggerClassName,
@@ -103,62 +137,20 @@ export function AsyncCombobox({
           <span className={cn("truncate", hasSelection ? "" : "text-[color:var(--iris-ink-mute)]")}>
             {triggerLabel}
           </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Search className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)]" />
-          <input
-            autoFocus
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            placeholder={searchPlaceholder}
-            className="w-full bg-transparent text-[13px] text-foreground outline-none"
-          />
-          {loading && <Loader2 className="h-4 w-4 shrink-0 animate-spin opacity-60" />}
-        </div>
-        <div className="max-h-64 overflow-y-auto py-1">
-          {clearLabel && (
-            <button
-              type="button"
-              onClick={() => {
-                const typed = term.trim();
-                choose(null);
-                onClear?.(typed);
-              }}
-              className="iris-focusable flex w-full items-center px-3 py-2 text-left text-[12px] text-[color:var(--iris-ink-soft)] hover:bg-[color:var(--iris-accent)]/10"
-            >
-              {clearLabel}
-            </button>
-          )}
-          {!loading && results.length === 0 ? (
-            <div className="px-3 py-6 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
-              {emptyText}
-            </div>
-          ) : (
-            results.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => choose(item)}
-                className="iris-focusable flex w-full items-start justify-between gap-2 px-3 py-2 text-left hover:bg-[color:var(--iris-accent)]/10"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] text-foreground">{item.label}</span>
-                  {item.sublabel && (
-                    <span className="block truncate text-[11px] text-[color:var(--iris-ink-soft)]">
-                      {item.sublabel}
-                    </span>
-                  )}
-                </span>
-                {!resetAfterSelect && item.label === selectedLabel && (
-                  <Check className="mt-0.5 h-4 w-4 shrink-0" />
-                )}
-              </button>
-            ))
-          )}
-        </div>
+        <ComboboxPanel
+          listId={listId}
+          search={term}
+          onSearchChange={setTerm}
+          searchPlaceholder={searchPlaceholder ?? t("combobox.searchPlaceholder")}
+          rows={rows}
+          showEmpty={!loading && results.length === 0}
+          emptyText={emptyText ?? t("combobox.empty")}
+          loading={loading}
+        />
       </PopoverContent>
     </Popover>
   );
