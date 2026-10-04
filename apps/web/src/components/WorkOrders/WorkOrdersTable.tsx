@@ -33,6 +33,8 @@ import {
 import { useListPreferences } from "@/hooks/useListPreferences";
 import { getRowHeightClass } from "@/lib/list-preferences";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { WorkOrderCard } from "@/components/WorkOrders/WorkOrderCard";
 import {
   WORK_ORDER_COLUMNS,
   columnLabel,
@@ -347,6 +349,9 @@ export function WorkOrdersTable({
   const { density } = useListPreferences();
   const rowHeightClass = getRowHeightClass(density);
 
+  // Below md the wide table is replaced by cards (only one tree is mounted).
+  const isTableLayout = useMediaQuery("(min-width: 768px)");
+
   const { isVisible } = useColumnVisibility();
   // The price column is the selling price, which every role may see; only
   // cost/margin is admin-only and it has no column here. Memoized so the
@@ -369,7 +374,23 @@ export function WorkOrdersTable({
   }, [currentPage]);
 
   return (
-    <div ref={containerRef} className="scroll-mt-4 overflow-x-auto border border-border bg-card">
+    <div ref={containerRef} className="scroll-mt-4 border border-border bg-card max-md:border-0 max-md:bg-transparent">
+      {!isTableLayout && (
+        <ul
+          aria-label={t("workOrders.table.card.listLabel")}
+          className="mb-3 space-y-3"
+        >
+          {orders.map((order) => (
+            <WorkOrderCard
+              key={order.id}
+              order={order}
+              onToggleStatus={onToggleStatus}
+            />
+          ))}
+        </ul>
+      )}
+      {isTableLayout && (
+      <div className="overflow-x-auto">
       <table className="min-w-[1100px] w-full border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-border">
@@ -440,8 +461,10 @@ export function WorkOrdersTable({
           ))}
         </tbody>
       </table>
+      </div>
+      )}
 
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-background px-6 py-3 text-[11px] text-[color:var(--iris-ink-mute)]">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-border bg-background px-4 py-3 max-md:border md:border-t md:px-6 text-[11px] text-[color:var(--iris-ink-mute)]">
         <div>
           {t("workOrders.table.pageSummary", {
             total: totalFiltered,
@@ -449,12 +472,12 @@ export function WorkOrdersTable({
             pages: totalPages,
           })}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 max-md:order-last max-md:w-full max-md:justify-between">
           <button
             type="button"
             disabled={currentPage <= 1}
             onClick={() => onPageChange(currentPage - 1)}
-            className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] max-md:min-h-11 max-md:px-4 max-md:text-[13px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t("workOrders.table.prev")}
           </button>
@@ -468,7 +491,7 @@ export function WorkOrdersTable({
               const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
               const isCurrent = page === currentPage;
               return (
-                <span key={page} className="contents">
+                <span key={page} className="contents max-sm:hidden">
                   {showEllipsis && (
                     <span className="px-1 text-[color:var(--iris-ink-faint)]">
                       …
@@ -493,7 +516,7 @@ export function WorkOrdersTable({
             type="button"
             disabled={currentPage >= totalPages}
             onClick={() => onPageChange(currentPage + 1)}
-            className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className="iris-focusable iris-press border border-border bg-transparent px-2.5 py-1 text-[11px] max-md:min-h-11 max-md:px-4 max-md:text-[13px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t("workOrders.table.next")}
           </button>

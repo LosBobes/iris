@@ -73,7 +73,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ---
 
 ## D-007: Perform analytical dashboard aggregates in the renderer
-- **Status**: `accepted`
+- **Status**: `superseded` by [D-016](#d-016-compute-dashboard-aggregates-server-side)
 - **Context**: Top client lists, monthly revenue buckets, and order status counts are computed from the same raw work-order dataset.
 - **Decision**: Fetch raw work-orders, then perform functional aggregations inside client-side pure functions (`apps/web/src/lib/dashboard/`).
 - **Consequences**:
@@ -150,6 +150,18 @@ This document records the project-level architectural decisions (ADRs) that shap
   - The contract-sync rule loses its desktop legs: a domain change now lands in OpenAPI, Go domain types, the store, `apps/web/src/types/`, and fixtures.
   - No native OS packaging or auto-update path; on-prem terminals need a browser and network reach to `iris-api`.
   - D-002 and D-003 (the main/preload/renderer split and typed IPC) no longer apply to any code in this repo. The `window.api` name survives in `apps/web/src/lib/web-api.ts` as the web client's own transport seam, not as an IPC bridge.
+
+---
+
+## D-016: Compute dashboard aggregates server-side
+- **Status**: `accepted` (supersedes [D-007](#d-007-perform-analytical-dashboard-aggregates-in-the-renderer))
+- **Context**: Under D-007 the dashboard downloaded every work order (`GET /work-orders?view=summary`, no paging) on each visit. The payload, and the browser's memory and CPU, grew with the shop's whole order history.
+- **Decision**: `GET /dashboard` returns the dashboard already aggregated (`iris-api/internal/dashboard`, pure and unit-tested). Filters (`dateFrom`, `dateTo`, `issuedBy`, `companyKey`) and the viewer's local `today` are query parameters. Finance figures are built only for admins (`finance: null` for operators). The TypeScript functions in `apps/web/src/lib/dashboard/` remain as the reference implementation that fixture mode serves.
+- **Consequences**:
+  - Response size no longer depends on the total number of orders, apart from attention rows, which list only open orders that need action.
+  - Cost-derived numbers never reach operator browsers. Before, the API sent operators zeroed costs and the UI hid the section.
+  - Two implementations must stay in sync: a behavior change lands in both the Go package and `lib/dashboard/`, with matching tests.
+  - Name sorting uses Croatian collation in Go, because x/text's `sr-Latn` falls back to root order. Its Latin alphabet order matches browsers' `sr-Latn`.
 
 ---
 

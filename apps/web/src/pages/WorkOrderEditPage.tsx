@@ -4,8 +4,10 @@ import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useWorkOrderEditLock } from "@/hooks/useWorkOrderEditLock";
 import {
   canToggleWorkOrderCompletion,
@@ -33,6 +35,9 @@ function WorkOrderEditPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [completeOpen, setCompleteOpen] = useState(false);
   const { lockedBy, readOnly } = useWorkOrderEditLock(id);
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
+  const { allowNavigation } = guard;
 
   useEffect(() => {
     if (!id) return;
@@ -109,12 +114,13 @@ function WorkOrderEditPage(): React.JSX.Element {
           return;
         }
         toast.success(t("workOrders.toast.updated", { order: updated.orderNumber }));
+        allowNavigation();
         navigate(`/work-orders/${updated.id}`);
       } catch (error) {
         toast.error(formatActionError(t("workOrders.toast.updateError"), error));
       }
     },
-    [id, order, navigate, t],
+    [id, order, allowNavigation, navigate, t],
   );
 
   const advanceStatus = useCallback(async () => {
@@ -233,6 +239,7 @@ function WorkOrderEditPage(): React.JSX.Element {
               initialData={order}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
+              onDirtyChange={setDirty}
               readOnly={readOnly}
             />
           </div>
@@ -245,6 +252,7 @@ function WorkOrderEditPage(): React.JSX.Element {
         onOpenChange={setCompleteOpen}
         onConfirm={() => void handleCompleteConfirm()}
       />
+      <UnsavedChangesDialog {...guard} />
     </>
   );
 }

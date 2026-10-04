@@ -20,7 +20,7 @@ import {
   filtersToSearchParams,
   type WorkOrdersFiltersState,
 } from "@/hooks/useWorkOrders";
-import { Search, X, ChevronDown, Check, Columns3, Bookmark, Trash2 } from "lucide-react";
+import { Search, X, ChevronDown, Check, Columns3, Bookmark, Trash2, SlidersHorizontal } from "lucide-react";
 import {
   addSavedView,
   readSavedViews,
@@ -481,6 +481,8 @@ export function WorkOrdersFilters({
   const { t } = useTranslation();
   const { isVisible } = useColumnVisibility();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // Below md the filter pills collapse behind a toggle; md+ always shows them.
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Local echo of the search field so typing stays instant; the committed
   // filter (which drives the URL and the full re-filter/re-sort) is written
@@ -582,6 +584,15 @@ export function WorkOrdersFilters({
     filters.dateFrom !== "" ||
     filters.dateTo !== "";
 
+  const activeFilterCount = [
+    filters.status !== "all",
+    filters.billingDocumentType !== "all",
+    filters.deliveryMethod !== "all",
+    filters.queue !== "all",
+    filters.customerId !== "",
+    filters.dateFrom !== "" || filters.dateTo !== "",
+  ].filter(Boolean).length;
+
   const statusLabel =
     statusOptions.find((o) => o.value === filters.status)?.label ??
     t("workOrders.filters.allStatuses");
@@ -597,7 +608,7 @@ export function WorkOrdersFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="group relative flex min-w-[220px] flex-1 items-center gap-2 border border-border bg-card px-3 py-2 transition-colors duration-150 focus-within:border-foreground">
+      <div className="group relative flex min-h-11 min-w-[200px] flex-1 md:min-h-0 items-center gap-2 border border-border bg-card px-3 py-2 transition-colors duration-150 focus-within:border-foreground">
         <Search className="h-3 w-3 text-[color:var(--iris-ink-mute)] transition-colors duration-150 group-focus-within:text-foreground" />
         <input
           ref={searchInputRef}
@@ -636,6 +647,25 @@ export function WorkOrdersFilters({
         )}
       </div>
 
+      <button
+        type="button"
+        aria-expanded={mobileFiltersOpen}
+        aria-controls="work-orders-filter-pills"
+        onClick={() => setMobileFiltersOpen((open) => !open)}
+        className="iris-focusable iris-press flex min-h-11 items-center gap-2 border border-border bg-card px-3 text-[13px] text-[color:var(--iris-ink-soft)] md:hidden"
+      >
+        <SlidersHorizontal className="h-4 w-4" />
+        {activeFilterCount > 0
+          ? t("workOrders.filters.toggleActive", { count: activeFilterCount })
+          : t("workOrders.filters.toggle")}
+      </button>
+
+      <div
+        id="work-orders-filter-pills"
+        className={`w-full flex-wrap items-center gap-2 md:contents ${
+          mobileFiltersOpen ? "flex" : "hidden"
+        }`}
+      >
       {isVisible("status") && (
         <FilterPill label={statusLabel} isActive={filters.status !== "all"}>
           <OptionList
@@ -684,11 +714,13 @@ export function WorkOrdersFilters({
         onChange={updateFilters}
       />
 
-      <span aria-hidden className="mx-0.5 h-5 w-px self-center bg-border" />
+      <span aria-hidden className="mx-0.5 h-5 w-px self-center bg-border max-md:hidden" />
 
       <SavedViewsPill filters={filters} onApply={updateFilters} />
 
-      <ColumnsPill />
+      <div className="hidden md:block">
+        <ColumnsPill />
+      </div>
 
       {hasActiveFilters && (
         <button
@@ -700,6 +732,7 @@ export function WorkOrdersFilters({
           {t("workOrders.filters.reset")}
         </button>
       )}
+      </div>
     </div>
   );
 }

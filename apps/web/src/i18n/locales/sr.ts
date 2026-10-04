@@ -210,6 +210,7 @@ export const sr = {
   dashboard: {
     loading: 'Učitavanje podataka...',
     loadError: 'Greška pri učitavanju podataka: {{error}}',
+    noOrders: 'Nema radnih naloga u bazi podataka.',
     header: {
       eyebrow: 'Iris · pregled',
       subtitle: 'Klijenti, rokovi i otvoreni redovi rada',
@@ -302,6 +303,22 @@ export const sr = {
       ordersCount_one: '{{count}} nalog',
       ordersCount_few: '{{count}} naloga',
       ordersCount_other: '{{count}} naloga',
+      noData: 'Nema podataka za prikaz.',
+      aria: '{{title}}. {{data}}',
+      months: {
+        m01: 'jan',
+        m02: 'feb',
+        m03: 'mar',
+        m04: 'apr',
+        m05: 'maj',
+        m06: 'jun',
+        m07: 'jul',
+        m08: 'avg',
+        m09: 'sep',
+        m10: 'okt',
+        m11: 'nov',
+        m12: 'dec',
+      },
     },
     attention: {
       show: 'Prikaži',
@@ -449,10 +466,25 @@ export const sr = {
     noContacts: 'Još nema kontakt osoba.',
   },
   command: {
+    paletteAria: 'Komandna paleta',
     searchPlaceholder: 'Pretraži komande…',
     noResults: 'Nema rezultata',
     create: 'Kreiraj',
     themePrefix: 'Tema:',
+  },
+  unsavedChanges: {
+    title: 'Napustiti stranicu?',
+    description:
+      'Imate nesačuvane izmene. Ako napustite stranicu, biće izgubljene.',
+    stay: 'Ostani',
+    leave: 'Napusti bez čuvanja',
+  },
+  combobox: {
+    placeholder: 'Izaberite stavku',
+    searchPlaceholder: 'Pretraga...',
+    empty: 'Nema rezultata.',
+    loading: 'Učitavanje...',
+    searchAria: 'Pretraga',
   },
   pager: {
     range: '{{from}}–{{to}} od {{total}}',
@@ -790,8 +822,18 @@ export const sr = {
       prev: '← Prethodna',
       next: 'Sledeća →',
       perPage: 'Po strani',
+      card: {
+        dueLabel: 'Rok',
+        overdue: 'Kasni',
+        noDueDate: 'Bez roka',
+        unassigned: 'Nedodeljeno',
+        assignee: 'Zaduženi',
+        listLabel: 'Radni nalozi',
+      },
     },
     filters: {
+      toggle: 'Filteri',
+      toggleActive: 'Filteri ({{count}})',
       searchPlaceholder: 'Pretraži po nalogu, klijentu, opisu, operateru, ceni…',
       clearSearch: 'Obriši pretragu',
       allStatuses: 'Svi statusi',
@@ -1067,6 +1109,7 @@ export const sr = {
       preview: 'Pregled',
       pdfPreview: 'PDF pregled',
       printPreview: 'Pregled štampe',
+      pdfPreviewTitle: 'Pregled radnog naloga',
       previewOrderNumber: '(novi nalog)',
       closePreview: 'Zatvori pregled',
       publicLink: 'Javni link',

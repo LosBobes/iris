@@ -43,6 +43,7 @@ Authenticated endpoints:
 - `POST /locations`
 - `PUT /locations/{id}`
 - `DELETE /locations/{id}` admin only
+- `GET /dashboard` (optional `?dateFrom=&dateTo=&issuedBy=&companyKey=&today=`; `finance` is admin only)
 - `GET /work-orders`
 - `GET /work-orders/operators`
 - `GET /work-orders/{id}`

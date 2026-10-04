@@ -211,6 +211,7 @@ export const en: typeof sr = {
   dashboard: {
     loading: 'Loading data...',
     loadError: 'Error loading data: {{error}}',
+    noOrders: 'There are no work orders in the database yet.',
     header: {
       eyebrow: 'Iris · overview',
       subtitle: 'Clients, deadlines and open work items',
@@ -303,6 +304,22 @@ export const en: typeof sr = {
       ordersCount_one: '{{count}} order',
       ordersCount_few: '{{count}} orders',
       ordersCount_other: '{{count}} orders',
+      noData: 'No data to display.',
+      aria: '{{title}}. {{data}}',
+      months: {
+        m01: 'Jan',
+        m02: 'Feb',
+        m03: 'Mar',
+        m04: 'Apr',
+        m05: 'May',
+        m06: 'Jun',
+        m07: 'Jul',
+        m08: 'Aug',
+        m09: 'Sep',
+        m10: 'Oct',
+        m11: 'Nov',
+        m12: 'Dec',
+      },
     },
     attention: {
       show: 'Show',
@@ -450,10 +467,25 @@ export const en: typeof sr = {
     noContacts: 'No contact people yet.',
   },
   command: {
+    paletteAria: 'Command palette',
     searchPlaceholder: 'Search commands…',
     noResults: 'No results',
     create: 'Create',
     themePrefix: 'Theme:',
+  },
+  unsavedChanges: {
+    title: 'Leave this page?',
+    description:
+      'You have unsaved changes. If you leave this page, they will be lost.',
+    stay: 'Stay',
+    leave: 'Leave without saving',
+  },
+  combobox: {
+    placeholder: 'Select an item',
+    searchPlaceholder: 'Search...',
+    empty: 'No results.',
+    loading: 'Loading...',
+    searchAria: 'Search',
   },
   pager: {
     range: '{{from}}–{{to}} of {{total}}',
@@ -790,8 +822,18 @@ export const en: typeof sr = {
       prev: '← Previous',
       next: 'Next →',
       perPage: 'Per page',
+      card: {
+        dueLabel: 'Due',
+        overdue: 'Overdue',
+        noDueDate: 'No due date',
+        unassigned: 'Unassigned',
+        assignee: 'Assignee',
+        listLabel: 'Work orders',
+      },
     },
     filters: {
+      toggle: 'Filters',
+      toggleActive: 'Filters ({{count}})',
       searchPlaceholder: 'Search by order, client, description, operator, price…',
       clearSearch: 'Clear search',
       allStatuses: 'All statuses',
@@ -1067,6 +1109,7 @@ export const en: typeof sr = {
       preview: 'Preview',
       pdfPreview: 'PDF preview',
       printPreview: 'Print preview',
+      pdfPreviewTitle: 'Work order preview',
       previewOrderNumber: '(new order)',
       closePreview: 'Close preview',
       publicLink: 'Public link',

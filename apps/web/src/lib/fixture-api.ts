@@ -26,6 +26,7 @@ import type {
   WorkOrderStatus,
   WorkOrderStatusHistory,
 } from '@/types/work-order'
+import { buildDashboardData } from '@/lib/dashboard/build'
 import type { CatalogCleanupFilter, CatalogItem, CatalogItemCost } from '@/types/catalog'
 import {
   DEFAULT_BILLING_DEFAULTS,
@@ -90,6 +91,9 @@ const INVALID_CREDENTIALS = 'Neispravno korisničko ime ili lozinka.'
 const INVALID_WORK_ORDER = 'Prosleđeni podaci nisu ispravni.'
 
 let users = [...(rawUsers as FixtureUser[])]
+// The fixture store has no real session; remember who logged in so
+// role/user-scoped responses (the dashboard) match what the API would return.
+let sessionUser: AuthenticatedUser | null = null
 let nextUserSequence = users.length + 1
 // Fixture JSON predates the emails/contacts collections; backfill them (and
 // seed one row from the legacy single fields) so the in-memory store matches
@@ -584,13 +588,10 @@ export function createFixtureApi(): Window['api'] {
         return { success: false, error: INVALID_CREDENTIALS }
       }
 
+      sessionUser = { id: user.id, username: user.username, role: user.role }
       return {
         success: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          role: user.role,
-        },
+        user: { ...sessionUser },
       }
     },
 
@@ -599,6 +600,7 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async logout() {
+      sessionUser = null
       return undefined
     },
 
@@ -910,6 +912,16 @@ export function createFixtureApi(): Window['api'] {
         .filter((user) => user.role === 'user')
         .map((user) => user.username)
         .sort((a, b) => a.localeCompare(b, 'sr-Latn'))
+    },
+
+    async getDashboard(query) {
+      const viewer = sessionUser ?? users.find((user) => user.role === 'admin') ?? null
+      return cloneValue(
+        buildDashboardData(workOrders, query ?? {}, {
+          username: viewer?.username ?? '',
+          isAdmin: viewer?.role === 'admin',
+        }),
+      )
     },
 
     async getWorkOrderById(id) {

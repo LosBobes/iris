@@ -16,6 +16,7 @@ import type {
   WorkOrderListQuery,
   WorkOrderListResult,
 } from '@/types/work-order'
+import type { DashboardData, DashboardQuery } from '@/types/dashboard'
 import type {
   CatalogCleanupFilter,
   CatalogItem,
@@ -92,6 +93,7 @@ declare global {
       deleteUser: (id: string) => Promise<{ success: boolean }>
       getWorkOrders: (query?: WorkOrderListQuery) => Promise<WorkOrderListResult>
       getWorkOrderOperators: () => Promise<string[]>
+      getDashboard: (query?: DashboardQuery) => Promise<DashboardData>
       getWorkOrderById: (id: string) => Promise<WorkOrder | null>
       reserveWorkOrderNumber: () => Promise<ReservedOrderNumber>
       releaseWorkOrderNumber: (orderNumber: string) => Promise<void>

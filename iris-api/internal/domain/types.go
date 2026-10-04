@@ -622,3 +622,139 @@ type PublicWorkOrderStatus struct {
 	SignedBy          *string         `json:"signedBy"`
 	SignedAt          *string         `json:"signedAt"`
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard (GET /dashboard) — server-side aggregation. Field names mirror the
+// web client's dashboard shapes so the client can consume them unchanged.
+// ---------------------------------------------------------------------------
+
+// DashboardSummary is the filtered-order headline: count per status and the
+// summed order price.
+type DashboardSummary struct {
+	TotalOrders int `json:"totalOrders"`
+	// StatusCounts carries every canonical status key, 0 by default.
+	StatusCounts map[WorkOrderStatus]int `json:"statusCounts"`
+	TotalRevenue float64                 `json:"totalRevenue"`
+}
+
+type DashboardMonthlyBucket struct {
+	Month   string  `json:"month"`
+	Count   int     `json:"count"`
+	Revenue float64 `json:"revenue"`
+}
+
+type DashboardDeliveryCount struct {
+	Method DeliveryMethod `json:"method"`
+	Count  int            `json:"count"`
+}
+
+type DashboardClientCount struct {
+	ClientName string `json:"clientName"`
+	Count      int    `json:"count"`
+}
+
+type DashboardProfitTotals struct {
+	Service float64 `json:"service"`
+	Article float64 `json:"article"`
+	Total   float64 `json:"total"`
+}
+
+type DashboardMonthlyProfit struct {
+	Month   string  `json:"month"`
+	Service float64 `json:"service"`
+	Article float64 `json:"article"`
+	Total   float64 `json:"total"`
+}
+
+type DashboardCompanyProfit struct {
+	GroupKey      string  `json:"groupKey"`
+	CustomerID    *string `json:"customerId"`
+	Name          string  `json:"name"`
+	Profit        float64 `json:"profit"`
+	ServiceProfit float64 `json:"serviceProfit"`
+	ArticleProfit float64 `json:"articleProfit"`
+	Revenue       float64 `json:"revenue"`
+	OrderCount    int     `json:"orderCount"`
+}
+
+type DashboardItemProfit struct {
+	GroupKey      string              `json:"groupKey"`
+	CatalogItemID *string             `json:"catalogItemId"`
+	Name          string              `json:"name"`
+	Kind          InvoiceLineItemKind `json:"kind"`
+	Profit        float64             `json:"profit"`
+	Revenue       float64             `json:"revenue"`
+	Quantity      float64             `json:"quantity"`
+}
+
+type DashboardItemProfitBreakdown struct {
+	Services []DashboardItemProfit `json:"services"`
+	Articles []DashboardItemProfit `json:"articles"`
+}
+
+// DashboardFinance is cost-derived and therefore admin-only; it is null for
+// every other role.
+type DashboardFinance struct {
+	ProfitTotals  DashboardProfitTotals        `json:"profitTotals"`
+	Revenue       float64                      `json:"revenue"`
+	MonthlyProfit []DashboardMonthlyProfit     `json:"monthlyProfit"`
+	CompanyProfit []DashboardCompanyProfit     `json:"companyProfit"`
+	ItemProfit    DashboardItemProfitBreakdown `json:"itemProfit"`
+}
+
+type DashboardSignalCounts struct {
+	Overdue     int `json:"overdue"`
+	DueToday    int `json:"dueToday"`
+	DueThisWeek int `json:"dueThisWeek"`
+	Unassigned  int `json:"unassigned"`
+}
+
+// DashboardAttentionOrder is the slim order projection shown in attention lists.
+type DashboardAttentionOrder struct {
+	ID             string          `json:"id"`
+	OrderNumber    string          `json:"orderNumber"`
+	JobDescription string          `json:"jobDescription"`
+	Status         WorkOrderStatus `json:"status"`
+	DueDate        *string         `json:"dueDate"`
+}
+
+type DashboardAttentionRow struct {
+	GroupKey    string                    `json:"groupKey"`
+	CustomerID  *string                   `json:"customerId"`
+	DisplayName string                    `json:"displayName"`
+	Counts      DashboardSignalCounts     `json:"counts"`
+	Severity    float64                   `json:"severity"`
+	Orders      []DashboardAttentionOrder `json:"orders"`
+}
+
+type DashboardQueueSummary struct {
+	Today      int `json:"today"`
+	Overdue    int `json:"overdue"`
+	Unassigned int `json:"unassigned"`
+}
+
+type DashboardOperatorQueue struct {
+	AssignedToMe int `json:"assignedToMe"`
+	DueToday     int `json:"dueToday"`
+	Overdue      int `json:"overdue"`
+	InProgress   int `json:"inProgress"`
+	Available    int `json:"available"`
+}
+
+// DashboardData is the GET /dashboard response.
+type DashboardData struct {
+	// HasOrders reports whether the tenant has any work order at all,
+	// independent of the filters, so clients can tell "no data yet" from
+	// "nothing matches the filters".
+	HasOrders             bool                     `json:"hasOrders"`
+	Summary               DashboardSummary         `json:"summary"`
+	MonthlyBuckets        []DashboardMonthlyBucket `json:"monthlyBuckets"`
+	DeliveryDistribution  []DashboardDeliveryCount `json:"deliveryDistribution"`
+	TopClients            []DashboardClientCount   `json:"topClients"`
+	Finance               *DashboardFinance        `json:"finance"`
+	SignalCounts          DashboardSignalCounts    `json:"signalCounts"`
+	ClientAttentionRows   []DashboardAttentionRow  `json:"clientAttentionRows"`
+	InternalAttentionRows []DashboardAttentionRow  `json:"internalAttentionRows"`
+	QueueSummary          DashboardQueueSummary    `json:"queueSummary"`
+	OperatorQueue         DashboardOperatorQueue   `json:"operatorQueue"`
+}

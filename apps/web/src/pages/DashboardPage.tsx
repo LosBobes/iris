@@ -82,7 +82,7 @@ function DashboardPage(): React.JSX.Element {
           <div className="px-5 sm:px-8">
             <div className="animate-iris-fade py-20 text-center">
               <p className="text-sm text-muted-foreground">
-                Nema radnih naloga u bazi podataka.
+                {t('dashboard.noOrders')}
               </p>
             </div>
           </div>

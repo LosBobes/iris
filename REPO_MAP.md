@@ -8,7 +8,7 @@ Onboarding snapshot for senior engineers. **Last verified:** 2026-07-10.
 
 - **Work orders** - lifecycle from `new` through `invoiced`, with assignment, materials, notes, events, invoice drafts, order-number reservation, and a per-order edit lock
 - **Customers and locations** - normalized master data (web client; API-backed)
-- **Dashboard** - revenue/status charts and queue summaries (aggregated client-side)
+- **Dashboard** - revenue/status charts and queue summaries (aggregated server-side by `GET /dashboard`)
 - **Public tracking** - token-based status lookup at `/public/work-orders/:token` (web only)
 - **Organization settings** - admin-configurable, shop-wide defaults (firm name, PDF sections, billing/priority defaults, shipping-options toggle)
 
@@ -117,7 +117,8 @@ Web client
 
 ### Dashboard analytics
 
-- Clients fetch **raw work orders**, then aggregate in `*/lib/dashboard/` (pure functions, unit-tested). Not computed on the server.
+- `GET /dashboard` aggregates **server-side** (`iris-api/internal/dashboard`, pure functions, unit-tested): filtered summary/charts, admin-only finance (`null` for operators), attention signals and queues over all orders, and slim attention-order rows. Query: `dateFrom`, `dateTo`, `issuedBy`, `companyKey`, `today`.
+- The web keeps a TypeScript reference implementation in `apps/web/src/lib/dashboard/` that fixture mode serves; keep the two in sync.
 
 ### Public tracking (web)
 

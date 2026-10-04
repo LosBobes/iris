@@ -56,7 +56,7 @@ describe("RouteErrorBoundary", () => {
       </RouteErrorBoundary>,
     );
 
-    expect(screen.getByText(strings.errorTitle)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(strings.errorTitle);
     expect(screen.getByText(strings.errorMessage)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: strings.reload }),

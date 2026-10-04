@@ -14,9 +14,9 @@ interface SummaryCellProps {
 function SummaryCell({ label, value, isLast, delayMs }: SummaryCellProps): React.JSX.Element {
   return (
     <div
-      className={`flex-1 px-6 py-5 ${
+      className={`min-w-0 flex-1 px-4 py-4 sm:px-6 sm:py-5 ${
         isLast ? '' : 'border-r border-[color:var(--iris-border-soft)]'
-      }`}
+      } max-sm:[&:nth-child(2n)]:border-r-0 max-sm:[&:nth-child(-n+2)]:border-b max-sm:[&:nth-child(-n+2)]:border-[color:var(--iris-border-soft)]`}
       style={{
         animation:
           'iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both',
@@ -26,7 +26,7 @@ function SummaryCell({ label, value, isLast, delayMs }: SummaryCellProps): React
       <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
         {label}
       </div>
-      <div className="tnum mt-2 text-[28px] font-normal tracking-[-0.5px] text-foreground">
+      <div className="tnum mt-2 break-words text-[22px] font-normal sm:text-[28px] tracking-[-0.5px] text-foreground">
         {value}
       </div>
     </div>
@@ -47,7 +47,7 @@ export function DashboardSummaryCards({
     summary.statusCounts.inProgress
 
   return (
-    <div className="flex border border-border bg-card">
+    <div className="grid grid-cols-2 border border-border bg-card sm:flex">
       <SummaryCell label={t('dashboard.summary.totalOrders')} value={summary.totalOrders} delayMs={120} />
       <SummaryCell label={t('dashboard.summary.completed')} value={summary.statusCounts.completed} delayMs={180} />
       <SummaryCell label={t('dashboard.summary.open')} value={openOrders} delayMs={240} />

@@ -22,7 +22,7 @@ export function DashboardFilters({
     filters.issuedBy !== null;
 
   return (
-    <div className="flex items-end gap-3">
+    <div className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1">
         <label
           htmlFor="filter-date-from"
