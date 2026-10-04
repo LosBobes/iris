@@ -210,6 +210,7 @@ export const sr = {
   dashboard: {
     loading: 'Učitavanje podataka...',
     loadError: 'Greška pri učitavanju podataka: {{error}}',
+    noOrders: 'Nema radnih naloga u bazi podataka.',
     header: {
       eyebrow: 'Iris · pregled',
       subtitle: 'Klijenti, rokovi i otvoreni redovi rada',

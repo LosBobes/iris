@@ -135,6 +135,7 @@ func Build(orders []domain.WorkOrder, opts Options) domain.DashboardData {
 	filtered := FilterWorkOrders(orders, opts.Filters)
 
 	data := domain.DashboardData{
+		HasOrders:            len(orders) > 0,
 		Summary:              DeriveSummary(filtered),
 		MonthlyBuckets:       MonthlyBuckets(filtered),
 		DeliveryDistribution: DeliveryDistribution(filtered),

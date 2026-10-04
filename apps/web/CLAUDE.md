@@ -37,9 +37,12 @@ vars and must not be committed.
 - The work-order form takes a per-order **edit lock** via `useWorkOrderEditLock`
   (heartbeat every 30 s, fails open; form goes read-only only when another operator
   holds it). Login requires an **organization slug** alongside username + password.
-- Dashboard analytics: clients fetch raw work orders and aggregate client-side in
-  `src/lib/dashboard/aggregations.ts` (pure, unit-tested) — not computed on the
-  server.
+- Dashboard analytics are computed server-side by `GET /dashboard`
+  (`iris-api/internal/dashboard`); `useDashboardData` calls
+  `window.api.getDashboard`. `src/lib/dashboard/` (`aggregations.ts`, `profit.ts`,
+  `build.ts`) is the TypeScript reference implementation that fixture mode serves —
+  keep it behaviorally identical to the Go port when changing either. Shapes live in
+  `src/types/dashboard.ts` (contract-sync with the `Dashboard*` OpenAPI schemas).
 - Forms: `react-hook-form` + `zod` (`src/lib/work-orders/validation.ts`).
 - Visible UI text and messages in Serbian (`sr-Latn`); code/tests in English.
 - Dates: `YYYY-MM-DD` stored, `DD.MM.YYYY` displayed (`src/lib/i18n-date.ts`).

@@ -211,6 +211,7 @@ export const en: typeof sr = {
   dashboard: {
     loading: 'Loading data...',
     loadError: 'Error loading data: {{error}}',
+    noOrders: 'There are no work orders in the database yet.',
     header: {
       eyebrow: 'Iris · overview',
       subtitle: 'Clients, deadlines and open work items',

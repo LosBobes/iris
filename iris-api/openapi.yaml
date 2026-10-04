@@ -1025,6 +1025,7 @@ components:
     DashboardData:
       type: object
       required:
+        - hasOrders
         - summary
         - monthlyBuckets
         - deliveryDistribution
@@ -1036,6 +1037,9 @@ components:
         - queueSummary
         - operatorQueue
       properties:
+        hasOrders:
+          type: boolean
+          description: Whether the tenant has any work order at all, ignoring filters.
         summary:
           $ref: '#/components/schemas/DashboardSummary'
         monthlyBuckets:

@@ -129,6 +129,41 @@ describe('createHttpApi', () => {
     )
   })
 
+  it('requests dashboard aggregates with filters and normalizes null lists', async () => {
+    const fetchMock = vi.fn(async () =>
+      response({
+        hasOrders: true,
+        summary: { totalOrders: 0, statusCounts: {}, totalRevenue: 0 },
+        monthlyBuckets: null,
+        deliveryDistribution: null,
+        topClients: null,
+        finance: null,
+        signalCounts: { overdue: 0, dueToday: 0, dueThisWeek: 0, unassigned: 0 },
+        clientAttentionRows: [{ groupKey: 'c1', orders: null }],
+        internalAttentionRows: null,
+        queueSummary: { today: 0, overdue: 0, unassigned: 0 },
+        operatorQueue: { assignedToMe: 0, dueToday: 0, overdue: 0, inProgress: 0, available: 0 },
+      }),
+    )
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const data = await api.getDashboard({
+      dateFrom: '2026-01-01',
+      dateTo: null,
+      issuedBy: 'ana',
+      companyKey: null,
+      today: '2026-06-10',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/dashboard?dateFrom=2026-01-01&issuedBy=ana&today=2026-06-10',
+      expect.objectContaining({ credentials: 'include' }),
+    )
+    expect(data.monthlyBuckets).toEqual([])
+    expect(data.internalAttentionRows).toEqual([])
+    expect(data.clientAttentionRows[0].orders).toEqual([])
+    expect(data.finance).toBeNull()
+  })
+
   it('posts the expanded work-order input to the API', async () => {
     const fetchMock = vi.fn(async () =>
       response({

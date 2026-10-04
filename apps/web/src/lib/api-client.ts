@@ -14,6 +14,7 @@ import type {
   WorkOrderListQuery,
   WorkOrderListResult,
 } from '@/types/work-order'
+import type { ClientAttentionRow, DashboardData, DashboardQuery } from '@/types/dashboard'
 import type {
   CatalogCleanupFilter,
   CatalogItem,
@@ -175,7 +176,7 @@ function credentialedRequest(init: RequestInit = {}): RequestInit {
   return { ...init, credentials: 'include' }
 }
 
-function queryString(query: WorkOrderListQuery = {}): string {
+function queryString(query: WorkOrderListQuery | DashboardQuery = {}): string {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null || value === '') continue
@@ -183,6 +184,32 @@ function queryString(query: WorkOrderListQuery = {}): string {
   }
   const encoded = params.toString()
   return encoded ? `?${encoded}` : ''
+}
+
+// normalizeDashboardData guards against a server that serializes empty lists
+// as null, so the dashboard components can always map over arrays.
+function normalizeDashboardData(data: DashboardData): DashboardData {
+  const rows = (list: ClientAttentionRow[] | null | undefined): ClientAttentionRow[] =>
+    readArray(list).map((row) => ({ ...row, orders: readArray(row.orders) }))
+  return {
+    ...data,
+    monthlyBuckets: readArray(data.monthlyBuckets),
+    deliveryDistribution: readArray(data.deliveryDistribution),
+    topClients: readArray(data.topClients),
+    clientAttentionRows: rows(data.clientAttentionRows),
+    internalAttentionRows: rows(data.internalAttentionRows),
+    finance: data.finance
+      ? {
+          ...data.finance,
+          monthlyProfit: readArray(data.finance.monthlyProfit),
+          companyProfit: readArray(data.finance.companyProfit),
+          itemProfit: {
+            services: readArray(data.finance.itemProfit?.services),
+            articles: readArray(data.finance.itemProfit?.articles),
+          },
+        }
+      : null,
+  }
 }
 
 // catalogCleanupQuery encodes a cleanup filter the way the API expects it: one
@@ -517,6 +544,11 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getWorkOrderOperators() {
       const response = await fetchImpl(url('/work-orders/operators'), credentialedRequest())
       return readArray(await readJSON<string[] | null>(response))
+    },
+
+    async getDashboard(query) {
+      const response = await fetchImpl(url(`/dashboard${queryString(query)}`), credentialedRequest())
+      return normalizeDashboardData(await readJSON<DashboardData>(response))
     },
 
     async getWorkOrderById(id) {

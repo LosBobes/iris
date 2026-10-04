@@ -743,6 +743,10 @@ type DashboardOperatorQueue struct {
 
 // DashboardData is the GET /dashboard response.
 type DashboardData struct {
+	// HasOrders reports whether the tenant has any work order at all,
+	// independent of the filters, so clients can tell "no data yet" from
+	// "nothing matches the filters".
+	HasOrders             bool                     `json:"hasOrders"`
 	Summary               DashboardSummary         `json:"summary"`
 	MonthlyBuckets        []DashboardMonthlyBucket `json:"monthlyBuckets"`
 	DeliveryDistribution  []DashboardDeliveryCount `json:"deliveryDistribution"`

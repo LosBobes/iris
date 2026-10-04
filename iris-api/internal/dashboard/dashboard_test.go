@@ -553,6 +553,17 @@ func TestBuildEmptyYieldsNonNilSlices(t *testing.T) {
 		data.Finance.ItemProfit.Services == nil || data.Finance.ItemProfit.Articles == nil {
 		t.Fatalf("expected empty non-nil slices: %+v", data)
 	}
+	if data.HasOrders {
+		t.Fatal("expected hasOrders=false for no orders")
+	}
+}
+
+func TestBuildHasOrdersIgnoresFilters(t *testing.T) {
+	orders := []domain.WorkOrder{makeOrder(func(o *domain.WorkOrder) { o.IssueDate = "2026-01-10" })}
+	data := Build(orders, Options{Today: today, Filters: Filters{DateFrom: "2027-01-01"}})
+	if !data.HasOrders || data.Summary.TotalOrders != 0 {
+		t.Fatalf("expected hasOrders with zero filtered orders, got %+v", data.Summary)
+	}
 }
 
 func TestCollatorMatchesSerbianLatinAlphabet(t *testing.T) {
