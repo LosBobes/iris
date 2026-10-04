@@ -13,6 +13,7 @@ tags:
   - name: Auth
   - name: Customers
   - name: Work Orders
+  - name: Dashboard
 paths:
   /healthz:
     get:
@@ -560,6 +561,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Return server-side aggregated dashboard data for the session tenant
+      description: >-
+        Aggregates every work order of the caller's organization so the client
+        does not have to download them all. `dateFrom`, `dateTo` and `issuedBy`
+        filter the summary, monthly buckets, delivery distribution, top clients
+        and finance. Signals, attention rows and queues always cover all orders.
+        `finance` is cost-derived and returned only to administrators (`null`
+        for operators).
+      operationId: getDashboard
+      parameters:
+        - name: dateFrom
+          in: query
+          description: Inclusive lower bound on issueDate (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          description: Inclusive upper bound on issueDate (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+        - name: issuedBy
+          in: query
+          description: Exact match on the issuing user.
+          schema:
+            type: string
+        - name: companyKey
+          in: query
+          description: >-
+            Scopes only `finance.itemProfit` to orders whose company group key
+            (customerId, else the normalized client name) equals this value.
+          schema:
+            type: string
+        - name: today
+          in: query
+          description: >-
+            Client-local date (YYYY-MM-DD) used for attention signals and
+            queues. Defaults to the server's local date.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Aggregated dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+        '400':
+          description: A date parameter is not a valid YYYY-MM-DD date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /work-orders:
     get:
       tags: [Work Orders]
@@ -957,6 +1022,236 @@ components:
         type: string
         enum: [purchase, sale, both]
   schemas:
+    DashboardData:
+      type: object
+      required:
+        - summary
+        - monthlyBuckets
+        - deliveryDistribution
+        - topClients
+        - finance
+        - signalCounts
+        - clientAttentionRows
+        - internalAttentionRows
+        - queueSummary
+        - operatorQueue
+      properties:
+        summary:
+          $ref: '#/components/schemas/DashboardSummary'
+        monthlyBuckets:
+          type: array
+          description: Per issueDate month, chronological (filtered orders).
+          items:
+            $ref: '#/components/schemas/DashboardMonthlyBucket'
+        deliveryDistribution:
+          type: array
+          description: Per delivery method, count descending (filtered orders).
+          items:
+            $ref: '#/components/schemas/DashboardDeliveryCount'
+        topClients:
+          type: array
+          description: Top 10 clients by order count (filtered orders).
+          items:
+            $ref: '#/components/schemas/DashboardClientCount'
+        finance:
+          description: Admin-only; null for every other role.
+          oneOf:
+            - $ref: '#/components/schemas/DashboardFinance'
+            - type: 'null'
+        signalCounts:
+          $ref: '#/components/schemas/DashboardSignalCounts'
+        clientAttentionRows:
+          type: array
+          description: Rows for overdue / dueToday / dueThisWeek signals (all orders).
+          items:
+            $ref: '#/components/schemas/DashboardAttentionRow'
+        internalAttentionRows:
+          type: array
+          description: Rows for the unassigned signal (all orders).
+          items:
+            $ref: '#/components/schemas/DashboardAttentionRow'
+        queueSummary:
+          $ref: '#/components/schemas/DashboardQueueSummary'
+        operatorQueue:
+          $ref: '#/components/schemas/DashboardOperatorQueue'
+    DashboardSummary:
+      type: object
+      required: [totalOrders, statusCounts, totalRevenue]
+      properties:
+        totalOrders:
+          type: integer
+        statusCounts:
+          type: object
+          description: Every canonical status key is present (0 by default).
+          required: [new, assigned, inProgress, completed, invoiced, cancelled]
+          properties:
+            new: {type: integer}
+            assigned: {type: integer}
+            inProgress: {type: integer}
+            completed: {type: integer}
+            invoiced: {type: integer}
+            cancelled: {type: integer}
+        totalRevenue:
+          type: number
+          format: double
+          description: Sum of order `price` where it is set.
+    DashboardMonthlyBucket:
+      type: object
+      required: [month, count, revenue]
+      properties:
+        month:
+          type: string
+          example: 2026-05
+        count:
+          type: integer
+        revenue:
+          type: number
+          format: double
+    DashboardDeliveryCount:
+      type: object
+      required: [method, count]
+      properties:
+        method:
+          type: string
+          example: postExpress
+        count:
+          type: integer
+    DashboardClientCount:
+      type: object
+      required: [clientName, count]
+      properties:
+        clientName:
+          type: string
+        count:
+          type: integer
+    DashboardFinance:
+      type: object
+      required: [profitTotals, revenue, monthlyProfit, companyProfit, itemProfit]
+      properties:
+        profitTotals:
+          $ref: '#/components/schemas/DashboardProfitTotals'
+        revenue:
+          type: number
+          format: double
+          description: Line-item sale revenue (unitPrice * quantity) of filtered orders.
+        monthlyProfit:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardMonthlyProfit'
+        companyProfit:
+          type: array
+          description: All companies, profit descending.
+          items:
+            $ref: '#/components/schemas/DashboardCompanyProfit'
+        itemProfit:
+          $ref: '#/components/schemas/DashboardItemProfitBreakdown'
+    DashboardProfitTotals:
+      type: object
+      required: [service, article, total]
+      properties:
+        service: {type: number, format: double}
+        article: {type: number, format: double}
+        total: {type: number, format: double}
+    DashboardMonthlyProfit:
+      type: object
+      required: [month, service, article, total]
+      properties:
+        month: {type: string, example: 2026-05}
+        service: {type: number, format: double}
+        article: {type: number, format: double}
+        total: {type: number, format: double}
+    DashboardCompanyProfit:
+      type: object
+      required: [groupKey, customerId, name, profit, serviceProfit, articleProfit, revenue, orderCount]
+      properties:
+        groupKey: {type: string}
+        customerId: {type: [string, 'null']}
+        name: {type: string}
+        profit: {type: number, format: double}
+        serviceProfit: {type: number, format: double}
+        articleProfit: {type: number, format: double}
+        revenue: {type: number, format: double}
+        orderCount: {type: integer}
+    DashboardItemProfit:
+      type: object
+      required: [groupKey, catalogItemId, name, kind, profit, revenue, quantity]
+      properties:
+        groupKey: {type: string}
+        catalogItemId: {type: [string, 'null']}
+        name: {type: string}
+        kind:
+          type: string
+          enum: [service, goods]
+        profit: {type: number, format: double}
+        revenue: {type: number, format: double}
+        quantity: {type: number, format: double}
+    DashboardItemProfitBreakdown:
+      type: object
+      required: [services, articles]
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardItemProfit'
+        articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardItemProfit'
+    DashboardSignalCounts:
+      type: object
+      required: [overdue, dueToday, dueThisWeek, unassigned]
+      properties:
+        overdue: {type: integer}
+        dueToday: {type: integer}
+        dueThisWeek: {type: integer}
+        unassigned: {type: integer}
+    DashboardAttentionOrder:
+      type: object
+      required: [id, orderNumber, jobDescription, status, dueDate]
+      properties:
+        id: {type: string}
+        orderNumber: {type: string}
+        jobDescription: {type: string}
+        status:
+          type: string
+          enum: [new, assigned, inProgress, completed, cancelled, invoiced]
+        dueDate:
+          type: [string, 'null']
+          format: date
+    DashboardAttentionRow:
+      type: object
+      required: [groupKey, customerId, displayName, counts, severity, orders]
+      properties:
+        groupKey: {type: string}
+        customerId: {type: [string, 'null']}
+        displayName: {type: string}
+        counts:
+          $ref: '#/components/schemas/DashboardSignalCounts'
+        severity:
+          type: number
+          format: double
+          description: Highest signal severity plus total signal count / 100.
+        orders:
+          type: array
+          description: Full list, most severe first then by order number.
+          items:
+            $ref: '#/components/schemas/DashboardAttentionOrder'
+    DashboardQueueSummary:
+      type: object
+      required: [today, overdue, unassigned]
+      properties:
+        today: {type: integer}
+        overdue: {type: integer}
+        unassigned: {type: integer}
+    DashboardOperatorQueue:
+      type: object
+      required: [assignedToMe, dueToday, overdue, inProgress, available]
+      properties:
+        assignedToMe: {type: integer}
+        dueToday: {type: integer}
+        overdue: {type: integer}
+        inProgress: {type: integer}
+        available: {type: integer}
     HealthResponse:
       type: object
       required: [status]
