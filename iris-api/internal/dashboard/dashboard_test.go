@@ -554,3 +554,13 @@ func TestBuildEmptyYieldsNonNilSlices(t *testing.T) {
 		t.Fatalf("expected empty non-nil slices: %+v", data)
 	}
 }
+
+func TestCollatorMatchesSerbianLatinAlphabet(t *testing.T) {
+	c := newCollator()
+	ordered := []string{"Ana", "Cer", "Čačak", "Ćuprija", "Dan", "Đakovo", "Sava", "Šabac", "Zemun", "Žabalj"}
+	for i := 1; i < len(ordered); i++ {
+		if c.CompareString(ordered[i-1], ordered[i]) >= 0 {
+			t.Errorf("expected %q to sort before %q", ordered[i-1], ordered[i])
+		}
+	}
+}

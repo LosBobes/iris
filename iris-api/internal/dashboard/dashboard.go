@@ -85,7 +85,11 @@ var statusOrder = []domain.WorkOrderStatus{
 
 func newCollator() *collate.Collator {
 	// collate.Collator is not safe for concurrent use, so every Build gets its own.
-	return collate.New(language.MustParse("sr-Latn"))
+	// x/text's "sr-Latn" falls back to root collation (Č sorts with C), while
+	// browsers' ICU tailors it with Č/Ć/Dž/Đ/Š/Ž as separate letters. The "hr"
+	// tailoring uses the same Latin alphabet order, so it matches the web's
+	// localeCompare(..., 'sr-Latn').
+	return collate.New(language.Croatian)
 }
 
 // CountsTowardWorkQueue is false for cancelled orders (abandoned work).
