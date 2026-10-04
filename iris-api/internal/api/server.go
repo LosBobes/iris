@@ -104,6 +104,7 @@ func (s *Server) Routes() http.Handler {
 		protected.Post("/locations", s.handleUpsertLocation)
 		protected.Put("/locations/{id}", s.handleUpsertLocation)
 		protected.Delete("/locations/{id}", s.requireAdmin(s.handleDeleteLocation))
+		protected.Get("/dashboard", s.handleDashboard)
 		protected.Get("/work-orders", s.handleWorkOrders)
 		protected.Get("/work-orders/operators", s.handleOperators)
 		protected.Get("/work-orders/{id}", s.handleWorkOrderByID)
