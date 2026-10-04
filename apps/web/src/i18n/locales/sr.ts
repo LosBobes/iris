@@ -454,6 +454,13 @@ export const sr = {
     create: 'Kreiraj',
     themePrefix: 'Tema:',
   },
+  unsavedChanges: {
+    title: 'Napustiti stranicu?',
+    description:
+      'Imate nesačuvane izmene. Ako napustite stranicu, biće izgubljene.',
+    stay: 'Ostani',
+    leave: 'Napusti bez čuvanja',
+  },
   pager: {
     range: '{{from}}–{{to}} od {{total}}',
     prev: 'Prethodna',

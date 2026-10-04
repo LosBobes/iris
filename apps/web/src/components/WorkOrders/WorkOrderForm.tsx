@@ -65,6 +65,11 @@ interface WorkOrderFormProps {
    */
   onValuesChange?: (values: WorkOrderFormValues) => void;
   /**
+   * Reports whether the operator has changed anything since the form opened.
+   * Pages feed this into the unsaved-changes guard. Always false when read-only.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
+  /**
    * When true every field and button is disabled (via a disabled fieldset), for
    * showing a work order another operator is currently editing. Defaults to false.
    */
@@ -425,6 +430,7 @@ export function WorkOrderForm({
   onSubmit,
   onCancel,
   onValuesChange,
+  onDirtyChange,
   readOnly = false,
   previewOrderNumber,
 }: WorkOrderFormProps): React.JSX.Element {
@@ -532,11 +538,18 @@ export function WorkOrderForm({
     watch,
     setValue,
     getValues,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<WorkOrderFormValues>({
     resolver: zodResolver(workOrderFormSchema),
     defaultValues,
   });
+
+  // Report dirtiness to the page. The programmatic syncs below (price total,
+  // default location) deliberately do not mark the form dirty, so a freshly
+  // loaded form stays clean until the operator actually edits something.
+  useEffect(() => {
+    onDirtyChange?.(isDirty && !readOnly);
+  }, [isDirty, readOnly, onDirtyChange]);
 
   // Mirror the live form values out to the caller so the create page can cache an
   // in-progress draft. Emit once on mount (so a draft exists before any edit) and
@@ -602,7 +615,7 @@ export function WorkOrderForm({
     [invoiceLineItems],
   );
   useEffect(() => {
-    setValue("price", lineItemsTotal, { shouldValidate: true, shouldDirty: true });
+    setValue("price", lineItemsTotal, { shouldValidate: true });
   }, [lineItemsTotal, setValue]);
   // Locations are lazy-loaded for the selected customer only. The tenant can
   // have thousands of locations, so pulling the whole list up front made this
@@ -748,7 +761,7 @@ export function WorkOrderForm({
 
     const firstLocation = filteredLocations[0];
     if (firstLocation) {
-      setValue("locationId", firstLocation.id, { shouldDirty: true });
+      setValue("locationId", firstLocation.id);
     }
   }, [
     filteredLocations,
@@ -762,13 +775,14 @@ export function WorkOrderForm({
     if (!item) {
       // "Novi klijent" — detach from the registry, keep any typed client name.
       setSelectedCustomer(null);
-      setValue("customerId", null);
+      setValue("customerId", null, { shouldDirty: true });
       return;
     }
     const customer = item.data as Customer;
     setSelectedCustomer(customer);
-    setValue("customerId", customer.id);
-    setValue("clientName", customer.name);
+    // A user-driven pick, so it counts as an edit for the unsaved-changes guard.
+    setValue("customerId", customer.id, { shouldDirty: true });
+    setValue("clientName", customer.name, { shouldDirty: true });
     // Default the contact to the firm's first contact person (falling back to
     // the legacy single field), and the notification email to its first email.
     const firstContact = customer.contacts[0];

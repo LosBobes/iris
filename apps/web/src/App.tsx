@@ -1,7 +1,14 @@
 import { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import { BrowserRouter, Routes, Route, Outlet, useNavigate } from "react-router-dom";
+import {
+  createBrowserRouter,
+  RouterProvider,
+  Routes,
+  Route,
+  Outlet,
+  useNavigate,
+} from "react-router-dom";
 import { Login } from "@/components/Login/Login";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -164,7 +171,7 @@ function LoginRoute({
   );
 }
 
-function App(): React.JSX.Element {
+function AppContent(): React.JSX.Element {
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(
     null,
   );
@@ -390,8 +397,7 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <BrowserRouter>
-      <RouteErrorBoundary>
+    <RouteErrorBoundary>
         <Suspense fallback={<RouteLoadingScreen />}>
           <Routes>
             <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
@@ -442,9 +448,22 @@ function App(): React.JSX.Element {
             />
           </Routes>
         </Suspense>
-      </RouteErrorBoundary>
-    </BrowserRouter>
+    </RouteErrorBoundary>
   );
+}
+
+/**
+ * The app runs on a data router (rather than `<BrowserRouter>`) because
+ * `useBlocker` — used by the unsaved-changes guard — needs one. A single
+ * catch-all route hosts the whole app; the real route tree (with its auth
+ * gating, which depends on component state) stays as nested `<Routes>` inside
+ * `AppContent`. The router is created once per mounted App.
+ */
+function App(): React.JSX.Element {
+  const [router] = useState(() =>
+    createBrowserRouter([{ path: "*", element: <AppContent /> }]),
+  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;
