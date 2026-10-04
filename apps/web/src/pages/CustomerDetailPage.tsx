@@ -13,7 +13,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   blankToNull,
   emptyCustomer,
@@ -56,6 +58,22 @@ function CustomerDetailPage(): React.JSX.Element {
   const [locationDraft, setLocationDraft] = useState<Location | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
+  // Unsaved-changes tracking: compare against the last loaded/saved snapshot.
+  // Locations of an existing client persist immediately, so only a client that
+  // is still being created holds unsaved locations.
+  const snapshotOf = useCallback(
+    (value: Customer, held: Location[]): string =>
+      JSON.stringify([value, isNew ? held : []]),
+    [isNew],
+  );
+  const [baseline, setBaseline] = useState<string | null>(() =>
+    isNew ? JSON.stringify([emptyCustomer, []]) : null,
+  );
+  const dirty =
+    !loading && baseline !== null && snapshotOf(customer, locations) !== baseline;
+  const guard = useUnsavedChangesGuard(dirty);
+  const { allowNavigation } = guard;
+
   const load = useCallback(async () => {
     if (isNew || !routeId) return;
     setLoading(true);
@@ -68,8 +86,10 @@ function CustomerDetailPage(): React.JSX.Element {
         setNotFound(true);
         return;
       }
+      const ownLocations = allLocations.filter((location) => location.customerId === routeId);
       setCustomer(found);
-      setLocations(allLocations.filter((location) => location.customerId === routeId));
+      setLocations(ownLocations);
+      setBaseline(JSON.stringify([found, []]));
     } catch (error: unknown) {
       reportUnexpectedError("CustomerDetailPage.load", error);
       toast.error(formatActionError(t("customerDetail.loadError"), error));
@@ -111,17 +131,19 @@ function CustomerDetailPage(): React.JSX.Element {
           await window.api.upsertLocation({ ...location, customerId: saved.id });
         }
         toast.success(t("customerDetail.saved"));
+        allowNavigation();
         navigate(`/customers/${encodeURIComponent(saved.id)}`, { replace: true });
       } else {
         toast.success(t("customerDetail.saved"));
         setCustomer(saved);
+        setBaseline(JSON.stringify([saved, []]));
       }
     } catch (error) {
       toast.error(formatActionError(t("customerDetail.saveError"), error));
     } finally {
       setSaving(false);
     }
-  }, [customer, isNew, locations, navigate, t]);
+  }, [allowNavigation, customer, isNew, locations, navigate, t]);
 
   const saveLocation = useCallback(async () => {
     if (!locationDraft) return;
@@ -168,6 +190,7 @@ function CustomerDetailPage(): React.JSX.Element {
       if (deleteTarget.kind === "customer") {
         await window.api.deleteCustomer(customer.id);
         toast.success(t("customerDetail.clientDeleted"));
+        allowNavigation();
         navigate("/customers");
         return;
       }
@@ -181,7 +204,7 @@ function CustomerDetailPage(): React.JSX.Element {
     } finally {
       setDeleteTarget(null);
     }
-  }, [deleteTarget, customer.id, isNew, navigate, t]);
+  }, [allowNavigation, deleteTarget, customer.id, isNew, navigate, t]);
 
   const title = isNew
     ? t("customers.newClient")
@@ -341,6 +364,7 @@ function CustomerDetailPage(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <UnsavedChangesDialog {...guard} />
     </>
   );
 }

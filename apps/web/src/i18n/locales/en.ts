@@ -455,6 +455,13 @@ export const en: typeof sr = {
     create: 'Create',
     themePrefix: 'Theme:',
   },
+  unsavedChanges: {
+    title: 'Leave this page?',
+    description:
+      'You have unsaved changes. If you leave this page, they will be lost.',
+    stay: 'Stay',
+    leave: 'Leave without saving',
+  },
   pager: {
     range: '{{from}}–{{to}} of {{total}}',
     prev: 'Previous',

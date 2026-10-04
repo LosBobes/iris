@@ -16,7 +16,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import {
   costPriceLabel,
@@ -30,6 +32,10 @@ import {
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
 import { cn } from "@/lib/utils";
 import { reportUnexpectedError } from "@/lib/errors";
+
+function snapshotOf(value: CatalogItem, effective: string): string {
+  return JSON.stringify([value, effective]);
+}
 
 function CatalogDetailPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -52,6 +58,19 @@ function CatalogDetailPage(): React.JSX.Element {
   // Only existing items can schedule a future price; new items price immediately.
   const canSchedulePrice = isAdmin && !isNew;
 
+  // Unsaved-changes tracking: compare against the last loaded/saved item (and
+  // the scheduled price date, which is also an edit once admin changes it).
+  const [baseline, setBaseline] = useState<string | null>(() =>
+    isNew ? snapshotOf(emptyCatalogItem, todayIso()) : null,
+  );
+  const dirty =
+    !readOnly &&
+    !loading &&
+    baseline !== null &&
+    snapshotOf(item, effectiveFrom) !== baseline;
+  const guard = useUnsavedChangesGuard(dirty);
+  const { allowNavigation } = guard;
+
   const load = useCallback(async () => {
     if (isNew || !routeId) return;
     setLoading(true);
@@ -62,6 +81,7 @@ function CatalogDetailPage(): React.JSX.Element {
         return;
       }
       setItem(found);
+      setBaseline(snapshotOf(found, todayIso()));
     } catch (error: unknown) {
       reportUnexpectedError("CatalogDetailPage.load", error);
       toast.error(formatActionError(t("catalog.detail.loadError"), error));
@@ -92,12 +112,14 @@ function CatalogDetailPage(): React.JSX.Element {
         : await window.api.updateCatalogItem(item.id, input);
       toast.success(t("catalog.detail.saved"));
       if (isNew) {
+        allowNavigation();
         navigate(`/catalog/${encodeURIComponent(saved.id)}`, { replace: true });
       } else {
         // The response reflects the price effective today; a scheduled future
         // change lives in the history panel. Reset the date and reload history.
         setItem(saved);
         setEffectiveFrom(todayIso());
+        setBaseline(snapshotOf(saved, todayIso()));
         setHistoryRefresh((token) => token + 1);
       }
     } catch (error) {
@@ -105,12 +127,13 @@ function CatalogDetailPage(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom]);
+  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom, allowNavigation]);
 
   const handleDelete = useCallback(async () => {
     try {
       await window.api.deleteCatalogItem(item.id);
       toast.success(t("catalog.detail.deleted"));
+      allowNavigation();
       navigate("/catalog");
     } catch (error: unknown) {
       reportUnexpectedError("CatalogDetailPage.delete", error);
@@ -118,7 +141,7 @@ function CatalogDetailPage(): React.JSX.Element {
     } finally {
       setConfirmDelete(false);
     }
-  }, [item.id, navigate, t]);
+  }, [allowNavigation, item.id, navigate, t]);
 
   const title = isNew ? t("catalog.newItem") : item.name || t("catalog.detail.itemFallback");
 
@@ -274,6 +297,7 @@ function CatalogDetailPage(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <UnsavedChangesDialog {...guard} />
     </>
   );
 }
