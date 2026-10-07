@@ -57,9 +57,24 @@ const service: CatalogItem = {
   isActive: true,
 };
 
+// A book, taxed at the special 10% PDV rate (fiscal label E).
+const book: CatalogItem = {
+  ...service,
+  id: "art-knjiga",
+  code: "KNJIGA",
+  name: "Knjiga monografija",
+  kind: "article",
+  unit: "kom",
+  salePrice: 1000,
+  taxGroup: "E",
+};
+
 function stubApi() {
   vi.stubGlobal("api", {
-    getCatalogItems: vi.fn().mockResolvedValue({ items: [service], total: 1 }),
+    getCatalogItems: vi.fn().mockResolvedValue({ items: [service, book], total: 2 }),
+    getCatalogItemById: vi.fn(async (id: string) =>
+      [service, book].find((item) => item.id === id) ?? null,
+    ),
     getWorkOrderOperators: vi.fn().mockResolvedValue([]),
     getCustomers: vi.fn().mockResolvedValue({ customers: [], total: 0 }),
     getLocations: vi.fn().mockResolvedValue([]),
@@ -202,5 +217,28 @@ describe("WorkOrderForm catalog lines", () => {
 
     await chooseDocumentType("Otkup");
     await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+  });
+
+  it("uses each catalog item's own PDV rate on an otkup order", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkOrderForm onSubmit={vi.fn().mockResolvedValue(undefined)} onCancel={vi.fn()} />,
+    );
+
+    await addCatalogService(user);
+    await user.click(screen.getByRole("button", { name: strings.catalogArticle }));
+    await user.click(await screen.findByRole("button", { name: /Knjiga monografija/ }));
+
+    const prices = () => screen.getAllByRole("spinbutton", { name: strings.colPrice });
+    await waitFor(() => expect(prices()).toHaveLength(2));
+    expect(prices()[0]).toHaveValue(1200);
+    expect(prices()[1]).toHaveValue(1000);
+
+    await user.click(screen.getByRole("combobox", { name: strings.documentType }));
+    await user.click(await screen.findByRole("option", { name: "Otkup" }));
+
+    // Service at the default 20%, book at 10%.
+    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+    expect(prices()[1]).toHaveValue(1100);
   });
 });

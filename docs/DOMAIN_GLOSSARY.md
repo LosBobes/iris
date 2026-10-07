@@ -85,6 +85,16 @@ extendable by an admin through the `billingDocumentType` managed enum.
 - `cashCollection` (`Otkup`): Cash collected on delivery.
 - `proforma` (`Profaktura`): Pre-payment request sheet.
 
+Catalog sale prices are net (bez PDV-a). On an `cashCollection` (otkup) order the
+web form prices catalog lines gross, at the item's PDV type; faktura and
+profaktura keep net prices.
+
+### PDV Type (catalog `taxGroup`)
+The catalog item's `taxGroup` (`Poreska grupa`) holds the fiscal-receipt tax label:
+- `Đ`: General rate (opšta stopa), 20%. Default for empty or unknown codes.
+- `E`: Special rate (posebna stopa), 10%.
+- `A`: Exempt from PDV, 0%.
+
 ### Delivery Method (`DeliveryMethod`)
 - `pickup` (`Lično preuzimanje`): Client collects order in person.
 - `postExpress` (`Post Express`): Delivered via Post Express courier.

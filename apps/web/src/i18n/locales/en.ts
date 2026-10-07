@@ -495,6 +495,12 @@ export const en: typeof sr = {
     nextAria: 'Next page',
   },
   catalog: {
+    vatType: {
+      'Đ': 'Đ – general VAT rate 20%',
+      E: 'E – special VAT rate 10%',
+      A: 'A – VAT exempt (0%)',
+      legacy: '{{code}} (general rate 20%)',
+    },
     eyebrow: 'Iris · catalog',
     title: 'Services & articles',
     adminSubtitle: 'Select an item to edit or add a new one',
@@ -1063,7 +1069,7 @@ export const en: typeof sr = {
       searchCatalog: 'Search catalog...',
       noCatalog: 'No catalog items.',
       catalogHint: 'For a service not in the catalog use “Special service”.',
-      catalogVatHint: 'Cash collection (otkup): catalog prices include 20% VAT.',
+      catalogVatHint: 'Cash collection (otkup): catalog prices include VAT at each item’s tax group (20% by default).',
       catalogAlreadyAdded: 'Already on order',
       noItems: 'No items',
       colType: 'Type',

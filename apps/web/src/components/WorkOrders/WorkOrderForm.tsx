@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useForm,
@@ -42,15 +42,18 @@ import { CatalogPickerDialog } from "@/components/WorkOrders/CatalogPickerDialog
 import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
 import {
   WORK_ORDER_SELECT_NONE_VALUE,
-  addVat,
-  billingDocumentIncludesVat,
   getWorkOrderStatusLabel,
-  repriceForBillingDocument,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
   getLocalIsoDate,
 } from "@/shared/utils/work-orders";
+import {
+  addVat,
+  billingDocumentIncludesVat,
+  repriceForBillingDocument,
+  vatRateForTaxGroup,
+} from "@/shared/utils/vat";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -262,7 +265,8 @@ function createInvoiceLineItem(
 
 /** Builds a work-order line item from a catalog selection, prefilling the
  * description, unit and price and remembering the catalog link. Catalog sale
- * prices are net; on an otkup order the line starts at the gross price. */
+ * prices are net; on an otkup order the line starts at the gross price, at
+ * the item's own PDV rate. */
 function createInvoiceLineItemFromCatalog(
   item: CatalogItem,
   billingDocumentType: BillingDocumentType | null,
@@ -275,7 +279,7 @@ function createInvoiceLineItemFromCatalog(
     quantity: 1,
     unit: normalizeInvoiceUnit(kind, item.unit),
     unitPrice: billingDocumentIncludesVat(billingDocumentType)
-      ? addVat(item.salePrice ?? 0)
+      ? addVat(item.salePrice ?? 0, vatRateForTaxGroup(item.taxGroup))
       : (item.salePrice ?? 0),
     // Catalog cost is captured server-side at save time from the item's history.
     unitCost: null,
@@ -963,7 +967,59 @@ export function WorkOrderForm({
     });
   };
 
+  // PDV rate per catalog item on this order, so switching to/from otkup can
+  // re-price each line at its own rate. Filled when a line is picked; lines
+  // loaded from a saved order are looked up on first use.
+  const vatRateByCatalogItemId = useRef(new Map<string, number>());
+  const resolveVatRate = async (catalogItemId: string): Promise<number> => {
+    const known = vatRateByCatalogItemId.current.get(catalogItemId);
+    if (known !== undefined) return known;
+    let rate = vatRateForTaxGroup(null);
+    try {
+      const item = await window.api.getCatalogItemById(catalogItemId);
+      rate = vatRateForTaxGroup(item?.taxGroup);
+    } catch {
+      // Unreachable item: fall back to the general rate.
+    }
+    vatRateByCatalogItemId.current.set(catalogItemId, rate);
+    return rate;
+  };
+  const repriceCatalogLines = async (
+    from: BillingDocumentType | null,
+    to: BillingDocumentType | null,
+  ): Promise<void> => {
+    if (billingDocumentIncludesVat(from) === billingDocumentIncludesVat(to)) return;
+    const lines = getValues("invoiceDraft.lineItems") ?? [];
+    const rates = await Promise.all(
+      lines.map((line) =>
+        line?.catalogItemId ? resolveVatRate(line.catalogItemId) : null,
+      ),
+    );
+    // Re-read after the lookups: lines may have been edited in the meantime.
+    const current = getValues("invoiceDraft.lineItems") ?? [];
+    current.forEach((line, index) => {
+      const rate = rates[index];
+      if (rate === null || rate === undefined || line?.id !== lines[index]?.id) return;
+      const repriced = repriceForBillingDocument(
+        Number(line.unitPrice) || 0,
+        rate,
+        from,
+        to,
+      );
+      if (repriced !== line.unitPrice) {
+        setValue(`invoiceDraft.lineItems.${index}.unitPrice`, repriced, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    });
+  };
+
   const handleAddCatalogLineItem = (catalogItem: CatalogItem): void => {
+    vatRateByCatalogItemId.current.set(
+      catalogItem.id,
+      vatRateForTaxGroup(catalogItem.taxGroup),
+    );
     const line = createInvoiceLineItemFromCatalog(
       catalogItem,
       getValues("billingDocumentType"),
@@ -2109,22 +2165,7 @@ export function WorkOrderForm({
                       // Switching to/from otkup moves catalog lines between net
                       // and gross (PDV) prices. Ad-hoc lines are priced by hand
                       // and left as typed.
-                      const lines = getValues("invoiceDraft.lineItems") ?? [];
-                      lines.forEach((line, index) => {
-                        if (!line?.catalogItemId) return;
-                        const repriced = repriceForBillingDocument(
-                          Number(line.unitPrice) || 0,
-                          field.value,
-                          nextValue,
-                        );
-                        if (repriced !== line.unitPrice) {
-                          setValue(
-                            `invoiceDraft.lineItems.${index}.unitPrice`,
-                            repriced,
-                            { shouldDirty: true, shouldValidate: true },
-                          );
-                        }
-                      });
+                      void repriceCatalogLines(field.value, nextValue);
                       field.onChange(nextValue);
                     }}
                   >
