@@ -496,7 +496,7 @@ export const en: typeof sr = {
   },
   catalog: {
     vatType: {
-      'Đ': 'Đ – general VAT rate 20%',
+      DJ: 'DJ – general VAT rate 20%',
       E: 'E – special VAT rate 10%',
       A: 'A – VAT exempt (0%)',
       legacy: '{{code}} (general rate 20%)',

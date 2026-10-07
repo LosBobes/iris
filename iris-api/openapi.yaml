@@ -1595,6 +1595,10 @@ components:
           type: [string, 'null']
         taxGroup:
           type: [string, 'null']
+          description: >-
+            PDV type code: "DJ" (general 20% rate, fiscal label Đ; the
+            default), "E" (special 10% rate) or "A" (exempt). Empty input is
+            and "Đ" are stored as "DJ"; other legacy codes are kept and priced at 20%.
         description:
           type: [string, 'null']
         isActive:
@@ -1764,6 +1768,10 @@ components:
           type: [string, 'null']
         taxGroup:
           type: [string, 'null']
+          description: >-
+            PDV type code: "DJ" (general 20% rate, fiscal label Đ; the
+            default), "E" (special 10% rate) or "A" (exempt). Empty input is
+            and "Đ" are stored as "DJ"; other legacy codes are kept and priced at 20%.
         description:
           type: [string, 'null']
         isActive:

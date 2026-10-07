@@ -9,7 +9,7 @@ import {
 
 describe("VAT helpers", () => {
   it("maps fiscal tax labels to rates, defaulting to the general 20%", () => {
-    expect(vatRateForTaxGroup("Đ")).toBe(0.2);
+    expect(vatRateForTaxGroup("DJ")).toBe(0.2);
     expect(vatRateForTaxGroup("E")).toBe(0.1);
     expect(vatRateForTaxGroup("A")).toBe(0);
     expect(vatRateForTaxGroup(null)).toBe(0.2);

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
 const initialSQLiteMigration = `
@@ -353,6 +355,16 @@ CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_due_date ON work_orders(tenant
 CREATE INDEX IF NOT EXISTS idx_customers_tenant_name ON customers(tenant_id, name COLLATE NOCASE);
 `
 
+// catalogDefaultTaxGroupMigration backfills the PDV type on catalog items that
+// have none (or the fiscal-receipt spelling "Đ"), so every stored item carries
+// an explicit tax group. Empty values already priced at the general rate; other
+// legacy codes are left as-is.
+const catalogDefaultTaxGroupMigration = `
+UPDATE catalog_items
+   SET tax_group = '` + domain.DefaultTaxGroup + `'
+ WHERE tax_group IS NULL OR TRIM(tax_group) IN ('', 'Đ');
+`
+
 // sqliteMigrations is the ordered list of schema versions. Each entry is applied
 // once, in order, and recorded in schema_migrations so existing databases pick
 // up later versions on the next startup.
@@ -379,6 +391,7 @@ var sqliteMigrations = []struct {
 	{version: 11, sql: workOrderNumberReservationsMigration},
 	{version: 12, sql: workOrderEditLocksMigration},
 	{version: 13, sql: workOrderPublicTokenMigration},
+	{version: 14, sql: catalogDefaultTaxGroupMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

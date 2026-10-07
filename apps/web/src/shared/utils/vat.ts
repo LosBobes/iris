@@ -1,17 +1,18 @@
 import type { BillingDocumentType } from "@/types/work-order";
 
 // PDV (Serbian VAT) types, keyed by the tax-rate label printed on fiscal
-// receipts. A catalog item's `taxGroup` holds one of these codes; an empty or
-// unrecognised value falls back to the general rate (opšta stopa).
+// receipts (DJ is the ASCII spelling of Đ). A catalog item's `taxGroup` holds
+// one of these codes; an empty or unrecognised value falls back to the general
+// rate (opšta stopa).
 export const VAT_TYPES = [
-  { code: "Đ", rate: 0.2 },
+  { code: "DJ", rate: 0.2 },
   { code: "E", rate: 0.1 },
   { code: "A", rate: 0 },
 ] as const;
 
 export type VatTypeCode = (typeof VAT_TYPES)[number]["code"];
 
-export const DEFAULT_VAT_TYPE: VatTypeCode = "Đ";
+export const DEFAULT_VAT_TYPE: VatTypeCode = "DJ";
 
 export function isVatTypeCode(value: string | null | undefined): value is VatTypeCode {
   return VAT_TYPES.some((type) => type.code === value);

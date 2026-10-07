@@ -91,7 +91,7 @@ profaktura keep net prices.
 
 ### PDV Type (catalog `taxGroup`)
 The catalog item's `taxGroup` (`Poreska grupa`) holds the fiscal-receipt tax label:
-- `Đ`: General rate (opšta stopa), 20%. Default for empty or unknown codes.
+- `DJ`: General rate (opšta stopa), 20% — `Đ` on fiscal receipts. Default for empty or unknown codes.
 - `E`: Special rate (posebna stopa), 10%.
 - `A`: Exempt from PDV, 0%.
 

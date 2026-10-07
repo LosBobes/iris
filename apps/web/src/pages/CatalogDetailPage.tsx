@@ -548,7 +548,7 @@ function Field({
 
 /**
  * PDV type picker for the item's tax group (poreska grupa). An empty value is
- * the general 20% rate, so it shows as Đ; a legacy code outside the known
+ * the general 20% rate, so it shows as DJ; a legacy code outside the known
  * labels is kept selectable and priced at the general rate.
  */
 function VatTypeField({
