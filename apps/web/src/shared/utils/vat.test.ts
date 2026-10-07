@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addVat,
   billingDocumentIncludesVat,
+  computeVatBreakdown,
   removeVat,
   repriceForBillingDocument,
   vatRateForTaxGroup,
@@ -36,5 +37,43 @@ describe("VAT helpers", () => {
     expect(repriceForBillingDocument(1100, 0.1, "cashCollection", "proforma")).toBe(1000);
     expect(repriceForBillingDocument(1000, 0.2, "invoice", "proforma")).toBe(1000);
     expect(repriceForBillingDocument(1000, 0, "invoice", "cashCollection")).toBe(1000);
+  });
+});
+
+describe("computeVatBreakdown", () => {
+  it("adds PDV on top of net faktura/predračun prices", () => {
+    expect(
+      computeVatBreakdown([{ quantity: 2, unitPrice: 500, rate: 0.2 }], false),
+    ).toEqual({ base: 1000, vatByRate: [{ rate: 0.2, amount: 200 }], vat: 200, total: 1200 });
+  });
+
+  it("takes PDV out of gross otkup prices", () => {
+    expect(
+      computeVatBreakdown([{ quantity: 1, unitPrice: 1200, rate: 0.2 }], true),
+    ).toEqual({ base: 1000, vatByRate: [{ rate: 0.2, amount: 200 }], vat: 200, total: 1200 });
+  });
+
+  it("splits PDV per rate and leaves exempt lines in the base only", () => {
+    const result = computeVatBreakdown(
+      [
+        { quantity: 1, unitPrice: 1000, rate: 0.1 },
+        { quantity: 1, unitPrice: 1000, rate: 0.2 },
+        { quantity: 3, unitPrice: 100, rate: 0 },
+      ],
+      false,
+    );
+    expect(result).toEqual({
+      base: 2300,
+      vatByRate: [
+        { rate: 0.2, amount: 200 },
+        { rate: 0.1, amount: 100 },
+      ],
+      vat: 300,
+      total: 2600,
+    });
+  });
+
+  it("returns zeros for an order with no lines", () => {
+    expect(computeVatBreakdown([], false)).toEqual({ base: 0, vatByRate: [], vat: 0, total: 0 });
   });
 });

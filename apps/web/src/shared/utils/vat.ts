@@ -58,3 +58,55 @@ export function repriceForBillingDocument(
   if (before === after) return unitPrice;
   return after ? addVat(unitPrice, rate) : removeVat(unitPrice, rate);
 }
+
+export interface VatLine {
+  quantity: number;
+  unitPrice: number;
+  /** PDV rate for the line, e.g. 0.2. */
+  rate: number;
+}
+
+export interface VatBreakdown {
+  /** Osnovica: the total without PDV. */
+  base: number;
+  /** PDV per rate, highest rate first; 0% rates are omitted. */
+  vatByRate: { rate: number; amount: number }[];
+  /** Total PDV across all rates. */
+  vat: number;
+  /** Osnovica + PDV: what the customer pays. */
+  total: number;
+}
+
+/**
+ * Splits an order into osnovica and PDV. Lines are grouped by rate and each
+ * group is rounded once, as on an invoice. `pricesIncludeVat` is true for otkup
+ * (prices are gross, so PDV is taken out) and false for faktura/predračun
+ * (prices are net, so PDV is added on top).
+ */
+export function computeVatBreakdown(
+  lines: VatLine[],
+  pricesIncludeVat: boolean,
+): VatBreakdown {
+  const sumByRate = new Map<number, number>();
+  for (const line of lines) {
+    const amount = (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0);
+    sumByRate.set(line.rate, (sumByRate.get(line.rate) ?? 0) + amount);
+  }
+
+  let base = 0;
+  let vat = 0;
+  const vatByRate: { rate: number; amount: number }[] = [];
+  for (const [rate, sum] of [...sumByRate.entries()].sort((a, b) => b[0] - a[0])) {
+    const rateBase = pricesIncludeVat ? roundMoney(sum / (1 + rate)) : roundMoney(sum);
+    const rateVat = pricesIncludeVat
+      ? roundMoney(sum - rateBase)
+      : roundMoney(rateBase * rate);
+    base += rateBase;
+    vat += rateVat;
+    if (rate > 0) vatByRate.push({ rate, amount: rateVat });
+  }
+
+  base = roundMoney(base);
+  vat = roundMoney(vat);
+  return { base, vatByRate, vat, total: roundMoney(base + vat) };
+}

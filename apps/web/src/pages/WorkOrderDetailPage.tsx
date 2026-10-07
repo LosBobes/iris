@@ -20,6 +20,8 @@ import { CancelWorkOrderDialog } from "@/components/WorkOrders/CancelWorkOrderDi
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkOrderVatBreakdown } from "@/hooks/useWorkOrderVatBreakdown";
+import { billingDocumentIncludesVat } from "@/shared/utils/vat";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
@@ -577,9 +579,12 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     ],
   ];
 
-  const total = order.price ?? 0;
-  const base = total / 1.2;
-  const pdv = total - base;
+  const vatBreakdown = useWorkOrderVatBreakdown(order);
+  const formatAmount = (value: number): string =>
+    new Intl.NumberFormat("sr-Latn-RS", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
 
   // Razlika u ceni: admin-only. The API nulls out unitCost/profit for operators,
   // so this breakdown is empty for them anyway — the isAdmin gate keeps the
@@ -836,33 +841,41 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             </div>
           )}
 
-          {/* Osnovica / PDV / za naplatu: the selling total every role needs to
-              know what to charge. Cost and margin are not part of this block. */}
+          {/* Osnovica / PDV / ukupno: the selling total every role needs to
+              know what to charge. Otkup prices already include PDV, so it is
+              taken out; faktura/predračun prices are net, so it is added on
+              top. Cost and margin are not part of this block. */}
           {order.price !== null && (
             <div className="mt-4 flex justify-end">
-              <div className="w-64 text-[12px]">
+              <div className="w-72 text-[12px]" data-testid="vat-breakdown">
+                <div className="pb-1.5 text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+                  {billingDocumentIncludesVat(order.billingDocumentType)
+                    ? t("workOrders.detail.pricesIncludeVat")
+                    : t("workOrders.detail.pricesExcludeVat")}
+                </div>
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
                   <span>{t("workOrders.detail.base")}</span>
-                  <span className="tnum">
-                    {new Intl.NumberFormat("sr-Latn-RS", {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    }).format(base)}
-                  </span>
+                  <span className="tnum">{formatAmount(vatBreakdown.base)}</span>
                 </div>
-                <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
-                  <span>{t("workOrders.detail.vat")}</span>
-                  <span className="tnum">
-                    {new Intl.NumberFormat("sr-Latn-RS", {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    }).format(pdv)}
-                  </span>
-                </div>
+                {vatBreakdown.vatByRate.map(({ rate, amount }) => (
+                  <div
+                    key={rate}
+                    className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]"
+                  >
+                    <span>{t("workOrders.detail.vatAtRate", { rate: Math.round(rate * 100) })}</span>
+                    <span className="tnum">{formatAmount(amount)}</span>
+                  </div>
+                ))}
+                {vatBreakdown.vatByRate.length !== 1 && (
+                  <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
+                    <span>{t("workOrders.detail.vatTotal")}</span>
+                    <span className="tnum">{formatAmount(vatBreakdown.vat)}</span>
+                  </div>
+                )}
                 <div className="mt-1.5 flex justify-between border-t border-foreground py-2.5 text-foreground">
-                  <span className="font-medium">{t("workOrders.detail.toPay")}</span>
+                  <span className="font-medium">{t("workOrders.detail.totalWithVat")}</span>
                   <span className="tnum text-[14px] font-medium">
-                    {formatWorkOrderPrice(total)}
+                    {formatAmount(vatBreakdown.total)}
                   </span>
                 </div>
               </div>
