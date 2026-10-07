@@ -34,6 +34,7 @@ import {
   addApiBreadcrumb,
   ApiError,
   ApiNetworkError,
+  type ResponseBodyFailure,
   reportApiError,
   reportNetworkError,
 } from '@/lib/errors'
@@ -88,6 +89,7 @@ function fail(
   message: string,
   response: Response,
   payload: unknown,
+  bodyFailure?: ResponseBodyFailure,
 ): never {
   const request = requestDetails.get(response)
   const error = new ApiError(message, {
@@ -96,19 +98,110 @@ function fail(
       errorField(payload, 'requestId') ?? response.headers.get('X-Request-Id'),
     url: request?.url || response.url,
     method: request?.method,
+    bodyFailure,
   })
   announceIfSessionExpired(error.status, error.url)
   throw error
+}
+
+/**
+ * Bodies the fetch wrapper already read (and parsed) on the way in, keyed by
+ * the response it handed back. A GET's JSON body is read eagerly so that a
+ * body that fails mid-transfer can be retried while the request is still in
+ * the wrapper's hands; see `bufferJSONBody`.
+ */
+const bufferedBodies = new WeakMap<
+  Response,
+  { payload: unknown; failure: ResponseBodyFailure | null }
+>()
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`
+  return String(error)
+}
+
+function bodyFailure(
+  response: Response,
+  stage: ResponseBodyFailure['stage'],
+  error: unknown,
+  receivedChars: number,
+  attempts: number,
+): ResponseBodyFailure {
+  return {
+    stage,
+    reason: describeError(error),
+    contentType: response.headers.get('Content-Type') ?? '(none)',
+    contentLength: response.headers.get('Content-Length') ?? '(none)',
+    receivedChars,
+    attempts,
+  }
+}
+
+function isJSONResponse(response: Response): boolean {
+  return (response.headers.get('Content-Type') ?? '').includes('application/json')
+}
+
+/**
+ * Reads and parses a JSON response body up front, returning a fresh Response
+ * that replays it plus whether the read or parse failed.
+ *
+ * Production saw 200 responses whose body never arrived intact (Sentry
+ * IRIS-FE-8/9/A): the status line and headers came through, then the body
+ * stream broke, and the list page showed "Neispravan odgovor servera." Reading
+ * the body here — instead of later in `readJSON` — is what makes a retry
+ * possible, because only the fetch wrapper can send the request again.
+ */
+async function bufferJSONBody(
+  response: Response,
+  attempts: number,
+): Promise<{ response: Response; failure: ResponseBodyFailure | null }> {
+  const init = {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  }
+  let text: string
+  try {
+    text = await response.text()
+  } catch (error) {
+    const failure = bodyFailure(response, 'read', error, 0, attempts)
+    const replay = new Response(null, init)
+    bufferedBodies.set(replay, { payload: undefined, failure })
+    return { response: replay, failure }
+  }
+
+  let payload: unknown
+  let failure: ResponseBodyFailure | null = null
+  try {
+    payload = JSON.parse(text)
+  } catch (error) {
+    payload = undefined
+    failure = bodyFailure(response, 'parse', error, text.length, attempts)
+  }
+  // A null-body status (204/304) cannot be constructed with a body.
+  const replay = new Response(text === '' ? null : text, init)
+  bufferedBodies.set(replay, { payload, failure })
+  return { response: replay, failure }
 }
 
 async function readJSON<T>(response: Response): Promise<T> {
   // Error responses are not guaranteed to be JSON (e.g. an HTML page from a
   // proxy), so parse failures must not mask the HTTP status.
   let payload: unknown
-  try {
-    payload = await response.json()
-  } catch {
-    payload = undefined
+  let failure: ResponseBodyFailure | null = null
+  const buffered = bufferedBodies.get(response)
+  if (buffered) {
+    payload = buffered.payload
+    failure = buffered.failure
+  } else {
+    let text: string | null = null
+    try {
+      text = await response.text()
+      payload = JSON.parse(text)
+    } catch (error) {
+      payload = undefined
+      failure = bodyFailure(response, text === null ? 'read' : 'parse', error, text?.length ?? 0, 1)
+    }
   }
 
   if (!response.ok) {
@@ -120,7 +213,7 @@ async function readJSON<T>(response: Response): Promise<T> {
   }
 
   if (payload === undefined) {
-    fail('Neispravan odgovor servera.', response, payload)
+    fail('Neispravan odgovor servera.', response, payload, failure ?? undefined)
   }
 
   return payload as T
@@ -287,7 +380,7 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
   // Records the method each response was fetched with, and turns a transport
   // failure — offline, DNS, a blocked response — into an error that names the
   // route instead of the bare `TypeError: Failed to fetch` the browser throws.
-  const fetchImpl: FetchLike = async (input, init) => {
+  const send: FetchLike = async (input, init) => {
     const method = (init?.method ?? 'GET').toUpperCase()
     try {
       const response = await baseFetch(input, init)
@@ -296,6 +389,26 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     } catch (cause) {
       if (cause instanceof ApiNetworkError) throw cause
       throw new ApiNetworkError({ url: requestUrl(input), method, cause })
+    }
+  }
+
+  // A successful GET whose JSON body breaks off mid-transfer is sent once more:
+  // a GET is safe to repeat, and a second attempt over a fresh connection is
+  // what an operator would otherwise do by hand with a refresh. Writes are never
+  // repeated, and neither is a failed status — that answer is already final.
+  const fetchImpl: FetchLike = async (input, init) => {
+    const method = (init?.method ?? 'GET').toUpperCase()
+    if (method !== 'GET') return send(input, init)
+
+    for (let attempt = 1; ; attempt += 1) {
+      const response = await send(input, init)
+      if (!isJSONResponse(response)) return response
+
+      const buffered = await bufferJSONBody(response, attempt)
+      requestDetails.set(buffered.response, { method, url: requestUrl(input) })
+      if (!buffered.failure || !response.ok || attempt >= 2) {
+        return buffered.response
+      }
     }
   }
 

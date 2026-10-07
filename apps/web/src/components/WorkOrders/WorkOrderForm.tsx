@@ -36,7 +36,11 @@ import {
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
-import { formatActionError, slugId } from "@/lib/customers";
+import {
+  formatActionError,
+  slugId,
+  validateIdentifierFormat,
+} from "@/lib/customers";
 import { AsyncCombobox } from "@/components/WorkOrders/AsyncCombobox";
 import { CatalogPickerDialog } from "@/components/WorkOrders/CatalogPickerDialog";
 import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
@@ -862,6 +866,13 @@ export function WorkOrderForm({
     if (!customerDraft) return;
     const name = customerDraft.name.trim();
     if (!name) return;
+    // The API rejects a malformed PIB/MB with a 422; catching it here keeps the
+    // operator in the dialog with the reason instead of a failed save.
+    const identifierError = validateIdentifierFormat(customerDraft.pib, customerDraft.mb);
+    if (identifierError) {
+      toast.error(identifierError);
+      return;
+    }
     setSavingCustomer(true);
     try {
       const contact = customerDraft.contact.trim();
@@ -904,6 +915,11 @@ export function WorkOrderForm({
     if (!customerEdit || !selectedCustomer) return;
     const name = customerEdit.name.trim();
     if (!name) return;
+    const identifierError = validateIdentifierFormat(customerEdit.pib, customerEdit.mb);
+    if (identifierError) {
+      toast.error(identifierError);
+      return;
+    }
     setSavingCustomerEdit(true);
     try {
       const contact = customerEdit.contact.trim();

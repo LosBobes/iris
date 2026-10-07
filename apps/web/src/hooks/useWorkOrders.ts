@@ -271,7 +271,20 @@ export function filterWorkOrdersForList(
   });
 }
 
-export function useWorkOrders(): UseWorkOrdersResult {
+export interface UseWorkOrdersOptions {
+  /**
+   * Fetch only orders awaiting cost entry, filtered by the API. The cost-review
+   * queue uses this so it downloads its few hundred rows instead of every order
+   * in the shop, and lists exactly the set the sidebar badge counts (both come
+   * from the same server-side filter).
+   */
+  needsCostReview?: boolean;
+}
+
+export function useWorkOrders(
+  options: UseWorkOrdersOptions = {},
+): UseWorkOrdersResult {
+  const serverNeedsCostReview = options.needsCostReview === true;
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParamsKey = searchParams.toString();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
@@ -306,14 +319,18 @@ export function useWorkOrders(): UseWorkOrdersResult {
       // Filtering, sorting and paging happen client-side over the full set
       // (search is scoped to visible columns, and export covers every page),
       // so this asks for all orders — but only the fields the table reads.
-      const data = await window.api.getWorkOrders({ view: "summary" });
+      // The cost-review queue narrows that set on the server first.
+      const data = await window.api.getWorkOrders({
+        view: "summary",
+        ...(serverNeedsCostReview ? { needsCostReview: true } : {}),
+      });
       setOrders(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : i18n.t("common.unknownError"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [serverNeedsCostReview]);
 
   useEffect(() => {
     fetchOrders();

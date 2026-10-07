@@ -42,7 +42,7 @@ function CostReviewPage(): React.JSX.Element {
     pageSize,
     setPageSize,
     refreshOrders,
-  } = useWorkOrders();
+  } = useWorkOrders({ needsCostReview: true });
   // Deleting a work order is admin-only on the API; this whole page is admin-only.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
