@@ -79,6 +79,21 @@ export function normalizeRoute(pathOrUrl: string): string {
   )
 }
 
+/** Why a response body could not be used, as recorded by the api-client. */
+export interface ResponseBodyFailure {
+  /** `read` = the body stream failed mid-transfer; `parse` = it arrived but was not JSON. */
+  stage: 'read' | 'parse'
+  /** The underlying error, e.g. `TypeError: network error` or `SyntaxError: ...`. */
+  reason: string
+  contentType: string
+  /** The Content-Length header, or `(none)` for a chunked/compressed response. */
+  contentLength: string
+  /** Characters actually received before the failure (0 when the read failed). */
+  receivedChars: number
+  /** How many times the request was sent (a failed GET body is retried once). */
+  attempts: number
+}
+
 /**
  * A failed API call, carrying everything needed to diagnose it after the fact.
  *
@@ -100,6 +115,13 @@ export class ApiError extends Error {
   readonly url: string
   readonly method: string
   readonly route: string
+  /**
+   * How the response body failed to read or parse, when it did. A 200 whose
+   * body never arrived intact otherwise reaches Sentry as nothing more than
+   * "Neispravan odgovor servera.", which cannot tell a dropped connection from
+   * an HTML page served in place of JSON.
+   */
+  readonly bodyFailure: ResponseBodyFailure | null
   operation: string
 
   constructor(
@@ -110,10 +132,12 @@ export class ApiError extends Error {
       url: string
       method?: string
       operation?: string
+      bodyFailure?: ResponseBodyFailure | null
     },
   ) {
     super(message)
     this.status = options.status
+    this.bodyFailure = options.bodyFailure ?? null
     this.requestId = options.requestId ?? null
     this.url = options.url
     this.method = (options.method ?? 'GET').toUpperCase()
@@ -251,6 +275,7 @@ export function reportApiError(error: ApiError): void {
       'http.path': pathOf(error.url),
       'api.operation': error.operation,
       ...(error.requestId ? { 'request.reference': error.requestId } : {}),
+      ...(error.bodyFailure ? { 'api.body_failure': error.bodyFailure.stage } : {}),
     },
     contexts: {
       'API request': {
@@ -262,6 +287,7 @@ export function reportApiError(error: ApiError): void {
         'server message': error.message,
         'request reference': error.requestId ?? '(none)',
       },
+      ...(error.bodyFailure ? { 'Response body': { ...error.bodyFailure } } : {}),
     },
   })
 }

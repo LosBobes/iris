@@ -514,3 +514,89 @@ describe('failed requests', () => {
     vi.resetModules()
   })
 })
+
+// A 200 whose body stream breaks partway: the status line and headers arrive,
+// then the connection drops (Sentry IRIS-FE-8/9/A).
+function brokenBodyResponse(): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"items":[{"id":"1"'))
+      controller.error(new TypeError('network error'))
+    },
+  })
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+describe('response bodies that fail to arrive', () => {
+  it('retries a GET once when the body breaks off, and returns the second answer', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(brokenBodyResponse())
+      .mockResolvedValueOnce(response({ items: [], total: 0 }))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getWorkOrders({ view: 'summary' })).resolves.toEqual({
+      items: [],
+      total: 0,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('gives up after the second attempt and says why the body was unusable', async () => {
+    const fetchMock = vi.fn(async () => brokenBodyResponse())
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getWorkOrders().catch((thrown) => thrown)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(error.name).toBe('ApiError 200 GET /work-orders (getWorkOrders)')
+    expect(error.status).toBe(200)
+    expect(error.message).toBe('Neispravan odgovor servera.')
+    expect(error.bodyFailure).toMatchObject({
+      stage: 'read',
+      reason: expect.stringContaining('network error'),
+      contentType: 'application/json',
+      attempts: 2,
+    })
+  })
+
+  it('records a body that arrived but is not JSON, without retrying it', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('<!doctype html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+    )
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getLocations().catch((thrown) => thrown)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(error.bodyFailure).toMatchObject({
+      stage: 'parse',
+      contentType: 'text/html',
+      receivedChars: '<!doctype html>'.length,
+      attempts: 1,
+    })
+  })
+
+  it('never repeats a write', async () => {
+    const fetchMock = vi.fn(async () => brokenBodyResponse())
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.createWorkOrder(baseInput)).rejects.toThrow(
+      'Neispravan odgovor servera.',
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry a failed status', async () => {
+    const fetchMock = vi.fn(async () => response({ error: 'Greška' }, { status: 500 }))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getWorkOrders()).rejects.toThrow('Greška')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
