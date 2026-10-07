@@ -42,7 +42,10 @@ import { CatalogPickerDialog } from "@/components/WorkOrders/CatalogPickerDialog
 import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
 import {
   WORK_ORDER_SELECT_NONE_VALUE,
+  addVat,
+  billingDocumentIncludesVat,
   getWorkOrderStatusLabel,
+  repriceForBillingDocument,
   formatWorkOrderDate,
   formatWorkOrderDateTime,
   formatWorkOrderPrice,
@@ -258,9 +261,11 @@ function createInvoiceLineItem(
 }
 
 /** Builds a work-order line item from a catalog selection, prefilling the
- * description, unit and price and remembering the catalog link. */
+ * description, unit and price and remembering the catalog link. Catalog sale
+ * prices are net; on an otkup order the line starts at the gross price. */
 function createInvoiceLineItemFromCatalog(
   item: CatalogItem,
+  billingDocumentType: BillingDocumentType | null,
 ): InvoiceLineItemFormValue {
   const kind: InvoiceLineItemKind = item.kind === "article" ? "goods" : "service";
   return {
@@ -269,7 +274,9 @@ function createInvoiceLineItemFromCatalog(
     description: item.name,
     quantity: 1,
     unit: normalizeInvoiceUnit(kind, item.unit),
-    unitPrice: item.salePrice ?? 0,
+    unitPrice: billingDocumentIncludesVat(billingDocumentType)
+      ? addVat(item.salePrice ?? 0)
+      : (item.salePrice ?? 0),
     // Catalog cost is captured server-side at save time from the item's history.
     unitCost: null,
     catalogItemId: item.id,
@@ -583,6 +590,7 @@ export function WorkOrderForm({
   const selectedCustomerId = watch("customerId");
   const selectedLocationId = watch("locationId");
   const shippingAddress = watch("shipping.shippingAddress");
+  const billingDocumentTypeValue = watch("billingDocumentType");
   // useWatch subscribes to the control store directly (not via a mounted input),
   // so the derived total stays correct even when a line's qty/price inputs are
   // unmounted because the row is collapsed to read-only.
@@ -956,7 +964,10 @@ export function WorkOrderForm({
   };
 
   const handleAddCatalogLineItem = (catalogItem: CatalogItem): void => {
-    const line = createInvoiceLineItemFromCatalog(catalogItem);
+    const line = createInvoiceLineItemFromCatalog(
+      catalogItem,
+      getValues("billingDocumentType"),
+    );
     appendInvoiceLineItem(line);
     // Catalog lines render locked, but every copy of one item has to be told
     // apart on the printed nalog ("BANER 0,5 M2" vs "BANER 6 M2"), so a
@@ -1565,6 +1576,9 @@ export function WorkOrderForm({
 
               <p className="mb-4 text-[11px] text-[color:var(--iris-ink-mute)]">
                 {t("workOrders.form.catalogHint")}
+                {billingDocumentIncludesVat(billingDocumentTypeValue) && (
+                  <> {t("workOrders.form.catalogVatHint")}</>
+                )}
               </p>
 
               <CatalogPickerDialog
@@ -2092,6 +2106,25 @@ export function WorkOrderForm({
                         v === WORK_ORDER_SELECT_NONE_VALUE
                           ? null
                           : (v as BillingDocumentType);
+                      // Switching to/from otkup moves catalog lines between net
+                      // and gross (PDV) prices. Ad-hoc lines are priced by hand
+                      // and left as typed.
+                      const lines = getValues("invoiceDraft.lineItems") ?? [];
+                      lines.forEach((line, index) => {
+                        if (!line?.catalogItemId) return;
+                        const repriced = repriceForBillingDocument(
+                          Number(line.unitPrice) || 0,
+                          field.value,
+                          nextValue,
+                        );
+                        if (repriced !== line.unitPrice) {
+                          setValue(
+                            `invoiceDraft.lineItems.${index}.unitPrice`,
+                            repriced,
+                            { shouldDirty: true, shouldValidate: true },
+                          );
+                        }
+                      });
                       field.onChange(nextValue);
                     }}
                   >

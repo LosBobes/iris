@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  addVat,
+  billingDocumentIncludesVat,
   compareWorkOrderNumbers,
   formatWorkOrderPrice,
   getWorkOrderBillingDocumentLabel,
   getWorkOrderPriorityLabel,
+  removeVat,
+  repriceForBillingDocument,
 } from "@/shared/utils/work-orders";
 
 describe("work order label + price helpers", () => {
@@ -59,5 +63,27 @@ describe("compareWorkOrderNumbers", () => {
     const numbers = ["RN-2026-9", "RN-2026-11", "RN-2026-10"];
     const sorted = [...numbers].sort((a, b) => -compareWorkOrderNumbers(a, b));
     expect(sorted).toEqual(["RN-2026-11", "RN-2026-10", "RN-2026-9"]);
+  });
+});
+
+describe("billing document VAT helpers", () => {
+  it("includes VAT only for otkup", () => {
+    expect(billingDocumentIncludesVat("cashCollection")).toBe(true);
+    expect(billingDocumentIncludesVat("invoice")).toBe(false);
+    expect(billingDocumentIncludesVat("proforma")).toBe(false);
+    expect(billingDocumentIncludesVat(null)).toBe(false);
+  });
+
+  it("adds and removes 20% VAT rounded to the para", () => {
+    expect(addVat(1000)).toBe(1200);
+    expect(addVat(333.33)).toBe(400);
+    expect(removeVat(1200)).toBe(1000);
+  });
+
+  it("re-prices only when crossing the net/gross boundary", () => {
+    expect(repriceForBillingDocument(1000, "invoice", "cashCollection")).toBe(1200);
+    expect(repriceForBillingDocument(1200, "cashCollection", "proforma")).toBe(1000);
+    expect(repriceForBillingDocument(1000, "invoice", "proforma")).toBe(1000);
+    expect(repriceForBillingDocument(1000, null, "invoice")).toBe(1000);
   });
 });

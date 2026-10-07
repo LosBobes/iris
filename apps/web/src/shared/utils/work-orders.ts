@@ -240,3 +240,42 @@ export function compareWorkOrderNumbers(a: string, b: string): number {
   }
   return segmentsA.length - segmentsB.length;
 }
+
+// Standard Serbian VAT (PDV) rate. Catalog sale prices are stored net (bez
+// PDV-a); an otkup order is collected from the end customer, so its catalog
+// lines must carry the gross price instead.
+export const VAT_RATE = 0.2;
+
+/** True when the document type is charged with VAT included (otkup). Invoices
+ * (faktura) and proformas (predračun) keep net prices — VAT is added on the
+ * document itself. */
+export function billingDocumentIncludesVat(
+  type: BillingDocumentType | null | undefined,
+): boolean {
+  return type === "cashCollection";
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function addVat(netPrice: number): number {
+  return roundMoney(netPrice * (1 + VAT_RATE));
+}
+
+export function removeVat(grossPrice: number): number {
+  return roundMoney(grossPrice / (1 + VAT_RATE));
+}
+
+/** Re-prices a line when the order's document type switches between a net
+ * (faktura/predračun) and a gross (otkup) basis; unchanged otherwise. */
+export function repriceForBillingDocument(
+  unitPrice: number,
+  from: BillingDocumentType | null | undefined,
+  to: BillingDocumentType | null | undefined,
+): number {
+  const before = billingDocumentIncludesVat(from);
+  const after = billingDocumentIncludesVat(to);
+  if (before === after) return unitPrice;
+  return after ? addVat(unitPrice) : removeVat(unitPrice);
+}

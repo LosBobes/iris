@@ -1063,6 +1063,7 @@ export const en: typeof sr = {
       searchCatalog: 'Search catalog...',
       noCatalog: 'No catalog items.',
       catalogHint: 'For a service not in the catalog use “Special service”.',
+      catalogVatHint: 'Cash collection (otkup): catalog prices include 20% VAT.',
       catalogAlreadyAdded: 'Already on order',
       noItems: 'No items',
       colType: 'Type',

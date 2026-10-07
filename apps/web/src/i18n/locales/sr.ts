@@ -1063,6 +1063,7 @@ export const sr = {
       searchCatalog: 'Pretraga kataloga...',
       noCatalog: 'Nema stavki u katalogu.',
       catalogHint: 'Za uslugu koja nije u katalogu koristite „Posebna usluga“.',
+      catalogVatHint: 'Otkup: cene iz kataloga su uvećane za PDV (20%).',
       catalogAlreadyAdded: 'Već na nalogu',
       noItems: 'Nema stavki',
       colType: 'Tip',

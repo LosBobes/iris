@@ -24,7 +24,13 @@ vi.mock("@/hooks/useOrganization", async () => {
 });
 vi.mock("@/hooks/useEnumValues", () => ({
   useEnumValues: () => ({
-    optionsFor: () => [],
+    optionsFor: (field: string) =>
+      field === "billingDocumentType"
+        ? [
+            { value: "invoice", label: "Faktura" },
+            { value: "cashCollection", label: "Otkup" },
+          ]
+        : [],
     labelFor: (_field: string, value: string) => value,
   }),
 }));
@@ -169,5 +175,32 @@ describe("WorkOrderForm catalog lines", () => {
     expect(
       await screen.findByRole("textbox", { name: strings.colDescription }),
     ).toBeInTheDocument();
+  });
+
+  // Catalog prices are net (bez PDV-a). An otkup order is collected from the
+  // end customer, so its catalog lines must carry PDV; a faktura/predračun
+  // keeps them net. Switching the document type re-prices the lines.
+  it("adds PDV to catalog lines on an otkup order and removes it again", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkOrderForm onSubmit={vi.fn().mockResolvedValue(undefined)} onCancel={vi.fn()} />,
+    );
+
+    const chooseDocumentType = async (label: string) => {
+      await user.click(screen.getByRole("combobox", { name: strings.documentType }));
+      await user.click(await screen.findByRole("option", { name: label }));
+    };
+    const prices = () => screen.getAllByRole("spinbutton", { name: strings.colPrice });
+
+    await chooseDocumentType("Otkup");
+    await addCatalogService(user);
+    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+    expect(screen.getByText(strings.catalogVatHint, { exact: false })).toBeInTheDocument();
+
+    await chooseDocumentType("Faktura");
+    await waitFor(() => expect(prices()[0]).toHaveValue(1200));
+
+    await chooseDocumentType("Otkup");
+    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
   });
 });
