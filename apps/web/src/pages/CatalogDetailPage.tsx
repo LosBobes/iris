@@ -31,6 +31,7 @@ import {
 } from "@/lib/catalog";
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
 import { cn } from "@/lib/utils";
+import { DEFAULT_VAT_TYPE, VAT_TYPES, isVatTypeCode } from "@/shared/utils/vat";
 import { reportUnexpectedError } from "@/lib/errors";
 
 function snapshotOf(value: CatalogItem, effective: string): string {
@@ -410,9 +411,8 @@ function DetailsForm({
           readOnly={readOnly}
           onChange={(barcode) => onChange({ ...value, barcode })}
         />
-        <Field
-          label={t("catalog.detail.taxGroup")}
-          value={value.taxGroup ?? ""}
+        <VatTypeField
+          value={value.taxGroup}
           readOnly={readOnly}
           onChange={(taxGroup) => onChange({ ...value, taxGroup })}
         />
@@ -542,6 +542,53 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
       />
+    </label>
+  );
+}
+
+/**
+ * PDV type picker for the item's tax group (poreska grupa). An empty value is
+ * the general 20% rate, so it shows as DJ; a legacy code outside the known
+ * labels is kept selectable and priced at the general rate.
+ */
+function VatTypeField({
+  value,
+  readOnly,
+  onChange,
+}: {
+  value: string | null;
+  readOnly?: boolean;
+  onChange: (value: string) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const options: { value: string; label: string }[] = VAT_TYPES.map((type) => ({
+    value: type.code,
+    label: t(`catalog.vatType.${type.code}`),
+  }));
+  const selected = value || DEFAULT_VAT_TYPE;
+  if (!isVatTypeCode(selected)) {
+    options.push({ value: selected, label: t("catalog.vatType.legacy", { code: selected }) });
+  }
+
+  if (readOnly) {
+    const current = options.find((option) => option.value === selected);
+    return <ReadOnlyValue label={t("catalog.detail.taxGroup")} value={current?.label ?? selected} />;
+  }
+
+  return (
+    <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
+      {t("catalog.detail.taxGroup")}
+      <select
+        value={selected}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

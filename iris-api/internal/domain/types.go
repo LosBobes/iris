@@ -134,6 +134,11 @@ type CatalogItem struct {
 	UpdatedAt     string          `json:"updatedAt,omitempty"`
 }
 
+// DefaultTaxGroup is the PDV type a catalog item gets when none is set: the
+// label for the general 20% rate (opšta stopa; "Đ" on fiscal receipts). The other
+// labels the web UI offers are "E" (special 10% rate) and "A" (exempt).
+const DefaultTaxGroup = "DJ"
+
 // CatalogItemCost is one effective-dated cost record in a catalog item's price
 // history (1-N to CatalogItem). The store appends a new record whenever an admin
 // changes an item's price, stamping EffectiveFrom = today and closing the prior

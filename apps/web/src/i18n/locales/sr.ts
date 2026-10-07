@@ -494,6 +494,12 @@ export const sr = {
     nextAria: 'Sledeća strana',
   },
   catalog: {
+    vatType: {
+      DJ: 'Đ – opšta stopa PDV-a 20%',
+      E: 'E – posebna stopa PDV-a 10%',
+      A: 'A – oslobođeno PDV-a (0%)',
+      legacy: '{{code}} (opšta stopa 20%)',
+    },
     eyebrow: 'Iris · katalog',
     title: 'Usluge i artikli',
     adminSubtitle: 'Izaberite stavku za izmenu ili dodajte novu',
@@ -1063,6 +1069,7 @@ export const sr = {
       searchCatalog: 'Pretraga kataloga...',
       noCatalog: 'Nema stavki u katalogu.',
       catalogHint: 'Za uslugu koja nije u katalogu koristite „Posebna usluga“.',
+      catalogVatHint: 'Otkup: cene iz kataloga su uvećane za PDV prema poreskoj grupi stavke (podrazumevano 20%).',
       catalogAlreadyAdded: 'Već na nalogu',
       noItems: 'Nema stavki',
       colType: 'Tip',

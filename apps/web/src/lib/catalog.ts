@@ -1,5 +1,6 @@
 import { format, parse } from "date-fns";
 import i18n from "@/i18n";
+import { DEFAULT_VAT_TYPE } from "@/shared/utils/vat";
 import type { CatalogItem, CatalogItemInput, CatalogItemKind } from "@/types/catalog";
 
 export const emptyCatalogItem: CatalogItem = {
@@ -11,7 +12,8 @@ export const emptyCatalogItem: CatalogItem = {
   purchasePrice: null,
   salePrice: null,
   barcode: null,
-  taxGroup: null,
+  // New items start at the general PDV rate; admins pick another type in the form.
+  taxGroup: DEFAULT_VAT_TYPE,
   description: null,
   isActive: true,
 };

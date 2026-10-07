@@ -24,7 +24,13 @@ vi.mock("@/hooks/useOrganization", async () => {
 });
 vi.mock("@/hooks/useEnumValues", () => ({
   useEnumValues: () => ({
-    optionsFor: () => [],
+    optionsFor: (field: string) =>
+      field === "billingDocumentType"
+        ? [
+            { value: "invoice", label: "Faktura" },
+            { value: "cashCollection", label: "Otkup" },
+          ]
+        : [],
     labelFor: (_field: string, value: string) => value,
   }),
 }));
@@ -51,9 +57,24 @@ const service: CatalogItem = {
   isActive: true,
 };
 
+// A book, taxed at the special 10% PDV rate (fiscal label E).
+const book: CatalogItem = {
+  ...service,
+  id: "art-knjiga",
+  code: "KNJIGA",
+  name: "Knjiga monografija",
+  kind: "article",
+  unit: "kom",
+  salePrice: 1000,
+  taxGroup: "E",
+};
+
 function stubApi() {
   vi.stubGlobal("api", {
-    getCatalogItems: vi.fn().mockResolvedValue({ items: [service], total: 1 }),
+    getCatalogItems: vi.fn().mockResolvedValue({ items: [service, book], total: 2 }),
+    getCatalogItemById: vi.fn(async (id: string) =>
+      [service, book].find((item) => item.id === id) ?? null,
+    ),
     getWorkOrderOperators: vi.fn().mockResolvedValue([]),
     getCustomers: vi.fn().mockResolvedValue({ customers: [], total: 0 }),
     getLocations: vi.fn().mockResolvedValue([]),
@@ -169,5 +190,55 @@ describe("WorkOrderForm catalog lines", () => {
     expect(
       await screen.findByRole("textbox", { name: strings.colDescription }),
     ).toBeInTheDocument();
+  });
+
+  // Catalog prices are net (bez PDV-a). An otkup order is collected from the
+  // end customer, so its catalog lines must carry PDV; a faktura/predračun
+  // keeps them net. Switching the document type re-prices the lines.
+  it("adds PDV to catalog lines on an otkup order and removes it again", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkOrderForm onSubmit={vi.fn().mockResolvedValue(undefined)} onCancel={vi.fn()} />,
+    );
+
+    const chooseDocumentType = async (label: string) => {
+      await user.click(screen.getByRole("combobox", { name: strings.documentType }));
+      await user.click(await screen.findByRole("option", { name: label }));
+    };
+    const prices = () => screen.getAllByRole("spinbutton", { name: strings.colPrice });
+
+    await chooseDocumentType("Otkup");
+    await addCatalogService(user);
+    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+    expect(screen.getByText(strings.catalogVatHint, { exact: false })).toBeInTheDocument();
+
+    await chooseDocumentType("Faktura");
+    await waitFor(() => expect(prices()[0]).toHaveValue(1200));
+
+    await chooseDocumentType("Otkup");
+    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+  });
+
+  it("uses each catalog item's own PDV rate on an otkup order", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkOrderForm onSubmit={vi.fn().mockResolvedValue(undefined)} onCancel={vi.fn()} />,
+    );
+
+    await addCatalogService(user);
+    await user.click(screen.getByRole("button", { name: strings.catalogArticle }));
+    await user.click(await screen.findByRole("button", { name: /Knjiga monografija/ }));
+
+    const prices = () => screen.getAllByRole("spinbutton", { name: strings.colPrice });
+    await waitFor(() => expect(prices()).toHaveLength(2));
+    expect(prices()[0]).toHaveValue(1200);
+    expect(prices()[1]).toHaveValue(1000);
+
+    await user.click(screen.getByRole("combobox", { name: strings.documentType }));
+    await user.click(await screen.findByRole("option", { name: "Otkup" }));
+
+    // Service at the default 20%, book at 10%.
+    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+    expect(prices()[1]).toHaveValue(1100);
   });
 });

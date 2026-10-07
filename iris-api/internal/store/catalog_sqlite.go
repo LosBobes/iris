@@ -405,6 +405,17 @@ func normalizeCatalogItem(item domain.CatalogItem) (domain.CatalogItem, error) {
 	if item.Kind == "" {
 		item.Kind = domain.CatalogItemKindService
 	}
+	if item.TaxGroup == nil || strings.TrimSpace(*item.TaxGroup) == "" {
+		taxGroup := domain.DefaultTaxGroup
+		item.TaxGroup = &taxGroup
+	} else {
+		taxGroup := strings.TrimSpace(*item.TaxGroup)
+		if taxGroup == "Đ" {
+			// The fiscal-receipt spelling of the default label.
+			taxGroup = domain.DefaultTaxGroup
+		}
+		item.TaxGroup = &taxGroup
+	}
 	if item.Name == "" {
 		return domain.CatalogItem{}, newValidationError("Naziv artikla je obavezan.")
 	}
