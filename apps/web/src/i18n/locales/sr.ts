@@ -495,7 +495,7 @@ export const sr = {
   },
   catalog: {
     vatType: {
-      DJ: 'DJ – opšta stopa PDV-a 20%',
+      DJ: 'Đ – opšta stopa PDV-a 20%',
       E: 'E – posebna stopa PDV-a 10%',
       A: 'A – oslobođeno PDV-a (0%)',
       legacy: '{{code}} (opšta stopa 20%)',
