@@ -21,7 +21,7 @@ import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrd
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkOrderVatBreakdown } from "@/hooks/useWorkOrderVatBreakdown";
-import { billingDocumentIncludesVat } from "@/shared/utils/vat";
+import { lineVatAmount } from "@/shared/utils/vat";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
@@ -579,7 +579,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     ],
   ];
 
-  const vatBreakdown = useWorkOrderVatBreakdown(order);
+  const {
+    breakdown: vatBreakdown,
+    rateFor: vatRateFor,
+    pricesIncludeVat,
+  } = useWorkOrderVatBreakdown(order);
   const formatAmount = (value: number): string =>
     new Intl.NumberFormat("sr-Latn-RS", {
       minimumFractionDigits: 2,
@@ -755,6 +759,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.amount")}
                 </th>
+                <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.lineVat")}
+                </th>
                 {/* Cost and margin per line are admin-only; operators see the
                     same three columns they always have. */}
                 {isAdmin && (
@@ -784,6 +791,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   ]
               ).map((line) => {
                 const lineTotals = lineMargin(line);
+                const lineRate = vatRateFor(
+                  "catalogItemId" in line ? line.catalogItemId : null,
+                );
                 return (
                   <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
                     <td className="py-3 text-foreground">
@@ -797,6 +807,16 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                     </td>
                     <td className="tnum py-3 text-right font-medium text-foreground">
                       {formatWorkOrderPrice(lineTotals.revenue)}
+                    </td>
+                    <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                      <div>
+                        {formatWorkOrderPrice(
+                          lineVatAmount(lineTotals.revenue, lineRate, pricesIncludeVat),
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-[color:var(--iris-ink-mute)]">
+                        {Math.round(lineRate * 100)}%
+                      </div>
                     </td>
                     {isAdmin && (
                       <>
@@ -848,11 +868,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           {order.price !== null && (
             <div className="mt-4 flex justify-end">
               <div className="w-72 text-[12px]" data-testid="vat-breakdown">
-                <div className="pb-1.5 text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
-                  {billingDocumentIncludesVat(order.billingDocumentType)
-                    ? t("workOrders.detail.pricesIncludeVat")
-                    : t("workOrders.detail.pricesExcludeVat")}
-                </div>
+                {pricesIncludeVat && (
+                  <div className="pb-1.5 text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+                    {t("workOrders.detail.pricesIncludeVat")}
+                  </div>
+                )}
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
                   <span>{t("workOrders.detail.base")}</span>
                   <span className="tnum">{formatAmount(vatBreakdown.base)}</span>

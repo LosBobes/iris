@@ -59,6 +59,13 @@ export function repriceForBillingDocument(
   return after ? addVat(unitPrice, rate) : removeVat(unitPrice, rate);
 }
 
+/** PDV contained in (otkup) or added to (faktura/predračun) one line's amount. */
+export function lineVatAmount(amount: number, rate: number, pricesIncludeVat: boolean): number {
+  return pricesIncludeVat
+    ? roundMoney(amount - amount / (1 + rate))
+    : roundMoney(amount * rate);
+}
+
 export interface VatLine {
   quantity: number;
   unitPrice: number;

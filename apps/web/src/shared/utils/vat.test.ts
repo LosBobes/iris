@@ -3,6 +3,7 @@ import {
   addVat,
   billingDocumentIncludesVat,
   computeVatBreakdown,
+  lineVatAmount,
   removeVat,
   repriceForBillingDocument,
   vatRateForTaxGroup,
@@ -75,5 +76,14 @@ describe("computeVatBreakdown", () => {
 
   it("returns zeros for an order with no lines", () => {
     expect(computeVatBreakdown([], false)).toEqual({ base: 0, vatByRate: [], vat: 0, total: 0 });
+  });
+});
+
+describe("lineVatAmount", () => {
+  it("adds PDV to a net line and extracts it from a gross one", () => {
+    expect(lineVatAmount(6000, 0.2, false)).toBe(1200);
+    expect(lineVatAmount(7200, 0.2, true)).toBe(1200);
+    expect(lineVatAmount(1100, 0.1, true)).toBe(100);
+    expect(lineVatAmount(500, 0, false)).toBe(0);
   });
 });

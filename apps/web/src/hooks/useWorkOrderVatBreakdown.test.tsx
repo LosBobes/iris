@@ -47,7 +47,7 @@ describe("useWorkOrderVatBreakdown", () => {
     );
 
     await waitFor(() =>
-      expect(result.current).toEqual({
+      expect(result.current.breakdown).toEqual({
         base: 2100,
         vatByRate: [
           { rate: 0.2, amount: 220 },
@@ -58,6 +58,8 @@ describe("useWorkOrderVatBreakdown", () => {
       }),
     );
     expect(lookup).toHaveBeenCalledTimes(2);
+    expect(result.current.rateFor("book")).toBe(0.1);
+    expect(result.current.rateFor(null)).toBe(0.2);
   });
 
   it("takes PDV out of otkup prices", async () => {
@@ -69,7 +71,7 @@ describe("useWorkOrderVatBreakdown", () => {
     );
 
     await waitFor(() =>
-      expect(result.current).toEqual({
+      expect(result.current.breakdown).toEqual({
         base: 1000,
         vatByRate: [{ rate: 0.1, amount: 100 }],
         vat: 100,
@@ -83,7 +85,8 @@ describe("useWorkOrderVatBreakdown", () => {
     const { result } = renderHook(() =>
       useWorkOrderVatBreakdown(order("proforma", [], 1000)),
     );
-    expect(result.current.total).toBe(1200);
-    expect(result.current.vat).toBe(200);
+    expect(result.current.breakdown.total).toBe(1200);
+    expect(result.current.breakdown.vat).toBe(200);
+    expect(result.current.pricesIncludeVat).toBe(false);
   });
 });
