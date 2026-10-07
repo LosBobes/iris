@@ -59,11 +59,24 @@ export function repriceForBillingDocument(
   return after ? addVat(unitPrice, rate) : removeVat(unitPrice, rate);
 }
 
-/** PDV contained in (otkup) or added to (faktura/predračun) one line's amount. */
-export function lineVatAmount(amount: number, rate: number, pricesIncludeVat: boolean): number {
-  return pricesIncludeVat
-    ? roundMoney(amount - amount / (1 + rate))
-    : roundMoney(amount * rate);
+/**
+ * Splits one line's amount into osnovica, PDV and total, so that
+ * base + vat === total. Otkup amounts are gross (PDV is taken out);
+ * faktura/predračun amounts are net (PDV is added on top).
+ */
+export function splitLineVat(
+  amount: number,
+  rate: number,
+  pricesIncludeVat: boolean,
+): { base: number; vat: number; total: number } {
+  if (pricesIncludeVat) {
+    const total = roundMoney(amount);
+    const base = roundMoney(amount / (1 + rate));
+    return { base, vat: roundMoney(total - base), total };
+  }
+  const base = roundMoney(amount);
+  const vat = roundMoney(amount * rate);
+  return { base, vat, total: roundMoney(base + vat) };
 }
 
 export interface VatLine {

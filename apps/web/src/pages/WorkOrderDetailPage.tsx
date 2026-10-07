@@ -21,7 +21,7 @@ import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrd
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkOrderVatBreakdown } from "@/hooks/useWorkOrderVatBreakdown";
-import { lineVatAmount } from "@/shared/utils/vat";
+import { splitLineVat } from "@/shared/utils/vat";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
@@ -762,6 +762,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.lineVat")}
                 </th>
+                <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.lineTotal")}
+                </th>
                 {/* Cost and margin per line are admin-only; operators see the
                     same three columns they always have. */}
                 {isAdmin && (
@@ -794,6 +797,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 const lineRate = vatRateFor(
                   "catalogItemId" in line ? line.catalogItemId : null,
                 );
+                // Every row reads Iznos (osnovica) + PDV = Ukupno, whether the
+                // entered price was net (faktura) or gross (otkup).
+                const lineVat = splitLineVat(lineTotals.revenue, lineRate, pricesIncludeVat);
                 return (
                   <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
                     <td className="py-3 text-foreground">
@@ -806,17 +812,18 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                       {line.quantity} {line.unit}
                     </td>
                     <td className="tnum py-3 text-right font-medium text-foreground">
-                      {formatWorkOrderPrice(lineTotals.revenue)}
+                      {formatWorkOrderPrice(lineVat.base)}
                     </td>
                     <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
                       <div>
-                        {formatWorkOrderPrice(
-                          lineVatAmount(lineTotals.revenue, lineRate, pricesIncludeVat),
-                        )}
+                        {formatWorkOrderPrice(lineVat.vat)}
                       </div>
                       <div className="mt-0.5 text-[10px] text-[color:var(--iris-ink-mute)]">
                         {Math.round(lineRate * 100)}%
                       </div>
+                    </td>
+                    <td className="tnum py-3 text-right font-medium text-foreground">
+                      {formatWorkOrderPrice(lineVat.total)}
                     </td>
                     {isAdmin && (
                       <>

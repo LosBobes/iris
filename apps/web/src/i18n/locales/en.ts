@@ -1160,6 +1160,7 @@ export const en: typeof sr = {
       totalWithVat: 'Total (base + VAT)',
       pricesIncludeVat: 'Cash collection · prices include VAT',
       lineVat: 'VAT',
+      lineTotal: 'Total',
       lineCost: 'Cost',
       lineMargin: 'Margin',
       marginTitle: 'Price difference',

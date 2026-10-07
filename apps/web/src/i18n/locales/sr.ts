@@ -1160,6 +1160,7 @@ export const sr = {
       totalWithVat: 'Ukupno (osnovica + PDV)',
       pricesIncludeVat: 'Otkup · cene sadrže PDV',
       lineVat: 'PDV',
+      lineTotal: 'Ukupno',
       lineCost: 'Trošak',
       lineMargin: 'Razlika',
       marginTitle: 'Razlika u ceni',

@@ -3,7 +3,7 @@ import {
   addVat,
   billingDocumentIncludesVat,
   computeVatBreakdown,
-  lineVatAmount,
+  splitLineVat,
   removeVat,
   repriceForBillingDocument,
   vatRateForTaxGroup,
@@ -79,11 +79,23 @@ describe("computeVatBreakdown", () => {
   });
 });
 
-describe("lineVatAmount", () => {
-  it("adds PDV to a net line and extracts it from a gross one", () => {
-    expect(lineVatAmount(6000, 0.2, false)).toBe(1200);
-    expect(lineVatAmount(7200, 0.2, true)).toBe(1200);
-    expect(lineVatAmount(1100, 0.1, true)).toBe(100);
-    expect(lineVatAmount(500, 0, false)).toBe(0);
+describe("splitLineVat", () => {
+  it("adds PDV on top of a net line", () => {
+    expect(splitLineVat(6000, 0.2, false)).toEqual({ base: 6000, vat: 1200, total: 7200 });
+    expect(splitLineVat(1000, 0.1, false)).toEqual({ base: 1000, vat: 100, total: 1100 });
+  });
+
+  it("takes PDV out of a gross otkup line", () => {
+    expect(splitLineVat(9600, 0.2, true)).toEqual({ base: 8000, vat: 1600, total: 9600 });
+    expect(splitLineVat(4950, 0.1, true)).toEqual({ base: 4500, vat: 450, total: 4950 });
+  });
+
+  it("always sums: base + vat = total", () => {
+    const { base, vat, total } = splitLineVat(333.33, 0.2, true);
+    expect(Math.round((base + vat) * 100) / 100).toBe(total);
+  });
+
+  it("has no PDV for exempt lines", () => {
+    expect(splitLineVat(500, 0, false)).toEqual({ base: 500, vat: 0, total: 500 });
   });
 });
