@@ -88,6 +88,12 @@ async function addCatalogService(user: ReturnType<typeof userEvent.setup>) {
   await user.click(option);
 }
 
+async function addCatalogArticle(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: strings.catalogArticle }));
+  const option = await screen.findByRole("button", { name: /Knjiga monografija/ });
+  await user.click(option);
+}
+
 beforeEach(() => {
   stubApi();
   if (!globalThis.ResizeObserver) {
@@ -192,10 +198,11 @@ describe("WorkOrderForm catalog lines", () => {
     ).toBeInTheDocument();
   });
 
-  // Catalog prices are net (bez PDV-a). An otkup order is collected from the
-  // end customer, so its catalog lines must carry PDV; a faktura/predračun
-  // keeps them net. Switching the document type re-prices the lines.
-  it("adds PDV to catalog lines on an otkup order and removes it again", async () => {
+  // Catalog prices are net (bez PDV-a). On an otkup order only articles (roba)
+  // are charged with PDV; services keep their catalog price. A
+  // faktura/predračun keeps every line net. Switching the document type
+  // re-prices the article lines.
+  it("adds PDV to catalog articles on an otkup order and removes it again", async () => {
     const user = userEvent.setup();
     render(
       <WorkOrderForm onSubmit={vi.fn().mockResolvedValue(undefined)} onCancel={vi.fn()} />,
@@ -208,26 +215,31 @@ describe("WorkOrderForm catalog lines", () => {
     const prices = () => screen.getAllByRole("spinbutton", { name: strings.colPrice });
 
     await chooseDocumentType("Otkup");
-    await addCatalogService(user);
-    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+    await addCatalogArticle(user);
+    await waitFor(() => expect(prices()[0]).toHaveValue(1100));
     expect(screen.getByText(strings.catalogVatHint, { exact: false })).toBeInTheDocument();
+    // A service added on otkup keeps its catalog price.
+    await addCatalogService(user);
+    await waitFor(() => expect(prices()).toHaveLength(2));
+    expect(prices()[1]).toHaveValue(1200);
 
     await chooseDocumentType("Faktura");
-    await waitFor(() => expect(prices()[0]).toHaveValue(1200));
+    await waitFor(() => expect(prices()[0]).toHaveValue(1000));
+    expect(prices()[1]).toHaveValue(1200);
 
     await chooseDocumentType("Otkup");
-    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
+    await waitFor(() => expect(prices()[0]).toHaveValue(1100));
+    expect(prices()[1]).toHaveValue(1200);
   });
 
-  it("uses each catalog item's own PDV rate on an otkup order", async () => {
+  it("keeps catalog services at their catalog price on an otkup order", async () => {
     const user = userEvent.setup();
     render(
       <WorkOrderForm onSubmit={vi.fn().mockResolvedValue(undefined)} onCancel={vi.fn()} />,
     );
 
     await addCatalogService(user);
-    await user.click(screen.getByRole("button", { name: strings.catalogArticle }));
-    await user.click(await screen.findByRole("button", { name: /Knjiga monografija/ }));
+    await addCatalogArticle(user);
 
     const prices = () => screen.getAllByRole("spinbutton", { name: strings.colPrice });
     await waitFor(() => expect(prices()).toHaveLength(2));
@@ -237,8 +249,8 @@ describe("WorkOrderForm catalog lines", () => {
     await user.click(screen.getByRole("combobox", { name: strings.documentType }));
     await user.click(await screen.findByRole("option", { name: "Otkup" }));
 
-    // Service at the default 20%, book at 10%.
-    await waitFor(() => expect(prices()[0]).toHaveValue(1440));
-    expect(prices()[1]).toHaveValue(1100);
+    // The book gets its own 10% rate; the service is untouched.
+    await waitFor(() => expect(prices()[1]).toHaveValue(1100));
+    expect(prices()[0]).toHaveValue(1200);
   });
 });

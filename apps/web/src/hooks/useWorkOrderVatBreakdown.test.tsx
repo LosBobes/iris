@@ -66,7 +66,9 @@ describe("useWorkOrderVatBreakdown", () => {
     stubCatalog({ book: "E" });
     const { result } = renderHook(() =>
       useWorkOrderVatBreakdown(
-        order("cashCollection", [{ catalogItemId: "book", quantity: 1, unitPrice: 1100 }]),
+        order("cashCollection", [
+          { kind: "goods", catalogItemId: "book", quantity: 1, unitPrice: 1100 },
+        ]),
       ),
     );
 
@@ -78,6 +80,30 @@ describe("useWorkOrderVatBreakdown", () => {
         total: 1100,
       }),
     );
+  });
+
+  it("charges no PDV on otkup services, only on articles", async () => {
+    stubCatalog({ book: "E", print: "DJ" });
+    const { result } = renderHook(() =>
+      useWorkOrderVatBreakdown(
+        order("cashCollection", [
+          { kind: "goods", catalogItemId: "book", quantity: 1, unitPrice: 1100 },
+          { kind: "service", catalogItemId: "print", quantity: 1, unitPrice: 1200 },
+          { kind: "service", catalogItemId: null, quantity: 1, unitPrice: 300 },
+        ]),
+      ),
+    );
+
+    await waitFor(() =>
+      expect(result.current.breakdown).toEqual({
+        base: 2500,
+        vatByRate: [{ rate: 0.1, amount: 100 }],
+        vat: 100,
+        total: 2600,
+      }),
+    );
+    expect(result.current.rateFor("print", "service")).toBe(0);
+    expect(result.current.rateFor("book", "goods")).toBe(0.1);
   });
 
   it("falls back to the order price at 20% when there are no lines", () => {
