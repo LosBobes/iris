@@ -1069,7 +1069,7 @@ export const sr = {
       searchCatalog: 'Pretraga kataloga...',
       noCatalog: 'Nema stavki u katalogu.',
       catalogHint: 'Za uslugu koja nije u katalogu koristite „Posebna usluga“.',
-      catalogVatHint: 'Otkup: cene iz kataloga su uvećane za PDV prema poreskoj grupi stavke (podrazumevano 20%).',
+      catalogVatHint: 'Otkup: cene artikala iz kataloga su uvećane za PDV prema poreskoj grupi stavke (podrazumevano 20%); usluge ostaju po ceni iz kataloga.',
       catalogAlreadyAdded: 'Već na nalogu',
       noItems: 'Nema stavki',
       colType: 'Tip',

@@ -1069,7 +1069,7 @@ export const en: typeof sr = {
       searchCatalog: 'Search catalog...',
       noCatalog: 'No catalog items.',
       catalogHint: 'For a service not in the catalog use “Special service”.',
-      catalogVatHint: 'Cash collection (otkup): catalog prices include VAT at each item’s tax group (20% by default).',
+      catalogVatHint: 'Cash collection (otkup): catalog article prices include VAT at each item’s tax group (20% by default); services keep their catalog price.',
       catalogAlreadyAdded: 'Already on order',
       noItems: 'No items',
       colType: 'Type',

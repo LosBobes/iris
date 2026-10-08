@@ -269,8 +269,8 @@ function createInvoiceLineItem(
 
 /** Builds a work-order line item from a catalog selection, prefilling the
  * description, unit and price and remembering the catalog link. Catalog sale
- * prices are net; on an otkup order the line starts at the gross price, at
- * the item's own PDV rate. */
+ * prices are net; on an otkup order an article (roba) starts at the gross
+ * price, at the item's own PDV rate. Services keep their catalog price. */
 function createInvoiceLineItemFromCatalog(
   item: CatalogItem,
   billingDocumentType: BillingDocumentType | null,
@@ -282,7 +282,7 @@ function createInvoiceLineItemFromCatalog(
     description: item.name,
     quantity: 1,
     unit: normalizeInvoiceUnit(kind, item.unit),
-    unitPrice: billingDocumentIncludesVat(billingDocumentType)
+    unitPrice: kind === "goods" && billingDocumentIncludesVat(billingDocumentType)
       ? addVat(item.salePrice ?? 0, vatRateForTaxGroup(item.taxGroup))
       : (item.salePrice ?? 0),
     // Catalog cost is captured server-side at save time from the item's history.
@@ -984,7 +984,7 @@ export function WorkOrderForm({
   };
 
   // PDV rate per catalog item on this order, so switching to/from otkup can
-  // re-price each line at its own rate. Filled when a line is picked; lines
+  // re-price each article line at its own rate (services are never re-priced). Filled when a line is picked; lines
   // loaded from a saved order are looked up on first use.
   const vatRateByCatalogItemId = useRef(new Map<string, number>());
   const resolveVatRate = async (catalogItemId: string): Promise<number> => {
@@ -1008,7 +1008,9 @@ export function WorkOrderForm({
     const lines = getValues("invoiceDraft.lineItems") ?? [];
     const rates = await Promise.all(
       lines.map((line) =>
-        line?.catalogItemId ? resolveVatRate(line.catalogItemId) : null,
+        line?.catalogItemId && line.kind === "goods"
+          ? resolveVatRate(line.catalogItemId)
+          : null,
       ),
     );
     // Re-read after the lookups: lines may have been edited in the meantime.
