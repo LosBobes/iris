@@ -1158,7 +1158,7 @@ export const en: typeof sr = {
       vatAtRate: 'VAT {{rate}}%',
       vatTotal: 'VAT total',
       totalWithVat: 'Total (base + VAT)',
-      pricesIncludeVat: 'Cash collection · prices include VAT',
+      pricesIncludeVat: 'Cash collection · article prices include VAT, services carry no VAT',
       lineVat: 'VAT',
       lineTotal: 'Total',
       lineCost: 'Cost',

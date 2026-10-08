@@ -794,9 +794,12 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   ]
               ).map((line) => {
                 const lineTotals = lineMargin(line);
-                const lineRate = vatRateFor(
-                  "catalogItemId" in line ? line.catalogItemId : null,
-                );
+                const lineRate =
+                  "catalogItemId" in line
+                    ? vatRateFor(line.catalogItemId, line.kind)
+                    : vatRateFor(null);
+                // Services on an otkup order carry no PDV: leave the cell empty.
+                const lineHasNoVat = pricesIncludeVat && lineRate === 0 && line.kind === "service";
                 // Every row reads Iznos (osnovica) + PDV = Ukupno, whether the
                 // entered price was net (faktura) or gross (otkup).
                 const lineVat = splitLineVat(lineTotals.revenue, lineRate, pricesIncludeVat);
@@ -815,12 +818,18 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                       {formatWorkOrderPrice(lineVat.base)}
                     </td>
                     <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
-                      <div>
-                        {formatWorkOrderPrice(lineVat.vat)}
-                      </div>
-                      <div className="mt-0.5 text-[10px] text-[color:var(--iris-ink-mute)]">
-                        {Math.round(lineRate * 100)}%
-                      </div>
+                      {lineHasNoVat ? (
+                        "—"
+                      ) : (
+                        <>
+                          <div>
+                            {formatWorkOrderPrice(lineVat.vat)}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-[color:var(--iris-ink-mute)]">
+                            {Math.round(lineRate * 100)}%
+                          </div>
+                        </>
+                      )}
                     </td>
                     <td className="tnum py-3 text-right font-medium text-foreground">
                       {formatWorkOrderPrice(lineVat.total)}
@@ -869,8 +878,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           )}
 
           {/* Osnovica / PDV / ukupno: the selling total every role needs to
-              know what to charge. Otkup prices already include PDV, so it is
-              taken out; faktura/predračun prices are net, so it is added on
+              know what to charge. Otkup article prices already include PDV, so it
+              is taken out (otkup services carry none); faktura/predračun prices are net, so it is added on
               top. Cost and margin are not part of this block. */}
           {order.price !== null && (
             <div className="mt-4 flex justify-end">

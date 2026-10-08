@@ -5,12 +5,16 @@ import {
   vatRateForTaxGroup,
   type VatBreakdown,
 } from "@/shared/utils/vat";
-import type { WorkOrder } from "@/types/work-order";
+import type { InvoiceLineItemKind, WorkOrder } from "@/types/work-order";
 
 export interface WorkOrderVat {
   breakdown: VatBreakdown;
-  /** PDV rate for a line, by its catalog item (general rate when ad hoc). */
-  rateFor: (catalogItemId: string | null | undefined) => number;
+  /** PDV rate for a line, by its catalog item (general rate when ad hoc).
+   * Services on an otkup order carry no PDV (0). */
+  rateFor: (
+    catalogItemId: string | null | undefined,
+    kind?: InvoiceLineItemKind,
+  ) => number;
   /** True for otkup: line prices already include PDV. */
   pricesIncludeVat: boolean;
 }
@@ -18,8 +22,9 @@ export interface WorkOrderVat {
 /**
  * Osnovica / PDV / total for a saved work order. Catalog lines are taxed at
  * their catalog item's PDV type (looked up here); ad-hoc lines, and an order
- * with a price but no lines, use the general rate. Otkup prices include PDV;
- * faktura/predračun prices are net and get PDV added on top.
+ * with a price but no lines, use the general rate. On otkup only articles
+ * (roba) carry PDV, already included in their price; services carry none.
+ * Faktura/predračun prices are net and get PDV added on top.
  */
 export function useWorkOrderVatBreakdown(order: WorkOrder): WorkOrderVat {
   const lineItems = order.invoiceDraft.lineItems;
@@ -55,15 +60,20 @@ export function useWorkOrderVatBreakdown(order: WorkOrder): WorkOrderVat {
 
   return useMemo(() => {
     const defaultRate = vatRateForTaxGroup(null);
-    const rateFor = (catalogItemId: string | null | undefined): number =>
-      catalogItemId ? (rates.get(catalogItemId) ?? defaultRate) : defaultRate;
     const pricesIncludeVat = billingDocumentIncludesVat(order.billingDocumentType);
+    const rateFor = (
+      catalogItemId: string | null | undefined,
+      kind?: InvoiceLineItemKind,
+    ): number => {
+      if (pricesIncludeVat && kind === "service") return 0;
+      return catalogItemId ? (rates.get(catalogItemId) ?? defaultRate) : defaultRate;
+    };
     const lines =
       lineItems.length > 0
         ? lineItems.map((line) => ({
             quantity: line.quantity,
             unitPrice: line.unitPrice,
-            rate: rateFor(line.catalogItemId),
+            rate: rateFor(line.catalogItemId, line.kind),
           }))
         : [{ quantity: 1, unitPrice: order.price ?? 0, rate: defaultRate }];
     return {
