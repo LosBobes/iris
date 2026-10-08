@@ -1131,6 +1131,7 @@ export const sr = {
       description: 'Opis',
       quantity: 'Količina',
       amount: 'Iznos',
+      unitPrice: 'Cena',
       customerSummary: 'Sažetak za klijenta',
       copyNotice: 'Kopiraj obaveštenje',
       orderNumber: 'Broj naloga',
