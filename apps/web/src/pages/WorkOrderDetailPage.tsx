@@ -747,7 +747,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             {t("workOrders.detail.items")}
           </div>
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] border-collapse text-[12px]">
+          <table className="w-full min-w-[500px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="py-2 text-left text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
@@ -755,6 +755,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 </th>
                 <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.quantity")}
+                </th>
+                <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.unitPrice")}
                 </th>
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.amount")}
@@ -765,8 +768,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.lineTotal")}
                 </th>
-                {/* Cost and margin per line are admin-only; operators see the
-                    same three columns they always have. */}
+                {/* Cost and margin per line are admin-only; operators see only the
+                    selling columns. */}
                 {isAdmin && (
                   <>
                     <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
@@ -803,6 +806,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 // Every row reads Iznos (osnovica) + PDV = Ukupno, whether the
                 // entered price was net (faktura) or gross (otkup).
                 const lineVat = splitLineVat(lineTotals.revenue, lineRate, pricesIncludeVat);
+                // Cena is the per-unit net price, so Cena x Količina = Iznos on
+                // every row (otkup prices are entered gross, so PDV comes out).
+                const unitBase = splitLineVat(line.unitPrice, lineRate, pricesIncludeVat).base;
                 return (
                   <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
                     <td className="py-3 text-foreground">
@@ -813,6 +819,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                     </td>
                     <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
                       {line.quantity} {line.unit}
+                    </td>
+                    <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                      {formatWorkOrderPrice(unitBase)}
                     </td>
                     <td className="tnum py-3 text-right font-medium text-foreground">
                       {formatWorkOrderPrice(lineVat.base)}

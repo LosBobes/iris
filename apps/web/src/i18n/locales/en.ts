@@ -1131,6 +1131,7 @@ export const en: typeof sr = {
       description: 'Description',
       quantity: 'Quantity',
       amount: 'Amount',
+      unitPrice: 'Unit price',
       customerSummary: 'Client summary',
       copyNotice: 'Copy notice',
       orderNumber: 'Order number',
