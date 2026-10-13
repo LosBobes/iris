@@ -58,8 +58,9 @@ func catalogItemIDs(items []domain.InvoiceLineItem) []string {
 //     preserve-mode keep frozen costs and protects an admin-entered ad-hoc cost
 //     from being wiped by a later operator edit that omits it.
 //
-// Catalog lines take their cost from costs (create/completion) or keep the
-// frozen value (preserve, existing line). Ad-hoc lines (no catalog link) keep an
+// Catalog lines with a positive catalog cost take it from costs
+// (create/completion) or keep the frozen value (preserve, existing line); a
+// zero or missing catalog cost yields to an admin-entered line cost. Ad-hoc lines (no catalog link) keep an
 // explicit incoming cost, else fall back to the previously captured cost, else
 // remain nil — which flags the order for admin review without blocking the save.
 func applyLineItemCosts(
@@ -82,22 +83,27 @@ func applyLineItemCosts(
 
 		var cost *float64
 		switch {
-		case isCatalog && mode == costModePreserve && existed && prev != nil:
-			cost = prev // freeze: keep the cost captured at creation
 		case isCatalog:
-			// Catalog price history is authoritative when it has a cost for the
-			// item. When it does not (no cost on record), an admin may fill the
+			// Catalog price history is authoritative when it has a positive cost
+			// for the item. A missing or zero cost means nobody entered a real
+			// purchase price (imports default it to 0), so an admin may fill the
 			// gap by entering a cost on the line; fall back to that, then to any
-			// previously captured value, else leave it for review. This keeps
-			// priced catalog lines untouched while making the "—" case editable.
-			cost = catalogCostPtr(costs, *line.CatalogItemID)
-			if cost == nil {
-				switch {
-				case line.UnitCost != nil:
-					cost = line.UnitCost
-				case existed:
-					cost = prev
-				}
+			// previously captured value, then to the catalog's zero, else leave it
+			// for review. This keeps priced catalog lines untouched while making
+			// the "—" and "0" cases editable.
+			catalogCost := catalogCostPtr(costs, *line.CatalogItemID)
+			switch {
+			case catalogCost != nil && *catalogCost > 0 &&
+				mode == costModePreserve && existed && prev != nil:
+				cost = prev // freeze: keep the cost captured at creation
+			case catalogCost != nil && *catalogCost > 0:
+				cost = catalogCost
+			case line.UnitCost != nil:
+				cost = line.UnitCost
+			case existed && prev != nil:
+				cost = prev
+			default:
+				cost = catalogCost // zero on record, or nil → needs review
 			}
 		case line.UnitCost != nil:
 			cost = line.UnitCost // ad-hoc with an explicit (admin-entered) cost

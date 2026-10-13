@@ -1974,11 +1974,12 @@ export function WorkOrderForm({
 
                             {isAdmin &&
                               // A catalog line's cost is authoritative only when
-                              // the catalog has one on record (unitCost set); that
-                              // stays read-only. When it is missing (the "—" case)
-                              // the admin can fill it in, same as an ad-hoc line.
+                              // the catalog has a real (positive) one on record;
+                              // that stays read-only. When it is missing ("—") or
+                              // zero (never entered), the admin can fill it in,
+                              // same as an ad-hoc line.
                               (isCatalogLine &&
-                              invoiceLineItems[index]?.unitCost != null ? (
+                              (Number(invoiceLineItems[index]?.unitCost) || 0) > 0 ? (
                                 <LineField
                                   htmlFor={`invoiceDraft.lineItems.${index}.unitCost`}
                                   label={t("workOrders.form.colCost")}
