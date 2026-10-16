@@ -9,6 +9,7 @@ import {
   Eye,
   Files,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Printer,
   Trash2,
@@ -23,6 +24,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWorkOrderVatBreakdown } from "@/hooks/useWorkOrderVatBreakdown";
 import { splitLineVat } from "@/shared/utils/vat";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Customer, Location, WorkOrder } from "@/types/work-order";
@@ -120,6 +128,9 @@ export function openWorkOrderPdf(orderId: string): void {
   window.open(window.api.getWorkOrderReportUrl(orderId), "_blank", "noopener,noreferrer");
 }
 
+// Header descriptions longer than this get a "show full description" toggle.
+const LONG_DESCRIPTION_CHARS = 140;
+
 function WorkOrderDetailPage(): React.JSX.Element {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -133,14 +144,30 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [completeOpen, setCompleteOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
   // Deleting is admin-only on the API; gate the button to match.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
   const canCancelOrder = order
     ? getAllowedWorkOrderTransitions(order.status).includes("cancelled")
     : false;
+  const primaryTransition = order
+    ? getPrimaryWorkOrderTransition(order.status)
+    : null;
+
+  const copyPublicLink = async (target: WorkOrder): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(
+        window.api.getPublicTrackingUrl(target.communication.publicToken),
+      );
+      toast.success(t("workOrders.detail.publicLinkCopied"));
+    } catch (error) {
+      reportUnexpectedError("WorkOrderDetailPage.copyPublicLink", error);
+      toast.error(t("workOrders.detail.publicLinkCopyError"));
+    }
+  };
 
   const advanceStatus = async (): Promise<void> => {
     if (!order) return;
@@ -334,8 +361,8 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
 
           {order && (
-            <div className="flex flex-wrap items-start justify-between gap-y-3">
-              <div>
+            <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+              <div className="min-w-0 flex-1 basis-80">
                 <div className="flex flex-wrap items-baseline gap-3.5">
                   <div className="tnum text-[28px] font-normal tracking-[-0.5px] text-foreground">
                     {order.orderNumber}
@@ -348,121 +375,117 @@ function WorkOrderDetailPage(): React.JSX.Element {
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-[14px] text-[color:var(--iris-ink-soft)]">
-                  {order.jobDescription} ·{" "}
+                {/* Client first, so it is never cut off; a long opis posla
+                    (e.g. a typed product list) is clamped to two lines with a
+                    toggle, instead of pushing the actions off the screen. */}
+                <div
+                  className={`mt-1 text-[14px] text-[color:var(--iris-ink-soft)] ${
+                    descriptionExpanded ? "" : "line-clamp-2"
+                  }`}
+                >
                   <span className="text-foreground">{order.clientName}</span>
+                  {order.jobDescription && <> · {order.jobDescription}</>}
                 </div>
+                {order.jobDescription.length > LONG_DESCRIPTION_CHARS && (
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionExpanded((open) => !open)}
+                    aria-expanded={descriptionExpanded}
+                    className="iris-focusable mt-1 bg-transparent p-0 text-[12px] text-[color:var(--iris-ink-mute)] underline underline-offset-2 hover:text-foreground"
+                  >
+                    {t(
+                      descriptionExpanded
+                        ? "workOrders.detail.showLessDescription"
+                        : "workOrders.detail.showFullDescription",
+                    )}
+                  </button>
+                )}
               </div>
-              <div className="flex w-full flex-wrap items-center justify-start gap-1.5 max-sm:[&_button]:min-h-11 sm:w-auto sm:justify-end">
-                {getPrimaryWorkOrderTransition(order.status) && (
+              {/* Actions: the status move and the everyday Izmeni / Štampaj
+                  stay visible; everything used less often (PDF download,
+                  public link, duplicate) and the destructive actions live in
+                  one "more" menu. On phones the status move spans the full
+                  width and the rest share one row of large touch targets. */}
+              <div className="grid w-full grid-cols-[1fr_1fr_auto] gap-2 max-sm:[&_button]:min-h-11 sm:flex sm:w-auto sm:items-center">
+                {primaryTransition && (
                   <button
                     type="button"
                     onClick={handleAdvanceStatus}
-                    className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-accent)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/10"
+                    className="iris-focusable iris-press col-span-3 flex items-center justify-center gap-1.5 border border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-3.5 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/20"
                   >
                     {t("workOrders.detail.moveTo")}{" "}
-                    {getWorkOrderStatusLabel(
-                      getPrimaryWorkOrderTransition(order.status)!,
-                    )}
+                    {getWorkOrderStatusLabel(primaryTransition)}
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => void printWorkOrder(order)}
-                  title={t("workOrders.detail.print")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Printer className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.print")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openWorkOrderPdf(order.id)}
-                  title={t("workOrders.detail.pdf")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.pdf")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewOpen((open) => !open)}
-                  aria-pressed={previewOpen}
-                  title={t("workOrders.detail.preview")}
-                  className={`iris-focusable iris-press flex items-center gap-1.5 border px-3 py-2 text-[12px] font-medium tracking-[0.3px] ${
-                    previewOpen
-                      ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
-                      : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                  }`}
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.preview")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(
-                      window.api.getPublicTrackingUrl(
-                        order.communication.publicToken,
-                      ),
-                    );
-                  }}
-                  title={t("workOrders.detail.publicLink")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.publicLink")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate("/work-orders/new", {
-                      state: { duplicateFrom: order },
-                    })
-                  }
-                  title={t("workOrders.detail.duplicate")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Files className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.duplicate")}
-                </button>
-                <button
-                  type="button"
                   onClick={() => navigate(`/work-orders/${order.id}/edit`)}
-                  className="iris-focusable iris-press flex items-center gap-1.5 bg-foreground px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+                  className="iris-focusable iris-press flex items-center justify-center gap-1.5 bg-foreground px-3.5 py-2 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   {t("common.edit")}
                 </button>
-                {/* Destructive actions grouped together behind a divider so
-                    cancel + delete read as one "danger" cluster, not scattered. */}
-                {(canCancelOrder || isAdmin) && (
-                  <div className="flex items-center gap-1.5 sm:ml-1 sm:border-l sm:border-border sm:pl-2.5">
+                <button
+                  type="button"
+                  onClick={() => void printWorkOrder(order)}
+                  className="iris-focusable iris-press flex items-center justify-center gap-1.5 border border-border bg-card px-3.5 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  {t("workOrders.detail.print")}
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={t("workOrders.detail.moreActions")}
+                      title={t("workOrders.detail.moreActions")}
+                      className="iris-focusable iris-press flex items-center justify-center border border-border bg-card px-3 py-2 text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground data-[state=open]:border-foreground data-[state=open]:text-foreground max-sm:min-w-11"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => openWorkOrderPdf(order.id)}>
+                      <Download />
+                      {t("workOrders.detail.downloadPdf")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => void copyPublicLink(order)}
+                    >
+                      <Copy />
+                      {t("workOrders.detail.copyPublicLink")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        navigate("/work-orders/new", {
+                          state: { duplicateFrom: order },
+                        })
+                      }
+                    >
+                      <Files />
+                      {t("workOrders.detail.duplicate")}
+                    </DropdownMenuItem>
+                    {(canCancelOrder || isAdmin) && <DropdownMenuSeparator />}
                     {canCancelOrder && (
-                      <button
-                        type="button"
-                        onClick={() => setCancelOpen(true)}
-                        title={t("workOrders.detail.cancelOrder")}
-                        className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => setCancelOpen(true)}
                       >
-                        <Ban className="h-3.5 w-3.5" />
-                        {t("workOrders.detail.cancelOrder")}
-                      </button>
+                        <Ban />
+                        {t("workOrders.detail.cancelOrderAction")}
+                      </DropdownMenuItem>
                     )}
                     {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteOpen(true)}
-                        aria-label={t("common.delete")}
-                        title={t("common.delete")}
-                        className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => setDeleteOpen(true)}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 />
                         {t("common.delete")}
-                      </button>
+                      </DropdownMenuItem>
                     )}
-                  </div>
-                )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           )}
@@ -492,24 +515,43 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
         )}
           </div>
-          {previewOpen && order && (
-            <aside className="animate-iris-enter sticky top-0 hidden h-screen w-[380px] shrink-0 self-start overflow-auto border-l border-border bg-card p-6 lg:block">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                  {t("workOrders.detail.pdfPreview")}
+          {/* PDF preview sidebar (desktop only: it needs the room beside the
+              detail). Collapsed it is a slim vertical "Pregled" tab on the
+              right edge, so it never competes with the action buttons. */}
+          {order &&
+            (previewOpen ? (
+              <aside className="animate-iris-enter sticky top-0 hidden h-screen w-[380px] shrink-0 self-start overflow-auto border-l border-border bg-card p-6 lg:block">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                    {t("workOrders.detail.pdfPreview")}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewOpen(false)}
+                    aria-label={t("workOrders.detail.closePreview")}
+                    className="iris-focusable iris-press flex items-center justify-center bg-transparent p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
+                <WorkOrderPreviewPane order={order} />
+              </aside>
+            ) : (
+              <aside className="sticky top-0 hidden h-screen w-11 shrink-0 self-start border-l border-border bg-card lg:block">
                 <button
                   type="button"
-                  onClick={() => setPreviewOpen(false)}
-                  aria-label={t("workOrders.detail.closePreview")}
-                  className="iris-focusable iris-press flex items-center justify-center bg-transparent p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                  onClick={() => setPreviewOpen(true)}
+                  aria-label={t("workOrders.detail.openPreview")}
+                  title={t("workOrders.detail.openPreview")}
+                  className="iris-focusable iris-press flex w-full flex-col items-center gap-2 px-0 py-5 text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:bg-black/[0.02] hover:text-foreground"
                 >
-                  <X className="h-4 w-4" />
+                  <Eye className="h-4 w-4" />
+                  <span className="[writing-mode:vertical-rl]">
+                    {t("workOrders.detail.preview")}
+                  </span>
                 </button>
-              </div>
-              <WorkOrderPreviewPane order={order} />
-            </aside>
-          )}
+              </aside>
+            ))}
           </div>
       </div>
       {order && (
