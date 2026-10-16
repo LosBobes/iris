@@ -9,7 +9,7 @@ import {
   type UseFormWatch,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Eye, EyeOff, Loader2, MapPin, Package, Pencil, Plus, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Eye, EyeOff, ListPlus, Loader2, MapPin, Package, Pencil, Plus, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,6 +43,14 @@ import {
 } from "@/lib/customers";
 import { AsyncCombobox } from "@/components/WorkOrders/AsyncCombobox";
 import { CatalogPickerDialog } from "@/components/WorkOrders/CatalogPickerDialog";
+import {
+  TextImportDialog,
+  type TextImportLine,
+} from "@/components/WorkOrders/TextImportDialog";
+import {
+  looksLikeItemList,
+  parseLineItemsFromText,
+} from "@/shared/utils/description-items";
 import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
 import {
   WORK_ORDER_SELECT_NONE_VALUE,
@@ -1109,6 +1117,34 @@ export function WorkOrderForm({
     appendInvoiceLineItem(createInvoiceLineItem(kind));
   };
 
+  // Text the "import from text" dialog opens with; null keeps it closed.
+  const [textImportSource, setTextImportSource] = useState<string | null>(null);
+  const handleImportTextLines = (lines: TextImportLine[]): void => {
+    appendInvoiceLineItem(
+      lines.map((line) => ({
+        ...createInvoiceLineItem(line.kind),
+        description: line.description,
+        quantity: line.quantity,
+        unit: line.unit,
+        unitPrice: line.unitPrice,
+      })),
+    );
+  };
+  // Nudge operators who typed a product list into the opis posla to enter it
+  // as stavke instead, until the order has at least as many lines as the list.
+  const watchedJobDescription = watch("jobDescription");
+  const descriptionListLength = useMemo(
+    () =>
+      looksLikeItemList(watchedJobDescription)
+        ? parseLineItemsFromText(watchedJobDescription).length
+        : 0,
+    [watchedJobDescription],
+  );
+  const showDescriptionListHint =
+    !readOnly &&
+    descriptionListLength > 0 &&
+    invoiceLineItems.length < descriptionListLength;
+
   // Operator selects share this renderer. They pick from registered operators
   // but keep showing an off-registry value already stored on the order (e.g. a
   // legacy free-typed name) via a read-only "custom" fallback option.
@@ -1645,6 +1681,14 @@ export function WorkOrderForm({
                     <Plus className="h-3.5 w-3.5" />
                     {t("workOrders.form.specialGoods")}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextImportSource("")}
+                    className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+                  >
+                    <ListPlus className="h-3.5 w-3.5" />
+                    {t("workOrders.form.textImportButton")}
+                  </button>
                 </div>
               </div>
 
@@ -1663,6 +1707,15 @@ export function WorkOrderForm({
                 }}
                 onSelect={handleAddCatalogLineItem}
                 usedIds={usedCatalogItemIds}
+              />
+
+              <TextImportDialog
+                open={textImportSource !== null}
+                onOpenChange={(next) => {
+                  if (!next) setTextImportSource(null);
+                }}
+                initialText={textImportSource ?? ""}
+                onImport={handleImportTextLines}
               />
 
               {invoiceLineItemFields.length === 0 ? (
@@ -2087,6 +2140,19 @@ export function WorkOrderForm({
                 className={`${underlineInput} resize-none`}
                 {...register("jobDescription")}
               />
+              {showDescriptionListHint && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-l-2 border-[color:var(--iris-accent)] pl-2 text-[11px] text-[color:var(--iris-ink-soft)]">
+                  <span>{t("workOrders.form.descriptionLooksLikeList")}</span>
+                  <button
+                    type="button"
+                    onClick={() => setTextImportSource(watchedJobDescription ?? "")}
+                    className="iris-focusable inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                  >
+                    <ListPlus className="h-3.5 w-3.5" />
+                    {t("workOrders.form.descriptionToItems")}
+                  </button>
+                </div>
+              )}
             </FieldShell>
 
             <div className="grid grid-cols-2 gap-6">
