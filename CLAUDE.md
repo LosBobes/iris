@@ -77,6 +77,9 @@ npm run lint && npm test && npm run build
 
 There is **no automated CI** beyond a manual Copilot setup workflow — run the
 relevant per-surface checks yourself before declaring work done.
+The `iris-guards` mod (`.claude/skills/iris-guards/`) backs this up: it runs
+those checks before any `git push`, flags contract-sync drift after contract
+edits, and blocks production/destructive commands the user did not ask for.
 
 ## Known pitfalls
 
