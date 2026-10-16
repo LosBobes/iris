@@ -14,6 +14,8 @@ tags:
   - name: Customers
   - name: Work Orders
   - name: Dashboard
+  - name: Platform
+    description: Operator console. Separate platform-admin accounts (irisctl create-platform-admin) and cookie; aggregate metrics only.
 paths:
   /healthz:
     get:
@@ -1110,12 +1112,103 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/login:
+    post:
+      tags: [Platform]
+      summary: Sign in to the operator console
+      description: |
+        Platform admins belong to no organization and are created only with
+        `irisctl create-platform-admin`. Sets the `iris_platform_session` cookie
+        (HttpOnly, SameSite=Strict, 2 h). Failed attempts are rate limited per
+        IP, per username and globally.
+      operationId: platformLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformLoginRequest'
+      responses:
+        '200':
+          description: Login result (success false on bad credentials)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/session:
+    get:
+      tags: [Platform]
+      summary: Return the current operator session, if any
+      operationId: getPlatformSession
+      security: []
+      responses:
+        '200':
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+  /platform/auth/logout:
+    post:
+      tags: [Platform]
+      summary: End the operator session
+      operationId: platformLogout
+      security: []
+      responses:
+        '200':
+          description: Signed out
+  /platform/metrics:
+    get:
+      tags: [Platform]
+      summary: Aggregate usage metrics across organizations (operator only)
+      description: Counts, dates and sizes only; never customer, user or work-order records.
+      operationId: getPlatformMetrics
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [7, 30, 90, 365]
+            default: 30
+      responses:
+        '200':
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformMetrics'
+        '400':
+          description: Unsupported range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session (an organization session is never accepted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
       type: apiKey
       in: cookie
       name: iris_session
+    PlatformSession:
+      type: apiKey
+      in: cookie
+      name: iris_platform_session
   parameters:
     CatalogCleanupKind:
       name: kind
@@ -2263,6 +2356,146 @@ components:
           $ref: '#/components/schemas/InvoiceDraft'
         communication:
           $ref: '#/components/schemas/CustomerCommunication'
+    PlatformLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    PlatformLoginResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        admin:
+          type: object
+          properties:
+            username:
+              type: string
+        error:
+          type: string
+    PlatformMetrics:
+      type: object
+      required: [generatedAt, rangeDays, rangeStart, totals, system, tenants, daily]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        rangeDays:
+          type: integer
+          enum: [7, 30, 90, 365]
+        rangeStart:
+          type: string
+          format: date
+        totals:
+          type: object
+          properties:
+            tenants:
+              type: integer
+            users:
+              type: integer
+            customers:
+              type: integer
+            catalogItems:
+              type: integer
+            workOrders:
+              type: integer
+            workOrdersInRange:
+              type: integer
+            openWorkOrders:
+              type: integer
+            loginsInRange:
+              type: integer
+            activeUsersInRange:
+              type: integer
+            activeSessions:
+              type: integer
+            databaseBytes:
+              type: integer
+        system:
+          type: object
+          properties:
+            release:
+              type: string
+            goVersion:
+              type: string
+            startedAt:
+              type: string
+              format: date-time
+            uptimeSeconds:
+              type: integer
+            goroutines:
+              type: integer
+            heapBytes:
+              type: integer
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformTenantMetrics'
+        daily:
+          type: array
+          description: One point per day of the range, zero-filled for every organization.
+          items:
+            type: object
+            required: [date, workOrders, logins]
+            properties:
+              date:
+                type: string
+                format: date
+              workOrders:
+                type: object
+                description: Work orders created that day, keyed by organization slug.
+                additionalProperties:
+                  type: integer
+              logins:
+                type: object
+                description: Sign-ins that day, keyed by organization slug.
+                additionalProperties:
+                  type: integer
+    PlatformTenantMetrics:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+        users:
+          type: integer
+        admins:
+          type: integer
+        customers:
+          type: integer
+        catalogItems:
+          type: integer
+        workOrders:
+          type: integer
+        workOrdersInRange:
+          type: integer
+        openWorkOrders:
+          type: integer
+        loginsInRange:
+          type: integer
+        activeUsersInRange:
+          type: integer
+        activeSessions:
+          type: integer
+        statusCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        lastWorkOrderAt:
+          type: [string, 'null']
+        lastLoginAt:
+          type: [string, 'null']
+        hasLoginLogo:
+          type: boolean
     PublicOrganization:
       type: object
       required: [slug, name, logoVersion]

@@ -452,6 +452,31 @@ describe('failed requests', () => {
     vi.resetModules()
   })
 
+  it('keeps the organization session when the operator console answers 401', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { subscribeSessionExpired } = await import('./session')
+
+    const expired = vi.fn()
+    const unsubscribe = subscribeSessionExpired(expired)
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Prijava je obavezna.' }, { status: 401 }),
+    )
+    // Production builds sit behind nginx's /api prefix.
+    const api = createApi('https://iris.example/api', fetchMock)
+
+    await expect(api.getPlatformMetrics(30)).rejects.toThrow('Prijava je obavezna.')
+    // The operator console has its own session; an expired one must not sign
+    // the shop user out of the app.
+    expect(expired).not.toHaveBeenCalled()
+
+    unsubscribe()
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
   it('turns an unreachable server into an error that names the call', async () => {
     const captureException = mockSentry()
     vi.resetModules()

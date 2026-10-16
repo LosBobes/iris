@@ -29,6 +29,7 @@ import type {
   OrganizationSettings,
   PublicOrganization,
 } from '@/types/settings'
+import type { PlatformLoginResponse, PlatformMetrics, PlatformRangeDays } from '@/types/platform'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -83,7 +84,9 @@ function announceIfSessionExpired(status: number, url: string): void {
   } catch {
     // Relative or unparseable; match on whatever we were given.
   }
-  if (path.startsWith('/auth/')) return
+  // Auth routes, and the operator console, which has its own session: a 401
+  // there says nothing about the organization session.
+  if (/(^|\/)(auth|platform)\//.test(path)) return
   notifySessionExpired()
 }
 
@@ -664,6 +667,29 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
         credentialedRequest({ method: 'DELETE' }),
       )
       if (!response.ok) await readJSON<never>(response)
+    },
+
+    async platformLogin(credentials) {
+      const response = await fetchImpl(url('/platform/auth/login'), jsonRequest('POST', credentials))
+      return readJSON<PlatformLoginResponse>(response)
+    },
+
+    async getPlatformSession() {
+      const response = await fetchImpl(url('/platform/auth/session'), credentialedRequest())
+      return readJSON<PlatformLoginResponse>(response)
+    },
+
+    async platformLogout() {
+      const response = await fetchImpl(
+        url('/platform/auth/logout'),
+        credentialedRequest({ method: 'POST' }),
+      )
+      await readJSON<{ success: boolean }>(response)
+    },
+
+    async getPlatformMetrics(days: PlatformRangeDays) {
+      const response = await fetchImpl(url(`/platform/metrics?days=${days}`), credentialedRequest())
+      return readJSON<PlatformMetrics>(response)
     },
 
     async listUsers() {

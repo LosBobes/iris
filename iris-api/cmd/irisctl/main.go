@@ -89,6 +89,17 @@ func main() {
 		}
 		must(sqliteStore.CreateUser(tenantCtx, *id, *username, *password, domain.UserRole(*role), false))
 		fmt.Printf("Korisnik %s je sačuvan.\n", *username)
+	case "create-platform-admin":
+		// Operator accounts for the hidden platform console. They are never
+		// created automatically and cannot be created from the web app.
+		cmd := flag.NewFlagSet("create-platform-admin", flag.ExitOnError)
+		username := cmd.String("username", "", "korisničko ime operatera")
+		password := cmd.String("password", "", "lozinka (najmanje 12 znakova)")
+		_ = cmd.Parse(os.Args[2:])
+		sqliteStore := mustOpen(ctx, dbPathFromEnv())
+		defer sqliteStore.Close()
+		must(sqliteStore.UpsertPlatformAdmin(ctx, *username, *password))
+		fmt.Printf("Operater platforme %s je sačuvan.\n", strings.TrimSpace(*username))
 	case "backup":
 		cmd := flag.NewFlagSet("backup", flag.ExitOnError)
 		out := cmd.String("out", "", "putanja izlazne .db kopije")
@@ -383,6 +394,7 @@ func usage() {
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
   irisctl import-csv -tenant oznaka --dry-run --dir import/
   irisctl import-csv -tenant oznaka --apply --dir import/
+  irisctl create-platform-admin -username ime -password lozinka
   irisctl backup [-out backups/iris.db]
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)

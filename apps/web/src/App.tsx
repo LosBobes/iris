@@ -57,6 +57,7 @@ const CostReviewPage = lazy(() => import("@/pages/CostReviewPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const HelpPage = lazy(() => import("@/pages/HelpPage"));
+const PlatformConsole = lazy(() => import("@/components/platform/PlatformConsole"));
 
 type AppBootstrapState =
   | { kind: "loading" }
@@ -369,6 +370,8 @@ function AppContent(): React.JSX.Element {
         <Suspense fallback={<RouteLoadingScreen />}>
           <Routes>
             <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
+            {/* Operator console: its own session, independent of any organization. */}
+            <Route path="/platform" element={<PlatformConsole />} />
             <Route
               path="*"
               element={

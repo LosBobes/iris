@@ -32,6 +32,11 @@ import type {
   PublicOrganization,
 } from '@/types/settings'
 import type {
+  PlatformLoginResponse,
+  PlatformMetrics,
+  PlatformRangeDays,
+} from '@/types/platform'
+import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
@@ -100,6 +105,11 @@ declare global {
       getLoginLogo: () => Promise<Blob | null>
       updateLoginLogo: (upload: LoginLogoUpload) => Promise<LoginLogoInfo>
       deleteLoginLogo: () => Promise<void>
+      /** Operator console (separate account and cookie; see iris-api platform.go). */
+      platformLogin: (credentials: { username: string; password: string }) => Promise<PlatformLoginResponse>
+      getPlatformSession: () => Promise<PlatformLoginResponse>
+      platformLogout: () => Promise<void>
+      getPlatformMetrics: (days: PlatformRangeDays) => Promise<PlatformMetrics>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

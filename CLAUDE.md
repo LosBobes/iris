@@ -88,6 +88,12 @@ relevant per-surface checks yourself before declaring work done.
   via `GET /public/organizations/{slug}`; the device remembers it and goes to
   `/login/<slug>` (username + password, plus the org's admin-editable logo from
   `PUT /settings/login-logo`, stored in `app_settings` under `login_logo`).
+- **Operator console (`/platform`):** reached by tapping the "Iris" wordmark on
+  the org picker 5× within 3 s (a convenience, not security). It needs a separate
+  platform-admin account (`irisctl create-platform-admin`, none by default), its own
+  `iris_platform_session` cookie (2 h), and only reads aggregate counts from
+  `GET /platform/metrics` — never customer/user/work-order records. Tenant logins
+  are recorded in `login_events` (tenant, opaque user id, time) for those counts.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`
