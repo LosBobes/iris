@@ -112,7 +112,8 @@ Operational commands:
 ```bash
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-tenant -slug grafika-cobanovic -name "Grafika Čobanović" -admin-username milica -admin-password '<secret>'
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user -tenant grafika-cobanovic -username milica -password '<secret>' -role admin
-# Operator console (/platform) account: belongs to no organization, password >= 12 chars
+# Operator console (/platform): a database with no operator gets admin / admin123321,
+# which must pick a new password (>= 12 chars) on first login. More accounts:
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-platform-admin -username ops -password '<long secret>'
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports

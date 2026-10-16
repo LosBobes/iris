@@ -34,6 +34,7 @@ import type {
 import type {
   PlatformLoginResponse,
   PlatformMetrics,
+  PlatformPasswordChange,
   PlatformRangeDays,
 } from '@/types/platform'
 import type {
@@ -109,6 +110,7 @@ declare global {
       platformLogin: (credentials: { username: string; password: string }) => Promise<PlatformLoginResponse>
       getPlatformSession: () => Promise<PlatformLoginResponse>
       platformLogout: () => Promise<void>
+      changePlatformPassword: (change: PlatformPasswordChange) => Promise<PlatformLoginResponse>
       getPlatformMetrics: (days: PlatformRangeDays) => Promise<PlatformMetrics>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>

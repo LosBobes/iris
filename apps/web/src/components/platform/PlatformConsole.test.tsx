@@ -118,6 +118,89 @@ describe("PlatformConsole", () => {
   });
 });
 
+describe("operator password", () => {
+  it("makes the seeded default account choose a password before any data loads", async () => {
+    const getPlatformMetrics = vi.fn(async () => metrics);
+    const changePlatformPassword = vi.fn(async () => ({
+      success: true,
+      admin: { username: "admin", mustChangePassword: false },
+    }));
+    vi.stubGlobal("api", {
+      getPlatformSession: vi.fn(async () => ({
+        success: true,
+        admin: { username: "admin", mustChangePassword: true },
+      })),
+      changePlatformPassword,
+      getPlatformMetrics,
+    });
+
+    render(
+      <MemoryRouter>
+        <PlatformConsole />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(strings.password.requiredIntro)).toBeInTheDocument();
+    // No way around it: no cancel, and nothing fetched yet.
+    expect(screen.queryByRole("button", { name: sr.common.cancel })).not.toBeInTheDocument();
+    expect(getPlatformMetrics).not.toHaveBeenCalled();
+
+    await userEvent.type(screen.getByLabelText(strings.password.current), "admin123321");
+    await userEvent.type(screen.getByLabelText(strings.password.new), "short");
+    await userEvent.type(screen.getByLabelText(strings.password.confirm), "short");
+    await userEvent.click(screen.getByRole("button", { name: strings.password.submit }));
+    expect(await screen.findByText(strings.password.tooShort.replace("{{min}}", "12"))).toBeInTheDocument();
+    expect(changePlatformPassword).not.toHaveBeenCalled();
+
+    await userEvent.clear(screen.getByLabelText(strings.password.new));
+    await userEvent.clear(screen.getByLabelText(strings.password.confirm));
+    await userEvent.type(screen.getByLabelText(strings.password.new), "a-much-better-password");
+    await userEvent.type(screen.getByLabelText(strings.password.confirm), "a-much-better-passwor");
+    await userEvent.click(screen.getByRole("button", { name: strings.password.submit }));
+    expect(await screen.findByText(strings.password.mismatch)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(strings.password.confirm), "d");
+    await userEvent.click(screen.getByRole("button", { name: strings.password.submit }));
+
+    await waitFor(() =>
+      expect(changePlatformPassword).toHaveBeenCalledWith({
+        currentPassword: "admin123321",
+        newPassword: "a-much-better-password",
+      }),
+    );
+    expect((await screen.findAllByText(strings.tiles.tenants)).length).toBeGreaterThan(0);
+    expect(getPlatformMetrics).toHaveBeenCalled();
+  });
+
+  it("lets a signed-in operator change it from the toolbar", async () => {
+    const changePlatformPassword = vi.fn(async () => {
+      throw new Error("Trenutna lozinka nije ispravna.");
+    });
+    vi.stubGlobal("api", {
+      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops" } })),
+      getPlatformMetrics: vi.fn(async () => metrics),
+      changePlatformPassword,
+    });
+
+    render(
+      <MemoryRouter>
+        <PlatformConsole />
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: strings.password.open }));
+    expect(screen.getByRole("dialog", { name: strings.password.title })).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(strings.password.current), "wrong-one");
+    await userEvent.type(screen.getByLabelText(strings.password.new), "a-much-better-password");
+    await userEvent.type(screen.getByLabelText(strings.password.confirm), "a-much-better-password");
+    await userEvent.click(screen.getByRole("button", { name: strings.password.submit }));
+    expect(await screen.findByText("Trenutna lozinka nije ispravna.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: sr.common.cancel }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
 describe("hidden console gesture", () => {
   function renderPicker(): void {
     vi.stubGlobal("api", { getAppVersion: vi.fn(async () => "1.0.0") });

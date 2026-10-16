@@ -1164,6 +1164,57 @@ paths:
       responses:
         '200':
           description: Signed out
+  /platform/auth/password:
+    post:
+      tags: [Platform]
+      summary: Change the signed-in operator's password
+      description: |
+        The only action open to an account with `mustChangePassword` (such as the
+        default `admin` seeded on a database with no operators). New passwords
+        need at least 12 characters and must differ from the current one; every
+        other session of the account is signed out. Wrong current passwords are
+        rate limited like logins.
+      operationId: changePlatformPassword
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 12
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Wrong current password, or new password too weak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /platform/metrics:
     get:
       tags: [Platform]
@@ -1189,6 +1240,12 @@ paths:
                 $ref: '#/components/schemas/PlatformMetrics'
         '400':
           description: Unsupported range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
           content:
             application/json:
               schema:
@@ -2375,6 +2432,9 @@ components:
           properties:
             username:
               type: string
+            mustChangePassword:
+              type: boolean
+              description: True until the account replaces its initial password.
         error:
           type: string
     PlatformMetrics:

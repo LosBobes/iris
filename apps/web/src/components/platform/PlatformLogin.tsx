@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { LOGIN_PATH } from "@/lib/organization-login";
+import type { PlatformAdmin } from "@/types/platform";
 
 const schema = z.object({
   username: z.string().trim().min(1, "platform.login.usernameRequired"),
@@ -13,7 +14,7 @@ const schema = z.object({
 });
 type PlatformLoginForm = z.infer<typeof schema>;
 
-export function PlatformLogin({ onSignedIn }: { onSignedIn: (username: string) => void }): React.JSX.Element {
+export function PlatformLogin({ onSignedIn }: { onSignedIn: (admin: PlatformAdmin) => void }): React.JSX.Element {
   const { t } = useTranslation();
   const [serverError, setServerError] = useState<string | null>(null);
   const {
@@ -27,7 +28,7 @@ export function PlatformLogin({ onSignedIn }: { onSignedIn: (username: string) =
     try {
       const result = await window.api.platformLogin(values);
       if (result.success && result.admin) {
-        onSignedIn(result.admin.username);
+        onSignedIn(result.admin);
       } else {
         setServerError(result.error ?? t("platform.login.failed"));
       }

@@ -142,3 +142,51 @@ func TestPlatformMetricsAggregatesPerTenant(t *testing.T) {
 		}
 	}
 }
+
+// TestDefaultPlatformAdmin: a fresh database gets admin/admin123321 flagged for a
+// password change; changing it clears the flag, refuses weak or wrong input,
+// and signs out every other session of that admin.
+func TestDefaultPlatformAdmin(t *testing.T) {
+	ctx := context.Background()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+
+	admin, err := sqliteStore.AuthenticatePlatformAdmin(ctx, DefaultPlatformAdminUsername, DefaultPlatformAdminPassword)
+	if err != nil || admin == nil || !admin.MustChangePassword {
+		t.Fatalf("default admin = %+v, %v; want one that must change its password", admin, err)
+	}
+
+	// Re-running the seed never adds a second default account.
+	if err := platformDefaultAdminMigration(ctx, sqliteStore.db); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := sqliteStore.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM platform_admins`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("platform admins = %d, %v; want 1", count, err)
+	}
+
+	mine, _ := sqliteStore.CreatePlatformSession(ctx, admin.ID, time.Now().Add(time.Hour))
+	other, _ := sqliteStore.CreatePlatformSession(ctx, admin.ID, time.Now().Add(time.Hour))
+
+	if err := sqliteStore.ChangePlatformAdminPassword(ctx, admin.ID, mine, "nope", "a-much-better-password"); err != ErrWrongPassword {
+		t.Fatalf("wrong current password = %v, want ErrWrongPassword", err)
+	}
+	if err := sqliteStore.ChangePlatformAdminPassword(ctx, admin.ID, mine, DefaultPlatformAdminPassword, "short"); err == nil {
+		t.Fatal("short new password accepted")
+	}
+	if err := sqliteStore.ChangePlatformAdminPassword(ctx, admin.ID, mine, DefaultPlatformAdminPassword, "a-much-better-password"); err != nil {
+		t.Fatalf("ChangePlatformAdminPassword: %v", err)
+	}
+
+	if got, _ := sqliteStore.PlatformAdminBySession(ctx, mine); got == nil || got.MustChangePassword {
+		t.Fatalf("own session after change = %+v, want kept and unflagged", got)
+	}
+	if got, _ := sqliteStore.PlatformAdminBySession(ctx, other); got != nil {
+		t.Fatal("other session survived the password change")
+	}
+	if got, _ := sqliteStore.AuthenticatePlatformAdmin(ctx, DefaultPlatformAdminUsername, DefaultPlatformAdminPassword); got != nil {
+		t.Fatal("old default password still works")
+	}
+	if got, _ := sqliteStore.AuthenticatePlatformAdmin(ctx, DefaultPlatformAdminUsername, "a-much-better-password"); got == nil {
+		t.Fatal("new password does not work")
+	}
+}

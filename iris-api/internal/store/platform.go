@@ -29,6 +29,10 @@ type PlatformStore interface {
 	CreatePlatformSession(ctx context.Context, adminID string, expiresAt time.Time) (string, error)
 	PlatformAdminBySession(ctx context.Context, token string) (*domain.PlatformAdmin, error)
 	DeletePlatformSession(ctx context.Context, token string) error
+	// ChangePlatformAdminPassword verifies the current password, stores the new
+	// one, clears MustChangePassword and ends every other session of that admin.
+	// It returns ErrWrongPassword when the current password does not match.
+	ChangePlatformAdminPassword(ctx context.Context, adminID, keepToken, currentPassword, newPassword string) error
 	RecordLogin(ctx context.Context, tenantID, userID string, at time.Time) error
 	PlatformMetrics(ctx context.Context, now time.Time, rangeDays int) (domain.PlatformMetrics, error)
 }
@@ -38,6 +42,17 @@ var _ PlatformStore = (*SQLiteStore)(nil)
 // MinPlatformAdminPasswordLength is enforced when an operator account is
 // created: it can read usage across every organization.
 const MinPlatformAdminPasswordLength = 12
+
+// ErrWrongPassword reports a failed current-password check on a password change.
+var ErrWrongPassword = errors.New("wrong current password")
+
+// Default operator account seeded on a database that has none, so the console
+// can be reached right after a deploy. It is created with must_change_password
+// set: until its owner picks a new password, the console offers nothing else.
+const (
+	DefaultPlatformAdminUsername = "admin"
+	DefaultPlatformAdminPassword = "admin123321"
+)
 
 // loginEventRetention bounds login_events so it cannot grow forever; the
 // dashboard's longest range is a year.
@@ -69,8 +84,8 @@ func (s *SQLiteStore) UpsertPlatformAdmin(ctx context.Context, username, passwor
 	id := "platform-" + strings.ToLower(username)
 	if _, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO platform_admins(id, username, password_hash) VALUES (?, ?, ?)
-		 ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash`,
+		`INSERT INTO platform_admins(id, username, password_hash, must_change_password) VALUES (?, ?, ?, 0)
+		 ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, must_change_password = 0`,
 		id, username, string(hash),
 	); err != nil {
 		return fmt.Errorf("save platform admin: %w", err)
@@ -83,9 +98,9 @@ func (s *SQLiteStore) AuthenticatePlatformAdmin(ctx context.Context, username, p
 	var hash string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, username, password_hash FROM platform_admins WHERE username = ?`,
+		`SELECT id, username, password_hash, must_change_password FROM platform_admins WHERE username = ?`,
 		strings.TrimSpace(username),
-	).Scan(&admin.ID, &admin.Username, &hash)
+	).Scan(&admin.ID, &admin.Username, &hash, &admin.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		_ = bcrypt.CompareHashAndPassword(dummyPlatformHash, []byte(password))
 		return nil, nil
@@ -129,12 +144,13 @@ func (s *SQLiteStore) PlatformAdminBySession(ctx context.Context, token string) 
 	var expiresAtRaw string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT platform_admins.id, platform_admins.username, platform_sessions.expires_at
+		`SELECT platform_admins.id, platform_admins.username, platform_admins.must_change_password,
+		        platform_sessions.expires_at
 		 FROM platform_sessions
 		 JOIN platform_admins ON platform_admins.id = platform_sessions.admin_id
 		 WHERE platform_sessions.token_hash = ?`,
 		hashPlatformToken(token),
-	).Scan(&admin.ID, &admin.Username, &expiresAtRaw)
+	).Scan(&admin.ID, &admin.Username, &admin.MustChangePassword, &expiresAtRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -158,6 +174,54 @@ func (s *SQLiteStore) DeletePlatformSession(ctx context.Context, token string) e
 		return fmt.Errorf("delete platform session: %w", err)
 	}
 	return nil
+}
+
+func (s *SQLiteStore) ChangePlatformAdminPassword(
+	ctx context.Context,
+	adminID, keepToken, currentPassword, newPassword string,
+) error {
+	var hash string
+	err := s.db.QueryRowContext(ctx, `SELECT password_hash FROM platform_admins WHERE id = ?`, adminID).Scan(&hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrWrongPassword
+	}
+	if err != nil {
+		return fmt.Errorf("load platform admin: %w", err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(currentPassword)) != nil {
+		return ErrWrongPassword
+	}
+	if len(newPassword) < MinPlatformAdminPasswordLength {
+		return newValidationError(fmt.Sprintf("Nova lozinka mora imati najmanje %d znakova.", MinPlatformAdminPasswordLength))
+	}
+	if newPassword == currentPassword || newPassword == DefaultPlatformAdminPassword {
+		return newValidationError("Izaberite novu lozinku, različitu od trenutne.")
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin password change: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(
+		ctx,
+		`UPDATE platform_admins SET password_hash = ?, must_change_password = 0 WHERE id = ?`,
+		string(newHash), adminID,
+	); err != nil {
+		return fmt.Errorf("update platform password: %w", err)
+	}
+	// Anyone else signed in with the old password is signed out.
+	if _, err := tx.ExecContext(
+		ctx,
+		`DELETE FROM platform_sessions WHERE admin_id = ? AND token_hash <> ?`,
+		adminID, hashPlatformToken(keepToken),
+	); err != nil {
+		return fmt.Errorf("end other platform sessions: %w", err)
+	}
+	return tx.Commit()
 }
 
 // RecordLogin notes that someone signed in to an organization. Only the tenant,
@@ -470,3 +534,38 @@ CREATE TABLE IF NOT EXISTS login_events (
 CREATE INDEX IF NOT EXISTS idx_login_events_tenant_at ON login_events(tenant_id, at);
 CREATE INDEX IF NOT EXISTS idx_login_events_at ON login_events(at);
 `
+
+// platformDefaultAdminMigration adds the must-change-password flag and, on a
+// database with no operator accounts yet, seeds the default one
+// (DefaultPlatformAdminUsername / DefaultPlatformAdminPassword) with the flag
+// set. A database that already has an operator is left alone.
+func platformDefaultAdminMigration(ctx context.Context, db *sql.DB) error {
+	var hasColumn int
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM pragma_table_info('platform_admins') WHERE name = 'must_change_password'`,
+	).Scan(&hasColumn); err != nil {
+		return fmt.Errorf("inspect platform_admins: %w", err)
+	}
+	if hasColumn == 0 {
+		if _, err := db.ExecContext(
+			ctx,
+			`ALTER TABLE platform_admins ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0`,
+		); err != nil {
+			return fmt.Errorf("add must_change_password: %w", err)
+		}
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(DefaultPlatformAdminPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash default platform password: %w", err)
+	}
+	if _, err := db.ExecContext(
+		ctx,
+		`INSERT INTO platform_admins(id, username, password_hash, must_change_password)
+		 SELECT ?, ?, ?, 1 WHERE NOT EXISTS (SELECT 1 FROM platform_admins)`,
+		"platform-"+DefaultPlatformAdminUsername, DefaultPlatformAdminUsername, string(hash),
+	); err != nil {
+		return fmt.Errorf("seed default platform admin: %w", err)
+	}
+	return nil
+}

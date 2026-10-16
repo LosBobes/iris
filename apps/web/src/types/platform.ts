@@ -4,10 +4,21 @@
 
 export type PlatformRangeDays = 7 | 30 | 90 | 365
 
+export interface PlatformAdmin {
+  username: string
+  /** True until the account replaces its initial password (e.g. the seeded default). */
+  mustChangePassword?: boolean
+}
+
 export interface PlatformLoginResponse {
   success: boolean
-  admin?: { username: string }
+  admin?: PlatformAdmin
   error?: string
+}
+
+export interface PlatformPasswordChange {
+  currentPassword: string
+  newPassword: string
 }
 
 export interface PlatformTotals {

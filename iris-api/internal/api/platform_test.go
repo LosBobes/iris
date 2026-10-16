@@ -50,9 +50,10 @@ func TestPlatformConsoleAccess(t *testing.T) {
 	platform := server.store.(store.PlatformStore)
 	login := `{"username":"ops","password":"correct-horse-battery"}`
 
-	// No operator account exists until one is created from the server.
+	// "ops" does not exist until it is created from the server (only the
+	// seeded default "admin" does).
 	if res := decodePlatformLogin(t, platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", login)); res.Success {
-		t.Fatal("login succeeded with no platform admins")
+		t.Fatal("login succeeded for an account that does not exist")
 	}
 	if err := platform.UpsertPlatformAdmin(context.Background(), "ops", "correct-horse-battery"); err != nil {
 		t.Fatal(err)
@@ -163,5 +164,48 @@ func TestLoginLimiterWindow(t *testing.T) {
 	limiter.fail("b")
 	if limiter.allow("c") {
 		t.Fatal("global limit not enforced")
+	}
+}
+
+// TestDefaultPlatformAdminMustChangePassword: the seeded admin/admin123321 can
+// sign in, but sees no metrics until it picks a new password.
+func TestDefaultPlatformAdminMustChangePassword(t *testing.T) {
+	server, _, _ := newServerWithRoles(t)
+
+	rec := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", `{"username":"admin","password":"admin123321"}`)
+	res := decodePlatformLogin(t, rec)
+	if !res.Success || res.Admin == nil || !res.Admin.MustChangePassword {
+		t.Fatalf("default login = %s, want success with mustChangePassword", rec.Body.String())
+	}
+	cookie := platformCookie(rec, server.config.PlatformSessionCookieName)
+
+	if rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("metrics before change = %d, want 403", rec.Code)
+	}
+
+	if rec := platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/password",
+		`{"currentPassword":"wrong","newPassword":"a-much-better-password"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("wrong current password = %d, want 422", rec.Code)
+	}
+	if rec := platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/password",
+		`{"currentPassword":"admin123321","newPassword":"short"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("short new password = %d, want 422", rec.Code)
+	}
+	if rec := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/password",
+		`{"currentPassword":"admin123321","newPassword":"a-much-better-password"}`); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous change = %d, want 401", rec.Code)
+	}
+
+	rec = platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/password",
+		`{"currentPassword":"admin123321","newPassword":"a-much-better-password"}`)
+	if res := decodePlatformLogin(t, rec); !res.Success || res.Admin.MustChangePassword {
+		t.Fatalf("change = %s", rec.Body.String())
+	}
+	if rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics", ""); rec.Code != http.StatusOK {
+		t.Fatalf("metrics after change = %d, want 200", rec.Code)
+	}
+	if res := decodePlatformLogin(t, platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login",
+		`{"username":"admin","password":"admin123321"}`)); res.Success {
+		t.Fatal("default password still signs in")
 	}
 }

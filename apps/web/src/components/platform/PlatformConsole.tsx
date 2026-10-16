@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PlatformDashboard } from "./PlatformDashboard";
 import { PlatformLogin } from "./PlatformLogin";
+import { PlatformChangePassword } from "./PlatformChangePassword";
+import type { PlatformAdmin } from "@/types/platform";
 
 // Dashboard surfaces. Always dark, like an ops console, whatever the app
 // theme; the chart palette in series.ts is validated against --pf-panel.
@@ -16,7 +18,7 @@ const CONSOLE_VARS = {
   colorScheme: "dark",
 } as React.CSSProperties;
 
-type ConsoleState = { kind: "checking" } | { kind: "signedOut" } | { kind: "signedIn"; username: string };
+type ConsoleState = { kind: "checking" } | { kind: "signedOut" } | { kind: "signedIn"; admin: PlatformAdmin };
 
 /**
  * The operator console at /platform, reached from the hidden gesture on the
@@ -35,7 +37,7 @@ export function PlatformConsole(): React.JSX.Element {
         if (!active) return;
         setState(
           session.success && session.admin
-            ? { kind: "signedIn", username: session.admin.username }
+            ? { kind: "signedIn", admin: session.admin }
             : { kind: "signedOut" },
         );
       })
@@ -60,10 +62,17 @@ export function PlatformConsole(): React.JSX.Element {
       {state.kind === "checking" ? (
         <div className="min-h-dvh bg-[color:var(--pf-bg)]" />
       ) : state.kind === "signedOut" ? (
-        <PlatformLogin onSignedIn={(username) => setState({ kind: "signedIn", username })} />
+        <PlatformLogin onSignedIn={(admin) => setState({ kind: "signedIn", admin })} />
+      ) : state.admin.mustChangePassword ? (
+        <div className="flex min-h-dvh items-center justify-center bg-[color:var(--pf-bg)] px-4">
+          <PlatformChangePassword
+            required
+            onChanged={(admin) => setState({ kind: "signedIn", admin })}
+          />
+        </div>
       ) : (
         <PlatformDashboard
-          username={state.username}
+          username={state.admin.username}
           onLogout={() => {
             void window.api
               .platformLogout()

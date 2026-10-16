@@ -335,6 +335,16 @@ type PublicOrganization struct {
 type PlatformAdmin struct {
 	ID       string `json:"-"`
 	Username string `json:"username"`
+	// MustChangePassword is set on the seeded default account (and any account
+	// whose password was not chosen by its owner): the console then allows
+	// nothing but a password change.
+	MustChangePassword bool `json:"mustChangePassword"`
+}
+
+// PlatformPasswordChange is the POST /platform/auth/password payload.
+type PlatformPasswordChange struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
 }
 
 type PlatformLoginRequest struct {

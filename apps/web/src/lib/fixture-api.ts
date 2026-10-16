@@ -493,6 +493,7 @@ let fixtureLoginLogo: { dataUrl: string; version: string } | null = null
 // Fixture mode's operator console (dev only, no backend): one fixed account,
 // and metrics derived from the fixture data so the dashboard has real shapes.
 const FIXTURE_PLATFORM_ADMIN = { username: 'operater', password: 'operater-demo' }
+let fixturePlatformPassword = FIXTURE_PLATFORM_ADMIN.password
 let platformSignedIn = false
 
 function fixturePlatformMetrics(days: PlatformRangeDays): PlatformMetrics {
@@ -1013,7 +1014,7 @@ export function createFixtureApi(): Window['api'] {
     async platformLogin(credentials) {
       platformSignedIn =
         credentials.username === FIXTURE_PLATFORM_ADMIN.username &&
-        credentials.password === FIXTURE_PLATFORM_ADMIN.password
+        credentials.password === fixturePlatformPassword
       return platformSignedIn
         ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
         : { success: false, error: 'Neispravno korisničko ime ili lozinka.' }
@@ -1027,6 +1028,14 @@ export function createFixtureApi(): Window['api'] {
 
     async platformLogout() {
       platformSignedIn = false
+    },
+
+    async changePlatformPassword(change) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (change.currentPassword !== fixturePlatformPassword) throw new Error('Trenutna lozinka nije ispravna.')
+      if (change.newPassword.length < 12) throw new Error('Nova lozinka mora imati najmanje 12 znakova.')
+      fixturePlatformPassword = change.newPassword
+      return { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
     },
 
     async getPlatformMetrics(days) {

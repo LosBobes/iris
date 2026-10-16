@@ -29,7 +29,12 @@ import type {
   OrganizationSettings,
   PublicOrganization,
 } from '@/types/settings'
-import type { PlatformLoginResponse, PlatformMetrics, PlatformRangeDays } from '@/types/platform'
+import type {
+  PlatformLoginResponse,
+  PlatformMetrics,
+  PlatformPasswordChange,
+  PlatformRangeDays,
+} from '@/types/platform'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -685,6 +690,11 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
         credentialedRequest({ method: 'POST' }),
       )
       await readJSON<{ success: boolean }>(response)
+    },
+
+    async changePlatformPassword(change: PlatformPasswordChange) {
+      const response = await fetchImpl(url('/platform/auth/password'), jsonRequest('POST', change))
+      return readJSON<PlatformLoginResponse>(response)
     },
 
     async getPlatformMetrics(days: PlatformRangeDays) {

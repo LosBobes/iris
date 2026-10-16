@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -20,7 +21,10 @@ import (
 // fails. The only data they reach is the aggregate metrics in
 // store.PlatformMetrics.
 
-const platformInvalidCredentials = "Neispravno korisničko ime ili lozinka."
+const (
+	platformInvalidCredentials     = "Neispravno korisničko ime ili lozinka."
+	platformPasswordChangeRequired = "Promenite lozinku pre nastavka."
+)
 
 var platformRangeDays = map[int]bool{7: true, 30: true, 90: true, 365: true}
 
@@ -133,6 +137,50 @@ func (s *Server) handlePlatformLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
+// handlePlatformChangePassword lets a signed-in operator replace their
+// password. It is the one action open to an account that must change it.
+func (s *Server) handlePlatformChangePassword(w http.ResponseWriter, r *http.Request) {
+	platform, ok := s.platformStore()
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	admin, err := s.platformAdminFromRequest(r)
+	if err != nil {
+		writeServerError(w, r, err)
+		return
+	}
+	if admin == nil {
+		writeAPIError(w, r, http.StatusUnauthorized, "Prijava je obavezna.", nil)
+		return
+	}
+	var req domain.PlatformPasswordChange
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	// Guessing the current password through this form is throttled like login.
+	keys := []string{"password:" + admin.ID, "ip:" + clientIP(r)}
+	if !s.platformLimiter.allow(keys...) {
+		writeAPIError(w, r, http.StatusTooManyRequests, "Previše neuspešnih pokušaja. Pokušajte ponovo kasnije.", nil)
+		return
+	}
+	cookie, _ := r.Cookie(s.config.PlatformSessionCookieName)
+	err = platform.ChangePlatformAdminPassword(r.Context(), admin.ID, cookie.Value, req.CurrentPassword, req.NewPassword)
+	if errors.Is(err, store.ErrWrongPassword) {
+		s.platformLimiter.fail(keys...)
+		writeValidationError(w, r, "Trenutna lozinka nije ispravna.")
+		return
+	}
+	if err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	s.platformLimiter.succeed(keys...)
+	log.Printf("platform password changed for %q from %s", admin.Username, clientIP(r))
+	admin.MustChangePassword = false
+	writeJSON(w, http.StatusOK, domain.PlatformLoginResponse{Success: true, Admin: admin})
+}
+
 // requirePlatformAdmin guards operator routes. A tenant session (iris_session)
 // is never accepted here, whatever its role.
 func (s *Server) requirePlatformAdmin(next http.Handler) http.Handler {
@@ -144,6 +192,11 @@ func (s *Server) requirePlatformAdmin(next http.Handler) http.Handler {
 		}
 		if admin == nil {
 			writeAPIError(w, r, http.StatusUnauthorized, "Prijava je obavezna.", nil)
+			return
+		}
+		// The seeded default account opens nothing until its password changes.
+		if admin.MustChangePassword {
+			writeAPIError(w, r, http.StatusForbidden, platformPasswordChangeRequired, nil)
 			return
 		}
 		next.ServeHTTP(w, r)

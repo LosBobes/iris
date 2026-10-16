@@ -119,6 +119,7 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/platform/auth/login", s.handlePlatformLogin)
 	r.Get("/platform/auth/session", s.handlePlatformSession)
 	r.Post("/platform/auth/logout", s.handlePlatformLogout)
+	r.Post("/platform/auth/password", s.handlePlatformChangePassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
 
 	r.Group(func(protected chi.Router) {

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, LogOut, RefreshCw } from "lucide-react";
+import { Check, KeyRound, LogOut, RefreshCw } from "lucide-react";
+import { PlatformChangePassword } from "./PlatformChangePassword";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -71,6 +72,8 @@ export function PlatformDashboard({
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -189,6 +192,14 @@ export function PlatformDashboard({
             <span className="text-[color:var(--pf-text-2)]">{username}</span>
             <button
               type="button"
+              onClick={() => setChangingPassword(true)}
+              className="iris-focusable inline-flex items-center gap-1 rounded px-1.5 py-1 hover:bg-white/5 hover:text-[color:var(--pf-text)]"
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              {t("platform.password.open")}
+            </button>
+            <button
+              type="button"
               onClick={onLogout}
               className="iris-focusable inline-flex items-center gap-1 rounded px-1.5 py-1 hover:bg-white/5 hover:text-[color:var(--pf-text)]"
             >
@@ -199,7 +210,29 @@ export function PlatformDashboard({
         </div>
       </div>
 
+      {changingPassword ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("platform.password.title")}
+          className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 px-4"
+        >
+          <PlatformChangePassword
+            onCancel={() => setChangingPassword(false)}
+            onChanged={() => {
+              setChangingPassword(false);
+              setNotice(t("platform.password.changed"));
+            }}
+          />
+        </div>
+      ) : null}
+
       <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-4 sm:px-6">
+        {notice ? (
+          <div role="status" className="rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
+            {notice}
+          </div>
+        ) : null}
         {error ? (
           <div role="alert" className="rounded border border-[#e66767]/40 bg-[#e66767]/10 px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
             {error}
