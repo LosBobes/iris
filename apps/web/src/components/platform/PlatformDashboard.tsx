@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, KeyRound, LogOut, RefreshCw } from "lucide-react";
+import { Check, RefreshCw } from "lucide-react";
+import { BackofficeMenu } from "./BackofficeMenu";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { PlatformChangePassword } from "./PlatformChangePassword";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
@@ -36,9 +38,9 @@ function storeNumber(key: string, value: number): void {
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }): React.JSX.Element {
   return (
-    <div className="min-w-0 rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-3">
-      <div className="truncate text-[11px] text-[color:var(--pf-text-2)]">{label}</div>
-      <div className="mt-1 truncate text-[26px] font-medium leading-tight tabular-nums text-[color:var(--pf-text)]">
+    <div className="min-w-0 rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-3.5">
+      <div className="truncate text-[12px] text-[color:var(--pf-text-2)]">{label}</div>
+      <div className="mt-1 truncate text-[28px] font-medium leading-tight tabular-nums text-[color:var(--pf-text)]">
         {value}
       </div>
       {hint ? <div className="mt-0.5 truncate text-[11px] text-[color:var(--pf-muted)]">{hint}</div> : null}
@@ -48,9 +50,9 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
   return (
-    <section className="min-w-0 rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
-      <header className="border-b border-[color:var(--pf-border)] px-4 py-2.5">
-        <h2 className="text-[13px] font-medium text-[color:var(--pf-text)]">{title}</h2>
+    <section className="min-w-0 rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
+      <header className="border-b border-[color:var(--pf-border)] px-4 py-3">
+        <h2 className="text-[14px] font-medium text-[color:var(--pf-text)]">{title}</h2>
       </header>
       {children}
     </section>
@@ -76,6 +78,9 @@ export function PlatformDashboard({
   const [loading, setLoading] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Range and refresh sit in the header from tablet width up; on a phone the
+  // range gets its own row and refresh moves into the menu.
+  const isWide = useMediaQuery("(min-width: 768px)");
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -119,103 +124,99 @@ export function PlatformDashboard({
   const totals = metrics?.totals;
   const rangeHint = t("platform.rangeHint", { days: range });
 
+  const rangeControl = (
+    <div
+      role="radiogroup"
+      aria-label={t("platform.range")}
+      className="grid grid-cols-4 rounded-md border border-[color:var(--pf-border)] p-0.5 md:inline-grid"
+    >
+      {RANGES.map((value) => (
+        <button
+          key={value}
+          type="button"
+          role="radio"
+          aria-checked={range === value}
+          onClick={() => {
+            setRange(value);
+            storeNumber(RANGE_KEY, value);
+          }}
+          className={`iris-focusable min-h-9 rounded px-3.5 text-[13px] font-medium tabular-nums ${
+            range === value
+              ? "bg-white/10 text-[color:var(--pf-text)]"
+              : "text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]"
+          }`}
+        >
+          {t("platform.rangeOption", { days: value })}
+        </button>
+      ))}
+    </div>
+  );
+
+  const refreshControls = (
+    <div className="flex items-center gap-2">
+      <label className="flex flex-1 items-center justify-between gap-2 text-[13px] text-[color:var(--pf-text-2)] md:flex-none">
+        {t("platform.autoRefresh")}
+        <select
+          value={refreshSeconds}
+          onChange={(event) => {
+            const value = Number(event.target.value);
+            setRefreshSeconds(value);
+            storeNumber(REFRESH_KEY, value);
+          }}
+          className="iris-focusable h-10 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-2.5 text-[13px] text-[color:var(--pf-text)]"
+        >
+          {REFRESH_OPTIONS.map((value) => (
+            <option key={value} value={value}>
+              {value === 0
+                ? t("platform.refreshOff")
+                : value < 60
+                  ? t("platform.refreshSeconds", { seconds: value })
+                  : t("platform.refreshMinutes", { minutes: value / 60 })}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        onClick={() => void load()}
+        disabled={loading}
+        aria-label={t("platform.refreshNow")}
+        title={t("platform.refreshNow")}
+        className="iris-focusable flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[color:var(--pf-border)] text-[color:var(--pf-text-2)] hover:bg-white/5 hover:text-[color:var(--pf-text)] disabled:opacity-60"
+      >
+        <RefreshCw className={`h-[18px] w-[18px] ${loading ? "animate-spin" : ""}`} />
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-dvh bg-[color:var(--pf-bg)] text-[color:var(--pf-text)]">
-      {/* Toolbar */}
-      <div className="sticky top-0 z-10 border-b border-[color:var(--pf-border)] bg-[color:var(--pf-bg)]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6">
-          <div className="mr-auto flex min-w-0 items-baseline gap-2">
-            <span className="text-[15px] font-medium">Iris</span>
-            <span className="truncate text-[12px] text-[color:var(--pf-muted)]">{t("platform.title")}</span>
+      {/* Header */}
+      <header className="sticky top-0 z-20 border-b border-[color:var(--pf-border)] bg-[color:var(--pf-bg)]/95 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-4 px-4 sm:px-6">
+          <div className="mr-auto flex min-w-0 items-center gap-3">
+            <span className="text-[18px] font-medium tracking-[-0.3px]">Iris</span>
+            <span aria-hidden className="h-5 w-px bg-[color:var(--pf-border)]" />
+            <span className="truncate text-[15px] text-[color:var(--pf-text-2)]">{t("platform.title")}</span>
           </div>
 
-          <div role="radiogroup" aria-label={t("platform.range")} className="flex rounded border border-[color:var(--pf-border)] p-0.5">
-            {RANGES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={range === value}
-                onClick={() => {
-                  setRange(value);
-                  storeNumber(RANGE_KEY, value);
-                }}
-                className={`iris-focusable rounded-sm px-2.5 py-1 text-[12px] tabular-nums ${
-                  range === value
-                    ? "bg-white/10 text-[color:var(--pf-text)]"
-                    : "text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]"
-                }`}
-              >
-                {t("platform.rangeOption", { days: value })}
-              </button>
-            ))}
-          </div>
+          {isWide ? (
+            <>
+              {rangeControl}
+              {refreshControls}
+            </>
+          ) : null}
 
-          <label className="flex items-center gap-1.5 text-[12px] text-[color:var(--pf-text-2)]">
-            {t("platform.autoRefresh")}
-            <select
-              value={refreshSeconds}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                setRefreshSeconds(value);
-                storeNumber(REFRESH_KEY, value);
-              }}
-              className="iris-focusable rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-1.5 py-1 text-[12px] text-[color:var(--pf-text)]"
-            >
-              {REFRESH_OPTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {value === 0
-                    ? t("platform.refreshOff")
-                    : value < 60
-                      ? t("platform.refreshSeconds", { seconds: value })
-                      : t("platform.refreshMinutes", { minutes: value / 60 })}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            aria-label={t("platform.refreshNow")}
-            title={t("platform.refreshNow")}
-            className="iris-focusable rounded border border-[color:var(--pf-border)] p-1.5 text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)] disabled:opacity-60"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          </button>
-
-          <div className="flex items-center gap-3 text-[12px] text-[color:var(--pf-muted)]">
-            {metrics ? (
-              <span className="hidden sm:inline">
-                {t("platform.updatedAt", { time: formatDateTime(metrics.generatedAt) })}
-              </span>
-            ) : null}
-            <span className="text-[color:var(--pf-text-2)]">{username}</span>
-            {role ? (
-              <span className="rounded border border-[color:var(--pf-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-[1px] text-[color:var(--pf-text-2)]">
-                {role}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setChangingPassword(true)}
-              className="iris-focusable inline-flex items-center gap-1 rounded px-1.5 py-1 hover:bg-white/5 hover:text-[color:var(--pf-text)]"
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-              {t("platform.password.open")}
-            </button>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="iris-focusable inline-flex items-center gap-1 rounded px-1.5 py-1 hover:bg-white/5 hover:text-[color:var(--pf-text)]"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              {t("platform.logout")}
-            </button>
-          </div>
+          <BackofficeMenu
+            username={username}
+            role={role}
+            extra={isWide ? undefined : refreshControls}
+            onChangePassword={() => setChangingPassword(true)}
+            onLogout={onLogout}
+          />
         </div>
-      </div>
+        {isWide ? null : <div className="px-4 pb-3">{rangeControl}</div>}
+      </header>
 
       {changingPassword ? (
         <div
@@ -234,7 +235,16 @@ export function PlatformDashboard({
         </div>
       ) : null}
 
-      <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-4 sm:px-6">
+      <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-5 sm:px-6">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+          <h1 className="text-[22px] font-medium tracking-[-0.3px]">{t("platform.overview")}</h1>
+          {metrics ? (
+            <p className="text-[12px] text-[color:var(--pf-muted)]">
+              {formatDate(metrics.rangeStart)} – {formatDate(metrics.generatedAt)} ·{" "}
+              {t("platform.updatedAt", { time: formatDateTime(metrics.generatedAt) })}
+            </p>
+          ) : null}
+        </div>
         {notice ? (
           <div role="status" className="rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
             {notice}
@@ -300,10 +310,10 @@ export function PlatformDashboard({
 
             <Panel title={t("platform.table.title")}>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-[12px]">
-                  <thead className="text-left text-[11px] text-[color:var(--pf-muted)]">
+                <table className="w-full min-w-[1040px] text-[13px]">
+                  <thead className="text-left text-[12px] text-[color:var(--pf-muted)]">
                     <tr>
-                      <th className="px-4 py-2 font-normal">{t("platform.table.organization")}</th>
+                      <th className="px-4 py-2.5 font-normal">{t("platform.table.organization")}</th>
                       <th className="px-3 py-2 text-right font-normal">{t("platform.table.users")}</th>
                       <th className="px-3 py-2 text-right font-normal">{t("platform.table.customers")}</th>
                       <th className="px-3 py-2 text-right font-normal">{t("platform.table.catalog")}</th>
@@ -316,14 +326,14 @@ export function PlatformDashboard({
                       <th className="px-3 py-2 font-normal">{t("platform.table.lastWorkOrder")}</th>
                       <th className="px-3 py-2 font-normal">{t("platform.table.lastLogin")}</th>
                       <th className="px-3 py-2 font-normal">{t("platform.table.logo")}</th>
-                      <th className="px-4 py-2 font-normal">{t("platform.table.created")}</th>
+                      <th className="px-4 py-2.5 font-normal">{t("platform.table.created")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {metrics.tenants.map((tenant) => {
                       const color = series.find((def) => def.key === keyFor(tenant.slug))?.color;
                       return (
-                        <tr key={tenant.id} className="border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]">
+                        <tr key={tenant.id} className="h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]">
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-2">
                               <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
@@ -367,7 +377,7 @@ export function PlatformDashboard({
             </Panel>
 
             <Panel title={t("platform.system.title")}>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 text-[12px] sm:grid-cols-3 lg:grid-cols-6">
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-4 px-4 py-4 text-[13px] sm:grid-cols-3 lg:grid-cols-6">
                 {[
                   [t("platform.system.release"), metrics.system.release || "—"],
                   [t("platform.system.go"), metrics.system.goVersion],

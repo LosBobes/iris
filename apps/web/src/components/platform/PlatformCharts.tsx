@@ -71,23 +71,23 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
   const empty = rows.every((row) => series.every((def) => Number(row[def.key]) === 0));
 
   return (
-    <section className="flex min-w-0 flex-col rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
-      <header className="flex items-center justify-between gap-3 border-b border-[color:var(--pf-border)] px-4 py-2.5">
-        <h2 className="min-w-0 truncate text-[13px] font-medium text-[color:var(--pf-text)]">
+    <section className="flex min-w-0 flex-col rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
+      <header className="flex items-center justify-between gap-3 border-b border-[color:var(--pf-border)] px-4 py-2">
+        <h2 className="min-w-0 truncate text-[14px] font-medium text-[color:var(--pf-text)]">
           {title} <span className="font-normal text-[color:var(--pf-muted)]">· {bucketLabel}</span>
         </h2>
         <button
           type="button"
           onClick={() => setAsTable((v) => !v)}
           aria-pressed={asTable}
-          className="iris-focusable shrink-0 rounded px-2 py-1 text-[11px] text-[color:var(--pf-text-2)] hover:bg-white/5 hover:text-[color:var(--pf-text)]"
+          className="iris-focusable min-h-9 shrink-0 rounded-md border border-[color:var(--pf-border)] px-3 text-[12px] text-[color:var(--pf-text-2)] hover:bg-white/5 hover:text-[color:var(--pf-text)]"
         >
           {asTable ? t("platform.charts.showChart") : t("platform.charts.showTable")}
         </button>
       </header>
 
       {series.length > 1 ? (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-3 text-[11px] text-[color:var(--pf-text-2)]">
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 px-4 pt-3 text-[12px] text-[color:var(--pf-text-2)]">
           {series.map((def) => (
             <li key={def.key} className="flex items-center gap-1.5">
               <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: def.color }} />
@@ -121,11 +121,11 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
           </table>
         </div>
       ) : empty ? (
-        <p className="flex h-56 items-center justify-center px-4 text-[12px] text-[color:var(--pf-muted)]">
+        <p className="flex h-64 items-center justify-center px-4 text-[12px] text-[color:var(--pf-muted)]">
           {t("platform.charts.empty")}
         </p>
       ) : (
-        <div className="h-56 px-2 pt-2 pb-1" role="img" aria-label={title}>
+        <div className="h-64 px-2 pt-2 pb-1" role="img" aria-label={title}>
           <ResponsiveContainer width="100%" height="100%">
             {kind === "bar" ? (
               <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barCategoryGap={2}>

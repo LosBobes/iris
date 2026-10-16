@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { PlatformDashboard } from "./PlatformDashboard";
 import { PlatformLogin } from "./PlatformLogin";
 import { PlatformChangePassword } from "./PlatformChangePassword";
+import { BackofficeScreen } from "./BackofficeScreen";
 import type { PlatformAdmin } from "@/types/platform";
 
 // Dashboard surfaces. Always dark, like an ops console, whatever the app
@@ -64,12 +65,12 @@ export function PlatformConsole(): React.JSX.Element {
       ) : state.kind === "signedOut" ? (
         <PlatformLogin onSignedIn={(admin) => setState({ kind: "signedIn", admin })} />
       ) : state.admin.mustChangePassword ? (
-        <div className="flex min-h-dvh items-center justify-center bg-[color:var(--pf-bg)] px-4">
+        <BackofficeScreen>
           <PlatformChangePassword
             required
             onChanged={(admin) => setState({ kind: "signedIn", admin })}
           />
-        </div>
+        </BackofficeScreen>
       ) : (
         <PlatformDashboard
           username={state.admin.username}

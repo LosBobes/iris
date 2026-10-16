@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { MAX_PASSWORD_BYTES, isPasswordTooLong } from "@/lib/password";
 import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Plus, Save, Shield, Trash2, User as UserIcon, X } from "lucide-react";
 import { toast } from "sonner";
@@ -192,6 +193,10 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }): Reac
       toast.error(t("users.passwordMin"));
       return;
     }
+    if (isPasswordTooLong(password)) {
+      toast.error(t("users.passwordMax", { max: MAX_PASSWORD_BYTES }));
+      return;
+    }
     setSaving(true);
     try {
       await window.api.createUser({ username: username.trim(), password, role });
@@ -262,6 +267,10 @@ function EditUserRow({
   const submit = async (): Promise<void> => {
     if (password.trim() !== "" && password.trim().length < 6) {
       toast.error(t("users.passwordMin"));
+      return;
+    }
+    if (isPasswordTooLong(password)) {
+      toast.error(t("users.passwordMax", { max: MAX_PASSWORD_BYTES }));
       return;
     }
     setSaving(true);
