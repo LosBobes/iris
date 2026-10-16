@@ -105,6 +105,9 @@ type WorkOrderPrintData struct {
 	ClientMb         string
 	IssueDate        string
 	DescriptionLines []string
+	// DescriptionColumns is how many columns the opis posla is set in (1 for a
+	// short description, more for a long product list).
+	DescriptionColumns int
 	// ItemHeaders and ItemLines are the "stavke" table, already arranged in the
 	// shop's configured line-item column order.
 	ItemHeaders     []string
@@ -367,8 +370,9 @@ func jobDetailsHasContent(details *domain.JobDetails) bool {
 // buildPrintDescriptionLines returns the "opis posla" (job description) lines
 // only: the structured job details when present, otherwise the free-text
 // description. Line items (stavke) are produced separately by
-// buildPrintItemLines so the two render in distinct panels. Falls back to a
-// placeholder when there is nothing to show.
+// buildPrintItemLines so the two render in distinct panels. A description
+// typed as a product list or across several lines prints one entry per line.
+// Falls back to a placeholder when there is nothing to show.
 func buildPrintDescriptionLines(order domain.WorkOrder) []string {
 	var detailLines []string
 
@@ -396,8 +400,14 @@ func buildPrintDescriptionLines(order domain.WorkOrder) []string {
 	if len(detailLines) > 0 {
 		return detailLines
 	}
-	if desc := uppercaseString(order.JobDescription); desc != "" {
-		return []string{desc}
+	var descLines []string
+	for _, entry := range splitDescriptionEntries(order.JobDescription) {
+		if line := uppercaseString(entry); line != "" {
+			descLines = append(descLines, line)
+		}
+	}
+	if len(descLines) > 0 {
+		return descLines
 	}
 	return []string{"OPIS POSLA NIJE UNET"}
 }
@@ -661,6 +671,22 @@ const htmlTemplateStr = `<!DOCTYPE html>
       font-weight: 400;
       line-height: 1.22;
       overflow-wrap: anywhere;
+    }
+
+    /* A product list typed into the opis posla is set in columns (count set
+       inline) with a bullet per entry, so it fits the panel at a legible size. */
+    .work-order-print-description-columns {
+      column-gap: 6mm;
+    }
+
+    .work-order-print-description-columns > div {
+      break-inside: avoid;
+      padding-left: 0.9em;
+      text-indent: -0.9em;
+    }
+
+    .work-order-print-description-columns > div::before {
+      content: "• ";
     }
 
     .work-order-print-job-items {
@@ -945,7 +971,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
       <div class="work-order-print-panel-header work-order-print-panel-header-left">
         <span class="work-order-print-panel-label">OPIS POSLA</span>
       </div>
-      <div class="work-order-print-description-lines">
+      <div class="work-order-print-description-lines{{if gt .DescriptionColumns 1}} work-order-print-description-columns{{end}}"{{if gt .DescriptionColumns 1}} style="column-count: {{.DescriptionColumns}}"{{end}}>
         {{range .DescriptionLines}}
           <div>{{.}}</div>
         {{end}}
@@ -1119,27 +1145,29 @@ func RenderWorkOrderHTML(order domain.WorkOrder, printCtx PrintContext, settings
 		clientMb = strings.TrimSpace(derefString(printCtx.Customer.Mb))
 	}
 
+	descriptionLines := buildPrintDescriptionLines(order)
 	data := WorkOrderPrintData{
-		FirmName:         strings.TrimSpace(settings.FirmName),
-		OrderNumber:      order.OrderNumber,
-		ClientName:       uppercaseString(order.ClientName),
-		ClientAddress:    uppercaseLine(printCtx.LocationAddress),
-		ClientPib:        clientPib,
-		ClientMb:         clientMb,
-		IssueDate:        formatOptionalDate(&order.IssueDate),
-		DescriptionLines: buildPrintDescriptionLines(order),
-		ItemHeaders:      itemHeaders,
-		ItemLines:        itemLines,
-		TotalPrice:       formatPrintPrice(order.Price),
-		ContactPerson:    uppercaseLine(order.ContactPerson),
-		DeliveryRows:     getPrintDeliveryRows(order.Shipping, printCtx.EnumValues),
-		PlannedDate:      formatOptionalDate(plannedDate),
-		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues, order.IsPaid),
-		NoteLines:        buildPrintNoteLines(order),
-		ShippingAddress:  ResolvePrintShippingAddress(order),
-		Completed:        completed,
-		CompletionDate:   formatOptionalDate(order.CompletionDate),
-		ExecutedBy:       execBy,
+		FirmName:           strings.TrimSpace(settings.FirmName),
+		OrderNumber:        order.OrderNumber,
+		ClientName:         uppercaseString(order.ClientName),
+		ClientAddress:      uppercaseLine(printCtx.LocationAddress),
+		ClientPib:          clientPib,
+		ClientMb:           clientMb,
+		IssueDate:          formatOptionalDate(&order.IssueDate),
+		DescriptionLines:   descriptionLines,
+		DescriptionColumns: printDescriptionColumns(len(descriptionLines)),
+		ItemHeaders:        itemHeaders,
+		ItemLines:          itemLines,
+		TotalPrice:         formatPrintPrice(order.Price),
+		ContactPerson:      uppercaseLine(order.ContactPerson),
+		DeliveryRows:       getPrintDeliveryRows(order.Shipping, printCtx.EnumValues),
+		PlannedDate:        formatOptionalDate(plannedDate),
+		BillingRows:        getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues, order.IsPaid),
+		NoteLines:          buildPrintNoteLines(order),
+		ShippingAddress:    ResolvePrintShippingAddress(order),
+		Completed:          completed,
+		CompletionDate:     formatOptionalDate(order.CompletionDate),
+		ExecutedBy:         execBy,
 
 		ShowDelivery:        sections.Delivery,
 		ShowBilling:         sections.Billing,

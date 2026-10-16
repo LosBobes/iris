@@ -259,6 +259,18 @@ describe("WorkOrderPrintSheet helpers", () => {
     expect(buildPrintDescriptionLines(baseOrder)).toEqual(["VIZIT KARTE"]);
   });
 
+  it("prints a description typed as a product list one entry per line", () => {
+    expect(
+      buildPrintDescriptionLines({
+        ...baseOrder,
+        jobDescription: "- Čoko vanilla 20 kom - Mango 20 kom - Sveća dark amber 10 kom",
+      }),
+    ).toEqual(["ČOKO VANILLA 20 KOM", "MANGO 20 KOM", "SVEĆA DARK AMBER 10 KOM"]);
+    expect(
+      buildPrintDescriptionLines({ ...baseOrder, jobDescription: "Plakati\nA2 format" }),
+    ).toEqual(["PLAKATI", "A2 FORMAT"]);
+  });
+
   it("falls back to the order description when structured details are empty", () => {
     expect(
       buildPrintDescriptionLines({
