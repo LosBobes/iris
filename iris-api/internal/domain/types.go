@@ -330,6 +330,103 @@ type PublicOrganization struct {
 	LogoVersion *string `json:"logoVersion"`
 }
 
+// PlatformAdmin is an Iris operator account. It belongs to no organization and
+// can only read the aggregate usage metrics below.
+// PlatformRoleSuperadmin is the Backoffice role: the only one that opens the
+// Backoffice (/backoffice in the web app, /platform/* in the API).
+const PlatformRoleSuperadmin = "superadmin"
+
+type PlatformAdmin struct {
+	ID       string `json:"-"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	// MustChangePassword is set on the seeded default account (and any account
+	// whose password was not chosen by its owner): the console then allows
+	// nothing but a password change.
+	MustChangePassword bool `json:"mustChangePassword"`
+}
+
+// PlatformPasswordChange is the POST /platform/auth/password payload.
+type PlatformPasswordChange struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+type PlatformLoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type PlatformLoginResponse struct {
+	Success bool           `json:"success"`
+	Admin   *PlatformAdmin `json:"admin,omitempty"`
+	Error   string         `json:"error,omitempty"`
+}
+
+// PlatformMetrics is the operator dashboard payload: counts, dates and sizes
+// only. It never carries a customer, user or work-order record.
+type PlatformMetrics struct {
+	GeneratedAt string                  `json:"generatedAt"`
+	RangeDays   int                     `json:"rangeDays"`
+	RangeStart  string                  `json:"rangeStart"`
+	Totals      PlatformTotals          `json:"totals"`
+	System      PlatformSystem          `json:"system"`
+	Tenants     []PlatformTenantMetrics `json:"tenants"`
+	Daily       []PlatformDailyPoint    `json:"daily"`
+}
+
+type PlatformTotals struct {
+	Tenants            int   `json:"tenants"`
+	Users              int   `json:"users"`
+	Customers          int   `json:"customers"`
+	CatalogItems       int   `json:"catalogItems"`
+	WorkOrders         int   `json:"workOrders"`
+	WorkOrdersInRange  int   `json:"workOrdersInRange"`
+	OpenWorkOrders     int   `json:"openWorkOrders"`
+	LoginsInRange      int   `json:"loginsInRange"`
+	ActiveUsersInRange int   `json:"activeUsersInRange"`
+	ActiveSessions     int   `json:"activeSessions"`
+	DatabaseBytes      int64 `json:"databaseBytes"`
+}
+
+type PlatformSystem struct {
+	Release       string `json:"release"`
+	GoVersion     string `json:"goVersion"`
+	StartedAt     string `json:"startedAt"`
+	UptimeSeconds int64  `json:"uptimeSeconds"`
+	Goroutines    int    `json:"goroutines"`
+	HeapBytes     uint64 `json:"heapBytes"`
+}
+
+type PlatformTenantMetrics struct {
+	ID                 string         `json:"id"`
+	Slug               string         `json:"slug"`
+	Name               string         `json:"name"`
+	CreatedAt          string         `json:"createdAt"`
+	Users              int            `json:"users"`
+	Admins             int            `json:"admins"`
+	Customers          int            `json:"customers"`
+	CatalogItems       int            `json:"catalogItems"`
+	WorkOrders         int            `json:"workOrders"`
+	WorkOrdersInRange  int            `json:"workOrdersInRange"`
+	OpenWorkOrders     int            `json:"openWorkOrders"`
+	StatusCounts       map[string]int `json:"statusCounts"`
+	LoginsInRange      int            `json:"loginsInRange"`
+	ActiveUsersInRange int            `json:"activeUsersInRange"`
+	ActiveSessions     int            `json:"activeSessions"`
+	LastWorkOrderAt    *string        `json:"lastWorkOrderAt"`
+	LastLoginAt        *string        `json:"lastLoginAt"`
+	HasLoginLogo       bool           `json:"hasLoginLogo"`
+}
+
+// PlatformDailyPoint is one day of the dashboard's time series, keyed by
+// organization slug.
+type PlatformDailyPoint struct {
+	Date       string         `json:"date"`
+	WorkOrders map[string]int `json:"workOrders"`
+	Logins     map[string]int `json:"logins"`
+}
+
 type User struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`

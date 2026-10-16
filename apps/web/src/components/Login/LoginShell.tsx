@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { PublicOrganization } from "@/types/settings";
 
@@ -40,9 +41,7 @@ export function LoginShell({
           {organization ? (
             <OrganizationMasthead organization={organization} />
           ) : (
-            <div className="text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px]">
-              Iris
-            </div>
+            <IrisWordmark />
           )}
           <div
             className="mx-auto my-4 h-0.5 w-8 origin-left bg-[color:var(--iris-accent)] sm:my-5 lg:mx-0"
@@ -70,6 +69,35 @@ export function LoginShell({
           {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Five taps on the wordmark within this window open the Backoffice.
+const CONSOLE_TAPS = 5;
+const CONSOLE_TAP_WINDOW_MS = 3000;
+
+/**
+ * The "Iris" wordmark on the organization picker. It doubles as the hidden
+ * way into the Backoffice (/backoffice) — a convenience only: that page
+ * asks for a separate platform-admin login the API checks on every request.
+ */
+function IrisWordmark(): React.JSX.Element {
+  const navigate = useNavigate();
+  const taps = useRef<number[]>([]);
+  return (
+    <div
+      onClick={() => {
+        const now = Date.now();
+        taps.current = [...taps.current.filter((at) => now - at < CONSOLE_TAP_WINDOW_MS), now];
+        if (taps.current.length >= CONSOLE_TAPS) {
+          taps.current = [];
+          navigate("/backoffice");
+        }
+      }}
+      className="select-none text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px]"
+    >
+      Iris
     </div>
   );
 }

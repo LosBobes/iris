@@ -2616,7 +2616,7 @@ function SummaryPanel({ watch, isEdit, isAdmin }: SummaryPanelProps): React.JSX.
   const issueDate = watch("issueDate");
   const dueDate = watch("dueDate");
 
-  // Operators see only the essentials; admins get the full back-office summary.
+  // Operators see only the essentials; admins get the full Backoffice summary.
   const rows: Array<[string, string]> = isAdmin
     ? [
         [t("workOrders.summary.client"), clientName || "-"],

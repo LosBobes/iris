@@ -43,6 +43,7 @@ import {
   type PriorityDefaults,
   type PublicOrganization,
 } from '@/types/settings'
+import type { PlatformMetrics, PlatformRangeDays } from '@/types/platform'
 
 interface FixtureUser extends AuthenticatedUser {
   password: string
@@ -489,6 +490,86 @@ let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
 // store's TenantBySlug); its sign-in logo lives here as a data URL.
 const FIXTURE_ORGANIZATION = { slug: 'demo', name: 'Demo Štamparija' }
 let fixtureLoginLogo: { dataUrl: string; version: string } | null = null
+// Fixture mode's Backoffice (dev only, no backend): one fixed superadmin,
+// and metrics derived from the fixture data so the dashboard has real shapes.
+const FIXTURE_PLATFORM_ADMIN = { username: 'operater', password: 'operater-demo' }
+let fixturePlatformPassword = FIXTURE_PLATFORM_ADMIN.password
+let platformSignedIn = false
+
+function fixturePlatformMetrics(days: PlatformRangeDays): PlatformMetrics {
+  const now = new Date()
+  const today = now.toISOString().slice(0, 10)
+  const start = new Date(`${today}T00:00:00Z`)
+  start.setUTCDate(start.getUTCDate() - (days - 1))
+  const rangeStart = start.toISOString().slice(0, 10)
+  const slug = FIXTURE_ORGANIZATION.slug
+  const created = (order: WorkOrder): string => (order.createdAt ?? order.issueDate).slice(0, 10)
+  const inRange = workOrders.filter((order) => created(order) >= rangeStart)
+  const closed = new Set(['completed', 'cancelled', 'invoiced'])
+  const statusCounts: Record<string, number> = {}
+  for (const order of workOrders) statusCounts[order.status] = (statusCounts[order.status] ?? 0) + 1
+  const daily = Array.from({ length: days }, (_, index) => {
+    const day = new Date(start)
+    day.setUTCDate(start.getUTCDate() + index)
+    const date = day.toISOString().slice(0, 10)
+    return {
+      date,
+      workOrders: { [slug]: inRange.filter((order) => created(order) === date).length },
+      // Deterministic pseudo-logins so the chart is not empty.
+      logins: { [slug]: (index * 7) % 5 },
+    }
+  })
+  const logins = daily.reduce((sum, point) => sum + point.logins[slug], 0)
+  const open = workOrders.filter((order) => !closed.has(order.status)).length
+  const tenant = {
+    id: 'tenant-demo',
+    slug,
+    name: FIXTURE_ORGANIZATION.name,
+    createdAt: rangeStart,
+    users: users.length,
+    admins: users.filter((user) => user.role === 'admin').length,
+    customers: customers.length,
+    catalogItems: catalogItems.length,
+    workOrders: workOrders.length,
+    workOrdersInRange: inRange.length,
+    openWorkOrders: open,
+    statusCounts,
+    loginsInRange: logins,
+    activeUsersInRange: Math.min(users.length, logins),
+    activeSessions: sessionUser ? 1 : 0,
+    lastWorkOrderAt: workOrders.map((order) => order.updatedAt ?? '').sort().at(-1) || null,
+    lastLoginAt: now.toISOString(),
+    hasLoginLogo: fixtureLoginLogo !== null,
+  }
+  return {
+    generatedAt: now.toISOString(),
+    rangeDays: days,
+    rangeStart,
+    totals: {
+      tenants: 1,
+      users: tenant.users,
+      customers: tenant.customers,
+      catalogItems: tenant.catalogItems,
+      workOrders: tenant.workOrders,
+      workOrdersInRange: tenant.workOrdersInRange,
+      openWorkOrders: open,
+      loginsInRange: logins,
+      activeUsersInRange: tenant.activeUsersInRange,
+      activeSessions: tenant.activeSessions,
+      databaseBytes: 0,
+    },
+    system: {
+      release: 'fixtures',
+      goVersion: '—',
+      startedAt: now.toISOString(),
+      uptimeSeconds: 0,
+      goroutines: 0,
+      heapBytes: 0,
+    },
+    tenants: [tenant],
+    daily,
+  }
+}
 
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
   return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
@@ -928,6 +1009,38 @@ export function createFixtureApi(): Window['api'] {
 
     async deleteLoginLogo() {
       fixtureLoginLogo = null
+    },
+
+    async platformLogin(credentials) {
+      platformSignedIn =
+        credentials.username === FIXTURE_PLATFORM_ADMIN.username &&
+        credentials.password === fixturePlatformPassword
+      return platformSignedIn
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
+        : { success: false, error: 'Neispravno korisničko ime ili lozinka.' }
+    },
+
+    async getPlatformSession() {
+      return platformSignedIn
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
+        : { success: false }
+    },
+
+    async platformLogout() {
+      platformSignedIn = false
+    },
+
+    async changePlatformPassword(change) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (change.currentPassword !== fixturePlatformPassword) throw new Error('Trenutna lozinka nije ispravna.')
+      if (change.newPassword.length < 12) throw new Error('Nova lozinka mora imati najmanje 12 znakova.')
+      fixturePlatformPassword = change.newPassword
+      return { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
+    },
+
+    async getPlatformMetrics(days) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return fixturePlatformMetrics(days)
     },
 
     async getWorkOrders(query) {

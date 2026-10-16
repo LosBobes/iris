@@ -31,8 +31,10 @@ import (
 // 3. Handlers delegate data access to the store package.
 // 4. writeJSON and writeServerError are small shared response helpers.
 type Server struct {
-	store  store.Store
-	config Config
+	store           store.Store
+	config          Config
+	startedAt       time.Time
+	platformLimiter *loginLimiter
 }
 
 type Config struct {
@@ -41,6 +43,12 @@ type Config struct {
 	SessionDuration   time.Duration
 	SecureCookies     bool
 	WebDir            string
+	// Operator console session (see platform.go): a separate cookie, kept
+	// short because it can read usage across every organization.
+	PlatformSessionCookieName string
+	PlatformSessionDuration   time.Duration
+	// Release is shown on the operator dashboard (IRIS_RELEASE).
+	Release string
 }
 
 func DefaultConfig() Config {
@@ -61,7 +69,19 @@ func NewServer(store store.Store, configs ...Config) *Server {
 	if config.SessionDuration == 0 {
 		config.SessionDuration = 12 * time.Hour
 	}
-	return &Server{store: store, config: config}
+	if config.PlatformSessionCookieName == "" {
+		config.PlatformSessionCookieName = "iris_platform_session"
+	}
+	if config.PlatformSessionDuration == 0 {
+		config.PlatformSessionDuration = 2 * time.Hour
+	}
+	return &Server{
+		store:     store,
+		config:    config,
+		startedAt: time.Now(),
+		// 5 failures per IP or username, 50 overall, per 15 minutes.
+		platformLimiter: newLoginLimiter(15*time.Minute, 5, 50),
+	}
 }
 
 // Routes builds the router once and returns it as an http.Handler.
@@ -95,6 +115,12 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/public/work-orders/{token}", s.handlePublicWorkOrderStatus)
 	r.Get("/public/organizations/{slug}", s.handlePublicOrganization)
 	r.Get("/public/organizations/{slug}/logo", s.handlePublicOrganizationLogo)
+
+	r.Post("/platform/auth/login", s.handlePlatformLogin)
+	r.Get("/platform/auth/session", s.handlePlatformSession)
+	r.Post("/platform/auth/logout", s.handlePlatformLogout)
+	r.Post("/platform/auth/password", s.handlePlatformChangePassword)
+	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -311,6 +337,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	s.recordLogin(r, user)
 
 	expiresAt := time.Now().UTC().Add(s.config.SessionDuration)
 	token, err := s.store.CreateSession(r.Context(), user.ID, expiresAt)
