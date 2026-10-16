@@ -5,6 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Iris</title>
+    <meta name="description" content="Radni nalozi, klijenti i praćenje porudžbina." />
+
+    <!-- PWA: Android/Chromium read the manifest; iOS Safari ignores most of
+         it and uses the apple-* tags below instead. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf6f1" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1614" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Iris" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <script>
       // Pre-paint theme application to avoid a flash of the wrong palette.
       // Mirrors src/lib/theme.ts (kept in sync intentionally).

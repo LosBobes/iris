@@ -94,6 +94,16 @@ export const en: typeof sr = {
       client: 'Client: {{name}}',
       appliesNote: 'The change applies immediately and is remembered on this device.',
     },
+    install: {
+      title: 'App on this device',
+      hint: 'Install Iris on your phone, tablet or computer',
+      installed: 'Iris is installed and runs as an app on this device.',
+      promptBody: 'Iris gets its own icon and opens in its own window, without the browser toolbar.',
+      button: 'Install app',
+      iosStep1: 'In Safari, tap the Share button in the browser toolbar.',
+      iosStep2: 'Choose “Add to Home Screen”.',
+      iosStep3: 'Confirm with “Add” — Iris appears with your apps.',
+    },
     density: {
       title: 'Work-order list',
       hint: 'Display density and default row count',

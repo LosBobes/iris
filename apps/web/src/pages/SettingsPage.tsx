@@ -7,6 +7,7 @@ import { FONT_SCALE_OPTIONS } from "@/lib/font-scale";
 import { useTheme } from "@/hooks/useTheme";
 import { THEME_OPTIONS } from "@/lib/theme";
 import { useAuth } from "@/hooks/useAuth";
+import { InstallAppSettings } from "@/components/settings/InstallAppSettings";
 import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
 import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
@@ -245,6 +246,8 @@ export function SettingsPage(): React.JSX.Element {
           </section>
 
           <ListDensitySettings />
+
+          <InstallAppSettings />
 
           {isAdmin && <BillingDefaultsSettings />}
 

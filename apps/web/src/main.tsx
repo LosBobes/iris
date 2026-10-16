@@ -2,6 +2,7 @@ import './lib/sentry'
 import './assets/main.css'
 import './lib/web-api'
 import './i18n'
+import { initPwaInstallListeners, registerServiceWorker } from './lib/pwa'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -10,6 +11,9 @@ import { FontScaleProvider } from '@/components/providers/FontScaleProvider'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { ListPreferencesProvider } from '@/components/providers/ListPreferencesProvider'
 import { ColumnVisibilityProvider } from '@/components/providers/ColumnVisibilityProvider'
+
+initPwaInstallListeners()
+registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

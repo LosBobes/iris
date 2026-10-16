@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -900,6 +901,14 @@ func (s *Server) serveWebIfHTML(w http.ResponseWriter, r *http.Request) bool {
 
 func wantsHTML(r *http.Request) bool {
 	return r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html")
+}
+
+// The PWA manifest the web build ships (apps/web/public/manifest.webmanifest)
+// has an extension Go's built-in MIME table does not know, and the slim
+// runtime image has no /etc/mime.types, so without this it would be served as
+// text/plain when WebDir hosts the SPA.
+func init() {
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
 func (s *Server) handleWebFallback(w http.ResponseWriter, r *http.Request) {

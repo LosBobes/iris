@@ -93,6 +93,16 @@ export const sr = {
       client: 'Klijent: {{name}}',
       appliesNote: 'Promena se primenjuje odmah i pamti se na ovom uređaju.',
     },
+    install: {
+      title: 'Aplikacija na uređaju',
+      hint: 'Instalirajte Iris na telefon, tablet ili računar',
+      installed: 'Iris je instaliran i radi kao aplikacija na ovom uređaju.',
+      promptBody: 'Iris dobija svoju ikonicu i otvara se u sopstvenom prozoru, bez trake pregledača.',
+      button: 'Instaliraj aplikaciju',
+      iosStep1: 'U Safariju dodirnite dugme Podeli na traci pregledača.',
+      iosStep2: 'Izaberite „Dodaj na početni ekran“.',
+      iosStep3: 'Potvrdite sa „Dodaj“ — Iris se pojavljuje među aplikacijama.',
+    },
     density: {
       title: 'Lista radnih naloga',
       hint: 'Gustina prikaza i podrazumevani broj redova',
