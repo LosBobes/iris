@@ -8,9 +8,9 @@ import type { BuiltinInvoiceUnit } from "@/types/work-order";
 // The segmentation rules are mirrored in the Go PDF renderer
 // (iris-api/internal/reports/description_items.go); keep the two in sync.
 
-// " - ", " – ", " — ", ";" and "•" separate entries on one line. A bare hyphen
-// without surrounding spaces ("A-4", "2-strano") never splits.
-const ENTRY_SEPARATOR = /\s+[-–—]\s+|\s*;\s*|\s*•\s*/;
+// " - ", " -", " – ", " — ", ";" and "•" separate entries on one line. A hyphen
+// needs a space before it, so "A-4" or "2-strano" never splits.
+const ENTRY_SEPARATOR = /\s+[-–—]\s*|\s*;\s*|\s*•\s*/;
 const LEADING_BULLET = /^[-–—•*]+\s*/;
 
 // Unit words recognised after a number. Order matters for the alternation:
@@ -21,15 +21,23 @@ const QUANTITY_WITH_UNIT = new RegExp(
   "iu",
 );
 
+// "Limunska trava 20 kom. Nalepnice..." — a quantity ending a sentence also
+// closes an entry, even without a dash after it.
+const QUANTITY_SENTENCE_END = new RegExp(
+  `(\\d+(?:[.,]\\d+)?\\s*(?:${UNIT_PATTERN}))\\.\\s+`,
+  "giu",
+);
+
 function stripBullet(value: string): string {
   return value.replace(LEADING_BULLET, "").trim();
 }
 
 /**
  * Splits a free-text description into its entries. Line breaks always
- * separate entries; within a line, " - " / ";" / "•" only split when at least
- * two of the resulting pieces carry a quantity with a unit ("20 KOM"), so an
- * ordinary sentence like "Vizit karte - mat plastifikacija" stays whole.
+ * separate entries; within a line, " - " / ";" / "•" (and a period right after
+ * a quantity) only split when at least two of the resulting pieces carry a
+ * quantity with a unit ("20 KOM"), so an ordinary sentence like
+ * "Vizit karte - mat plastifikacija" stays whole.
  */
 export function splitDescriptionEntries(text: string | null | undefined): string[] {
   const entries: string[] = [];
@@ -37,8 +45,9 @@ export function splitDescriptionEntries(text: string | null | undefined): string
     const line = stripBullet(rawLine);
     if (!line) continue;
     const pieces = line
+      .replace(QUANTITY_SENTENCE_END, "$1;")
       .split(ENTRY_SEPARATOR)
-      .map(stripBullet)
+      .map((piece) => stripBullet(piece).replace(/\.$/, ""))
       .filter(Boolean);
     const quantified = pieces.filter((piece) => QUANTITY_WITH_UNIT.test(piece));
     if (pieces.length >= 2 && quantified.length >= 2) {
@@ -60,6 +69,14 @@ export function looksLikeItemList(text: string | null | undefined): boolean {
     entries.length >= 2 &&
     entries.filter((entry) => QUANTITY_WITH_UNIT.test(entry)).length >= 2
   );
+}
+
+/**
+ * True for an entry that labels the ones after it ("Nalepnice za proizvode:")
+ * rather than naming a product: shown as a subheading, never imported as a line.
+ */
+export function isDescriptionHeading(entry: string): boolean {
+  return /:\s*$/.test(entry) && !QUANTITY_WITH_UNIT.test(entry);
 }
 
 /**
@@ -148,6 +165,7 @@ export function parseLineItemsFromText(
   text: string | null | undefined,
 ): ParsedLineItem[] {
   return splitDescriptionEntries(text)
+    .filter((entry) => !isDescriptionHeading(entry))
     .map(parseLineItemEntry)
     .filter((item): item is ParsedLineItem => item !== null);
 }

@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WorkOrderDescription } from "@/components/WorkOrders/WorkOrderDescription";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Customer, Location, WorkOrder } from "@/types/work-order";
@@ -128,9 +129,6 @@ export function openWorkOrderPdf(orderId: string): void {
   window.open(window.api.getWorkOrderReportUrl(orderId), "_blank", "noopener,noreferrer");
 }
 
-// Header descriptions longer than this get a "show full description" toggle.
-const LONG_DESCRIPTION_CHARS = 140;
-
 function WorkOrderDetailPage(): React.JSX.Element {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -145,7 +143,6 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   // Deleting is admin-only on the API; gate the button to match.
   const { currentUser } = useAuth();
@@ -375,31 +372,15 @@ function WorkOrderDetailPage(): React.JSX.Element {
                     </span>
                   )}
                 </div>
-                {/* Client first, so it is never cut off; a long opis posla
-                    (e.g. a typed product list) is clamped to two lines with a
-                    toggle, instead of pushing the actions off the screen. */}
-                <div
-                  className={`mt-1 text-[14px] text-[color:var(--iris-ink-soft)] ${
-                    descriptionExpanded ? "" : "line-clamp-2"
-                  }`}
-                >
-                  <span className="text-foreground">{order.clientName}</span>
-                  {order.jobDescription && <> · {order.jobDescription}</>}
+                {/* Client first, so it is never cut off; the opis posla
+                    below renders a typed product list as a list and keeps
+                    long text collapsed, instead of pushing the actions down. */}
+                <div className="mt-1 text-[14px] text-foreground">
+                  {order.clientName}
                 </div>
-                {order.jobDescription.length > LONG_DESCRIPTION_CHARS && (
-                  <button
-                    type="button"
-                    onClick={() => setDescriptionExpanded((open) => !open)}
-                    aria-expanded={descriptionExpanded}
-                    className="iris-focusable mt-1 bg-transparent p-0 text-[12px] text-[color:var(--iris-ink-mute)] underline underline-offset-2 hover:text-foreground"
-                  >
-                    {t(
-                      descriptionExpanded
-                        ? "workOrders.detail.showLessDescription"
-                        : "workOrders.detail.showFullDescription",
-                    )}
-                  </button>
-                )}
+                <div className="mt-2">
+                  <WorkOrderDescription description={order.jobDescription} />
+                </div>
               </div>
               {/* Actions: the status move and the everyday Izmeni / Štampaj
                   stay visible; everything used less often (PDF download,
