@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -92,6 +93,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/auth/session", s.handleSession)
 	r.Post("/auth/logout", s.handleLogout)
 	r.Get("/public/work-orders/{token}", s.handlePublicWorkOrderStatus)
+	r.Get("/public/organizations/{slug}", s.handlePublicOrganization)
+	r.Get("/public/organizations/{slug}/logo", s.handlePublicOrganizationLogo)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -136,6 +139,9 @@ func (s *Server) Routes() http.Handler {
 		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
+		protected.Get("/settings/login-logo", s.handleLoginLogo)
+		protected.Put("/settings/login-logo", s.requireAdmin(s.handleUpdateLoginLogo))
+		protected.Delete("/settings/login-logo", s.requireAdmin(s.handleDeleteLoginLogo))
 		protected.Get("/users", s.requireAdmin(s.handleListUsers))
 		protected.Post("/users", s.requireAdmin(s.handleCreateUser))
 		protected.Put("/users/{id}", s.requireAdmin(s.handleUpdateUser))
@@ -900,6 +906,14 @@ func (s *Server) serveWebIfHTML(w http.ResponseWriter, r *http.Request) bool {
 
 func wantsHTML(r *http.Request) bool {
 	return r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html")
+}
+
+// The PWA manifest the web build ships (apps/web/public/manifest.webmanifest)
+// has an extension Go's built-in MIME table does not know, and the slim
+// runtime image has no /etc/mime.types, so without this it would be served as
+// text/plain when WebDir hosts the SPA.
+func init() {
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
 func (s *Server) handleWebFallback(w http.ResponseWriter, r *http.Request) {

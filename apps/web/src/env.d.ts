@@ -25,7 +25,12 @@ import type {
   CatalogItemListResult,
   CatalogItemQuery,
 } from '@/types/catalog'
-import type { OrganizationSettings } from '@/types/settings'
+import type {
+  LoginLogoInfo,
+  LoginLogoUpload,
+  OrganizationSettings,
+  PublicOrganization,
+} from '@/types/settings'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -87,6 +92,14 @@ declare global {
       cleanupCatalogItems: (filter: CatalogCleanupFilter) => Promise<{ deleted: number }>
       getSettings: () => Promise<OrganizationSettings>
       updateSettings: (settings: Partial<OrganizationSettings>) => Promise<OrganizationSettings>
+      /** Resolves an organization slug for the first sign-in step; null when unknown. */
+      getPublicOrganization: (slug: string) => Promise<PublicOrganization | null>
+      /** URL of an organization's sign-in logo, versioned to bust caches. */
+      getPublicOrganizationLogoUrl: (slug: string, logoVersion: string) => string
+      /** The signed-in organization's logo for the Settings preview; null when unset. */
+      getLoginLogo: () => Promise<Blob | null>
+      updateLoginLogo: (upload: LoginLogoUpload) => Promise<LoginLogoInfo>
+      deleteLoginLogo: () => Promise<void>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

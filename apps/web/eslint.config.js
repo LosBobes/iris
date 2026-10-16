@@ -25,4 +25,17 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // The service worker template runs in the worker scope, not a page; the
+    // two constants are prepended at build time by pwa/vite-plugin.ts.
+    files: ['pwa/service-worker.js'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: {
+        ...globals.serviceworker,
+        PRECACHE_VERSION: 'readonly',
+        PRECACHE_URLS: 'readonly',
+      },
+    },
+  },
 ])

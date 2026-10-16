@@ -84,6 +84,10 @@ relevant per-surface checks yourself before declaring work done.
   API enforces session + admin on destructive routes. Don't treat the UI check as
   a security boundary.
 - API normalizes legacy statuses (`draft`/`active`) for old fixtures.
+- **Sign-in is two-step:** `/login` asks for the organization slug and validates it
+  via `GET /public/organizations/{slug}`; the device remembers it and goes to
+  `/login/<slug>` (username + password, plus the org's admin-editable logo from
+  `PUT /settings/login-logo`, stored in `app_settings` under `login_logo`).
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

@@ -46,6 +46,27 @@ Seeded demo login:
 - username: `admin`
 - password: `admin123`
 
+## Installable app (PWA)
+
+Production builds are installable on Android, iOS/iPadOS and desktop:
+
+- `public/manifest.webmanifest` + `public/icons/` drive Android/Chromium
+  install (standalone window, maskable icon, shortcuts). iOS Safari uses the
+  `apple-*` tags and `public/apple-touch-icon.png` in `index.html` instead.
+- `pwa/vite-plugin.ts` emits `/sw.js` from `pwa/service-worker.js` on every
+  build, precaching the hashed bundle so the installed app opens instantly and
+  survives a dropped connection. Navigations are network-first (cached shell is
+  only an offline fallback); **API responses are never cached** — they are
+  tenant/session scoped. The worker is not registered by the dev server.
+- Settings → "Aplikacija na uređaju" offers a one-tap install on Chromium and
+  Share → "Dodaj na početni ekran" instructions on iOS (Safari has no install
+  prompt API).
+- Icons are generated from the brand mark: `node scripts/generate-pwa-icons.mjs`
+  (set `PLAYWRIGHT_CHROMIUM_PATH` if Playwright's bundled browser is missing).
+- Service workers need HTTPS (or `localhost`); `npm run build && npm run preview`
+  is the way to try it locally. `frontend/nginx.conf` serves `sw.js` and the
+  manifest with `Cache-Control: no-cache` so deploys reach installed apps.
+
 ## Verification
 
 ```bash

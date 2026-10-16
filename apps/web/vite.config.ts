@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { irisServiceWorker } from './pwa/vite-plugin'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,7 +12,7 @@ export default defineConfig({
       '@renderer': resolve('src'),
     },
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), irisServiceWorker()],
   build: {
     // Recharts + its d3-*/victory-vendor dependencies alone dwarf the rest of
     // the vendor graph, so it gets its own chunk (loaded lazily, see

@@ -8,6 +8,18 @@ import { sr } from "@/i18n/locales/sr";
 import "@/i18n";
 
 const strings = sr.auth;
+const organization = { slug: "demo", name: "Demo Štamparija", logoVersion: null };
+
+function renderLogin(props: Partial<React.ComponentProps<typeof Login>> = {}) {
+  return render(
+    <Login
+      organization={organization}
+      onLoginSuccess={vi.fn()}
+      onChangeOrganization={vi.fn()}
+      {...props}
+    />,
+  );
+}
 
 beforeEach(() => {
   window.sessionStorage.clear();
@@ -23,7 +35,7 @@ describe("Login", () => {
   it("explains why the form appeared when the session lapsed", () => {
     vi.stubGlobal("api", { getAppVersion: vi.fn(async () => "1.0.0") });
 
-    render(<Login onLoginSuccess={vi.fn()} sessionExpired />);
+    renderLogin({ sessionExpired: true });
 
     // Without this the app looks like it simply forgot the operator: the one
     // screen that could name the real cause never mentioned it.
@@ -34,7 +46,7 @@ describe("Login", () => {
   it("says nothing about an expired session on an ordinary sign-in", () => {
     vi.stubGlobal("api", { getAppVersion: vi.fn(async () => "1.0.0") });
 
-    render(<Login onLoginSuccess={vi.fn()} />);
+    renderLogin();
 
     expect(
       screen.queryByText(strings.sessionExpiredTitle),
@@ -50,9 +62,10 @@ describe("Login", () => {
     });
     const onLoginSuccess = vi.fn();
 
-    render(<Login onLoginSuccess={onLoginSuccess} />);
+    renderLogin({ onLoginSuccess });
 
-    await userEvent.type(screen.getByLabelText(strings.organization), "demo");
+    // The organization was settled in step one; this form never asks for it.
+    expect(screen.queryByLabelText(strings.organization)).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(strings.username), "admin");
     await userEvent.type(screen.getByLabelText(strings.password), "admin123");
     await userEvent.click(screen.getByRole("button", { name: strings.submit }));
@@ -62,5 +75,29 @@ describe("Login", () => {
       // so the slug typed here is the only thing that can tag later events.
       expect(onLoginSuccess).toHaveBeenCalledWith(user, "demo");
     });
+    expect(login).toHaveBeenCalledWith({ orgSlug: "demo", username: "admin", password: "admin123" });
+  });
+
+  it("shows the organization's logo when it has one, and its name otherwise", () => {
+    const getPublicOrganizationLogoUrl = vi.fn(() => "/api/public/organizations/demo/logo?v=abc");
+    vi.stubGlobal("api", { getAppVersion: vi.fn(async () => "1.0.0"), getPublicOrganizationLogoUrl });
+
+    renderLogin({ organization: { ...organization, logoVersion: "abc" } });
+
+    expect(getPublicOrganizationLogoUrl).toHaveBeenCalledWith("demo", "abc");
+    expect(screen.getByRole("img", { name: "Demo Štamparija" })).toHaveAttribute(
+      "src",
+      "/api/public/organizations/demo/logo?v=abc",
+    );
+  });
+
+  it("offers a way back to choose another organization", async () => {
+    vi.stubGlobal("api", { getAppVersion: vi.fn(async () => "1.0.0") });
+    const onChangeOrganization = vi.fn();
+
+    renderLogin({ onChangeOrganization });
+    await userEvent.click(screen.getByRole("button", { name: strings.changeOrganization }));
+
+    expect(onChangeOrganization).toHaveBeenCalled();
   });
 });
