@@ -117,11 +117,11 @@ function FormSection({
     >
       <div
         data-tour={tourId ? `${tourId}-heading` : undefined}
-        className="flex items-baseline gap-3 border-b border-[color:var(--iris-border-soft)] px-6 py-3.5"
+        className="flex items-baseline gap-3 border-b border-[color:var(--iris-border-soft)] px-4 py-3.5 sm:px-6"
       >
         <span className="text-[13px] font-medium text-foreground">{title}</span>
       </div>
-      <div className="px-6 py-6">{children}</div>
+      <div className="px-4 py-5 sm:px-6 sm:py-6">{children}</div>
     </section>
   );
 }
@@ -1206,7 +1206,9 @@ export function WorkOrderForm({
   return (
     <form
       onSubmit={handleSubmit(handleFormSubmit, handleInvalidSubmit)}
-      className={`grid gap-0 ${
+      // grid-cols-[minmax(0,1fr)]: on phones the implicit column would size to
+      // its widest child and push every section past the screen edge.
+      className={`grid grid-cols-[minmax(0,1fr)] gap-0 ${
         showPreview
           ? isAdmin
             ? "xl:grid-cols-[minmax(0,1fr)_460px]"
@@ -1219,7 +1221,7 @@ export function WorkOrderForm({
       <fieldset disabled={readOnly} className="contents">
       <div className={showPreview ? (isAdmin ? "xl:pr-10" : "lg:pr-10") : ""}>
         {isEdit && initialData && (
-          <div className="mb-8 flex flex-wrap gap-x-10 gap-y-4 border border-[color:var(--iris-border-soft)] bg-card px-6 py-4 text-[12px]">
+          <div className="mb-6 flex flex-wrap gap-x-10 gap-y-4 border border-[color:var(--iris-border-soft)] bg-card px-4 py-4 text-[12px] sm:mb-8 sm:px-6">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
                 Broj naloga
@@ -1251,7 +1253,7 @@ export function WorkOrderForm({
           title={t("workOrders.form.sectionClient")}
           tourId="work-order-client"
         >
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <FieldShell
               id="customerId"
               label={t("workOrders.form.clientRegistry")}
@@ -1790,8 +1792,10 @@ export function WorkOrderForm({
                           style={{ backgroundColor: kindColor }}
                         />
                         <div className="flex flex-col gap-3 py-3 pr-3 pl-4">
-                          {/* Header row: kind pill/select · description · edit · remove. */}
-                          <div className="flex items-center gap-2.5">
+                          {/* Header row: kind pill/select · description · edit · remove.
+                              On phones the description drops to its own full-width
+                              row so the pills don't squeeze it to a few letters. */}
+                          <div className="flex flex-wrap items-center gap-2.5">
                             {isEditingLine ? (
                               <Controller
                                 name={`invoiceDraft.lineItems.${index}.kind` as const}
@@ -1867,13 +1871,13 @@ export function WorkOrderForm({
                                 id={`invoiceDraft.lineItems.${index}.description`}
                                 aria-label={t("workOrders.form.colDescription")}
                                 placeholder={t("workOrders.form.colDescription")}
-                                className="min-w-0 flex-1 border-0 border-b border-transparent bg-transparent py-1 text-[13px] font-medium text-foreground outline-none placeholder:font-normal placeholder:text-[color:var(--iris-ink-faint)] focus:border-border"
+                                className="min-w-0 flex-1 border-0 border-b border-transparent bg-transparent py-1 text-[13px] font-medium max-sm:order-last max-sm:basis-full text-foreground outline-none placeholder:font-normal placeholder:text-[color:var(--iris-ink-faint)] focus:border-border"
                                 {...register(
                                   `invoiceDraft.lineItems.${index}.description` as const,
                                 )}
                               />
                             ) : (
-                              <span className="min-w-0 flex-1 truncate py-1 text-[13px] font-medium text-foreground">
+                              <span className="min-w-0 flex-1 py-1 text-[13px] font-medium text-foreground max-sm:order-last max-sm:basis-full sm:truncate">
                                 {invoiceLineItems[index]?.description || (
                                   <span className="font-normal text-[color:var(--iris-ink-faint)]">
                                     {t("workOrders.form.colDescription")}
@@ -1881,6 +1885,7 @@ export function WorkOrderForm({
                                 )}
                               </span>
                             )}
+                            <span aria-hidden="true" className="flex-1 sm:hidden" />
                             {isCatalogLine && (
                               <button
                                 type="button"
@@ -2134,10 +2139,15 @@ export function WorkOrderForm({
               error={errors.jobDescription?.message}
               full
             >
+              {/* Grows with the text (field-sizing where supported, a
+                  line-count fallback elsewhere), so a typed list stays readable. */}
               <textarea
                 id="jobDescription"
-                rows={2}
-                className={`${underlineInput} resize-none`}
+                rows={Math.min(
+                  10,
+                  Math.max(2, (watchedJobDescription ?? "").split("\n").length),
+                )}
+                className={`${underlineInput} max-h-80 resize-none [field-sizing:content]`}
                 {...register("jobDescription")}
               />
               {showDescriptionListHint && (
@@ -2155,7 +2165,7 @@ export function WorkOrderForm({
               )}
             </FieldShell>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               {/* Issuer and executor were consolidated into one operator field
                   (the shop treats them as the same person); its value is mirrored
                   onto issuedBy at submit time. */}
@@ -2230,7 +2240,7 @@ export function WorkOrderForm({
         )}
 
         <FormSection title={t("workOrders.form.sectionDocument")}>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {/* Tip dokumenta: faktura / otkup / profaktura out of the box, plus
                 any type the shop added to the `billingDocumentType` managed
                 enum. Always shown — every role fills it in, and it is the box
@@ -2473,7 +2483,7 @@ export function WorkOrderForm({
             had a NAPOMENA box, so the shop needs somewhere to fill it in. The
             Interna beleška field stays removed. */}
         <FormSection title={t("workOrders.form.sectionFinanceNotes")}>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <FieldShell
               id="price"
               label={t("workOrders.form.price")}
@@ -2511,7 +2521,7 @@ export function WorkOrderForm({
         </FormSection>
       </div>
 
-      <aside className="bg-card p-8 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-border">
+      <aside className="bg-card p-4 sm:p-8 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-border">
         {/* The PDF preview is a wide document render, so it only shows from xl
             up; between lg and xl the narrower text summary stands in. Both roles
             get the preview — the API strips money from an operator's render.

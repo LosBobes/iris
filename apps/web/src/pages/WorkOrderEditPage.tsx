@@ -174,7 +174,7 @@ function WorkOrderEditPage(): React.JSX.Element {
   return (
     <>
       <div className="space-y-8">
-        <header className="animate-iris-enter border-b border-border px-10 pt-8 pb-7">
+        <header className="animate-iris-enter border-b border-border px-4 pt-6 pb-6 sm:px-10 sm:pt-8 sm:pb-7">
           <button
             type="button"
             onClick={() => navigate("/work-orders")}
@@ -183,12 +183,12 @@ function WorkOrderEditPage(): React.JSX.Element {
             <ArrowLeft className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:-translate-x-0.5" />
             {t("workOrders.create.back")}
           </button>
-          <div className="flex items-end justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-[10px] font-medium uppercase tracking-[2px] text-[color:var(--iris-ink-mute)]">
                 {t("workOrders.edit.eyebrow")}
               </p>
-              <h1 className="mt-2.5 text-[32px] font-normal leading-[1.08] tracking-[-0.5px] text-foreground">
+              <h1 className="mt-2.5 text-[24px] font-normal leading-[1.1] tracking-[-0.5px] text-foreground sm:text-[32px] sm:leading-[1.08]">
                 {order ? t("workOrders.edit.title", { order: order.orderNumber }) : t("workOrders.edit.titleNew")}
               </h1>
               <p className="mt-2 text-[13px] text-[color:var(--iris-ink-soft)]">
@@ -199,6 +199,7 @@ function WorkOrderEditPage(): React.JSX.Element {
               <Button
                 variant={order.status === "completed" ? "outline" : "secondary"}
                 size="sm"
+                className="max-sm:h-11 max-sm:w-full"
                 onClick={handleToggleStatus}
               >
                 {t("workOrders.detail.moveTo")} {getWorkOrderStatusLabel(getPrimaryWorkOrderTransition(order.status)!)}
@@ -228,9 +229,9 @@ function WorkOrderEditPage(): React.JSX.Element {
         )}
 
         {!loading && !error && order && (
-          <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
+          <div className="animate-iris-enter px-4 sm:pl-10 sm:pr-0" style={{ animationDelay: "80ms" }}>
             {readOnly && (
-              <div className="mb-6 mr-10 flex items-center gap-2.5 border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
+              <div className="mb-6 flex items-center gap-2.5 sm:mr-10 border-l-2 border-[color:var(--iris-status-cancelled)] bg-[color:var(--iris-status-cancelled)]/10 px-4 py-3 text-[12px] text-[color:var(--iris-status-cancelled)]">
                 <Lock className="h-4 w-4 shrink-0" />
                 <span>{t("workOrders.edit.locked", { user: lockedBy ?? "" })}</span>
               </div>
