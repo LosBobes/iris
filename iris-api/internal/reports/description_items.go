@@ -12,10 +12,15 @@ import (
 // Mirrors apps/web/src/shared/utils/description-items.ts; keep the two in sync.
 
 var (
-	// " - ", " – ", " — ", ";" and "•" separate entries on one line. A bare
-	// hyphen without surrounding spaces ("A-4") never splits.
-	descriptionEntrySeparator = regexp.MustCompile(`\s+[-–—]\s+|\s*;\s*|\s*•\s*`)
-	descriptionLeadingBullet  = regexp.MustCompile(`^[-–—•*]+\s*`)
+	// " - ", " -", " – ", " — ", ";" and "•" separate entries on one line. A
+	// hyphen needs a space before it, so "A-4" never splits.
+	descriptionEntrySeparator = regexp.MustCompile(`\s+[-–—]\s*|\s*;\s*|\s*•\s*`)
+	// "Limunska trava 20 kom. Nalepnice..." — a quantity ending a sentence
+	// also closes an entry, even without a dash after it.
+	descriptionQuantitySentenceEnd = regexp.MustCompile(
+		`(?i)(\d+(?:[.,]\d+)?\s*(?:komada|kom|kpl|kompleta|kompl|paketa|pak|seta|set|m2|m²))\.\s+`,
+	)
+	descriptionLeadingBullet = regexp.MustCompile(`^[-–—•*]+\s*`)
 	// A quantity followed by a unit word ("20 KOM", "6 m2").
 	descriptionQuantityWithUnit = regexp.MustCompile(
 		`(?i)\d+(?:[.,]\d+)?\s*(?:komada|kom|kpl|kompleta|kompl|paketa|pak|seta|set|m2|m²)\.?(?:[^\p{L}\d]|$)`,
@@ -28,8 +33,9 @@ func stripDescriptionBullet(value string) string {
 
 // splitDescriptionEntries splits a free-text description into its entries.
 // Line breaks always separate entries; within a line, " - " / ";" / "•" only
-// split when at least two of the resulting pieces carry a quantity with a unit,
-// so an ordinary sentence like "Vizit karte - mat plastifikacija" stays whole.
+// split (as does a period right after a quantity) when at least two of the
+// resulting pieces carry a quantity with a unit, so an ordinary sentence like
+// "Vizit karte - mat plastifikacija" stays whole.
 func splitDescriptionEntries(text string) []string {
 	var entries []string
 	for _, rawLine := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
@@ -39,8 +45,9 @@ func splitDescriptionEntries(text string) []string {
 		}
 		var pieces []string
 		quantified := 0
-		for _, piece := range descriptionEntrySeparator.Split(line, -1) {
-			piece = stripDescriptionBullet(piece)
+		normalized := descriptionQuantitySentenceEnd.ReplaceAllString(line, "${1};")
+		for _, piece := range descriptionEntrySeparator.Split(normalized, -1) {
+			piece = strings.TrimSuffix(stripDescriptionBullet(piece), ".")
 			if piece == "" {
 				continue
 			}
