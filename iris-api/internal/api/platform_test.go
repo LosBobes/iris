@@ -260,3 +260,37 @@ func TestBackofficeAccountsAreSeparateFromUsers(t *testing.T) {
 		t.Fatalf("org users = %s, want only the two organization accounts", users.Body.String())
 	}
 }
+
+// TestOverlongPasswordsGetAClearError: bcrypt cannot hash more than 72 bytes.
+// That used to escape as a 500 ("Došlo je do greške na serveru."); it is now a
+// 422 that says what is wrong, for Backoffice and organization users alike.
+func TestOverlongPasswordsGetAClearError(t *testing.T) {
+	server, adminToken, _ := newServerWithRoles(t)
+	login := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", `{"username":"admin","password":"admin123321"}`)
+	cookie := platformCookie(login, server.config.PlatformSessionCookieName)
+
+	for name, password := range map[string]string{
+		"73 ASCII characters":            strings.Repeat("a", 73),
+		"37 letters that take two bytes": strings.Repeat("ž", 37),
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/password",
+				`{"currentPassword":"admin123321","newPassword":"`+password+`"}`)
+			if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "preduga") {
+				t.Fatalf("Backoffice change = %d %s, want 422 saying it is too long", rec.Code, rec.Body.String())
+			}
+			rec = roleRequest(t, server, adminToken, http.MethodPost, "/users",
+				`{"username":"dugacka","password":"`+password+`","role":"user"}`)
+			if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "preduga") {
+				t.Fatalf("org user create = %d %s, want 422 saying it is too long", rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	// Exactly 72 bytes is still fine.
+	rec := platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/password",
+		`{"currentPassword":"admin123321","newPassword":"`+strings.Repeat("a", 72)+`"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("72-byte password = %d %s, want 200", rec.Code, rec.Body.String())
+	}
+}

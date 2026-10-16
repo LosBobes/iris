@@ -8,6 +8,7 @@ import { PlatformConsole } from "./PlatformConsole";
 import { OrganizationStep } from "@/components/Login/OrganizationStep";
 import { sr } from "@/i18n/locales/sr";
 import type { PlatformMetrics } from "@/types/platform";
+import { ApiError } from "@/lib/errors";
 import "@/i18n";
 
 const strings = sr.platform;
@@ -95,9 +96,11 @@ describe("PlatformConsole", () => {
     await screen.findAllByText(strings.tiles.tenants);
     await userEvent.click(screen.getByRole("radio", { name: "90 d" }));
 
-    // The toolbar names the account's role.
-    expect(screen.getByText("superadmin")).toBeInTheDocument();
     await waitFor(() => expect(getPlatformMetrics).toHaveBeenLastCalledWith(90));
+    // The menu names the account and its role.
+    await userEvent.click(screen.getByRole("button", { name: strings.menu.open }));
+    expect(screen.getByText("superadmin")).toBeInTheDocument();
+    expect(screen.getByText("ops")).toBeInTheDocument();
     expect(window.localStorage.getItem("iris.platform.range")).toBe("90");
     // A fresh device auto-refreshes every minute.
     expect(screen.getByRole("combobox")).toHaveValue("60");
@@ -154,6 +157,15 @@ describe("operator password", () => {
     expect(await screen.findByText(strings.password.tooShort.replace("{{min}}", "12"))).toBeInTheDocument();
     expect(changePlatformPassword).not.toHaveBeenCalled();
 
+    // Too long for bcrypt: caught in the form with a specific message.
+    await userEvent.clear(screen.getByLabelText(strings.password.new));
+    await userEvent.clear(screen.getByLabelText(strings.password.confirm));
+    await userEvent.type(screen.getByLabelText(strings.password.new), "ž".repeat(37));
+    await userEvent.type(screen.getByLabelText(strings.password.confirm), "ž".repeat(37));
+    await userEvent.click(screen.getByRole("button", { name: strings.password.submit }));
+    expect(await screen.findByText(strings.password.tooLong.replace("{{max}}", "72"))).toBeInTheDocument();
+    expect(changePlatformPassword).not.toHaveBeenCalled();
+
     await userEvent.clear(screen.getByLabelText(strings.password.new));
     await userEvent.clear(screen.getByLabelText(strings.password.confirm));
     await userEvent.type(screen.getByLabelText(strings.password.new), "a-much-better-password");
@@ -176,7 +188,11 @@ describe("operator password", () => {
 
   it("lets a signed-in operator change it from the toolbar", async () => {
     const changePlatformPassword = vi.fn(async () => {
-      throw new Error("Trenutna lozinka nije ispravna.");
+      throw new ApiError("Trenutna lozinka nije ispravna.", {
+        status: 422,
+        url: "/platform/auth/password",
+        requestId: "abc123",
+      });
     });
     vi.stubGlobal("api", {
       getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops" } })),
@@ -189,17 +205,57 @@ describe("operator password", () => {
         <PlatformConsole />
       </MemoryRouter>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: strings.password.open }));
+    await userEvent.click(await screen.findByRole("button", { name: strings.menu.open }));
+    await userEvent.click(screen.getByRole("button", { name: strings.password.title }));
     expect(screen.getByRole("dialog", { name: strings.password.title })).toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText(strings.password.current), "wrong-one");
     await userEvent.type(screen.getByLabelText(strings.password.new), "a-much-better-password");
     await userEvent.type(screen.getByLabelText(strings.password.confirm), "a-much-better-password");
     await userEvent.click(screen.getByRole("button", { name: strings.password.submit }));
+    // A rejected password shows the server's own words, without a request code.
     expect(await screen.findByText("Trenutna lozinka nije ispravna.")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: sr.common.cancel }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("Backoffice language", () => {
+  afterEach(async () => {
+    const { default: i18n } = await import("@/i18n");
+    await i18n.changeLanguage("sr");
+  });
+
+  it("switches the sign-in screen to English and back", async () => {
+    vi.stubGlobal("api", { getPlatformSession: vi.fn(async () => ({ success: false })) });
+    render(
+      <MemoryRouter>
+        <PlatformConsole />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByLabelText(strings.login.username)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: "English" }));
+    expect(await screen.findByLabelText("Username")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("radio", { name: "Srpski" }));
+    expect(await screen.findByLabelText(strings.login.username)).toBeInTheDocument();
+  });
+
+  it("offers the switch in the dashboard menu too", async () => {
+    vi.stubGlobal("api", {
+      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops", role: "superadmin" } })),
+      getPlatformMetrics: vi.fn(async () => metrics),
+    });
+    render(
+      <MemoryRouter>
+        <PlatformConsole />
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: strings.menu.open }));
+    await userEvent.click(screen.getByRole("radio", { name: "English" }));
+    expect((await screen.findAllByText("Organizations")).length).toBeGreaterThan(0);
   });
 });
 

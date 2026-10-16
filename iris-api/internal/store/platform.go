@@ -77,6 +77,9 @@ func (s *SQLiteStore) UpsertPlatformAdmin(ctx context.Context, username, passwor
 	if len(password) < MinPlatformAdminPasswordLength {
 		return newValidationError(fmt.Sprintf("Lozinka mora imati najmanje %d znakova.", MinPlatformAdminPasswordLength))
 	}
+	if err := checkPasswordMaxLength(password); err != nil {
+		return err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
@@ -192,10 +195,13 @@ func (s *SQLiteStore) ChangePlatformAdminPassword(
 		return ErrWrongPassword
 	}
 	if len(newPassword) < MinPlatformAdminPasswordLength {
-		return newValidationError(fmt.Sprintf("Nova lozinka mora imati najmanje %d znakova.", MinPlatformAdminPasswordLength))
+		return newValidationError(fmt.Sprintf("Nova lozinka je prekratka: potrebno je najmanje %d znakova.", MinPlatformAdminPasswordLength))
+	}
+	if err := checkPasswordMaxLength(newPassword); err != nil {
+		return err
 	}
 	if newPassword == currentPassword || newPassword == DefaultPlatformAdminPassword {
-		return newValidationError("Izaberite novu lozinku, različitu od trenutne.")
+		return newValidationError("Nova lozinka mora biti različita od trenutne i od početne lozinke.")
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {

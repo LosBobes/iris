@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { LOGIN_PATH } from "@/lib/organization-login";
 import type { PlatformAdmin } from "@/types/platform";
+import { BackofficeScreen } from "./BackofficeScreen";
 
 const schema = z.object({
   username: z.string().trim().min(1, "platform.login.usernameRequired"),
@@ -38,52 +39,52 @@ export function PlatformLogin({ onSignedIn }: { onSignedIn: (admin: PlatformAdmi
   });
 
   const inputClass =
-    "w-full rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 py-2 text-[14px] text-[color:var(--pf-text)] outline-none focus:border-[color:var(--pf-text-2)]";
+    "w-full h-11 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 text-[15px] text-[color:var(--pf-text)] outline-none focus:border-[color:var(--pf-text-2)]";
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[color:var(--pf-bg)] px-4 text-[color:var(--pf-text)]">
-      <div className="w-full max-w-[360px] rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-6">
+    <BackofficeScreen>
+      <div className="w-full max-w-[400px] rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-6 sm:p-7">
         <div className="mb-5 flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-[color:var(--pf-text-2)]" />
-          <h1 className="text-[15px] font-medium">{t("platform.login.title")}</h1>
+          <h1 className="text-[18px] font-medium">{t("platform.login.title")}</h1>
         </div>
-        <p className="mb-5 text-[12px] leading-5 text-[color:var(--pf-text-2)]">{t("platform.login.intro")}</p>
+        <p className="mb-6 text-[13px] leading-5 text-[color:var(--pf-text-2)]">{t("platform.login.intro")}</p>
         <form onSubmit={onSubmit} noValidate className="space-y-4">
           <div>
-            <label htmlFor="platform-username" className="mb-1 block text-[11px] text-[color:var(--pf-text-2)]">
+            <label htmlFor="platform-username" className="mb-1.5 block text-[13px] text-[color:var(--pf-text-2)]">
               {t("platform.login.username")}
             </label>
             <input id="platform-username" autoComplete="username" autoCapitalize="none" spellCheck={false} {...register("username")} className={inputClass} />
             {errors.username?.message ? (
-              <p className="mt-1 text-[11px] text-[#e66767]">{t(errors.username.message)}</p>
+              <p className="mt-1.5 text-[12px] text-[#e66767]">{t(errors.username.message)}</p>
             ) : null}
           </div>
           <div>
-            <label htmlFor="platform-password" className="mb-1 block text-[11px] text-[color:var(--pf-text-2)]">
+            <label htmlFor="platform-password" className="mb-1.5 block text-[13px] text-[color:var(--pf-text-2)]">
               {t("platform.login.password")}
             </label>
             <input id="platform-password" type="password" autoComplete="current-password" {...register("password")} className={inputClass} />
             {errors.password?.message ? (
-              <p className="mt-1 text-[11px] text-[#e66767]">{t(errors.password.message)}</p>
+              <p className="mt-1.5 text-[12px] text-[#e66767]">{t(errors.password.message)}</p>
             ) : null}
           </div>
           {serverError ? (
-            <p role="alert" className="rounded border border-[#e66767]/40 bg-[#e66767]/10 px-3 py-2 text-[12px]">
+            <p role="alert" className="rounded-md border border-[#e66767]/40 bg-[#e66767]/10 px-3 py-2.5 text-[13px] leading-5">
               {serverError}
             </p>
           ) : null}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="iris-focusable w-full rounded bg-[color:var(--pf-text)] py-2 text-[13px] font-medium text-[color:var(--pf-bg)] hover:opacity-90 disabled:opacity-50"
+            className="iris-focusable w-full h-11 rounded-md bg-[color:var(--pf-text)] text-[14px] font-medium text-[color:var(--pf-bg)] hover:opacity-90 disabled:opacity-50"
           >
             {isSubmitting ? t("common.loading") : t("platform.login.submit")}
           </button>
         </form>
-        <Link to={LOGIN_PATH} className="mt-4 block text-center text-[11px] text-[color:var(--pf-muted)] hover:text-[color:var(--pf-text-2)]">
+        <Link to={LOGIN_PATH} className="iris-focusable mt-5 flex min-h-10 items-center justify-center text-[13px] text-[color:var(--pf-muted)] hover:text-[color:var(--pf-text-2)]">
           {t("platform.login.back")}
         </Link>
       </div>
-    </div>
+    </BackofficeScreen>
   );
 }

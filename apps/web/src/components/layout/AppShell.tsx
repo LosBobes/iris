@@ -26,6 +26,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+// Sidebar icon size. 16px read as tiny next to the 13px labels, especially on
+// touch screens and in the collapsed rail, where the icon is all there is.
+const NAV_ICON_SIZE = 20;
+
 function useIsLg(): boolean {
   const [isLg, setIsLg] = useState(
     () =>
@@ -278,8 +282,8 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                   style={{ "--iris-stagger-index": idx } as React.CSSProperties}
                   className={() =>
                     cn(
-                      "iris-drawer-item iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
-                      isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
+                      "iris-drawer-item iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2.5 text-[13px] transition-all duration-300",
+                      isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-3",
                       idx === activeNavIndex
                         ? cn(
                             "bg-black/5 font-medium text-foreground",
@@ -291,7 +295,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                   }
                 >
                   <span className="relative flex shrink-0">
-                    <Icon size={16} />
+                    <Icon size={NAV_ICON_SIZE} />
                     {badgeCount > 0 && (
                       <span
                         aria-hidden
@@ -341,8 +345,8 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 onClick={closeMobileMenu}
                 className={({ isActive }) =>
                   cn(
-                    "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
-                    isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
+                    "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2.5 text-[13px] transition-all duration-300",
+                    isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-3",
                     isActive
                       ? cn(
                           "bg-black/5 font-medium text-foreground",
@@ -353,7 +357,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                   )
                 }
               >
-                <UserCog size={16} className="shrink-0" />
+                <UserCog size={NAV_ICON_SIZE} className="shrink-0" />
                 <span
                   className={cn(
                     "whitespace-nowrap transition-all duration-300 ease-[var(--iris-ease-out-decisive)]",
@@ -371,8 +375,8 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               onClick={closeMobileMenu}
               className={({ isActive }) =>
                 cn(
-                  "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
-                  isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
+                  "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2.5 text-[13px] transition-all duration-300",
+                  isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-3",
                   isActive
                     ? cn(
                         "bg-black/5 font-medium text-foreground",
@@ -383,7 +387,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 )
               }
             >
-              <HelpCircle size={16} className="shrink-0" />
+              <HelpCircle size={NAV_ICON_SIZE} className="shrink-0" />
               <span className={cn(
                 "transition-all duration-300 ease-[var(--iris-ease-out-decisive)] whitespace-nowrap",
                 isSidebarCollapsed ? "lg:w-0 lg:opacity-0 lg:overflow-hidden lg:pointer-events-none" : "lg:w-auto lg:opacity-100",
@@ -398,8 +402,8 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
               onClick={closeMobileMenu}
               className={({ isActive }) =>
                 cn(
-                  "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300",
-                  isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
+                  "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2.5 text-[13px] transition-all duration-300",
+                  isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-3",
                   isActive
                     ? cn(
                         "bg-black/5 font-medium text-foreground",
@@ -410,7 +414,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 )
               }
             >
-              <Settings size={16} className="shrink-0" />
+              <Settings size={NAV_ICON_SIZE} className="shrink-0" />
               <span className={cn(
                 "transition-all duration-300 ease-[var(--iris-ease-out-decisive)] whitespace-nowrap",
                 isSidebarCollapsed ? "lg:w-0 lg:opacity-0 lg:overflow-hidden lg:pointer-events-none" : "lg:w-auto lg:opacity-100",
@@ -423,12 +427,12 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
             <button
               onClick={toggleCollapse}
               className={cn(
-                "hidden iris-focusable iris-press relative items-center rounded-sm px-2 py-2 text-[13px] transition-all duration-300 lg:flex lg:w-full",
+                "hidden iris-focusable iris-press relative items-center rounded-sm px-2 py-2.5 text-[13px] transition-all duration-300 lg:flex lg:w-full",
                 "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
-                isSidebarCollapsed ? "lg:justify-center lg:px-0 lg:gap-0" : "gap-2.5",
+                isSidebarCollapsed ? "lg:justify-center lg:px-0 lg:gap-0" : "gap-3",
               )}
             >
-              <PanelLeft size={16} className="shrink-0" />
+              <PanelLeft size={NAV_ICON_SIZE} className="shrink-0" />
               <span className={cn(
                 "transition-all duration-300 ease-[var(--iris-ease-out-decisive)] whitespace-nowrap",
                 isSidebarCollapsed ? "lg:w-0 lg:opacity-0 lg:overflow-hidden lg:pointer-events-none" : "lg:w-auto lg:opacity-100",
@@ -472,7 +476,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                   isSidebarCollapsed ? "" : "ml-auto"
                 )}
               >
-                <LogOut size={14} className="shrink-0" />
+                <LogOut size={NAV_ICON_SIZE - 2} className="shrink-0" />
               </button>
             </SidebarTooltip>
           </div>

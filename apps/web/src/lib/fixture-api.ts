@@ -1,3 +1,4 @@
+import { isPasswordTooLong } from '@/lib/password'
 import rawCustomers from '@/fixtures/customers.json'
 import rawLocations from '@/fixtures/locations.json'
 import rawUsers from '@/fixtures/users.json'
@@ -1033,7 +1034,8 @@ export function createFixtureApi(): Window['api'] {
     async changePlatformPassword(change) {
       if (!platformSignedIn) throw new Error('Prijava je obavezna.')
       if (change.currentPassword !== fixturePlatformPassword) throw new Error('Trenutna lozinka nije ispravna.')
-      if (change.newPassword.length < 12) throw new Error('Nova lozinka mora imati najmanje 12 znakova.')
+      if (change.newPassword.length < 12) throw new Error('Nova lozinka je prekratka: potrebno je najmanje 12 znakova.')
+      if (isPasswordTooLong(change.newPassword)) throw new Error('Nova lozinka je preduga: najviše 72 znaka.')
       fixturePlatformPassword = change.newPassword
       return { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
     },

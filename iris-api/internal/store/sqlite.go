@@ -1168,6 +1168,9 @@ func (s *SQLiteStore) CreateUser(
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(username) == "" || strings.TrimSpace(password) == "" {
 		return newValidationError(invalidWorkOrderMessage)
 	}
+	if err := checkPasswordMaxLength(password); err != nil {
+		return err
+	}
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return err
