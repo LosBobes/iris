@@ -88,14 +88,15 @@ relevant per-surface checks yourself before declaring work done.
   via `GET /public/organizations/{slug}`; the device remembers it and goes to
   `/login/<slug>` (username + password, plus the org's admin-editable logo from
   `PUT /settings/login-logo`, stored in `app_settings` under `login_logo`).
-- **Operator console (`/platform`):** reached by tapping the "Iris" wordmark on
-  the org picker 5× within 3 s (a convenience, not security). It needs a separate
-  platform-admin account. A database with none gets `admin` / `admin123321`, which
-  must change its password before the console shows anything (in-app "Lozinka";
-  `irisctl create-platform-admin` adds more). It has its own
-  `iris_platform_session` cookie (2 h), and only reads aggregate counts from
-  `GET /platform/metrics` — never customer/user/work-order records. Tenant logins
-  are recorded in `login_events` (tenant, opaque user id, time) for those counts.
+- **Backoffice (`/backoffice`, API `/platform/*`):** opened by tapping the "Iris"
+  wordmark on the org picker 5× within 3 s (a convenience, not security). Only
+  `superadmin` accounts get in; they live in `platform_admins`, fully separate from
+  organization `users` (own sessions, `iris_platform_session` cookie, 2 h; neither
+  side's credentials or sessions work on the other). A database with none gets
+  `admin` / `admin123321`, which must change its password before anything shows
+  (in-app "Lozinka"; `irisctl create-platform-admin` adds more). It only reads
+  aggregate counts from `GET /platform/metrics` — never customer/user/work-order
+  records. Tenant logins are recorded in `login_events` for those counts.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

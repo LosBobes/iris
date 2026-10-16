@@ -452,7 +452,7 @@ describe('failed requests', () => {
     vi.resetModules()
   })
 
-  it('keeps the organization session when the operator console answers 401', async () => {
+  it('keeps the organization session when the Backoffice answers 401', async () => {
     mockSentry()
     vi.resetModules()
     const { createHttpApi: createApi } = await import('./api-client')
@@ -468,7 +468,7 @@ describe('failed requests', () => {
     const api = createApi('https://iris.example/api', fetchMock)
 
     await expect(api.getPlatformMetrics(30)).rejects.toThrow('Prijava je obavezna.')
-    // The operator console has its own session; an expired one must not sign
+    // The Backoffice has its own session; an expired one must not sign
     // the shop user out of the app.
     expect(expired).not.toHaveBeenCalled()
 

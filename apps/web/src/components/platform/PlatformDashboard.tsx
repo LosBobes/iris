@@ -59,9 +59,11 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 export function PlatformDashboard({
   username,
+  role,
   onLogout,
 }: {
   username: string;
+  role?: string;
   onLogout: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -190,6 +192,11 @@ export function PlatformDashboard({
               </span>
             ) : null}
             <span className="text-[color:var(--pf-text-2)]">{username}</span>
+            {role ? (
+              <span className="rounded border border-[color:var(--pf-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-[1px] text-[color:var(--pf-text-2)]">
+                {role}
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={() => setChangingPassword(true)}

@@ -73,13 +73,13 @@ export function LoginShell({
   );
 }
 
-// Five taps on the wordmark within this window open the operator console.
+// Five taps on the wordmark within this window open the Backoffice.
 const CONSOLE_TAPS = 5;
 const CONSOLE_TAP_WINDOW_MS = 3000;
 
 /**
  * The "Iris" wordmark on the organization picker. It doubles as the hidden
- * way into the operator console (/platform) — a convenience only: that page
+ * way into the Backoffice (/backoffice) — a convenience only: that page
  * asks for a separate platform-admin login the API checks on every request.
  */
 function IrisWordmark(): React.JSX.Element {
@@ -92,7 +92,7 @@ function IrisWordmark(): React.JSX.Element {
         taps.current = [...taps.current.filter((at) => now - at < CONSOLE_TAP_WINDOW_MS), now];
         if (taps.current.length >= CONSOLE_TAPS) {
           taps.current = [];
-          navigate("/platform");
+          navigate("/backoffice");
         }
       }}
       className="select-none text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px]"

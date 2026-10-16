@@ -490,7 +490,7 @@ let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
 // store's TenantBySlug); its sign-in logo lives here as a data URL.
 const FIXTURE_ORGANIZATION = { slug: 'demo', name: 'Demo Štamparija' }
 let fixtureLoginLogo: { dataUrl: string; version: string } | null = null
-// Fixture mode's operator console (dev only, no backend): one fixed account,
+// Fixture mode's Backoffice (dev only, no backend): one fixed superadmin,
 // and metrics derived from the fixture data so the dashboard has real shapes.
 const FIXTURE_PLATFORM_ADMIN = { username: 'operater', password: 'operater-demo' }
 let fixturePlatformPassword = FIXTURE_PLATFORM_ADMIN.password
@@ -1016,13 +1016,13 @@ export function createFixtureApi(): Window['api'] {
         credentials.username === FIXTURE_PLATFORM_ADMIN.username &&
         credentials.password === fixturePlatformPassword
       return platformSignedIn
-        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
         : { success: false, error: 'Neispravno korisničko ime ili lozinka.' }
     },
 
     async getPlatformSession() {
       return platformSignedIn
-        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
         : { success: false }
     },
 

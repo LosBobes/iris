@@ -641,7 +641,7 @@ export const en: typeof sr = {
     },
   },
   platform: {
-    title: 'Platform',
+    title: 'Backoffice',
     range: 'Range',
     rangeOption: '{{days}} d',
     rangeHint: 'last {{days}} days',
@@ -725,8 +725,8 @@ export const en: typeof sr = {
       changed: 'Password changed. Other sign-ins with this account were signed out.',
     },
     login: {
-      title: 'Platform console',
-      intro: 'For Iris platform operators only. Organization accounts do not work here.',
+      title: 'Backoffice',
+      intro: 'Superadmin accounts only. Organization accounts do not work here.',
       username: 'Username',
       password: 'Password',
       submit: 'Sign in',

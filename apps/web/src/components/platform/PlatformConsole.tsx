@@ -21,9 +21,9 @@ const CONSOLE_VARS = {
 type ConsoleState = { kind: "checking" } | { kind: "signedOut" } | { kind: "signedIn"; admin: PlatformAdmin };
 
 /**
- * The operator console at /platform, reached from the hidden gesture on the
+ * The Backoffice at /backoffice, reached from the hidden gesture on the
  * organization picker. Being here grants nothing: the API checks a separate
- * platform-admin session on every request.
+ * superadmin session on every request.
  */
 export function PlatformConsole(): React.JSX.Element {
   const { t } = useTranslation();
@@ -73,6 +73,7 @@ export function PlatformConsole(): React.JSX.Element {
       ) : (
         <PlatformDashboard
           username={state.admin.username}
+          role={state.admin.role}
           onLogout={() => {
             void window.api
               .platformLogout()

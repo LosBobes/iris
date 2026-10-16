@@ -15,7 +15,7 @@ tags:
   - name: Work Orders
   - name: Dashboard
   - name: Platform
-    description: Operator console. Separate platform-admin accounts (irisctl create-platform-admin) and cookie; aggregate metrics only.
+    description: Backoffice (/backoffice in the web app). Superadmin accounts stored apart from organization users (own table, sessions and cookie); aggregate metrics only.
 paths:
   /healthz:
     get:
@@ -1115,10 +1115,13 @@ paths:
   /platform/auth/login:
     post:
       tags: [Platform]
-      summary: Sign in to the operator console
+      summary: Sign in to the Backoffice (superadmin accounts only)
       description: |
-        Platform admins belong to no organization and are created only with
-        `irisctl create-platform-admin`. Sets the `iris_platform_session` cookie
+        Superadmins live in `platform_admins`, separate from every organization's
+        users: organization credentials never work here and Backoffice
+        credentials never work on `/auth/login`. A database with no superadmin
+        gets `admin` / `admin123321`, which must change its password first;
+        `irisctl create-platform-admin` adds more. Sets the `iris_platform_session` cookie
         (HttpOnly, SameSite=Strict, 2 h). Failed attempts are rate limited per
         IP, per username and globally.
       operationId: platformLogin
@@ -2432,6 +2435,10 @@ components:
           properties:
             username:
               type: string
+            role:
+              type: string
+              enum: [superadmin]
+              description: The only Backoffice role.
             mustChangePassword:
               type: boolean
               description: True until the account replaces its initial password.

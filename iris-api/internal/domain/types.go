@@ -332,9 +332,14 @@ type PublicOrganization struct {
 
 // PlatformAdmin is an Iris operator account. It belongs to no organization and
 // can only read the aggregate usage metrics below.
+// PlatformRoleSuperadmin is the Backoffice role: the only one that opens the
+// Backoffice (/backoffice in the web app, /platform/* in the API).
+const PlatformRoleSuperadmin = "superadmin"
+
 type PlatformAdmin struct {
 	ID       string `json:"-"`
 	Username string `json:"username"`
+	Role     string `json:"role"`
 	// MustChangePassword is set on the seeded default account (and any account
 	// whose password was not chosen by its owner): the console then allows
 	// nothing but a password change.

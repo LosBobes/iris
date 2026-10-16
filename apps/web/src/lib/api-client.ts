@@ -89,7 +89,7 @@ function announceIfSessionExpired(status: number, url: string): void {
   } catch {
     // Relative or unparseable; match on whatever we were given.
   }
-  // Auth routes, and the operator console, which has its own session: a 401
+  // Auth routes, and the Backoffice, which has its own session: a 401
   // there says nothing about the organization session.
   if (/(^|\/)(auth|platform)\//.test(path)) return
   notifySessionExpired()

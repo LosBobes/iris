@@ -1,4 +1,4 @@
-// Operator ("platform") console. Contract-sync point with the Platform* schemas
+// Backoffice (the "platform" API). Contract-sync point with the Platform* schemas
 // in iris-api/openapi.yaml. Aggregates only: no customer, user or work-order
 // records ever appear here.
 
@@ -6,6 +6,8 @@ export type PlatformRangeDays = 7 | 30 | 90 | 365
 
 export interface PlatformAdmin {
   username: string
+  /** Always "superadmin": the only role that opens the Backoffice. */
+  role?: 'superadmin'
   /** True until the account replaces its initial password (e.g. the seeded default). */
   mustChangePassword?: boolean
 }

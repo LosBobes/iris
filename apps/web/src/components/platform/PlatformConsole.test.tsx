@@ -83,7 +83,7 @@ describe("PlatformConsole", () => {
   it("refetches for a different range and remembers it", async () => {
     const getPlatformMetrics = vi.fn(async () => metrics);
     vi.stubGlobal("api", {
-      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops" } })),
+      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops", role: "superadmin" } })),
       getPlatformMetrics,
     });
 
@@ -95,6 +95,8 @@ describe("PlatformConsole", () => {
     await screen.findAllByText(strings.tiles.tenants);
     await userEvent.click(screen.getByRole("radio", { name: "90 d" }));
 
+    // The toolbar names the account's role.
+    expect(screen.getByText("superadmin")).toBeInTheDocument();
     await waitFor(() => expect(getPlatformMetrics).toHaveBeenLastCalledWith(90));
     expect(window.localStorage.getItem("iris.platform.range")).toBe("90");
     // A fresh device auto-refreshes every minute.
@@ -208,7 +210,7 @@ describe("hidden console gesture", () => {
       <MemoryRouter initialEntries={["/login"]}>
         <Routes>
           <Route path="/login" element={<OrganizationStep />} />
-          <Route path="/platform" element={<div>console reached</div>} />
+          <Route path="/backoffice" element={<div>console reached</div>} />
         </Routes>
       </MemoryRouter>,
     );

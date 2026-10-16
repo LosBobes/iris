@@ -640,7 +640,7 @@ export const sr = {
     },
   },
   platform: {
-    title: 'Platforma',
+    title: 'Backoffice',
     range: 'Period',
     rangeOption: '{{days}} d',
     rangeHint: 'poslednjih {{days}} dana',
@@ -724,8 +724,8 @@ export const sr = {
       changed: 'Lozinka je promenjena. Ostale prijave ovim nalogom su odjavljene.',
     },
     login: {
-      title: 'Konzola platforme',
-      intro: 'Pristup samo za operatere Iris platforme. Nalozi organizacija ovde ne važe.',
+      title: 'Backoffice',
+      intro: 'Pristup samo za superadmin naloge. Nalozi organizacija ovde ne važe.',
       username: 'Korisničko ime',
       password: 'Lozinka',
       submit: 'Prijavi se',

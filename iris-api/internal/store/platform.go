@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// PlatformStore is the operator-only side of the store: platform admin accounts
+// PlatformStore is the Backoffice side of the store: superadmin accounts
 // (not tied to any organization), their sessions, and the cross-tenant usage
 // metrics they can read. It is deliberately separate from Store so the
 // tenant-scoped code paths never see it, and only the SQLite store implements
@@ -84,9 +84,9 @@ func (s *SQLiteStore) UpsertPlatformAdmin(ctx context.Context, username, passwor
 	id := "platform-" + strings.ToLower(username)
 	if _, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO platform_admins(id, username, password_hash, must_change_password) VALUES (?, ?, ?, 0)
-		 ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, must_change_password = 0`,
-		id, username, string(hash),
+		`INSERT INTO platform_admins(id, username, password_hash, must_change_password, role) VALUES (?, ?, ?, 0, ?)
+		 ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, must_change_password = 0, role = excluded.role`,
+		id, username, string(hash), domain.PlatformRoleSuperadmin,
 	); err != nil {
 		return fmt.Errorf("save platform admin: %w", err)
 	}
@@ -98,9 +98,9 @@ func (s *SQLiteStore) AuthenticatePlatformAdmin(ctx context.Context, username, p
 	var hash string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, username, password_hash, must_change_password FROM platform_admins WHERE username = ?`,
+		`SELECT id, username, password_hash, must_change_password, role FROM platform_admins WHERE username = ?`,
 		strings.TrimSpace(username),
-	).Scan(&admin.ID, &admin.Username, &hash, &admin.MustChangePassword)
+	).Scan(&admin.ID, &admin.Username, &hash, &admin.MustChangePassword, &admin.Role)
 	if errors.Is(err, sql.ErrNoRows) {
 		_ = bcrypt.CompareHashAndPassword(dummyPlatformHash, []byte(password))
 		return nil, nil
@@ -145,12 +145,12 @@ func (s *SQLiteStore) PlatformAdminBySession(ctx context.Context, token string) 
 	err := s.db.QueryRowContext(
 		ctx,
 		`SELECT platform_admins.id, platform_admins.username, platform_admins.must_change_password,
-		        platform_sessions.expires_at
+		        platform_admins.role, platform_sessions.expires_at
 		 FROM platform_sessions
 		 JOIN platform_admins ON platform_admins.id = platform_sessions.admin_id
 		 WHERE platform_sessions.token_hash = ?`,
 		hashPlatformToken(token),
-	).Scan(&admin.ID, &admin.Username, &admin.MustChangePassword, &expiresAtRaw)
+	).Scan(&admin.ID, &admin.Username, &admin.MustChangePassword, &admin.Role, &expiresAtRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -555,15 +555,32 @@ func platformDefaultAdminMigration(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("add must_change_password: %w", err)
 		}
 	}
+	// Every Backoffice account is a superadmin; the column makes the role
+	// explicit, and the API refuses any other value.
+	var hasRole int
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM pragma_table_info('platform_admins') WHERE name = 'role'`,
+	).Scan(&hasRole); err != nil {
+		return fmt.Errorf("inspect platform_admins: %w", err)
+	}
+	if hasRole == 0 {
+		if _, err := db.ExecContext(
+			ctx,
+			`ALTER TABLE platform_admins ADD COLUMN role TEXT NOT NULL DEFAULT 'superadmin' CHECK (role IN ('superadmin'))`,
+		); err != nil {
+			return fmt.Errorf("add role: %w", err)
+		}
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(DefaultPlatformAdminPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash default platform password: %w", err)
 	}
 	if _, err := db.ExecContext(
 		ctx,
-		`INSERT INTO platform_admins(id, username, password_hash, must_change_password)
-		 SELECT ?, ?, ?, 1 WHERE NOT EXISTS (SELECT 1 FROM platform_admins)`,
-		"platform-"+DefaultPlatformAdminUsername, DefaultPlatformAdminUsername, string(hash),
+		`INSERT INTO platform_admins(id, username, password_hash, must_change_password, role)
+		 SELECT ?, ?, ?, 1, ? WHERE NOT EXISTS (SELECT 1 FROM platform_admins)`,
+		"platform-"+DefaultPlatformAdminUsername, DefaultPlatformAdminUsername, string(hash), domain.PlatformRoleSuperadmin,
 	); err != nil {
 		return fmt.Errorf("seed default platform admin: %w", err)
 	}

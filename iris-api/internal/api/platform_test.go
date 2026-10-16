@@ -69,7 +69,7 @@ func TestPlatformConsoleAccess(t *testing.T) {
 	}
 
 	rec := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", login)
-	if res := decodePlatformLogin(t, rec); !res.Success || res.Admin == nil || res.Admin.Username != "ops" {
+	if res := decodePlatformLogin(t, rec); !res.Success || res.Admin == nil || res.Admin.Username != "ops" || res.Admin.Role != domain.PlatformRoleSuperadmin {
 		t.Fatalf("login = %s", rec.Body.String())
 	}
 	cookie := platformCookie(rec, server.config.PlatformSessionCookieName)
@@ -174,7 +174,7 @@ func TestDefaultPlatformAdminMustChangePassword(t *testing.T) {
 
 	rec := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", `{"username":"admin","password":"admin123321"}`)
 	res := decodePlatformLogin(t, rec)
-	if !res.Success || res.Admin == nil || !res.Admin.MustChangePassword {
+	if !res.Success || res.Admin == nil || !res.Admin.MustChangePassword || res.Admin.Role != domain.PlatformRoleSuperadmin {
 		t.Fatalf("default login = %s, want success with mustChangePassword", rec.Body.String())
 	}
 	cookie := platformCookie(rec, server.config.PlatformSessionCookieName)
@@ -207,5 +207,56 @@ func TestDefaultPlatformAdminMustChangePassword(t *testing.T) {
 	if res := decodePlatformLogin(t, platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login",
 		`{"username":"admin","password":"admin123321"}`)); res.Success {
 		t.Fatal("default password still signs in")
+	}
+}
+
+// TestBackofficeAccountsAreSeparateFromUsers: Backoffice superadmins and
+// organization users live in different tables with different sessions. Neither
+// side's credentials or sessions work on the other, and the same username on
+// both sides ("admin") names two unrelated accounts.
+func TestBackofficeAccountsAreSeparateFromUsers(t *testing.T) {
+	server, adminToken, _ := newServerWithRoles(t)
+
+	// The organization admin ("admin"/"admin123" in demo) cannot open the Backoffice.
+	if res := decodePlatformLogin(t, platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login",
+		`{"username":"admin","password":"admin123"}`)); res.Success {
+		t.Fatal("organization credentials signed in to the Backoffice")
+	}
+	// The Backoffice admin ("admin"/"admin123321") cannot sign in to any organization.
+	for _, org := range []string{"demo", "grafika-cobanovic"} {
+		rec := platformRequest(t, server, nil, http.MethodPost, "/auth/login",
+			`{"orgSlug":"`+org+`","username":"admin","password":"admin123321"}`)
+		if strings.Contains(rec.Body.String(), `"success":true`) {
+			t.Fatalf("Backoffice credentials signed in to %s", org)
+		}
+	}
+
+	// Changing the Backoffice admin's password leaves the organization admin alone.
+	login := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", `{"username":"admin","password":"admin123321"}`)
+	cookie := platformCookie(login, server.config.PlatformSessionCookieName)
+	if rec := platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/password",
+		`{"currentPassword":"admin123321","newPassword":"a-much-better-password"}`); rec.Code != http.StatusOK {
+		t.Fatalf("change = %d %s", rec.Code, rec.Body.String())
+	}
+	rec := platformRequest(t, server, nil, http.MethodPost, "/auth/login", `{"orgSlug":"demo","username":"admin","password":"admin123"}`)
+	if !strings.Contains(rec.Body.String(), `"success":true`) {
+		t.Fatalf("organization admin login broke after Backoffice password change: %s", rec.Body.String())
+	}
+
+	// Sessions do not cross either: an org session cookie value is not a
+	// Backoffice session, and a Backoffice token is not an org session.
+	if rec := platformRequest(t, server, &http.Cookie{Name: server.config.PlatformSessionCookieName, Value: adminToken},
+		http.MethodGet, "/platform/metrics", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("org token as Backoffice session = %d, want 401", rec.Code)
+	}
+	if rec := platformRequest(t, server, &http.Cookie{Name: server.config.SessionCookieName, Value: cookie.Value},
+		http.MethodGet, "/settings", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Backoffice token as org session = %d, want 401", rec.Code)
+	}
+
+	// Organization user listings never include Backoffice accounts.
+	users := platformRequest(t, server, &http.Cookie{Name: server.config.SessionCookieName, Value: adminToken}, http.MethodGet, "/users", "")
+	if strings.Contains(users.Body.String(), "superadmin") || strings.Count(users.Body.String(), `"username"`) != 2 {
+		t.Fatalf("org users = %s, want only the two organization accounts", users.Body.String())
 	}
 }

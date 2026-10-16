@@ -370,8 +370,8 @@ function AppContent(): React.JSX.Element {
         <Suspense fallback={<RouteLoadingScreen />}>
           <Routes>
             <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
-            {/* Operator console: its own session, independent of any organization. */}
-            <Route path="/platform" element={<PlatformConsole />} />
+            {/* Backoffice: superadmin session, independent of any organization. */}
+            <Route path="/backoffice" element={<PlatformConsole />} />
             <Route
               path="*"
               element={

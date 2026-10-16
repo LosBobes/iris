@@ -106,7 +106,7 @@ declare global {
       getLoginLogo: () => Promise<Blob | null>
       updateLoginLogo: (upload: LoginLogoUpload) => Promise<LoginLogoInfo>
       deleteLoginLogo: () => Promise<void>
-      /** Operator console (separate account and cookie; see iris-api platform.go). */
+      /** Backoffice (superadmin accounts and cookie, separate from organization users; see iris-api platform.go). */
       platformLogin: (credentials: { username: string; password: string }) => Promise<PlatformLoginResponse>
       getPlatformSession: () => Promise<PlatformLoginResponse>
       platformLogout: () => Promise<void>

@@ -14,7 +14,7 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/store"
 )
 
-// Operator ("platform") console. These routes sit outside every organization:
+// Backoffice (the "platform" routes). These sit outside every organization:
 // a platform admin is a separate account in platform_admins, created only from
 // the server with `irisctl create-platform-admin`, with its own cookie and a
 // short session. None exist by default, so on a fresh install every login here
@@ -192,6 +192,10 @@ func (s *Server) requirePlatformAdmin(next http.Handler) http.Handler {
 		}
 		if admin == nil {
 			writeAPIError(w, r, http.StatusUnauthorized, "Prijava je obavezna.", nil)
+			return
+		}
+		if admin.Role != domain.PlatformRoleSuperadmin {
+			writeAPIError(w, r, http.StatusForbidden, "Nemate pristup Backoffice-u.", nil)
 			return
 		}
 		// The seeded default account opens nothing until its password changes.
