@@ -139,6 +139,12 @@ type Store interface {
 
 	OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error)
 	UpdateOrganizationSettings(ctx context.Context, update domain.OrganizationSettingsUpdate) (domain.OrganizationSettings, error)
+	// LoginLogo returns the tenant's sign-in logo, or nil when none is set.
+	LoginLogo(ctx context.Context) (*domain.LoginLogo, error)
+	// SetLoginLogo validates and stores the tenant's sign-in logo.
+	SetLoginLogo(ctx context.Context, upload domain.LoginLogoUpload) (*domain.LoginLogo, error)
+	// DeleteLoginLogo removes the tenant's sign-in logo (a no-op when unset).
+	DeleteLoginLogo(ctx context.Context) error
 
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	UserByID(ctx context.Context, id string) (*domain.User, error)

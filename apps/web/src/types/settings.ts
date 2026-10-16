@@ -131,3 +131,27 @@ export function normalizePrintItemColumns(
   }
   return [...columns]
 }
+
+/**
+ * What the sign-in screen learns about an organization before anyone is signed
+ * in. Contract-sync point with the PublicOrganization schema in
+ * iris-api/openapi.yaml.
+ */
+export interface PublicOrganization {
+  slug: string
+  name: string
+  /** Content hash of the sign-in logo; null when the organization has none. */
+  logoVersion: string | null
+}
+
+/** PUT /settings/login-logo payload (LoginLogoUpload in openapi.yaml). */
+export interface LoginLogoUpload {
+  contentType: 'image/png' | 'image/jpeg' | 'image/webp'
+  /** Base64 image bytes, max 512 KB decoded. */
+  data: string
+}
+
+/** Returned after an upload (LoginLogoInfo in openapi.yaml). */
+export interface LoginLogoInfo {
+  logoVersion: string
+}

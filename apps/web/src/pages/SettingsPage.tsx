@@ -8,6 +8,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { THEME_OPTIONS } from "@/lib/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { InstallAppSettings } from "@/components/settings/InstallAppSettings";
+import { LoginLogoSettings } from "@/components/settings/LoginLogoSettings";
 import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
 import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
@@ -52,6 +53,8 @@ export function SettingsPage(): React.JSX.Element {
 
         <div className="space-y-8 px-5 pb-10 sm:px-8 lg:px-10">
           {isAdmin && <OrganizationNameSettings />}
+
+          {isAdmin && <LoginLogoSettings />}
 
           <section className="max-w-2xl border border-border bg-card">
             <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">

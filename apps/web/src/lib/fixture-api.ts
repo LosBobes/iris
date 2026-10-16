@@ -41,6 +41,7 @@ import {
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
+  type PublicOrganization,
 } from '@/types/settings'
 
 interface FixtureUser extends AuthenticatedUser {
@@ -484,6 +485,10 @@ let billingDefaults: BillingDefaults = { ...DEFAULT_BILLING_DEFAULTS }
 let priorityDefaults: PriorityDefaults = { ...DEFAULT_PRIORITY_DEFAULTS }
 let printItemColumns: PrintItemColumn[] = [...DEFAULT_PRINT_ITEM_COLUMNS]
 let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
+// Fixture mode models the single demo organization (mirrors the Go fixture
+// store's TenantBySlug); its sign-in logo lives here as a data URL.
+const FIXTURE_ORGANIZATION = { slug: 'demo', name: 'Demo Štamparija' }
+let fixtureLoginLogo: { dataUrl: string; version: string } | null = null
 
 function isBuiltinEnumValue(field: EnumField, value: string): boolean {
   return BUILTIN_ENUM_VALUES.some((entry) => entry.field === field && entry.value === value)
@@ -899,6 +904,30 @@ export function createFixtureApi(): Window['api'] {
         showShippingOptions = settings.showShippingOptions
       }
       return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions }
+    },
+
+    async getPublicOrganization(slug): Promise<PublicOrganization | null> {
+      if (slug.trim().toLowerCase() !== FIXTURE_ORGANIZATION.slug) return null
+      return { ...FIXTURE_ORGANIZATION, logoVersion: fixtureLoginLogo?.version ?? null }
+    },
+
+    getPublicOrganizationLogoUrl() {
+      return fixtureLoginLogo?.dataUrl ?? ''
+    },
+
+    async getLoginLogo() {
+      if (!fixtureLoginLogo) return null
+      return (await fetch(fixtureLoginLogo.dataUrl)).blob()
+    },
+
+    async updateLoginLogo(upload) {
+      const version = String(Date.now())
+      fixtureLoginLogo = { dataUrl: `data:${upload.contentType};base64,${upload.data}`, version }
+      return { logoVersion: version }
+    },
+
+    async deleteLoginLogo() {
+      fixtureLoginLogo = null
     },
 
     async getWorkOrders(query) {

@@ -7,9 +7,11 @@ import {
   Routes,
   Route,
   Outlet,
+  Navigate,
   useNavigate,
 } from "react-router-dom";
-import { Login } from "@/components/Login/Login";
+import { LoginFlow } from "@/components/Login/LoginFlow";
+import { loginEntryPath } from "@/lib/organization-login";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -37,10 +39,7 @@ import { clearSentryUser, setSentryUser } from "@/lib/sentry";
 import {
   activeOrganizationSlug,
   clearReturnLocation,
-  currentLocation,
-  isRestorableLocation,
   subscribeSessionExpired,
-  takeReturnLocation,
 } from "@/lib/session";
 import { reportUnexpectedError } from "@/lib/errors";
 
@@ -136,42 +135,8 @@ function BackendUnavailableScreen({
   );
 }
 
-/**
- * The login screen, plus the return trip afterwards.
- *
- * The login form replaces the whole app at whatever URL the operator was on, so
- * signing back in normally puts them exactly where they were with no navigation
- * at all. The remembered location is the fallback for the cases where the URL
- * did not survive — a reload that landed on the root, or a tab opened fresh.
- */
-function LoginRoute({
-  sessionExpired,
-  onLoginSuccess,
-}: {
-  sessionExpired: boolean;
-  onLoginSuccess: (user: AuthenticatedUser, orgSlug: string) => void;
-}): React.JSX.Element {
-  const navigate = useNavigate();
-
-  const handleSuccess = useCallback(
-    (user: AuthenticatedUser, orgSlug: string) => {
-      const returnTo = takeReturnLocation();
-      onLoginSuccess(user, orgSlug);
-      // Staying put is the common case and the correct one: the address bar
-      // still points at the page the session expired on.
-      if (returnTo && !isRestorableLocation(currentLocation())) {
-        navigate(returnTo, { replace: true });
-      }
-    },
-    [navigate, onLoginSuccess],
-  );
-
-  return (
-    <Login onLoginSuccess={handleSuccess} sessionExpired={sessionExpired} />
-  );
-}
-
 function AppContent(): React.JSX.Element {
+  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(
     null,
   );
@@ -302,11 +267,14 @@ function AppContent(): React.JSX.Element {
       })
       .finally(() => {
         setCurrentUser(null);
+        // Straight to this organization's sign-in page, so the page being
+        // left is not mistaken for a deep link to return to.
+        navigate(loginEntryPath(), { replace: true });
         // The settings belong to the organization that just signed out, so they
         // go with it: the next sign-in loads its own.
         applyOrganizationSettings(null);
       });
-  }, [applyOrganizationSettings]);
+  }, [applyOrganizationSettings, navigate]);
 
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser, orgSlug: string) => {
@@ -405,7 +373,7 @@ function AppContent(): React.JSX.Element {
               path="*"
               element={
                 !currentUser ? (
-                  <LoginRoute
+                  <LoginFlow
                     sessionExpired={sessionExpired}
                     onLoginSuccess={handleLoginSuccess}
                   />
@@ -415,6 +383,8 @@ function AppContent(): React.JSX.Element {
                     <TooltipProvider>
                       <InteractiveTourProvider>
                         <Routes>
+                          {/* Already signed in: the sign-in pages have nothing to show. */}
+                          <Route path="/login/*" element={<Navigate to="/" replace />} />
                           <Route element={<AppShellLayout />}>
                             <Route path="/" element={<DashboardPage />} />
                             <Route path="/customers" element={<CustomersPage />} />

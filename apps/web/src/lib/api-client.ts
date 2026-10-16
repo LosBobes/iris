@@ -23,7 +23,12 @@ import type {
   CatalogItemListResult,
   CatalogItemQuery,
 } from '@/types/catalog'
-import type { OrganizationSettings } from '@/types/settings'
+import type {
+  LoginLogoInfo,
+  LoginLogoUpload,
+  OrganizationSettings,
+  PublicOrganization,
+} from '@/types/settings'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -621,6 +626,44 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async updateSettings(settings: Partial<OrganizationSettings>) {
       const response = await fetchImpl(url('/settings'), jsonRequest('PUT', settings))
       return readJSON<OrganizationSettings>(response)
+    },
+
+    async getPublicOrganization(slug: string) {
+      const response = await fetchImpl(
+        url(`/public/organizations/${encodeURIComponent(slug)}`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return readJSON<PublicOrganization>(response)
+    },
+
+    getPublicOrganizationLogoUrl(slug: string, logoVersion: string) {
+      return url(
+        `/public/organizations/${encodeURIComponent(slug)}/logo?v=${encodeURIComponent(logoVersion)}`,
+      )
+    },
+
+    async getLoginLogo() {
+      const response = await fetchImpl(url('/settings/login-logo'), credentialedRequest())
+      if (response.status === 404) return null
+      if (!response.ok) {
+        // Reuse readJSON's error path so the failure names the status.
+        await readJSON<never>(response)
+      }
+      return response.blob()
+    },
+
+    async updateLoginLogo(upload: LoginLogoUpload) {
+      const response = await fetchImpl(url('/settings/login-logo'), jsonRequest('PUT', upload))
+      return readJSON<LoginLogoInfo>(response)
+    },
+
+    async deleteLoginLogo() {
+      const response = await fetchImpl(
+        url('/settings/login-logo'),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      if (!response.ok) await readJSON<never>(response)
     },
 
     async listUsers() {

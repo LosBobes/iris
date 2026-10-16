@@ -392,6 +392,7 @@ var sqliteMigrations = []struct {
 	{version: 12, sql: workOrderEditLocksMigration},
 	{version: 13, sql: workOrderPublicTokenMigration},
 	{version: 14, sql: catalogDefaultTaxGroupMigration},
+	{version: 15, fn: productionLoginLogoMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

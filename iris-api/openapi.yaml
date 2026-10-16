@@ -456,6 +456,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /settings/login-logo:
+    get:
+      tags: [Settings]
+      summary: Return the signed-in organization's sign-in logo image
+      operationId: getLoginLogo
+      responses:
+        '200':
+          description: The logo image bytes (PNG, JPEG or WebP)
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            image/png: {}
+            image/jpeg: {}
+            image/webp: {}
+        '404':
+          description: No logo is set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Settings]
+      summary: Replace the organization's sign-in logo (admin only)
+      operationId: updateLoginLogo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginLogoUpload'
+      responses:
+        '200':
+          description: Logo stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginLogoInfo'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Not a PNG, JPEG or WebP image, or larger than 512 KB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Settings]
+      summary: Remove the organization's sign-in logo (admin only)
+      operationId: deleteLoginLogo
+      responses:
+        '204':
+          description: Logo removed (or none was set)
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /users:
     get:
       tags: [Users]
@@ -983,6 +1047,65 @@ paths:
                 $ref: '#/components/schemas/PublicWorkOrderStatus'
         '404':
           description: Unknown public token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /public/organizations/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        description: Organization login slug (case-insensitive)
+        schema:
+          type: string
+    get:
+      tags: [Auth]
+      summary: Validate an organization slug for the first sign-in step
+      description: |
+        Unauthenticated. Lets the sign-in screen confirm the organization exists
+        and show its name and logo before asking for credentials.
+      operationId: getPublicOrganization
+      security: []
+      responses:
+        '200':
+          description: The organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicOrganization'
+        '404':
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /public/organizations/{slug}/logo:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Auth]
+      summary: Return an organization's sign-in logo image
+      description: |
+        Unauthenticated. Served with `Cache-Control: no-cache` and an ETag equal
+        to the quoted `logoVersion`, plus `X-Content-Type-Options: nosniff`.
+      operationId: getPublicOrganizationLogo
+      security: []
+      responses:
+        '200':
+          description: The logo image bytes
+          content:
+            image/png: {}
+            image/jpeg: {}
+            image/webp: {}
+        '304':
+          description: Not modified (If-None-Match matched)
+        '404':
+          description: Unknown organization or no logo set
           content:
             application/json:
               schema:
@@ -2140,6 +2263,33 @@ components:
           $ref: '#/components/schemas/InvoiceDraft'
         communication:
           $ref: '#/components/schemas/CustomerCommunication'
+    PublicOrganization:
+      type: object
+      required: [slug, name, logoVersion]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        logoVersion:
+          type: [string, 'null']
+          description: Content hash of the sign-in logo; null when none is set.
+    LoginLogoUpload:
+      type: object
+      required: [contentType, data]
+      properties:
+        contentType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        data:
+          type: string
+          description: Base64 image bytes (a full data URL is also accepted). Max 512 KB decoded; the server sniffs the actual type.
+    LoginLogoInfo:
+      type: object
+      required: [logoVersion]
+      properties:
+        logoVersion:
+          type: string
     PublicWorkOrderStatus:
       type: object
       required:

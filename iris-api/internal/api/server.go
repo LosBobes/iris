@@ -93,6 +93,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/auth/session", s.handleSession)
 	r.Post("/auth/logout", s.handleLogout)
 	r.Get("/public/work-orders/{token}", s.handlePublicWorkOrderStatus)
+	r.Get("/public/organizations/{slug}", s.handlePublicOrganization)
+	r.Get("/public/organizations/{slug}/logo", s.handlePublicOrganizationLogo)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -137,6 +139,9 @@ func (s *Server) Routes() http.Handler {
 		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
+		protected.Get("/settings/login-logo", s.handleLoginLogo)
+		protected.Put("/settings/login-logo", s.requireAdmin(s.handleUpdateLoginLogo))
+		protected.Delete("/settings/login-logo", s.requireAdmin(s.handleDeleteLoginLogo))
 		protected.Get("/users", s.requireAdmin(s.handleListUsers))
 		protected.Post("/users", s.requireAdmin(s.handleCreateUser))
 		protected.Put("/users/{id}", s.requireAdmin(s.handleUpdateUser))

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
@@ -34,6 +34,10 @@ function stubSignedOutApi(overrides: Record<string, unknown> = {}) {
     getCurrentSession: vi.fn(async () => ({ success: false })),
     getAppVersion: vi.fn(async () => "1.0.0"),
     login: vi.fn(async () => ({ success: true, user })),
+    getPublicOrganization: vi.fn(async (slug: string) =>
+      slug === "demo" ? { slug: "demo", name: "Demo Štamparija", logoVersion: null } : null,
+    ),
+    getPublicOrganizationLogoUrl: vi.fn(() => ""),
     getSettings,
     getWorkOrders: vi.fn(async () => ({ items: [], total: 0 })),
     getWorkOrderOperators: vi.fn(async () => []),
@@ -41,6 +45,21 @@ function stubSignedOutApi(overrides: Record<string, unknown> = {}) {
   });
   return getSettings;
 }
+
+/** Both sign-in steps: organization first, then that organization's form. */
+async function signIn(): Promise<void> {
+  await userEvent.type(await screen.findByLabelText(strings.organization), "demo");
+  await userEvent.click(screen.getByRole("button", { name: strings.continue }));
+  await userEvent.type(await screen.findByLabelText(strings.username), "admin");
+  await userEvent.type(screen.getByLabelText(strings.password), "admin123");
+  await userEvent.click(screen.getByRole("button", { name: strings.submit }));
+}
+
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/");
+});
 
 afterEach(() => {
   cleanup();
@@ -60,10 +79,7 @@ describe("App organization settings", () => {
     await screen.findByLabelText(strings.organization);
     expect(getSettings).not.toHaveBeenCalled();
 
-    await userEvent.type(screen.getByLabelText(strings.organization), "demo");
-    await userEvent.type(screen.getByLabelText(strings.username), "admin");
-    await userEvent.type(screen.getByLabelText(strings.password), "admin123");
-    await userEvent.click(screen.getByRole("button", { name: strings.submit }));
+    await signIn();
 
     await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(1));
   });
@@ -76,16 +92,66 @@ describe("App organization settings", () => {
 
     render(<App />);
 
-    await screen.findByLabelText(strings.organization);
-    await userEvent.type(screen.getByLabelText(strings.organization), "demo");
-    await userEvent.type(screen.getByLabelText(strings.username), "admin");
-    await userEvent.type(screen.getByLabelText(strings.password), "admin123");
-    await userEvent.click(screen.getByRole("button", { name: strings.submit }));
+    await signIn();
 
     await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(1));
     // The login still went through — a settings failure is not a sign-in failure.
     await waitFor(() =>
-      expect(screen.queryByLabelText(strings.organization)).not.toBeInTheDocument(),
+      expect(screen.queryByLabelText(strings.username)).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe("App two-step sign-in", () => {
+  it("sends a signed-out visitor to step one, then to the organization's own page", async () => {
+    stubSignedOutApi();
+    render(<App />);
+
+    await screen.findByLabelText(strings.organization);
+    expect(window.location.pathname).toBe("/login");
+    // Step one asks for the organization only.
+    expect(screen.queryByLabelText(strings.username)).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(strings.organization), "DEMO");
+    await userEvent.click(screen.getByRole("button", { name: strings.continue }));
+
+    await screen.findByLabelText(strings.username);
+    expect(window.location.pathname).toBe("/login/demo");
+    expect(screen.queryByLabelText(strings.organization)).not.toBeInTheDocument();
+    // No logo: the masthead and the card both name the organization.
+    expect(screen.getAllByText("Demo Štamparija")).toHaveLength(2);
+  });
+
+  it("skips step one on a device that already chose its organization", async () => {
+    window.localStorage.setItem("iris.rememberedOrg", "demo");
+    stubSignedOutApi();
+    render(<App />);
+
+    await screen.findByLabelText(strings.username);
+    expect(window.location.pathname).toBe("/login/demo");
+  });
+
+  it("returns to the deep link that was opened while signed out", async () => {
+    window.localStorage.setItem("iris.rememberedOrg", "demo");
+    window.history.replaceState(null, "", "/settings");
+    stubSignedOutApi();
+    render(<App />);
+
+    await userEvent.type(await screen.findByLabelText(strings.username), "admin");
+    await userEvent.type(screen.getByLabelText(strings.password), "admin123");
+    await userEvent.click(screen.getByRole("button", { name: strings.submit }));
+
+    await waitFor(() => expect(window.location.pathname).toBe("/settings"));
+  });
+
+  it("starts over when a remembered organization no longer exists", async () => {
+    window.localStorage.setItem("iris.rememberedOrg", "gone");
+    stubSignedOutApi();
+    render(<App />);
+
+    expect(await screen.findByText(strings.orgNotFound)).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/login");
+    expect(screen.getByLabelText(strings.organization)).toHaveValue("gone");
+    expect(window.localStorage.getItem("iris.rememberedOrg")).toBeNull();
   });
 });

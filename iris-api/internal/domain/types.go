@@ -299,6 +299,37 @@ type OrganizationSettingsUpdate struct {
 	ShowShippingOptions *bool              `json:"showShippingOptions"`
 }
 
+// LoginLogo is the image an organization shows on its sign-in screen. Admins
+// upload it from Settings; the public organization endpoints serve it before
+// anyone is signed in.
+type LoginLogo struct {
+	ContentType string
+	Data        []byte
+}
+
+// LoginLogoUpload is the PUT /settings/login-logo payload: the raw image bytes,
+// base64-encoded, with the content type the client believes it has. The server
+// sniffs the bytes and rejects anything that is not PNG, JPEG or WebP.
+type LoginLogoUpload struct {
+	ContentType string `json:"contentType"`
+	Data        string `json:"data"`
+}
+
+// LoginLogoInfo is returned after an upload. LogoVersion changes whenever the
+// image does, so clients can use it to bust caches.
+type LoginLogoInfo struct {
+	LogoVersion string `json:"logoVersion"`
+}
+
+// PublicOrganization is what the sign-in screen may learn about an
+// organization before authentication: that it exists, its display name, and
+// whether (and which version of) a login logo it has.
+type PublicOrganization struct {
+	Slug        string  `json:"slug"`
+	Name        string  `json:"name"`
+	LogoVersion *string `json:"logoVersion"`
+}
+
 type User struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`
