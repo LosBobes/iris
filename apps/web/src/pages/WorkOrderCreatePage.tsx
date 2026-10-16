@@ -242,7 +242,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
   return (
     <>
       <div className="space-y-8">
-        <header className="animate-iris-enter border-b border-border px-10 pt-8 pb-7">
+        <header className="animate-iris-enter border-b border-border px-4 pt-6 pb-6 sm:px-10 sm:pt-8 sm:pb-7">
           <button
             type="button"
             onClick={() => navigate("/work-orders")}
@@ -270,7 +270,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
                     : t("workOrders.create.orderNumberPending"))}
             </span>
           </div>
-          <h1 className="mt-2.5 text-[32px] font-normal leading-[1.08] tracking-[-0.5px] text-foreground">
+          <h1 className="mt-2.5 text-[24px] font-normal leading-[1.1] tracking-[-0.5px] text-foreground sm:text-[32px] sm:leading-[1.08]">
             {t("workOrders.create.title")}
           </h1>
           <p className="mt-2 text-[13px] text-[color:var(--iris-ink-soft)]">
@@ -278,7 +278,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
           </p>
         </header>
 
-        <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
+        <div className="animate-iris-enter px-4 sm:pl-10 sm:pr-0" style={{ animationDelay: "80ms" }}>
           <WorkOrderForm
             initialValues={initialValues}
             onSubmit={handleSubmit}
