@@ -1,4 +1,5 @@
 import { isPasswordTooLong } from '@/lib/password'
+import { APP_VERSION } from '@/lib/app-version'
 import rawCustomers from '@/fixtures/customers.json'
 import rawLocations from '@/fixtures/locations.json'
 import rawUsers from '@/fixtures/users.json'
@@ -89,7 +90,6 @@ type FixtureWorkOrder = Partial<
     communication?: Partial<CustomerCommunication> | null
   }
 
-const APP_VERSION = '0.1.0-dev'
 const INVALID_CREDENTIALS = 'Neispravno korisničko ime ili lozinka.'
 const INVALID_WORK_ORDER = 'Prosleđeni podaci nisu ispravni.'
 

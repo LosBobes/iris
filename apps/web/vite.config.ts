@@ -1,11 +1,19 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { irisServiceWorker } from './pwa/vite-plugin'
 
+// The app version lives in the repository-root VERSION file, bumped on every
+// merge to main from .changeset/ entries (see .changeset/README.md).
+const appVersion = readFileSync(resolve(__dirname, '../../VERSION'), 'utf8').trim()
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+  },
   resolve: {
     alias: {
       '@': resolve('src'),
