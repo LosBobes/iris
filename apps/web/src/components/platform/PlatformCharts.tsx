@@ -128,7 +128,7 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
         <div className="h-64 px-2 pt-2 pb-1" role="img" aria-label={title}>
           <ResponsiveContainer width="100%" height="100%">
             {kind === "bar" ? (
-              <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barCategoryGap={2}>
+              <BarChart accessibilityLayer={false} data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barCategoryGap={2}>
                 <CartesianGrid vertical={false} stroke="var(--pf-grid)" strokeDasharray="0" />
                 <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={24} tickLine={false} {...AXIS} />
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={44} {...AXIS} />
@@ -148,7 +148,7 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
                 ))}
               </BarChart>
             ) : (
-              <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
+              <LineChart accessibilityLayer={false} data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
                 <CartesianGrid vertical={false} stroke="var(--pf-grid)" />
                 <XAxis dataKey="date" tickFormatter={formatShortDate} minTickGap={24} tickLine={false} {...AXIS} />
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={44} {...AXIS} />
