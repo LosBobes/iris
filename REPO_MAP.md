@@ -248,6 +248,7 @@ curl http://localhost:8080/healthz
 | `IRIS_ALLOWED_ORIGINS` | CORS allowlist (comma-separated) |
 | `IRIS_WEB_DIR` | Serve built SPA + fallback routing (Docker: `/app/web`) |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary for PDF rendering (Docker: `/usr/local/bin/iris-chrome`); unset = search `chromium`, `google-chrome`, … on `$PATH` |
+| `IRIS_SEED_SHOWCASE` | `1` = create the showcase org (`/login/showcase`) on first start; production also needs `IRIS_SHOWCASE_ADMIN_PASSWORD` / `IRIS_SHOWCASE_OPERATOR_PASSWORD` (12+ chars), else skipped with a warning |
 
 Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Compose (gitignored; do not commit secrets).
 

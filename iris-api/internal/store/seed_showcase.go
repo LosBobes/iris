@@ -39,6 +39,46 @@ type ShowcaseOptions struct {
 	Reset bool
 	// Now anchors the order dates; zero means time.Now().
 	Now time.Time
+	// AdminPassword and OperatorPassword set the two logins' passwords; empty
+	// means the public demo passwords. Resolve them with ShowcasePasswords so
+	// production never gets the demo ones.
+	AdminPassword    string
+	OperatorPassword string
+}
+
+// MinShowcasePasswordLength is required for the showcase logins in production.
+const MinShowcasePasswordLength = 12
+
+// ShowcasePasswords resolves the showcase logins' passwords. Outside production
+// an empty value falls back to the public demo password. In production both
+// must be set, at least MinShowcasePasswordLength characters, and must not be
+// a demo password: a production server refuses to start with the demo admin
+// password, and the showcase org is reachable at /login/<slug> on the live host.
+func ShowcasePasswords(production bool, admin, operator string) (string, string, error) {
+	admin, operator = strings.TrimSpace(admin), strings.TrimSpace(operator)
+	if !production {
+		if admin == "" {
+			admin = ShowcaseAdminPassword
+		}
+		if operator == "" {
+			operator = ShowcaseOperatorPassword
+		}
+		return admin, operator, nil
+	}
+	for _, pw := range []struct{ name, value string }{
+		{"IRIS_SHOWCASE_ADMIN_PASSWORD", admin},
+		{"IRIS_SHOWCASE_OPERATOR_PASSWORD", operator},
+	} {
+		switch {
+		case pw.value == "":
+			return "", "", fmt.Errorf("%s is required in production", pw.name)
+		case len(pw.value) < MinShowcasePasswordLength:
+			return "", "", fmt.Errorf("%s must be at least %d characters", pw.name, MinShowcasePasswordLength)
+		case pw.value == ShowcaseAdminPassword || pw.value == ShowcaseOperatorPassword || pw.value == "admin123321":
+			return "", "", fmt.Errorf("%s must not be a demo password", pw.name)
+		}
+	}
+	return admin, operator, nil
 }
 
 // ShowcaseResult describes what SeedShowcase did. When Created is false the
@@ -56,6 +96,8 @@ type ShowcaseResult struct {
 	BrochureOrder    string
 	BrochureTemplate string
 	CancelledOrder   string
+	// DemoPasswords is true when the logins use the public demo passwords.
+	DemoPasswords bool
 }
 
 type showcaseArticle struct {
@@ -125,6 +167,13 @@ func SeedShowcase(ctx context.Context, s *SQLiteStore, opts ShowcaseOptions) (re
 		s: s, slug: slug, ctx: ContextWithTenant(ctx, tenant.ID),
 		now: opts.Now, articles: map[string]domain.CatalogItem{}, customers: map[string]domain.Customer{},
 		locations: map[string]domain.Location{}, templates: map[string]*domain.ProcessTemplate{},
+		adminPassword: opts.AdminPassword, operatorPassword: opts.OperatorPassword,
+	}
+	if b.adminPassword == "" {
+		b.adminPassword = ShowcaseAdminPassword
+	}
+	if b.operatorPassword == "" {
+		b.operatorPassword = ShowcaseOperatorPassword
 	}
 	if b.now.IsZero() {
 		b.now = time.Now()
@@ -134,6 +183,7 @@ func SeedShowcase(ctx context.Context, s *SQLiteStore, opts ShowcaseOptions) (re
 		return ShowcaseResult{}, err
 	}
 	result.Created = true
+	result.DemoPasswords = b.adminPassword == ShowcaseAdminPassword && b.operatorPassword == ShowcaseOperatorPassword
 	return result, nil
 }
 
@@ -146,6 +196,8 @@ type showcaseBuilder struct {
 	customers map[string]domain.Customer
 	locations map[string]domain.Location
 	templates map[string]*domain.ProcessTemplate
+
+	adminPassword, operatorPassword string
 }
 
 func (b *showcaseBuilder) build(result *ShowcaseResult) error {
@@ -165,8 +217,8 @@ func (b *showcaseBuilder) users() error {
 		name, password string
 		role           domain.UserRole
 	}{
-		{ShowcaseAdminUsername, ShowcaseAdminPassword, domain.RoleAdmin},
-		{ShowcaseOperatorUsername, ShowcaseOperatorPassword, domain.RoleUser},
+		{ShowcaseAdminUsername, b.adminPassword, domain.RoleAdmin},
+		{ShowcaseOperatorUsername, b.operatorPassword, domain.RoleUser},
 	} {
 		id := "user-" + b.slug + "-" + u.name
 		if err := b.s.CreateUser(b.ctx, id, u.name, u.password, u.role, true); err != nil {

@@ -52,13 +52,21 @@ func main() {
 		cmd := flag.NewFlagSet("seed-showcase", flag.ExitOnError)
 		slug := cmd.String("slug", store.ShowcaseDefaultSlug, "oznaka showcase organizacije")
 		reset := cmd.Bool("reset", false, "obriši postojeću organizaciju i napravi je iznova")
+		adminPassword := cmd.String("admin-password", os.Getenv("IRIS_SHOWCASE_ADMIN_PASSWORD"), "lozinka naloga admin (podrazumevano IRIS_SHOWCASE_ADMIN_PASSWORD)")
+		operatorPassword := cmd.String("operator-password", os.Getenv("IRIS_SHOWCASE_OPERATOR_PASSWORD"), "lozinka naloga operater (podrazumevano IRIS_SHOWCASE_OPERATOR_PASSWORD)")
 		_ = cmd.Parse(os.Args[2:])
-		if strings.EqualFold(strings.TrimSpace(os.Getenv("IRIS_ENV")), "production") {
-			log.Fatal("seed-showcase upisuje demo naloge i nije dozvoljen kada je IRIS_ENV=production")
+		// Outside production the demo passwords are the default; production
+		// requires strong passwords of its own (see store.ShowcasePasswords).
+		production := strings.EqualFold(strings.TrimSpace(os.Getenv("IRIS_ENV")), "production")
+		adminPw, operatorPw, err := store.ShowcasePasswords(production, *adminPassword, *operatorPassword)
+		if err != nil {
+			log.Fatalf("seed-showcase: %v", err)
 		}
 		sqliteStore := mustOpen(ctx, dbPathFromEnv())
 		defer sqliteStore.Close()
-		result, err := store.SeedShowcase(ctx, sqliteStore, store.ShowcaseOptions{Slug: *slug, Reset: *reset})
+		result, err := store.SeedShowcase(ctx, sqliteStore, store.ShowcaseOptions{
+			Slug: *slug, Reset: *reset, AdminPassword: adminPw, OperatorPassword: operatorPw,
+		})
 		must(err)
 		printShowcaseSummary(result)
 	case "create-tenant":
@@ -170,6 +178,14 @@ func main() {
 }
 
 // printShowcaseSummary tells the operator how to sign in and what to look at.
+// showcasePasswordHint prints a demo password as-is but never echoes a secret.
+func showcasePasswordHint(result store.ShowcaseResult, demo, source string) string {
+	if result.DemoPasswords {
+		return demo
+	}
+	return "(lozinka iz " + source + ")"
+}
+
 func printShowcaseSummary(result store.ShowcaseResult) {
 	if !result.Created {
 		fmt.Printf("Organizacija %q (%s) već postoji; ništa nije promenjeno. Koristite -reset da je napravite iznova.\n", result.Name, result.Slug)
@@ -193,8 +209,8 @@ Backoffice:  /backoffice, podrazumevani nalog admin / admin123321 se pravi pri p
              (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju.
 `,
 		result.Name, result.Slug,
-		store.ShowcaseAdminUsername, store.ShowcaseAdminPassword,
-		store.ShowcaseOperatorUsername, store.ShowcaseOperatorPassword,
+		store.ShowcaseAdminUsername, showcasePasswordHint(result, store.ShowcaseAdminPassword, "IRIS_SHOWCASE_ADMIN_PASSWORD / -admin-password"),
+		store.ShowcaseOperatorUsername, showcasePasswordHint(result, store.ShowcaseOperatorPassword, "IRIS_SHOWCASE_OPERATOR_PASSWORD / -operator-password"),
 		result.Templates, result.Orders,
 		strings.Join(result.LowArticles, ", "),
 		result.ShortageOrder, result.InProgressOrder, result.BrochureOrder, result.CancelledOrder, result.BrochureTemplate)
@@ -475,7 +491,7 @@ func usage() {
   irisctl migrate
   irisctl seed-demo [-fixtures testdata/fixtures]
   irisctl seed-cobanovic [-dir internal/seed/cobanovic/data]
-  irisctl seed-showcase [-slug showcase] [-reset]
+  irisctl seed-showcase [-slug showcase] [-reset] [-admin-password … -operator-password …]
   irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
   irisctl import-csv -tenant oznaka --dry-run --dir import/
@@ -495,8 +511,11 @@ Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastal
 
 seed-showcase pravi i popunjava organizaciju za isprobavanje modula Procesi rada i Magacin
 (šabloni procesa, artikli, početno stanje, prijemi, radni nalozi u raznim statusima). Ako
-organizacija već postoji, ništa se ne menja; -reset je briše i pravi iznova. Odbija da radi
-kada je IRIS_ENV=production.
+organizacija već postoji, ništa se ne menja; -reset je briše i pravi iznova. Van produkcije
+nalozi dobijaju demo lozinke; kada je IRIS_ENV=production, lozinke se moraju zadati
+(IRIS_SHOWCASE_ADMIN_PASSWORD i IRIS_SHOWCASE_OPERATOR_PASSWORD ili -admin-password i
+-operator-password, najmanje 12 znakova). Server je pravi sam pri pokretanju kada je
+IRIS_SEED_SHOWCASE=1.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }

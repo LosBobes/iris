@@ -277,3 +277,51 @@ func TestDeleteTenantCascades(t *testing.T) {
 		}
 	}
 }
+
+func TestShowcasePasswords(t *testing.T) {
+	admin, operator, err := ShowcasePasswords(false, "", "")
+	if err != nil || admin != ShowcaseAdminPassword || operator != ShowcaseOperatorPassword {
+		t.Fatalf("non-production defaults = %q %q %v", admin, operator, err)
+	}
+	for name, pw := range map[string][2]string{
+		"missing":   {"", "operater-strong-pass"},
+		"too short": {"short", "operater-strong-pass"},
+		"demo":      {"admin123321", "operater-strong-pass"},
+		"demo op":   {"admin-strong-pass", ShowcaseOperatorPassword},
+	} {
+		if _, _, err := ShowcasePasswords(true, pw[0], pw[1]); err == nil {
+			t.Errorf("%s: production accepted %q / %q", name, pw[0], pw[1])
+		}
+	}
+	admin, operator, err = ShowcasePasswords(true, " admin-strong-pass ", "operater-strong-pass")
+	if err != nil || admin != "admin-strong-pass" || operator != "operater-strong-pass" {
+		t.Fatalf("production passwords = %q %q %v", admin, operator, err)
+	}
+}
+
+func TestSeedShowcaseWithOwnPasswords(t *testing.T) {
+	s, ctx := openShowcaseStore(t)
+	result, err := SeedShowcase(ctx, s, ShowcaseOptions{AdminPassword: "admin-strong-pass", OperatorPassword: "operater-strong-pass"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.DemoPasswords {
+		t.Fatal("DemoPasswords = true for custom passwords")
+	}
+	tenant, err := s.TenantBySlug(ctx, ShowcaseDefaultSlug)
+	if err != nil || tenant == nil {
+		t.Fatalf("tenant = %v, %v", tenant, err)
+	}
+	if user, err := s.AuthenticateUser(ctx, tenant.ID, ShowcaseAdminUsername, ShowcaseAdminPassword); err == nil && user != nil {
+		t.Fatal("demo admin password still works")
+	}
+	for _, creds := range [][2]string{{ShowcaseAdminUsername, "admin-strong-pass"}, {ShowcaseOperatorUsername, "operater-strong-pass"}} {
+		if user, err := s.AuthenticateUser(ctx, tenant.ID, creds[0], creds[1]); err != nil || user == nil {
+			t.Fatalf("login %s = %v, %v", creds[0], user, err)
+		}
+	}
+	// The production startup guard looks for the demo admin password anywhere.
+	if demo, err := s.HasUserPassword(ctx, "admin", "admin123"); err != nil || demo {
+		t.Fatalf("HasUserPassword(admin, admin123) = %v, %v", demo, err)
+	}
+}

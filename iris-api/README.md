@@ -92,6 +92,9 @@ iris-api/
 | `IRIS_ALLOWED_ORIGINS` | Comma-separated CORS origins. Empty allows local dev origins. | empty |
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary used to render work-order PDFs (`GET /work-orders/{id}/report`). When empty the usual names (`chromium`, `chromium-browser`, `google-chrome`, …) are searched on `$PATH`; when nothing is found the endpoint answers `503` instead of rendering. | empty |
+| `IRIS_SEED_SHOWCASE` | `1` creates the showcase organization (see `seed-showcase`) on the first server start that finds it missing; later starts leave it alone. | empty |
+| `IRIS_SHOWCASE_ADMIN_PASSWORD`, `IRIS_SHOWCASE_OPERATOR_PASSWORD` | Passwords of the showcase `admin` / `operater` logins. Required in production (12+ characters, not the demo ones; otherwise the seed is skipped with a warning); outside production they default to `admin123` / `operater123`. Also read by `irisctl seed-showcase`. | empty |
+| `IRIS_SHOWCASE_SLUG` | Slug for the server-start showcase seed. | `showcase` |
 
 ## Commands
 
@@ -145,7 +148,9 @@ the catalog's `stockOnHand` is `null`. Work-order processes post/reserve stock o
 created while stock was on, so enabling stock later never posts retroactively.
 
 `seed-showcase` creates the organization `showcase` ("Showcase Štamparija", both modules on; logins
-`admin` / `admin123` and `operater` / `operater123`, sign in at `/login/showcase`) and fills it through
+`admin` and `operater` — `admin123` / `operater123` outside production, the
+`IRIS_SHOWCASE_*_PASSWORD` values or `-admin-password` / `-operator-password` in production — sign in
+at `/login/showcase`) and fills it through
 the real store methods: customers, services, 10 articles with minimum stock, an opening balance
 (stock count) and three goods receipts, four process templates (default "Offset štampa", "Digitalna
 štampa", "Brošura sa šivenjem" with an intermediate product and parallel steps, "Veliki format
