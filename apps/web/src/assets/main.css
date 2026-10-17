@@ -355,6 +355,13 @@
     border-radius: 1px;
   }
 
+  /* Charts are not keyboard-navigable (accessibilityLayer is off), so a tap must not leave
+     the browser's focus ring around the Recharts SVG. */
+  .recharts-wrapper,
+  .recharts-wrapper :focus {
+    outline: none;
+  }
+
   /* Press feedback for non-shadcn buttons. Short, restrained. */
   .iris-press {
     transition: transform var(--iris-dur-fast) var(--iris-ease-out),
