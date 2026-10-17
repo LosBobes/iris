@@ -37,7 +37,7 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?, ?)`,
+		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?, ?, ?)`,
 		tenantID,
 		firmNameSettingKey,
 		pdfSectionsSettingKey,
@@ -45,6 +45,7 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 		priorityDefaultsSettingKey,
 		printItemColumnsSettingKey,
 		showShippingOptionsSettingKey,
+		modulesSettingKey,
 	)
 	if err != nil {
 		return domain.OrganizationSettings{}, fmt.Errorf("load organization settings: %w", err)
@@ -92,6 +93,8 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 			if parsed, err := strconv.ParseBool(value); err == nil {
 				settings.ShowShippingOptions = parsed
 			}
+		case modulesSettingKey:
+			settings.Modules = parseModules(value)
 		}
 	}
 	if err := rows.Err(); err != nil {

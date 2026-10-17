@@ -52,6 +52,7 @@ func TestPlatformTenantRoutesNeedSuperadmin(t *testing.T) {
 		{http.MethodGet, "/platform/tenants"},
 		{http.MethodPost, "/platform/tenants"},
 		{http.MethodPatch, "/platform/tenants/demo"},
+		{http.MethodPut, "/platform/tenants/demo/modules"},
 		{http.MethodPost, "/platform/tenants/demo/suspend"},
 		{http.MethodPost, "/platform/tenants/demo/reactivate"},
 		{http.MethodPost, "/platform/tenants/demo/users/user-1/password"},

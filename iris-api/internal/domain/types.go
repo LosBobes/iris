@@ -292,6 +292,27 @@ type OrganizationSettings struct {
 	// fields (drives-out, wait-for-payment, packaging, labeling, fragile,
 	// signature, insurance). Off by default so the form stays compact.
 	ShowShippingOptions bool `json:"showShippingOptions"`
+	// Modules reports which optional modules the organization has. Read-only
+	// here: only Backoffice superadmins switch them (PUT /platform/tenants/{slug}/modules),
+	// and PUT /settings ignores it.
+	Modules OrganizationModules `json:"modules"`
+}
+
+// OrganizationModules are the optional per-organization feature modules. Both
+// are off by default and independent of each other: "processes" enables process
+// templates, per-order processes and the simulator; "stock" enables the
+// warehouse (magacin). With both on, process item nodes link to articles and
+// steps post stock movements.
+type OrganizationModules struct {
+	Processes bool `json:"processes"`
+	Stock     bool `json:"stock"`
+}
+
+// OrganizationModulesUpdate is a partial module switch used by irisctl
+// set-modules; a nil field is left unchanged.
+type OrganizationModulesUpdate struct {
+	Processes *bool
+	Stock     *bool
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
@@ -402,6 +423,8 @@ type PlatformTenant struct {
 	SuspendedAt *string `json:"suspendedAt"`
 	Users       int     `json:"users"`
 	Admins      int     `json:"admins"`
+	// Modules are the organization's optional feature modules (both off by default).
+	Modules OrganizationModules `json:"modules"`
 }
 
 // PlatformCreateTenantInput creates an organization with its first admin.
@@ -430,6 +453,7 @@ const (
 	AuditTenantUpdate       = "tenant.update"
 	AuditTenantSuspend      = "tenant.suspend"
 	AuditTenantReactivate   = "tenant.reactivate"
+	AuditTenantModules      = "tenant.modules"
 	AuditUserPasswordReset  = "user.password_reset"
 	AuditImpersonationStart = "impersonate"
 )

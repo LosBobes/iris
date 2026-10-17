@@ -100,13 +100,17 @@ func writeAudit(ctx context.Context, db execer, actor AuditActor, entry auditEnt
 const platformTenantSelect = `
 	SELECT t.id, t.slug, t.name, t.created_at, t.suspended_at,
 	       (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id),
-	       (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.role = 'admin')
+	       (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.role = 'admin'),
+	       (SELECT s.value FROM app_settings s WHERE s.tenant_id = t.id AND s.key = 'modules')
 	FROM tenants t`
 
 func scanPlatformTenant(row interface{ Scan(...any) error }) (domain.PlatformTenant, error) {
 	var tenant domain.PlatformTenant
-	var suspended sql.NullString
-	err := row.Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.CreatedAt, &suspended, &tenant.Users, &tenant.Admins)
+	var suspended, modules sql.NullString
+	err := row.Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.CreatedAt, &suspended, &tenant.Users, &tenant.Admins, &modules)
+	if modules.Valid {
+		tenant.Modules = parseModules(modules.String)
+	}
 	if suspended.Valid {
 		tenant.SuspendedAt = &suspended.String
 	}

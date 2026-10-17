@@ -138,6 +138,9 @@ type Store interface {
 	DeleteCatalogItemsMissingPrices(ctx context.Context, filter CatalogCleanupFilter) (int, error)
 
 	OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error)
+	// OrganizationModules returns the optional modules (processes, stock) of the
+	// tenant in ctx; both are off unless a Backoffice superadmin switched them on.
+	OrganizationModules(ctx context.Context) (domain.OrganizationModules, error)
 	UpdateOrganizationSettings(ctx context.Context, update domain.OrganizationSettingsUpdate) (domain.OrganizationSettings, error)
 	// LoginLogo returns the tenant's sign-in logo, or nil when none is set.
 	LoginLogo(ctx context.Context) (*domain.LoginLogo, error)

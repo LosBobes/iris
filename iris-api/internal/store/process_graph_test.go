@@ -158,6 +158,7 @@ func TestSQLiteStoreCreateWorkOrderAttachesDefaultProcess(t *testing.T) {
 	ctx := testTenantContext()
 	s := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	t.Cleanup(func() { _ = s.Close() })
+	enableModules(t, s, DemoTenantSlug)
 	create := func() *domain.WorkOrder {
 		order, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
 			ClientName: "Alfa", JobDescription: "Posao", IssuedBy: "admin", IssueDate: "2026-06-02",

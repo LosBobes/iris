@@ -54,6 +54,9 @@ func (s *FixtureStore) clearOtherDefaultsLocked(keepID string) {
 }
 
 func (s *FixtureStore) attachDefaultProcessLocked(workOrderID, username, now string) {
+	if !s.modules.Processes {
+		return
+	}
 	for _, template := range s.processTemplates {
 		if template.IsDefault {
 			s.setWorkOrderProcessLocked(workOrderID, template, username, now)
@@ -76,6 +79,10 @@ func (s *FixtureStore) setWorkOrderProcessLocked(workOrderID string, template do
 		UpdatedBy:    username,
 	}
 	s.workOrderProcesses[workOrderID] = process
+	if s.stockTracked == nil {
+		s.stockTracked = make(map[string]bool)
+	}
+	s.stockTracked[workOrderID] = s.modules.Stock
 	return cloneWorkOrderProcess(process)
 }
 
@@ -216,7 +223,9 @@ func (s *FixtureStore) ApplyProcessTemplate(_ context.Context, workOrderID, temp
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	process := s.setWorkOrderProcessLocked(workOrderID, s.processTemplates[i], username, now)
-	s.postWorkOrderStockLocked(workOrderID, process.Graph, username, now)
+	if s.modules.Stock {
+		s.postWorkOrderStockLocked(workOrderID, process.Graph, username, now)
+	}
 	return process, nil
 }
 
@@ -240,7 +249,9 @@ func (s *FixtureStore) UpdateWorkOrderProcess(_ context.Context, workOrderID str
 	now := time.Now().UTC().Format(time.RFC3339)
 	current.Graph, current.UpdatedAt, current.UpdatedBy = next, now, username
 	s.workOrderProcesses[workOrderID] = current
-	s.postWorkOrderStockLocked(workOrderID, next, username, now)
+	if s.modules.Stock && s.stockTracked[workOrderID] {
+		s.postWorkOrderStockLocked(workOrderID, next, username, now)
+	}
 	return cloneWorkOrderProcess(current), nil
 }
 
@@ -251,5 +262,6 @@ func (s *FixtureStore) DeleteWorkOrderProcess(_ context.Context, workOrderID str
 		return ErrProcessNotFound
 	}
 	delete(s.workOrderProcesses, workOrderID)
+	delete(s.stockTracked, workOrderID)
 	return nil
 }

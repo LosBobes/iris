@@ -40,9 +40,17 @@ func stockArticle(ctx context.Context, q dbExecQuerier, tenantID, id string) (it
 
 // resolveGraphLinks validates the catalog links of a process graph against the
 // tenant's articles (exists, kind article, unit rule) and fills empty units.
+// With the stock module off links are inert: they are kept as-is, unvalidated.
 func resolveGraphLinks(
 	ctx context.Context, q dbExecQuerier, tenantID string, graph domain.ProcessGraph, skip func(domain.ProcessNode) bool,
 ) (domain.ProcessGraph, error) {
+	modules, err := readModules(ctx, q, tenantID)
+	if err != nil {
+		return domain.ProcessGraph{}, err
+	}
+	if !modules.Stock {
+		return graph, nil
+	}
 	articles := map[string]domain.StockArticle{}
 	for _, id := range domain.GraphArticleIDs(graph) {
 		item, ok, err := stockArticle(ctx, q, tenantID, id)
@@ -150,7 +158,7 @@ func openReservations(ctx context.Context, q dbExecQuerier, tenantID string) (ma
 		ctx,
 		`SELECT p.graph FROM work_order_processes p
 		 JOIN work_orders w ON w.id = p.work_order_id
-		 WHERE p.tenant_id = ? AND w.tenant_id = ? AND w.status NOT IN `+closedWorkOrderStatusesSQL,
+		 WHERE p.tenant_id = ? AND w.tenant_id = ? AND p.stock_tracked = 1 AND w.status NOT IN `+closedWorkOrderStatusesSQL,
 		tenantID, tenantID,
 	)
 	if err != nil {

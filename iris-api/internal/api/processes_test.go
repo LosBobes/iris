@@ -41,7 +41,16 @@ type processFixture struct {
 	orderID    string
 }
 
+// newProcessFixture builds a server whose demo and "other" organizations have
+// both modules switched on, the precondition of every process/stock route.
 func newProcessFixture(t *testing.T) processFixture {
+	t.Helper()
+	return newModuleFixture(t, true)
+}
+
+// newModuleFixture is newProcessFixture with the modules either on or left at
+// their default (off) for both organizations.
+func newModuleFixture(t *testing.T, modulesOn bool) processFixture {
 	t.Helper()
 	server, adminToken, userToken := newServerWithRoles(t)
 	sqliteStore := server.store.(*store.SQLiteStore)
@@ -60,6 +69,14 @@ func newProcessFixture(t *testing.T) processFixture {
 	otherToken, err := sqliteStore.CreateSession(ctx, user.ID, time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if modulesOn {
+		on := true
+		for _, slug := range []string{store.DemoTenantSlug, "other"} {
+			if _, err := sqliteStore.SetTenantModules(ctx, slug, domain.OrganizationModulesUpdate{Processes: &on, Stock: &on}); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	order, err := sqliteStore.CreateWorkOrder(store.ContextWithTenant(ctx, store.DemoTenantID), domain.CreateWorkOrderInput{
 		ClientName: "Alfa", JobDescription: "Posao", IssuedBy: "admin", IssueDate: "2026-06-02",

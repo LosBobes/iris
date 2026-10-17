@@ -57,6 +57,9 @@ func (s *FixtureStore) withStockLocked(item domain.CatalogItem) domain.CatalogIt
 }
 
 func (s *FixtureStore) resolveGraphLinksLocked(graph domain.ProcessGraph, skip func(domain.ProcessNode) bool) (domain.ProcessGraph, error) {
+	if !s.modules.Stock {
+		return graph, nil // links are inert while the stock module is off
+	}
 	resolved, err := domain.ResolveGraphArticleLinks(graph, func(id string) (domain.StockArticle, bool) {
 		item, ok := s.articleLocked(id)
 		return domain.StockArticle{ID: item.ID, Name: item.Name, Unit: item.Unit}, ok
@@ -136,7 +139,7 @@ func (s *FixtureStore) openReservationsLocked() map[string]float64 {
 		if isClosedWorkOrderStatus(order.Status) {
 			continue
 		}
-		if process, ok := s.workOrderProcesses[order.ID]; ok {
+		if process, ok := s.workOrderProcesses[order.ID]; ok && s.stockTracked[order.ID] {
 			sumReserved(reserved, process.Graph)
 		}
 	}

@@ -121,6 +121,8 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user -tenant grafika-co
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-platform-admin -username ops -password '<long secret>'
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports
+# Optional per-organization modules (off by default; "processes" requires "stock"):
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl set-modules -tenant grafika-cobanovic -stock on -processes on
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup -out ./backups/iris.db
 # Warehouse opening balance / stock count from a CSV (code,quantity[,note]):
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-cobanovic --file ./stock.csv --dry-run
@@ -131,6 +133,14 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-c
 requires `-tenant <slug>` (a `--dry-run` only validates CSV shape). `import-stock` always
 needs `-tenant` (it matches CSV codes against the catalog); `--apply` posts a stock count as
 user `irisctl` (opening movements for articles without stock history) and reports unknown codes.
+
+`set-modules -tenant <slug> [-processes on|off] [-stock on|off]` switches an organization's
+optional modules ("Procesi rada" needs "Magacin"; an omitted flag stays as it is). Unlike the
+Backoffice (`PUT /platform/tenants/{slug}/modules`) it writes no audit row. Both modules are off
+for new organizations, including the `seed-demo` tenant (the demo template and articles are still
+seeded); with a module off its routes answer `403`, new orders get no auto-attached process and
+the catalog's `stockOnHand` is `null`. Work-order processes post/reserve stock only if they were
+created while stock was on, so enabling stock later never posts retroactively.
 
 Verification:
 

@@ -65,6 +65,8 @@ type FixtureStore struct {
 	nextProcessSequence int
 	workOrderProcesses  map[string]domain.WorkOrderProcess
 	stockMovements      []domain.StockMovement
+	modules             domain.OrganizationModules
+	stockTracked        map[string]bool // work-order id -> process is stock tracked
 	nextStockSequence   int
 }
 
@@ -592,6 +594,7 @@ func (s *FixtureStore) DeleteWorkOrder(_ context.Context, id string) (domain.Del
 
 		s.workOrders = append(s.workOrders[:index], s.workOrders[index+1:]...)
 		delete(s.workOrderProcesses, id)
+		delete(s.stockTracked, id)
 		// Movements outlive the order (the material was used); they just detach.
 		for i := range s.stockMovements {
 			if s.stockMovements[i].WorkOrderID != nil && *s.stockMovements[i].WorkOrderID == id {

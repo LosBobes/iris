@@ -400,6 +400,27 @@ func runStockProcessContract(t *testing.T, s Store, ctx context.Context, orderID
 	}
 }
 
+// enableModules switches both modules on for the test shop (or the named
+// organization of a SQLite store); the process/stock rules are inert without it.
+func enableModules(t *testing.T, s Store, slug string) {
+	t.Helper()
+	setModules(t, s, slug, true, true)
+}
+
+func setModules(t *testing.T, s Store, slug string, processes, stock bool) {
+	t.Helper()
+	switch typed := s.(type) {
+	case *SQLiteStore:
+		if _, err := typed.SetTenantModules(context.Background(), slug, domain.OrganizationModulesUpdate{Processes: &processes, Stock: &stock}); err != nil {
+			t.Fatal(err)
+		}
+	case *FixtureStore:
+		typed.SetOrganizationModules(domain.OrganizationModules{Processes: processes, Stock: stock})
+	default:
+		t.Fatalf("unsupported store %T", s)
+	}
+}
+
 func newStockOrder(t *testing.T, ctx context.Context, s Store) *domain.WorkOrder {
 	t.Helper()
 	order, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
@@ -427,6 +448,7 @@ func TestSQLiteStoreStockProcessPosting(t *testing.T) {
 	ctx := testTenantContext()
 	s := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	t.Cleanup(func() { _ = s.Close() })
+	enableModules(t, s, DemoTenantSlug)
 	order := newStockOrder(t, ctx, s)
 	runStockProcessContract(t, s, ctx, order.ID, order.OrderNumber)
 }
@@ -434,6 +456,7 @@ func TestSQLiteStoreStockProcessPosting(t *testing.T) {
 func TestFixtureStoreStockProcessPosting(t *testing.T) {
 	ctx := testTenantContext()
 	s := NewFixtureStore(testutil.FixtureDir(t))
+	enableModules(t, s, DemoTenantSlug)
 	order := newStockOrder(t, ctx, s)
 	runStockProcessContract(t, s, ctx, order.ID, order.OrderNumber)
 }
@@ -446,6 +469,8 @@ func TestSQLiteStoreStockIsTenantScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := ContextWithTenant(context.Background(), "tenant-other")
+	enableModules(t, s, DemoTenantSlug)
+	enableModules(t, s, "other")
 	upsertArticle(t, ctx, s, "paper", "Papir", "tabak", domain.CatalogItemKindArticle, nil)
 	if _, err := s.PostStockReceipt(ctx, domain.StockReceiptInput{Lines: []domain.StockReceiptLine{{CatalogItemID: "paper", Quantity: 5}}}, "ana"); err != nil {
 		t.Fatal(err)

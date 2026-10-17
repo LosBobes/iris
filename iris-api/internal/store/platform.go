@@ -61,6 +61,9 @@ type PlatformStore interface {
 	PlatformCreateTenant(ctx context.Context, actor AuditActor, input domain.PlatformCreateTenantInput) (*domain.PlatformTenant, error)
 	PlatformUpdateTenant(ctx context.Context, actor AuditActor, slug string, input domain.PlatformUpdateTenantInput) (*domain.PlatformTenant, error)
 	PlatformSetTenantSuspended(ctx context.Context, actor AuditActor, slug string, suspended bool) (*domain.PlatformTenant, error)
+	// PlatformSetTenantModules switches the organization's optional modules and
+	// audits the change; nil when no organization has that slug.
+	PlatformSetTenantModules(ctx context.Context, actor AuditActor, slug string, modules domain.OrganizationModules) (*domain.PlatformTenant, error)
 	PlatformResetUserPassword(ctx context.Context, actor AuditActor, slug, userID, password string) (*domain.User, error)
 	PlatformAuditLog(ctx context.Context, limit, offset int) (domain.PlatformAuditLog, error)
 

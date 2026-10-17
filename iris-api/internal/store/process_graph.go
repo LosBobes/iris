@@ -323,7 +323,9 @@ func getWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, workOrd
 }
 
 // insertWorkOrderProcess stores a fresh copy of a template graph on an order.
-func insertWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, workOrderID string, template domain.ProcessTemplate, username, now string) (*domain.WorkOrderProcess, error) {
+// stockTracked marks a process created while the stock module is on; only such
+// processes post and reserve stock.
+func insertWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, workOrderID string, template domain.ProcessTemplate, username, now string, stockTracked bool) (*domain.WorkOrderProcess, error) {
 	graph := domain.InstantiateProcessGraph(template.Graph)
 	raw, err := encodeProcessGraph(graph)
 	if err != nil {
@@ -331,9 +333,9 @@ func insertWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, work
 	}
 	if _, err := q.ExecContext(
 		ctx,
-		`INSERT INTO work_order_processes(work_order_id, tenant_id, template_id, template_name, graph, updated_at, updated_by)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		workOrderID, tenantID, template.ID, template.Name, raw, now, username,
+		`INSERT INTO work_order_processes(work_order_id, tenant_id, template_id, template_name, graph, updated_at, updated_by, stock_tracked)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		workOrderID, tenantID, template.ID, template.Name, raw, now, username, boolInt(stockTracked),
 	); err != nil {
 		if isUniqueConstraintError(err) {
 			return nil, ErrProcessExists
@@ -348,8 +350,16 @@ func insertWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, work
 }
 
 // attachDefaultProcess copies the tenant's default template onto a freshly
-// created work order. It does nothing when the tenant has no default.
+// created work order. It does nothing when the processes module is off or the
+// tenant has no default.
 func attachDefaultProcess(ctx context.Context, q dbExecQuerier, tenantID, workOrderID, username, now string) error {
+	modules, err := readModules(ctx, q, tenantID)
+	if err != nil {
+		return err
+	}
+	if !modules.Processes {
+		return nil
+	}
 	template, err := scanProcessTemplate(q.QueryRowContext(
 		ctx,
 		`SELECT `+processTemplateColumns+` FROM process_templates WHERE tenant_id = ? AND is_default = 1`,
@@ -361,7 +371,7 @@ func attachDefaultProcess(ctx context.Context, q dbExecQuerier, tenantID, workOr
 	if err != nil {
 		return fmt.Errorf("load default process template: %w", err)
 	}
-	_, err = insertWorkOrderProcess(ctx, q, tenantID, workOrderID, template, username, now)
+	_, err = insertWorkOrderProcess(ctx, q, tenantID, workOrderID, template, username, now, modules.Stock)
 	return err
 }
 
@@ -488,13 +498,19 @@ func (s *SQLiteStore) ApplyProcessTemplate(ctx context.Context, workOrderID, tem
 	if existing != nil {
 		return nil, ErrProcessExists
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	process, err := insertWorkOrderProcess(ctx, tx, tenantID, workOrderID, *template, username, now)
+	modules, err := readModules(ctx, tx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, process.Graph, username, now); err != nil {
+	now := time.Now().UTC().Format(time.RFC3339)
+	process, err := insertWorkOrderProcess(ctx, tx, tenantID, workOrderID, *template, username, now, modules.Stock)
+	if err != nil {
 		return nil, err
+	}
+	if modules.Stock {
+		if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, process.Graph, username, now); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit apply process template: %w", err)
@@ -541,8 +557,23 @@ func (s *SQLiteStore) UpdateWorkOrderProcess(ctx context.Context, workOrderID st
 	); err != nil {
 		return nil, fmt.Errorf("update work order process: %w", err)
 	}
-	if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, next, username, now); err != nil {
+	// Post only when stock is on and this process was created while it was on.
+	modules, err := readModules(ctx, tx, tenantID)
+	if err != nil {
 		return nil, err
+	}
+	if modules.Stock {
+		var tracked int
+		if err := tx.QueryRowContext(
+			ctx, `SELECT stock_tracked FROM work_order_processes WHERE work_order_id = ? AND tenant_id = ?`, workOrderID, tenantID,
+		).Scan(&tracked); err != nil {
+			return nil, fmt.Errorf("load process stock tracking: %w", err)
+		}
+		if tracked != 0 {
+			if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, next, username, now); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit update work order process: %w", err)

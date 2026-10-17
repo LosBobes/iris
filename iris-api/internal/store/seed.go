@@ -129,13 +129,14 @@ func seedDemoProcessTemplate(ctx context.Context, sqliteStore *SQLiteStore) erro
 	step := func(id, label string, x float64) domain.ProcessNode {
 		return domain.ProcessNode{ID: id, Kind: domain.ProcessNodeStep, Label: label, X: x, Y: 160}
 	}
-	// Linked items carry the planned quantity per batch; the unit comes from the
-	// article when the template is saved.
+	// Linked items carry the planned quantity per batch and the article's unit,
+	// set explicitly because the demo tenant keeps its modules off by default and
+	// saving a template then does not resolve article links.
 	item := func(id string, kind domain.ProcessNodeKind, label string, x, y float64) domain.ProcessNode {
 		return domain.ProcessNode{ID: id, Kind: kind, Label: label, X: x, Y: y}
 	}
-	linked := func(node domain.ProcessNode, articleID string, quantity float64) domain.ProcessNode {
-		node.CatalogItemID, node.Quantity = articleID, &quantity
+	linked := func(node domain.ProcessNode, articleID, unit string, quantity float64) domain.ProcessNode {
+		node.CatalogItemID, node.Unit, node.Quantity = articleID, unit, &quantity
 		return node
 	}
 	edge := func(source, target string) domain.ProcessEdge {
@@ -151,14 +152,14 @@ func seedDemoProcessTemplate(ctx context.Context, sqliteStore *SQLiteStore) erro
 				step("stampa", "Štampa", 480),
 				step("secenje", "Sečenje", 720),
 				step("pakovanje", "Pakovanje", 960),
-				linked(item("papir", domain.ProcessNodeInput, "Papir", 0, 0), demoPaperID, 100),
-				linked(item("boja", domain.ProcessNodeInput, "Boja", 0, 160), demoInkID, 2),
-				linked(item("ploce", domain.ProcessNodeInput, "Ploče", 0, 320), demoPlateID, 4),
+				linked(item("papir", domain.ProcessNodeInput, "Papir", 0, 0), demoPaperID, "tabak", 100),
+				linked(item("boja", domain.ProcessNodeInput, "Boja", 0, 160), demoInkID, "kg", 2),
+				linked(item("ploce", domain.ProcessNodeInput, "Ploče", 0, 320), demoPlateID, "kom", 4),
 				// Finished prints are not a catalog article, so the product stays unlinked.
 				item("otisci", domain.ProcessNodeProduct, "Gotovi otisci", 1200, 160),
 				// Both scrap nodes return to the same Makulatura article.
-				linked(item("makulatura", domain.ProcessNodeByproduct, "Makulatura", 480, 340), demoWasteID, 3),
-				linked(item("otpad", domain.ProcessNodeByproduct, "Otpad papira", 720, 340), demoWasteID, 2),
+				linked(item("makulatura", domain.ProcessNodeByproduct, "Makulatura", 480, 340), demoWasteID, "tabak", 3),
+				linked(item("otpad", domain.ProcessNodeByproduct, "Otpad papira", 720, 340), demoWasteID, "tabak", 2),
 			},
 			Edges: []domain.ProcessEdge{
 				edge("priprema", "stampa"), edge("stampa", "secenje"), edge("secenje", "pakovanje"),

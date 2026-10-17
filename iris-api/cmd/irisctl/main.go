@@ -403,6 +403,29 @@ func mustTenantContext(ctx context.Context, sqliteStore *store.SQLiteStore, slug
 	return store.ContextWithTenant(ctx, tenant.ID)
 }
 
+// parseOnOff reads an optional on|off flag; an empty value means "unchanged".
+func parseOnOff(name, value string) *bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return nil
+	case "on":
+		on := true
+		return &on
+	case "off":
+		off := false
+		return &off
+	}
+	log.Fatalf("--%s mora biti on ili off", name)
+	return nil
+}
+
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
+}
+
 func usage() {
 	fmt.Println(`Korišćenje:
   irisctl migrate
@@ -414,11 +437,16 @@ func usage() {
   irisctl import-csv -tenant oznaka --apply --dir import/
   irisctl import-stock -tenant oznaka --file stanje.csv --dry-run
   irisctl import-stock -tenant oznaka --file stanje.csv --apply
+  irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
   irisctl create-platform-admin -username ime -password lozinka
   irisctl backup [-out backups/iris.db]
 
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
 a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
+
+set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin);
+izostavljen modul ostaje kakav jeste. Za razliku od Backoffice-a ne upisuje zapis u aktivnost.
+Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastali.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }
