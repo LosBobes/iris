@@ -39,11 +39,11 @@ export function PlatformLogin({ onSignedIn }: { onSignedIn: (admin: PlatformAdmi
   });
 
   const inputClass =
-    "w-full h-11 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 text-[15px] text-[color:var(--pf-text)] outline-none focus:border-[color:var(--pf-text-2)]";
+    "w-full h-11 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 text-[15px] text-[color:var(--pf-text)] outline-none transition-colors duration-[var(--iris-dur-fast)] focus:border-[color:var(--pf-text-2)]";
 
   return (
     <BackofficeScreen>
-      <div className="w-full max-w-[400px] rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-6 sm:p-7">
+      <div className="animate-iris-enter w-full max-w-[400px] rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-6 sm:p-7">
         <div className="mb-5 flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-[color:var(--pf-text-2)]" />
           <h1 className="text-[18px] font-medium">{t("platform.login.title")}</h1>
@@ -69,7 +69,7 @@ export function PlatformLogin({ onSignedIn }: { onSignedIn: (admin: PlatformAdmi
             ) : null}
           </div>
           {serverError ? (
-            <p role="alert" className="rounded-md border border-[#e66767]/40 bg-[#e66767]/10 px-3 py-2.5 text-[13px] leading-5">
+            <p role="alert" className="animate-iris-shake rounded-md border border-[#e66767]/40 bg-[#e66767]/10 px-3 py-2.5 text-[13px] leading-5">
               {serverError}
             </p>
           ) : null}

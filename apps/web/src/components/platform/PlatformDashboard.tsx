@@ -1,9 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { Check, RefreshCw } from "lucide-react";
 import { BackofficeMenu } from "./BackofficeMenu";
+import { SectionTabs } from "./SectionTabs";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useCountUp } from "@/hooks/useCountUp";
+import { staggerStyle } from "@/lib/motion";
 import { PlatformChangePassword } from "./PlatformChangePassword";
 import { OrganizationsPanel } from "./OrganizationsPanel";
 import { ActivityLog } from "./ActivityLog";
@@ -39,12 +42,31 @@ function storeNumber(key: string, value: number): void {
   }
 }
 
-function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }): React.JSX.Element {
+function StatTile({
+  label,
+  value,
+  count,
+  hint,
+  index = 0,
+}: {
+  label: string;
+  /** Preformatted value, shown as is. */
+  value?: string;
+  /** Numeric value that counts up once, then eases to changes. */
+  count?: number;
+  hint?: string;
+  /** Position in the grid, for the entrance stagger. */
+  index?: number;
+}): React.JSX.Element {
+  const counted = useCountUp(count ?? 0);
   return (
-    <div className="min-w-0 rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-3.5">
+    <div
+      style={staggerStyle(index)}
+      className="animate-iris-enter iris-stagger min-w-0 rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-3.5"
+    >
       <div className="truncate text-[12px] text-[color:var(--pf-text-2)]">{label}</div>
       <div className="mt-1 truncate text-[28px] font-medium leading-tight tabular-nums text-[color:var(--pf-text)]">
-        {value}
+        {count === undefined ? value : formatCount(counted)}
       </div>
       {hint ? <div className="mt-0.5 truncate text-[11px] text-[color:var(--pf-muted)]">{hint}</div> : null}
     </div>
@@ -208,24 +230,7 @@ export function PlatformDashboard({
     { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
     { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
   ];
-  const navTabs = (
-    <nav aria-label={t("platform.nav.label")} className="ml-1 flex items-center gap-1">
-      {sections.map((tab) => (
-        <Link
-          key={tab.to}
-          to={tab.to}
-          aria-current={tab.current ? "page" : undefined}
-          className={`iris-focusable flex min-h-9 items-center rounded-md px-2.5 text-[13px] font-medium ${
-            tab.current
-              ? "bg-white/10 text-[color:var(--pf-text)]"
-              : "text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]"
-          }`}
-        >
-          {tab.label}
-        </Link>
-      ))}
-    </nav>
-  );
+  const navTabs = <SectionTabs tabs={sections} label={t("platform.nav.label")} />;
 
   return (
     <div className="min-h-dvh bg-[color:var(--pf-bg)] text-[color:var(--pf-text)]">
@@ -263,7 +268,7 @@ export function PlatformDashboard({
           role="dialog"
           aria-modal="true"
           aria-label={t("platform.password.title")}
-          className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 px-4"
+          className="animate-iris-fade fixed inset-0 z-20 flex items-center justify-center bg-black/60 px-4"
         >
           <PlatformChangePassword
             onCancel={() => setChangingPassword(false)}
@@ -281,6 +286,7 @@ export function PlatformDashboard({
             {notice}
           </div>
         ) : null}
+        <div key={section} className="animate-iris-rise space-y-4">
         {showLog ? (
           <>
             <h1 className="text-[22px] font-medium tracking-[-0.3px]">
@@ -312,28 +318,31 @@ export function PlatformDashboard({
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <StatTile label={t("platform.tiles.tenants")} value={formatCount(totals!.tenants)} />
+              <StatTile index={0} label={t("platform.tiles.tenants")} count={totals!.tenants} />
               <StatTile
+                index={1}
                 label={t("platform.tiles.users")}
-                value={formatCount(totals!.users)}
+                count={totals!.users}
                 hint={t("platform.tiles.activeUsers", { value: formatCount(totals!.activeUsersInRange) })}
               />
-              <StatTile label={t("platform.tiles.customers")} value={formatCount(totals!.customers)} />
+              <StatTile index={2} label={t("platform.tiles.customers")} count={totals!.customers} />
               <StatTile
+                index={3}
                 label={t("platform.tiles.workOrders")}
-                value={formatCount(totals!.workOrders)}
+                count={totals!.workOrders}
                 hint={t("platform.tiles.open", { value: formatCount(totals!.openWorkOrders) })}
               />
               <StatTile
+                index={4}
                 label={t("platform.tiles.newWorkOrders")}
-                value={formatCount(totals!.workOrdersInRange)}
+                count={totals!.workOrdersInRange}
                 hint={rangeHint}
               />
-              <StatTile label={t("platform.tiles.logins")} value={formatCount(totals!.loginsInRange)} hint={rangeHint} />
-              <StatTile label={t("platform.tiles.sessions")} value={formatCount(totals!.activeSessions)} hint={t("platform.tiles.now")} />
-              <StatTile label={t("platform.tiles.catalog")} value={formatCount(totals!.catalogItems)} />
-              <StatTile label={t("platform.tiles.database")} value={formatBytes(totals!.databaseBytes)} />
-              <StatTile label={t("platform.tiles.uptime")} value={formatDuration(metrics.system.uptimeSeconds)} hint={metrics.system.release || undefined} />
+              <StatTile index={5} label={t("platform.tiles.logins")} count={totals!.loginsInRange} hint={rangeHint} />
+              <StatTile index={6} label={t("platform.tiles.sessions")} count={totals!.activeSessions} hint={t("platform.tiles.now")} />
+              <StatTile index={7} label={t("platform.tiles.catalog")} count={totals!.catalogItems} />
+              <StatTile index={8} label={t("platform.tiles.database")} value={formatBytes(totals!.databaseBytes)} />
+              <StatTile index={9} label={t("platform.tiles.uptime")} value={formatDuration(metrics.system.uptimeSeconds)} hint={metrics.system.release || undefined} />
             </div>
 
             <Suspense
@@ -382,7 +391,7 @@ export function PlatformDashboard({
                     {metrics.tenants.map((tenant) => {
                       const color = series.find((def) => def.key === keyFor(tenant.slug))?.color;
                       return (
-                        <tr key={tenant.id} className="h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]">
+                        <tr key={tenant.id} className="iris-row h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]">
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-2">
                               <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
@@ -446,6 +455,7 @@ export function PlatformDashboard({
         )}
         </>
         )}
+        </div>
       </main>
     </div>
   );

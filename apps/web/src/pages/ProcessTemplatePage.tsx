@@ -83,7 +83,7 @@ function ProcessTemplatePage(): React.JSX.Element {
           </h1>
         </div>
 
-        <div className="px-5 pb-10 sm:px-8 lg:px-10">
+        <div className="animate-iris-enter px-5 pb-10 sm:px-8 lg:px-10" style={{ animationDelay: '90ms' }}>
           {loading ? (
             <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />

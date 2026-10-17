@@ -23,8 +23,10 @@ import {
   generateEdgeId,
   generateNodeId,
   readySteps,
+  stepStatus,
   validateGraph,
 } from '@/lib/process/graph'
+import { hasNewItems } from '@/lib/motion'
 import {
   PROCESS_NODE_KINDS,
   type ProcessEdge,
@@ -84,6 +86,10 @@ function ProcessGraphEditorInner({
     [onChange],
   )
 
+  // Nodes present when the editor first mounts reveal with a stagger (by order);
+  // anything added afterwards gets a quick pop instead. Never replayed on drag.
+  const [initialOrder] = useState(() => new Map(value.nodes.map((node, index) => [node.id, index])))
+
   const readyIds = useMemo(
     () => (mode === 'order' ? new Set(readySteps(value).map((step) => step.id)) : new Set<string>()),
     [mode, value],
@@ -96,13 +102,30 @@ function ProcessGraphEditorInner({
         type: node.kind,
         position: { x: node.x, y: node.y },
         measured: measured[node.id],
-        data: { node, mode, ready: readyIds.has(node.id) },
+        data: {
+          node,
+          mode,
+          ready: readyIds.has(node.id),
+          enter: initialOrder.has(node.id)
+            ? { index: initialOrder.get(node.id) as number }
+            : ('pop' as const),
+        },
         selected: selection?.type === 'node' && selection.id === node.id,
         deletable: canEditStructure,
         connectable: canEditStructure,
         draggable: true,
       })),
-    [value.nodes, mode, readyIds, selection, canEditStructure, measured],
+    [value.nodes, mode, readyIds, selection, canEditStructure, measured, initialOrder],
+  )
+
+  // Edges feeding a step that is in progress flow (dashes); reduced motion stops
+  // the dash animation in CSS.
+  const activeTargets = useMemo(
+    () =>
+      mode === 'order'
+        ? new Set(value.nodes.filter((n) => n.kind === 'step' && stepStatus(n) === 'in_progress').map((n) => n.id))
+        : new Set<string>(),
+    [mode, value.nodes],
   )
 
   const edges = useMemo<Edge[]>(
@@ -113,14 +136,24 @@ function ProcessGraphEditorInner({
         target: edge.target,
         label: edge.label,
         markerEnd: { type: MarkerType.ArrowClosed },
+        animated: activeTargets.has(edge.target),
         selected: selection?.type === 'edge' && selection.id === edge.id,
         deletable: canEditStructure,
         reconnectable: false,
       })),
-    [value.edges, selection, canEditStructure],
+    [value.edges, selection, canEditStructure, activeTargets],
   )
 
   const errors = useMemo(() => validateGraph(value), [value])
+
+  // Shake the error list only when a new message appears after mount (e.g. the
+  // user connected an invalid edge), not for errors already present on load.
+  const [prevErrors, setPrevErrors] = useState(errors)
+  const [shakeKey, setShakeKey] = useState(0)
+  if (errors !== prevErrors) {
+    setPrevErrors(errors)
+    if (hasNewItems(prevErrors, errors)) setShakeKey((count) => count + 1)
+  }
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<ProcessFlowNode>[]) => {
@@ -285,7 +318,7 @@ function ProcessGraphEditorInner({
           ref={canvasRef}
           role="group"
           aria-label={t('process.canvasLabel')}
-          className="h-[420px] min-w-0 border border-border lg:h-[520px]"
+          className="animate-iris-fade h-[420px] min-w-0 border border-border lg:h-[520px]"
         >
           <ReactFlow<ProcessFlowNode, Edge>
             className="iris-flow"
@@ -336,9 +369,13 @@ function ProcessGraphEditorInner({
 
       {errors.length > 0 && (
         <ul
+          key={shakeKey}
           role="alert"
           aria-label={t('process.validation.title')}
-          className="space-y-1 border border-destructive/40 bg-destructive/10 px-3 py-2 text-[12px] text-destructive"
+          className={cn(
+            'space-y-1 border border-destructive/40 bg-destructive/10 px-3 py-2 text-[12px] text-destructive',
+            shakeKey > 0 ? 'animate-iris-shake' : 'animate-iris-rise',
+          )}
         >
           {errors.map((message) => (
             <li key={message}>{message}</li>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   Bar,
   BarChart,
@@ -68,10 +69,12 @@ function SeriesTooltip({
 export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPanelProps): React.JSX.Element {
   const { t } = useTranslation();
   const [asTable, setAsTable] = useState(false);
+  // Recharts draws its own entrance (bars grow, lines draw); skip it under reduced motion.
+  const animate = !useMediaQuery("(prefers-reduced-motion: reduce)");
   const empty = rows.every((row) => series.every((def) => Number(row[def.key]) === 0));
 
   return (
-    <section className="flex min-w-0 flex-col rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
+    <section className="animate-iris-fade flex min-w-0 flex-col rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
       <header className="flex items-center justify-between gap-3 border-b border-[color:var(--pf-border)] px-4 py-2">
         <h2 className="min-w-0 truncate text-[14px] font-medium text-[color:var(--pf-text)]">
           {title} <span className="font-normal text-[color:var(--pf-muted)]">· {bucketLabel}</span>
@@ -98,7 +101,7 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
       ) : null}
 
       {asTable ? (
-        <div className="max-h-72 overflow-auto px-4 py-3">
+        <div className="animate-iris-fade max-h-72 overflow-auto px-4 py-3">
           <table className="w-full text-[12px]">
             <thead className="text-left text-[color:var(--pf-muted)]">
               <tr>
@@ -125,7 +128,7 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
           {t("platform.charts.empty")}
         </p>
       ) : (
-        <div className="h-64 px-2 pt-2 pb-1" role="img" aria-label={title}>
+        <div className="animate-iris-fade h-64 px-2 pt-2 pb-1" role="img" aria-label={title}>
           <ResponsiveContainer width="100%" height="100%">
             {kind === "bar" ? (
               <BarChart accessibilityLayer={false} data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barCategoryGap={2}>
@@ -143,7 +146,9 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
                     stroke="var(--pf-panel)"
                     strokeWidth={series.length > 1 ? 2 : 0}
                     radius={index === series.length - 1 ? [4, 4, 0, 0] : 0}
-                    isAnimationActive={false}
+                    isAnimationActive={animate}
+                    animationDuration={500}
+                    animationEasing="ease-out"
                   />
                 ))}
               </BarChart>
@@ -162,7 +167,9 @@ export function ChartPanel({ title, bucketLabel, kind, rows, series }: ChartPane
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4, stroke: "var(--pf-panel)", strokeWidth: 2 }}
-                    isAnimationActive={false}
+                    isAnimationActive={animate}
+                    animationDuration={600}
+                    animationEasing="ease-out"
                   />
                 ))}
               </LineChart>

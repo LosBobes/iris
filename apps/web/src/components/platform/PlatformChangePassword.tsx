@@ -70,7 +70,7 @@ export function PlatformChangePassword({
   });
 
   const inputClass =
-    "w-full h-11 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 text-[15px] text-[color:var(--pf-text)] outline-none focus:border-[color:var(--pf-text-2)]";
+    "w-full h-11 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 text-[15px] text-[color:var(--pf-text)] outline-none transition-colors duration-[var(--iris-dur-fast)] focus:border-[color:var(--pf-text-2)]";
   const field = (
     name: keyof ChangePasswordForm,
     label: string,
@@ -90,7 +90,7 @@ export function PlatformChangePassword({
   );
 
   return (
-    <div className="w-full max-w-[400px] rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-6 sm:p-7 text-[color:var(--pf-text)]">
+    <div className="animate-iris-enter w-full max-w-[400px] rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-6 sm:p-7 text-[color:var(--pf-text)]">
       <div className="mb-3 flex items-center gap-2">
         <KeyRound className="h-4 w-4 text-[color:var(--pf-text-2)]" />
         <h1 className="text-[18px] font-medium">{t("platform.password.title")}</h1>
@@ -106,7 +106,7 @@ export function PlatformChangePassword({
           {t("platform.password.hint", { min: MIN_PLATFORM_PASSWORD_LENGTH, max: MAX_PASSWORD_BYTES })}
         </p>
         {serverError ? (
-          <p role="alert" className="rounded-md border border-[#e66767]/40 bg-[#e66767]/10 px-3 py-2.5 text-[13px] leading-5">
+          <p role="alert" className="animate-iris-shake rounded-md border border-[#e66767]/40 bg-[#e66767]/10 px-3 py-2.5 text-[13px] leading-5">
             {serverError}
           </p>
         ) : null}

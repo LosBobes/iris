@@ -1,14 +1,21 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { stepStatus } from '@/lib/process/graph'
+import { staggerStyle } from '@/lib/motion'
 import type { ProcessNode, ProcessNodeKind } from '@/types/process'
 import { KIND_META } from './kind-meta'
 import { StepStatusBadge } from './StepStatusBadge'
 
 export type ProcessFlowNode = Node<
-  { node: ProcessNode; mode: 'template' | 'order'; ready: boolean },
+  {
+    node: ProcessNode
+    mode: 'template' | 'order'
+    ready: boolean
+    /** First reveal: `{ index }` staggers in with the canvas; `'pop'` is a node added later. */
+    enter?: { index: number } | 'pop'
+  },
   ProcessNodeKind
 >
 
@@ -19,7 +26,7 @@ function formatQuantity(quantity: number | undefined, unit: string | undefined):
 
 function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode>): React.JSX.Element {
   const { t } = useTranslation()
-  const { node, mode, ready } = data
+  const { node, mode, ready, enter } = data
   const kind = type
   const meta = KIND_META[kind]
   const Icon = meta.icon
@@ -28,15 +35,29 @@ function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode
   const actual = formatQuantity(node.actualQuantity, node.unit)
   const status = stepStatus(node)
 
+  // One-shot success ring when a step becomes done (not on first render).
+  const [prevStatus, setPrevStatus] = useState(status)
+  const [pulse, setPulse] = useState(0)
+  if (status !== prevStatus) {
+    setPrevStatus(status)
+    if (status === 'done') setPulse((count) => count + 1)
+  }
+  const showReady = isStep && mode === 'order' && ready && status !== 'done' && status !== 'skipped'
+
   return (
     <div
+      style={typeof enter === 'object' ? staggerStyle(enter.index) : undefined}
       className={cn(
-        'w-[180px] rounded-sm border border-l-4 bg-card px-2.5 py-2 text-card-foreground shadow-sm',
+        'iris-node-card w-[180px] rounded-sm border border-l-4 bg-card px-2.5 py-2 text-card-foreground shadow-sm',
+        typeof enter === 'object' && 'iris-node-enter',
+        enter === 'pop' && 'iris-node-pop',
         meta.accent,
         selected ? 'border-[color:var(--iris-accent)] ring-2 ring-[color:var(--iris-accent)]/30' : 'border-border',
         isStep && mode === 'order' && status === 'skipped' && 'opacity-60',
       )}
     >
+      {showReady && <span aria-hidden className="iris-node-ready" />}
+      {pulse > 0 && <span key={pulse} aria-hidden className="iris-node-pulse" />}
       {kind !== 'input' && <Handle type="target" position={Position.Left} />}
       <div className="flex items-start gap-2">
         <span className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-sm', meta.iconWrap)}>

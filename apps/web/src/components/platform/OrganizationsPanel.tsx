@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { staggerStyle } from "@/lib/motion";
 import type { PlatformTenant } from "@/types/platform";
 import { formatCount, formatDate, formatDateTime } from "./format";
 import {
@@ -77,7 +78,10 @@ export function OrganizationsPanel(): React.JSX.Element {
       </span>
     ) : (
       <span className="inline-flex items-center gap-1.5 text-[color:var(--pf-text-2)]">
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#5fb88a]" />
+        <span aria-hidden className="relative flex h-1.5 w-1.5">
+          <span className="iris-dot-ping absolute inset-0 rounded-full bg-[#5fb88a]" />
+          <span className="relative h-1.5 w-1.5 rounded-full bg-[#5fb88a]" />
+        </span>
         {t("platform.orgs.active")}
       </span>
     );
@@ -130,8 +134,8 @@ export function OrganizationsPanel(): React.JSX.Element {
         <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("platform.orgs.empty")}</p>
       ) : !isWide ? (
         <ul className="mt-1">
-          {tenants.map((tenant) => (
-            <li key={tenant.id} className="space-y-2.5 border-t border-[color:var(--pf-border)] px-4 py-3 first:border-t-0 text-[13px]">
+          {tenants.map((tenant, index) => (
+            <li key={tenant.id} style={staggerStyle(index)} className="animate-iris-rise iris-stagger space-y-2.5 border-t border-[color:var(--pf-border)] px-4 py-3 first:border-t-0 text-[13px]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate text-[14px] text-[color:var(--pf-text)]">{tenant.name}</div>
@@ -171,8 +175,12 @@ export function OrganizationsPanel(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {tenants.map((tenant) => (
-                <tr key={tenant.id} className="h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]">
+              {tenants.map((tenant, index) => (
+                <tr
+                  key={tenant.id}
+                  style={staggerStyle(index)}
+                  className="animate-iris-rise iris-stagger iris-row h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]"
+                >
                   <td className="px-4 py-2">
                     <div className="text-[color:var(--pf-text)]">{tenant.name}</div>
                     <div className="text-[11px] text-[color:var(--pf-muted)]">/login/{tenant.slug}</div>

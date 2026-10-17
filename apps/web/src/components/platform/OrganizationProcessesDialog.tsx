@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { ProcessTemplateForm } from "@/components/process/ProcessTemplateForm";
+import { staggerStyle } from "@/lib/motion";
 import type { PlatformTenant } from "@/types/platform";
 import type { ProcessTemplate, ProcessTemplateInput } from "@/types/process";
 import {
@@ -93,7 +94,7 @@ export function OrganizationProcessesDialog({
           </div>
         ) : null}
         {error ? (
-          <div role="alert" className="rounded border border-[#e66767]/40 bg-[#e66767]/10 px-4 py-2.5 text-[12px]">
+          <div role="alert" className="animate-iris-shake rounded border border-[#e66767]/40 bg-[#e66767]/10 px-4 py-2.5 text-[12px]">
             {error}
           </div>
         ) : null}
@@ -101,7 +102,7 @@ export function OrganizationProcessesDialog({
         {view.kind === "form" ? (
           // `dark` scopes the app's dark theme tokens to the editor so it sits
           // naturally on the Backoffice's dark surface.
-          <div className="dark rounded-md bg-background p-4 text-foreground">
+          <div className="dark animate-iris-rise rounded-md bg-background p-4 text-foreground">
             <ProcessTemplateForm
               template={view.template}
               onSubmit={save}
@@ -111,7 +112,7 @@ export function OrganizationProcessesDialog({
         ) : templates === null ? (
           error ? null : <p className="py-8 text-center text-[13px] text-[color:var(--pf-muted)]">{t("common.loading")}</p>
         ) : (
-          <>
+          <div className="animate-iris-rise space-y-3">
             <div className="flex justify-end">
               <button type="button" onClick={() => setView({ kind: "form" })} className={backofficeSmallButtonClass}>
                 <Plus className="h-4 w-4" />
@@ -122,13 +123,17 @@ export function OrganizationProcessesDialog({
               <p className="py-8 text-center text-[13px] text-[color:var(--pf-muted)]">{t("process.templates.empty")}</p>
             ) : (
               <ul className="divide-y divide-[color:var(--pf-border)] rounded-md border border-[color:var(--pf-border)]">
-                {templates.map((template) => (
-                  <li key={template.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
+                {templates.map((template, index) => (
+                  <li
+                    key={template.id}
+                    style={staggerStyle(index)}
+                    className="animate-iris-rise iris-stagger iris-row flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-[13px] hover:bg-white/[0.02]"
+                  >
                     <div className="min-w-0">
                       <div className="truncate text-[color:var(--pf-text)]">
                         {template.name}
                         {template.isDefault ? (
-                          <span className="ml-2 rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                          <span className="animate-iris-pop ml-2 inline-block rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
                             {t("process.templates.default")}
                           </span>
                         ) : null}
@@ -181,7 +186,7 @@ export function OrganizationProcessesDialog({
                 ))}
               </ul>
             )}
-          </>
+          </div>
         )}
       </div>
     </BackofficeDialog>

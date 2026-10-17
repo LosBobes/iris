@@ -64,9 +64,12 @@ export function ProcessInspector({
   const shell = (children: React.ReactNode): React.JSX.Element => (
     <aside
       aria-label={t('process.inspector.title')}
-      className="space-y-3 border border-border bg-card p-3 text-[12px]"
+      className="border border-border bg-card p-3 text-[12px]"
     >
-      {children}
+      {/* Re-keyed per selection so the panel content eases in on every change. */}
+      <div key={selection ? `${selection.type}:${selection.id}` : 'none'} className="animate-iris-rise space-y-3">
+        {children}
+      </div>
     </aside>
   )
 

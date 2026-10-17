@@ -37,12 +37,12 @@ export function BackofficeDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 px-4"
+      className="animate-iris-fade fixed inset-0 z-30 flex items-center justify-center bg-black/60 px-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className={`max-h-[calc(100dvh-32px)] w-full ${wide ? "max-w-[1100px]" : "max-w-[460px]"} overflow-y-auto rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] text-[color:var(--pf-text)] shadow-2xl`}>
+      <div className={`animate-iris-pop max-h-[calc(100dvh-32px)] w-full ${wide ? "max-w-[1100px]" : "max-w-[460px]"} overflow-y-auto rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] text-[color:var(--pf-text)] shadow-2xl`}>
         <header className="flex items-start gap-3 border-b border-[color:var(--pf-border)] px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 id={titleId} className="text-[15px] font-medium">
@@ -69,7 +69,7 @@ export function BackofficeDialog({
 
 /** Shared Backoffice form styles. */
 export const backofficeInputClass =
-  "w-full h-11 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 text-[15px] text-[color:var(--pf-text)] outline-none focus:border-[color:var(--pf-text-2)]";
+  "w-full h-11 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-bg)] px-3 text-[15px] text-[color:var(--pf-text)] outline-none transition-colors duration-[var(--iris-dur-fast)] focus:border-[color:var(--pf-text-2)]";
 export const backofficePrimaryButtonClass =
   "iris-focusable h-11 rounded-md bg-[color:var(--pf-text)] px-4 text-[14px] font-medium text-[color:var(--pf-bg)] hover:opacity-90 disabled:opacity-50";
 export const backofficeSecondaryButtonClass =

@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useProcessTemplates } from '@/hooks/useProcessTemplates'
 import { formatActionError } from '@/lib/errors'
+import { staggerStyle } from '@/lib/motion'
 import type { ProcessTemplate } from '@/types/process'
 
 function stepCount(template: ProcessTemplate): number {
@@ -58,7 +59,7 @@ export function ProcessTemplatesSettings(): React.JSX.Element {
   }
 
   return (
-    <section className="max-w-2xl border border-border bg-card" aria-labelledby="process-templates-title">
+    <section className="animate-iris-enter max-w-2xl border border-border bg-card" aria-labelledby="process-templates-title">
       <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="flex items-center gap-2.5">
           <Workflow size={16} className="text-[color:var(--iris-accent)]" />
@@ -88,14 +89,22 @@ export function ProcessTemplatesSettings(): React.JSX.Element {
 
       {!loading && !error && templates.length > 0 && (
         <ul className="divide-y divide-border">
-          {templates.map((template) => {
+          {templates.map((template, index) => {
             const steps = stepCount(template)
             return (
-              <li key={template.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+              <li
+                key={template.id}
+                style={staggerStyle(index)}
+                className="animate-iris-rise iris-stagger iris-row flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-muted/40"
+              >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-[13px] font-medium text-foreground">{template.name}</span>
-                    {template.isDefault && <Badge variant="secondary">{t('process.templates.default')}</Badge>}
+                    {template.isDefault && (
+                      <Badge variant="secondary" className="animate-iris-pop">
+                        {t('process.templates.default')}
+                      </Badge>
+                    )}
                   </div>
                   <div className="text-[11px] text-[color:var(--iris-ink-soft)]">
                     {t('process.templates.stepCount', { count: steps })}

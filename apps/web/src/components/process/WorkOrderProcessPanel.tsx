@@ -24,6 +24,7 @@ import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog'
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
 import { ApiError, formatActionError, reportUnexpectedError } from '@/lib/errors'
 import { graphsEqual, readySteps, summarizeProgress, validateGraph } from '@/lib/process/graph'
+import { percentToScale, staggerStyle } from '@/lib/motion'
 import { formatWorkOrderDateTime } from '@/shared/utils/work-orders'
 import type { ProcessGraph, ProcessTemplate, WorkOrderProcess } from '@/types/process'
 
@@ -184,7 +185,7 @@ export function WorkOrderProcessPanel({
     )
   } else if (process === null) {
     body = (
-      <div className="space-y-3">
+      <div className="animate-iris-rise space-y-3">
         {loadError && (
           <p role="alert" className="text-[12px] text-[color:var(--iris-status-cancelled)]">
             {loadError}
@@ -219,7 +220,7 @@ export function WorkOrderProcessPanel({
   } else if (draft && progress) {
     body = (
       <div className="space-y-4">
-        <div className="space-y-2">
+        <div className="animate-iris-enter iris-stagger space-y-2" style={staggerStyle(0)}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-[13px] text-foreground">
               {t('process.order.progress', { done: progress.finished, total: progress.total })}
@@ -243,8 +244,13 @@ export function WorkOrderProcessPanel({
             className="h-1.5 w-full overflow-hidden bg-muted"
           >
             <div
-              className="h-full bg-[color:var(--iris-status-done)] transition-all"
-              style={{ width: `${progress.percent}%` }}
+              className="iris-bar h-full w-full bg-[color:var(--iris-status-done)]"
+              style={
+                {
+                  '--iris-bar': percentToScale(progress.percent),
+                  scale: `${percentToScale(progress.percent)} 1`,
+                } as React.CSSProperties
+              }
             />
           </div>
           <p className="text-[12px] text-[color:var(--iris-ink-soft)]">
@@ -256,7 +262,7 @@ export function WorkOrderProcessPanel({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="animate-iris-enter iris-stagger flex flex-wrap items-center gap-2" style={staggerStyle(1)}>
           <Button
             type="button"
             variant="outline"
