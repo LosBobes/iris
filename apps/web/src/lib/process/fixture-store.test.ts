@@ -9,6 +9,7 @@ function setup(role: 'admin' | 'user' = 'admin') {
     workOrderExists: (id) => orders.has(id),
     tenantSlug: 'demo',
     platformSignedIn: () => true,
+    modules: () => ({ processes: true, stock: true }),
   })
   return store
 }
@@ -86,5 +87,50 @@ describe('process fixture store', () => {
     const process = await store.api.getWorkOrderProcess('1')
     expect(process?.templateId).toBeNull()
     expect(process?.templateName).toBe('Offset štampa')
+  })
+})
+
+describe('process fixture store: stock tracking', () => {
+  function trackedSetup(initial: { processes: boolean; stock: boolean }) {
+    let modules = initial
+    const saved: string[] = []
+    const store = createProcessFixtureStore({
+      currentUser: () => ({ username: 'tester', role: 'admin' }),
+      workOrderExists: () => true,
+      tenantSlug: 'demo',
+      platformSignedIn: () => true,
+      modules: () => modules,
+      onOrderProcessSaved: (orderId) => saved.push(orderId),
+    })
+    return { store, saved, set: (next: { processes: boolean; stock: boolean }) => (modules = next) }
+  }
+
+  it('never posts for a process created while stock was off, even after stock is switched on', async () => {
+    const { store, saved, set } = trackedSetup({ processes: true, stock: false })
+    const process = await store.api.applyProcessTemplate('1', 'pt-offset')
+    set({ processes: true, stock: true })
+    await store.api.updateWorkOrderProcess('1', { graph: process.graph })
+    expect(saved).toEqual([])
+    expect(store.listOrderProcesses()).toEqual([])
+  })
+
+  it('posts for a process created while stock is on, resumes after an off/on cycle', async () => {
+    const { store, saved, set } = trackedSetup({ processes: true, stock: true })
+    const process = await store.api.applyProcessTemplate('1', 'pt-offset')
+    expect(saved).toEqual(['1'])
+    set({ processes: true, stock: false })
+    await store.api.updateWorkOrderProcess('1', { graph: process.graph })
+    expect(saved).toEqual(['1'])
+    set({ processes: true, stock: true })
+    await store.api.updateWorkOrderProcess('1', { graph: process.graph })
+    expect(saved).toEqual(['1', '1'])
+  })
+
+  it('rejects tenant calls with 403 while processes are off but keeps platform templates', async () => {
+    const { store } = trackedSetup({ processes: false, stock: false })
+    await expect(store.api.getProcessTemplates()).rejects.toMatchObject({ status: 403 })
+    expect(await store.api.getPlatformProcessTemplates('demo')).toHaveLength(1)
+    store.attachDefaultProcess('1')
+    expect(store.listOrderProcesses()).toEqual([])
   })
 })

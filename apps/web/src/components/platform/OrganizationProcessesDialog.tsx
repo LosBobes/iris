@@ -88,6 +88,11 @@ export function OrganizationProcessesDialog({
       onClose={onClose}
     >
       <div className="space-y-3 p-4">
+        {!(tenant.modules.stock && tenant.modules.processes) ? (
+          <p data-testid="processes-module-off" className="text-[12px] text-[color:var(--pf-muted)]">
+            {t("platform.orgs.modules.templatesPrepNote")}
+          </p>
+        ) : null}
         {notice ? (
           <div role="status" className="rounded border border-[color:var(--pf-border)] bg-white/[0.03] px-4 py-2.5 text-[12px]">
             {notice}

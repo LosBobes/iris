@@ -1015,6 +1015,7 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
         </div>
       </div>
 
+      {/* Renders nothing (and requests nothing) while the processes module is off. */}
       <WorkOrderProcessPanel workOrderId={order.id} canEditStructure={isAdmin} />
     </>
   );

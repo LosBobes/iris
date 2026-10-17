@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/errors'
+import { PROCESSES_DISABLED_MESSAGE } from '@/lib/modules'
 import {
   copyTemplateToOrder,
   hasStructuralChange,
@@ -6,6 +7,7 @@ import {
   stripOrderState,
   validateGraph,
 } from '@/lib/process/graph'
+import type { OrganizationModules } from '@/types/settings'
 import type {
   ProcessGraph,
   ProcessNode,
@@ -91,6 +93,8 @@ interface ProcessFixtureContext {
   /** The single fixture organization's slug. */
   tenantSlug: string
   platformSignedIn: () => boolean
+  /** The organization's enabled modules (Backoffice-controlled). */
+  modules: () => OrganizationModules
   /**
    * Catalog lookup used to validate `catalogItemId` links (must be an existing
    * article; unit must match). Omitted = links are stored unchecked.
@@ -144,13 +148,28 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
 
   const clone = <T>(value: T): T => structuredClone(value)
 
+  // Orders whose process was created while the stock module was on ("stock
+  // tracked"). Only those ever post stock; a process created while stock was off
+  // never posts retroactively, even after the module is switched on.
+  const stockTracked = new Set<string>()
+
+  const requireProcesses = (): void => {
+    if (!context.modules().processes) throw fixtureError(403, PROCESSES_DISABLED_MESSAGE)
+  }
+  const stockOn = (): boolean => context.modules().stock
+  const postIfTracked = (workOrderId: string, graph: ProcessGraph, username: string): void => {
+    if (stockOn() && stockTracked.has(workOrderId)) context.onOrderProcessSaved?.(workOrderId, graph, username)
+  }
+
   const requireAdmin = (): { username: string } => {
+    requireProcesses()
     const user = context.currentUser()
     if (!user) throw fixtureError(401, MESSAGES.loginRequired)
     if (user.role !== 'admin') throw fixtureError(403, MESSAGES.adminOnly)
     return user
   }
   const requireUser = (): { username: string; role: 'admin' | 'user' } => {
+    requireProcesses()
     const user = context.currentUser()
     if (!user) throw fixtureError(401, MESSAGES.loginRequired)
     return user
@@ -173,6 +192,8 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
   // is rejected).
   const resolveLinks = (graph: ProcessGraph): ProcessGraph => {
     const find = context.findCatalogItem
+    // Stock off: links are kept as-is and not validated.
+    if (!stockOn()) return graph
     return {
       ...graph,
       nodes: graph.nodes.map((item) => {
@@ -254,16 +275,21 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
       updatedBy: username,
     }
     processes.set(workOrderId, created)
-    context.onOrderProcessSaved?.(workOrderId, created.graph, username)
+    if (stockOn()) stockTracked.add(workOrderId)
+    else stockTracked.delete(workOrderId)
+    postIfTracked(workOrderId, created.graph, username)
     return created
   }
 
   return {
     listOrderProcesses() {
-      return [...processes].map(([workOrderId, process]) => ({ workOrderId, graph: clone(process.graph) }))
+      return [...processes]
+        .filter(([workOrderId]) => stockTracked.has(workOrderId))
+        .map(([workOrderId, process]) => ({ workOrderId, graph: clone(process.graph) }))
     },
 
     attachDefaultProcess(workOrderId) {
+      if (!context.modules().processes) return
       const template = templates.find((item) => item.isDefault)
       if (!template) return
       copyOntoOrder(workOrderId, template, context.currentUser()?.username ?? '')
@@ -321,12 +347,13 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
         const updated: WorkOrderProcess = { ...current, graph, updatedAt: now(), updatedBy: user.username }
         processes.set(workOrderId, updated)
         // Same "transaction": the ledger is brought in line with the saved graph.
-        context.onOrderProcessSaved?.(workOrderId, updated.graph, user.username)
+        postIfTracked(workOrderId, updated.graph, user.username)
         return clone(updated)
       },
       async deleteWorkOrderProcess(workOrderId) {
         requireAdmin()
         if (!processes.delete(workOrderId)) throw fixtureError(404, MESSAGES.orderMissing)
+        stockTracked.delete(workOrderId)
       },
 
       async getPlatformProcessTemplates(slug) {

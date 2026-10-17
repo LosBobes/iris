@@ -28,6 +28,7 @@ import type {
 import type {
   LoginLogoInfo,
   LoginLogoUpload,
+  OrganizationModules,
   OrganizationSettings,
   PublicOrganization,
 } from '@/types/settings'
@@ -121,7 +122,8 @@ declare global {
       previewCatalogCleanup: (filter: CatalogCleanupFilter) => Promise<CatalogItemListResult>
       cleanupCatalogItems: (filter: CatalogCleanupFilter) => Promise<{ deleted: number }>
       getSettings: () => Promise<OrganizationSettings>
-      updateSettings: (settings: Partial<OrganizationSettings>) => Promise<OrganizationSettings>
+      /** `modules` is read-only for tenants (Backoffice switches it) and is never sent. */
+      updateSettings: (settings: Partial<Omit<OrganizationSettings, 'modules'>>) => Promise<OrganizationSettings>
       /** Resolves an organization slug for the first sign-in step; null when unknown. */
       getPublicOrganization: (slug: string) => Promise<PublicOrganization | null>
       /** URL of an organization's sign-in logo, versioned to bust caches. */
@@ -145,6 +147,8 @@ declare global {
       updatePlatformTenant: (slug: string, input: PlatformUpdateTenantInput) => Promise<PlatformTenant>
       /** Suspends (true) or reactivates (false) an organization. */
       setPlatformTenantSuspended: (slug: string, suspended: boolean) => Promise<PlatformTenant>
+      /** Switches an organization's optional modules (Backoffice superadmin only). */
+      setPlatformTenantModules: (slug: string, modules: OrganizationModules) => Promise<PlatformTenant>
       resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
       getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
       listUsers: () => Promise<ManagedUser[]>

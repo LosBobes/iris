@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useOrganization } from '@/hooks/useOrganization'
 import { useStockLevels } from '@/hooks/useStockLevels'
 import { linkedArticleIds, stockContextFor } from '@/lib/stock/posting'
 import { graphsEqual, normalizeGraphForKinds, stripOrderState, validateGraph, MAX_LABEL_LENGTH } from '@/lib/process/graph'
@@ -68,7 +69,9 @@ export function ProcessTemplateForm({
 
   // Catalog links and live stock need an organization session; the backoffice
   // console edits templates with a platform session, so it skips them.
-  const stockEnabled = variant === 'app'
+  // The in-app editor additionally needs the Magacin module to be on.
+  const { modules } = useOrganization()
+  const stockEnabled = variant === 'app' && modules.stock
   const { levels } = useStockLevels(useMemo(() => linkedArticleIds(graph), [graph]), stockEnabled)
   const stockContext = useMemo(
     () => (stockEnabled ? stockContextFor(graph, 'template', levels) : undefined),
@@ -170,6 +173,7 @@ export function ProcessTemplateForm({
         canEditStructure
         stock={stockEnabled ? levels : undefined}
         articleLinking={stockEnabled}
+        articlesHidden={variant === 'app' && !modules.stock}
       />
 
       <div className="flex flex-wrap items-center gap-2">

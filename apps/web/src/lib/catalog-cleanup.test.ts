@@ -149,7 +149,7 @@ describe('catalog cleanup against the fixture API', () => {
   }
 
   beforeEach(async () => {
-    api = createFixtureApi()
+    api = createFixtureApi({ modules: { processes: true, stock: true } })
     // The fixture catalog is module state shared across instances: clear it so
     // the matrix below is the whole world.
     const existing = await api.getCatalogItems()

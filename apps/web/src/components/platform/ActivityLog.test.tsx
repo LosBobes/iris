@@ -41,6 +41,20 @@ describe("ActivityLog", () => {
     expect(screen.queryByRole("button", { name: strings.showTrail })).not.toBeInTheDocument();
   });
 
+  it("shows which modules were switched on or off", async () => {
+    const items: PlatformAuditEvent[] = [
+      { ...base, id: 7, action: "tenant.modules", detail: { processes: "off", stock: "on", changed: "processes" } },
+    ];
+    vi.stubGlobal("api", { getPlatformAudit: vi.fn(async () => ({ items, total: 1 })) });
+
+    render(<ActivityLog />);
+    const rows = await screen.findAllByRole("row");
+    expect(within(rows[1]).getByText(strings.kinds.tenantModules)).toBeInTheDocument();
+    expect(
+      within(rows[1]).getByText(`Magacin: ${strings.moduleOn} · Procesi rada: ${strings.moduleOff}`),
+    ).toBeInTheDocument();
+  });
+
   it("opens an impersonation into the changes made during it", async () => {
     const getPlatformImpersonationActions = vi.fn(async () => [
       { at: "2026-10-17T06:05:00Z", method: "PATCH" as const, route: "/work-orders/{id}", path: "/work-orders/wo-7", status: 200 },

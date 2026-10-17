@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog'
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
+import { useOrganization } from '@/hooks/useOrganization'
 import { useStockLevels } from '@/hooks/useStockLevels'
 import { formatStockQuantity } from '@/lib/stock/format'
 import { linkedArticleIds, materialRows, shortages, stockContextFor } from '@/lib/stock/posting'
@@ -48,10 +49,21 @@ function errorStatus(cause: unknown): number | null {
 }
 
 /** "Proces rada" section of the work-order detail page. */
-export function WorkOrderProcessPanel({
+export function WorkOrderProcessPanel(props: WorkOrderProcessPanelProps): React.JSX.Element | null {
+  const { modules } = useOrganization()
+  // Off module: render nothing, so the order's process is never requested.
+  if (!modules.processes) return null
+  return <WorkOrderProcessPanelBody {...props} />
+}
+
+function WorkOrderProcessPanelBody({
   workOrderId,
   canEditStructure,
 }: WorkOrderProcessPanelProps): React.JSX.Element {
+  const { modules } = useOrganization()
+  // Stock is a separate module: without it the process works with no articles,
+  // material table, shortage checks or stock requests.
+  const stockEnabled = modules.stock
   const { t } = useTranslation()
   // undefined = loading, null = the order has no process.
   const [process, setProcess] = useState<WorkOrderProcess | null | undefined>(undefined)
@@ -117,10 +129,13 @@ export function WorkOrderProcessPanel({
   // added back (see materialRows), so an order never reports a shortage caused
   // only by its own planned material.
   const linkedIds = useMemo(() => (draft ? linkedArticleIds(draft) : []), [draft])
-  const { levels, loaded: stockLoaded, reload: reloadStock } = useStockLevels(linkedIds)
+  const { levels, loaded: stockLoaded, reload: reloadStock } = useStockLevels(linkedIds, stockEnabled)
   const materials = useMemo(() => (draft ? materialRows(draft, 'order', levels) : []), [draft, levels])
   const missing = useMemo(() => shortages(materials), [materials])
-  const stockContext = useMemo(() => (draft ? stockContextFor(draft, 'order', levels) : undefined), [draft, levels])
+  const stockContext = useMemo(
+    () => (draft && stockEnabled ? stockContextFor(draft, 'order', levels) : undefined),
+    [draft, levels, stockEnabled],
+  )
 
   const progress = useMemo(() => (draft ? summarizeProgress(draft) : null), [draft])
   const ready = useMemo(() => (draft ? readySteps(draft) : []), [draft])
@@ -279,7 +294,7 @@ export function WorkOrderProcessPanel({
           </p>
         </div>
 
-        {linkedIds.length > 0 && (
+        {stockEnabled && linkedIds.length > 0 && (
           <section
             aria-label={t('process.materials.title')}
             data-testid="process-materials"
@@ -407,7 +422,9 @@ export function WorkOrderProcessPanel({
           </div>
         </div>
 
-        <p className="text-[11px] text-[color:var(--iris-ink-soft)]">{t('process.materials.autoPosting')}</p>
+        {stockEnabled && (
+          <p className="text-[11px] text-[color:var(--iris-ink-soft)]">{t('process.materials.autoPosting')}</p>
+        )}
 
         {expanded && (
           <Suspense
@@ -422,8 +439,9 @@ export function WorkOrderProcessPanel({
               value={draft}
               onChange={setDraft}
               canEditStructure={canEditStructure}
-              stock={levels}
-              articleLinking
+              stock={stockEnabled ? levels : undefined}
+              articleLinking={stockEnabled}
+              articlesHidden={!stockEnabled}
             />
           </Suspense>
         )}

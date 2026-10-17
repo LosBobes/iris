@@ -7,6 +7,7 @@ import { Pager } from "@/components/Pager";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
 import { CatalogCleanupDialog } from "@/components/Catalog/CatalogCleanupDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { useCatalogItems } from "@/hooks/useCatalogItems";
 import { formatCatalogPrice, kindLabel } from "@/lib/catalog";
 import { formatStockQuantity } from "@/lib/stock/format";
@@ -20,6 +21,7 @@ function CatalogPage(): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { modules } = useOrganization();
   const isAdmin = currentUser.role === "admin";
 
   const kindTabs: TabItem<KindFilter>[] = [
@@ -181,7 +183,7 @@ function CatalogPage(): React.JSX.Element {
                             .join(" · ")}
                         </span>
                         {/* Warehouse stock is tracked for articles only. */}
-                        {item.kind === "article" && typeof item.stockOnHand === "number" && (
+                        {modules.stock && item.kind === "article" && typeof item.stockOnHand === "number" && (
                           <span
                             data-testid="catalog-stock"
                             className={

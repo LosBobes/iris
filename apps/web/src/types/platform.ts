@@ -2,6 +2,8 @@
 // in iris-api/openapi.yaml: usage metrics, organization management and the
 // activity log.
 
+import type { OrganizationModules } from '@/types/settings'
+
 export type PlatformRangeDays = 7 | 30 | 90 | 365
 
 export interface PlatformAdmin {
@@ -42,6 +44,8 @@ export interface PlatformTenant {
   suspendedAt: string | null
   users: number
   admins: number
+  /** Optional modules switched on for the organization (both off by default). */
+  modules: OrganizationModules
 }
 
 export interface PlatformCreateTenantInput {
@@ -61,6 +65,7 @@ export type PlatformAuditAction =
   | 'tenant.update'
   | 'tenant.suspend'
   | 'tenant.reactivate'
+  | 'tenant.modules'
   | 'user.password_reset'
   | 'impersonate'
   | 'process_template.create'
@@ -77,7 +82,11 @@ export interface PlatformAuditEvent {
   tenantSlug: string
   tenantName: string
   targetUsername?: string
-  /** For tenant.update: fromName/toName, fromSlug/toSlug of what changed. */
+  /**
+   * For tenant.update: fromName/toName, fromSlug/toSlug of what changed. For
+   * tenant.modules: processes/stock = "on"|"off" (new values) and changed =
+   * comma-joined names of the modules that changed.
+   */
   detail?: Record<string, string>
   ip: string
   /** On an "impersonate" event: its session state and change count. */

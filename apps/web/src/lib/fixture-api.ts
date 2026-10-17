@@ -39,13 +39,16 @@ import {
   DEFAULT_SHOW_SHIPPING_OPTIONS,
   normalizePrintItemColumns,
   type BillingDefaults,
+  type OrganizationModules,
   type OrganizationSettings,
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
   type PublicOrganization,
+  normalizeOrganizationModules,
 } from '@/types/settings'
-import type { PlatformMetrics, PlatformRangeDays } from '@/types/platform'
+import type { PlatformMetrics, PlatformRangeDays, PlatformTenant } from '@/types/platform'
+import { PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
 import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
 import { ApiError } from '@/lib/errors'
@@ -715,13 +718,35 @@ function validateCreateInput(input: WorkOrder): void {
   }
 }
 
-export function createFixtureApi(): Window['api'] {
+export interface FixtureApiOptions {
+  /**
+   * Initial module switches (both off by default, like a fresh organization).
+   * In the dev server they are switched through the Backoffice
+   * (/backoffice, operater / operater-demo -> Organizacije -> Moduli).
+   */
+  modules?: Partial<OrganizationModules>
+}
+
+export function createFixtureApi(options: FixtureApiOptions = {}): Window['api'] {
+  // Per instance (not module state) so every createFixtureApi() starts with the
+  // modules off, together with its fresh process store and ledger.
+  let modules: OrganizationModules = normalizeOrganizationModules(options.modules)
+  const fixtureTenant = (): PlatformTenant => ({
+    id: FIXTURE_ORGANIZATION.slug,
+    ...FIXTURE_ORGANIZATION,
+    createdAt: '2026-01-01 00:00:00',
+    suspendedAt: null,
+    users: users.length,
+    admins: users.filter((user) => user.role === 'admin').length,
+    modules: { ...modules },
+  })
   const currentFixtureUser = () => sessionUser ?? users.find((user) => user.role === 'admin') ?? null
   // The ledger and the process store reference each other (automatic posting
   // reads order graphs, the process store validates article links), so the
   // cross references are lazy closures.
   const stockStore = createStockFixtureStore({
     currentUser: currentFixtureUser,
+    enabled: () => modules.stock,
     catalogItems: () =>
       catalogItems.map((item) => ({
         id: item.id,
@@ -743,6 +768,7 @@ export function createFixtureApi(): Window['api'] {
     workOrderExists: (id) => workOrders.some((order) => order.id === id),
     tenantSlug: FIXTURE_ORGANIZATION.slug,
     platformSignedIn: () => platformSignedIn,
+    modules: () => modules,
     findCatalogItem: (id) => catalogItems.find((item) => item.id === id),
     onOrderProcessSaved: stockStore.onProcessSaved,
   })
@@ -758,11 +784,12 @@ export function createFixtureApi(): Window['api'] {
     stockStore.seedOpening(id, quantity, 'admin', 'Početno stanje (demo)')
   }
 
-  // Catalog reads carry the computed stock fields (articles only).
+  // Catalog reads carry the computed stock fields (articles only); with the
+  // stock module off the on-hand quantity is null (minStock stays as config).
   const withStock = (item: CatalogItem): CatalogItem =>
-    item.kind === 'article'
+    item.kind === 'article' && modules.stock
       ? { ...item, stockOnHand: stockStore.onHand(item.id), minStock: item.minStock ?? null }
-      : { ...item, stockOnHand: null, minStock: null }
+      : { ...item, stockOnHand: null, minStock: item.kind === 'article' ? (item.minStock ?? null) : null }
 
   return {
     ...processStore.api,
@@ -1084,12 +1111,13 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules: { ...modules } }
     },
 
     async updateSettings(
-      settings: Partial<OrganizationSettings>,
+      settings: Partial<Omit<OrganizationSettings, 'modules'>>,
     ): Promise<OrganizationSettings> {
+      // Like the server, any `modules` in the body is ignored.
       if (settings.firmName !== undefined) {
         const next = settings.firmName.trim()
         if (!next) throw new Error('Naziv firme je obavezan.')
@@ -1110,7 +1138,7 @@ export function createFixtureApi(): Window['api'] {
       if (settings.showShippingOptions !== undefined) {
         showShippingOptions = settings.showShippingOptions
       }
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules: { ...modules } }
     },
 
     async getPublicOrganization(slug): Promise<PublicOrganization | null> {
@@ -1192,16 +1220,20 @@ export function createFixtureApi(): Window['api'] {
 
     async getPlatformTenants() {
       if (!platformSignedIn) throw new Error('Prijava je obavezna.')
-      return [
-        {
-          id: FIXTURE_ORGANIZATION.slug,
-          ...FIXTURE_ORGANIZATION,
-          createdAt: '2026-01-01 00:00:00',
-          suspendedAt: null,
-          users: users.length,
-          admins: users.filter((user) => user.role === 'admin').length,
-        },
-      ]
+      return [fixtureTenant()]
+    },
+    async setPlatformTenantModules(slug, next) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (slug !== FIXTURE_ORGANIZATION.slug) throw new Error('Organizacija ne postoji.')
+      if (next.processes && !next.stock) {
+        throw new ApiError(PROCESSES_REQUIRE_STOCK_MESSAGE, {
+          status: 422,
+          url: 'fixture://platform/modules',
+          method: 'PUT',
+        })
+      }
+      modules = normalizeOrganizationModules(next)
+      return fixtureTenant()
     },
 
     // Organization management needs the real API: fixture mode has a single,

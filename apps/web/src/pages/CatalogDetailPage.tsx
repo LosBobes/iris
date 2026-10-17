@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import {
@@ -46,6 +47,8 @@ function CatalogDetailPage(): React.JSX.Element {
   const { id: routeId } = useParams<{ id: string }>();
   const isNew = routeId === undefined || routeId === "new";
   const { currentUser } = useAuth();
+  const { modules } = useOrganization();
+  const stockEnabled = modules.stock;
   const isAdmin = currentUser.role === "admin";
   const readOnly = !isAdmin;
 
@@ -102,7 +105,7 @@ function CatalogDetailPage(): React.JSX.Element {
       toast.error(t("catalog.detail.nameRequired"));
       return;
     }
-    if (item.kind === "article" && !minStockSchema.safeParse(item.minStock ?? null).success) {
+    if (stockEnabled && item.kind === "article" && !minStockSchema.safeParse(item.minStock ?? null).success) {
       toast.error(t("catalog.detail.minStockInvalid"));
       return;
     }
@@ -134,7 +137,7 @@ function CatalogDetailPage(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom, allowNavigation]);
+  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom, allowNavigation, stockEnabled]);
 
   const handleDelete = useCallback(async () => {
     try {
@@ -215,6 +218,7 @@ function CatalogDetailPage(): React.JSX.Element {
               canSchedulePrice={canSchedulePrice}
               effectiveFrom={effectiveFrom}
               onEffectiveFromChange={setEffectiveFrom}
+              stockEnabled={stockEnabled}
             />
             {canSchedulePrice && (
               <PriceHistoryPanel itemId={item.id} refreshToken={historyRefresh} />
@@ -244,7 +248,7 @@ function CatalogDetailPage(): React.JSX.Element {
                 />
               )}
               <SummaryRow label={t("catalog.detail.code")} value={item.code || null} />
-              {!isNew && item.kind === "article" && typeof item.stockOnHand === "number" && (
+              {!isNew && stockEnabled && item.kind === "article" && typeof item.stockOnHand === "number" && (
                 <div className="flex items-center justify-between gap-3" data-testid="catalog-detail-stock">
                   <dt className="text-[color:var(--iris-ink-soft)]">{t("catalog.detail.stockOnHand")}</dt>
                   <dd className="tnum min-w-0 truncate text-foreground">
@@ -353,7 +357,9 @@ function DetailsForm({
   canSchedulePrice,
   effectiveFrom,
   onEffectiveFromChange,
+  stockEnabled,
 }: {
+  stockEnabled: boolean;
   value: CatalogItem;
   readOnly: boolean;
   onChange: (value: CatalogItem) => void;
@@ -434,7 +440,7 @@ function DetailsForm({
           </label>
         )}
         {/* Low-stock threshold: articles only, admin-editable. */}
-        {value.kind === "article" &&
+        {stockEnabled && value.kind === "article" &&
           (readOnly ? (
             <ReadOnlyValue
               label={t("catalog.detail.minStockField")}

@@ -27,9 +27,11 @@ import type {
 import type {
   LoginLogoInfo,
   LoginLogoUpload,
+  OrganizationModules,
   OrganizationSettings,
   PublicOrganization,
 } from '@/types/settings'
+import { normalizeOrganizationModules } from '@/types/settings'
 import type {
   PlatformLoginResponse,
   PlatformMetrics,
@@ -76,6 +78,11 @@ import {
 import { notifySessionExpired } from '@/lib/session'
 
 type FetchLike = typeof fetch
+
+/** Settings from an older server may lack `modules`: treat that as both off. */
+function withModules(settings: OrganizationSettings): OrganizationSettings {
+  return { ...settings, modules: normalizeOrganizationModules(settings.modules) }
+}
 
 function errorField(payload: unknown, field: 'error' | 'requestId'): string | undefined {
   if (typeof payload !== 'object' || payload === null || !(field in payload)) {
@@ -672,12 +679,16 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
 
     async getSettings() {
       const response = await fetchImpl(url('/settings'), credentialedRequest())
-      return readJSON<OrganizationSettings>(response)
+      return withModules(await readJSON<OrganizationSettings>(response))
     },
 
-    async updateSettings(settings: Partial<OrganizationSettings>) {
-      const response = await fetchImpl(url('/settings'), jsonRequest('PUT', settings))
-      return readJSON<OrganizationSettings>(response)
+    async updateSettings(settings: Partial<Omit<OrganizationSettings, 'modules'>>) {
+      // Modules are switched by Backoffice only; never send them from here even
+      // if a caller spread a full settings object into the update.
+      const { modules: _ignored, ...editable } = settings as Partial<OrganizationSettings>
+      void _ignored
+      const response = await fetchImpl(url('/settings'), jsonRequest('PUT', editable))
+      return withModules(await readJSON<OrganizationSettings>(response))
     },
 
     async getPublicOrganization(slug: string) {
@@ -789,6 +800,14 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/${suspended ? 'suspend' : 'reactivate'}`),
         credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async setPlatformTenantModules(slug: string, modules: OrganizationModules) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/modules`),
+        jsonRequest('PUT', { processes: modules.processes, stock: modules.stock }),
       )
       return readJSON<PlatformTenant>(response)
     },

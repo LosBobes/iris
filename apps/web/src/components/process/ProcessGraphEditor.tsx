@@ -66,6 +66,8 @@ export interface ProcessGraphEditorProps {
   stock?: StockLevelMap
   /** Lets admins link item nodes to catalog articles in the inspector (needs an organization session). */
   articleLinking?: boolean
+  /** Hides every article/stock detail in the inspector (the organization's Magacin module is off). */
+  articlesHidden?: boolean
 }
 
 function ProcessGraphEditorInner({
@@ -79,6 +81,7 @@ function ProcessGraphEditorInner({
   highlightIds,
   stock,
   articleLinking = false,
+  articlesHidden = false,
 }: ProcessGraphEditorProps): React.JSX.Element {
   const canEditStructure = canEditStructureProp && !readOnly
   const highlighted = useMemo(() => new Set(highlightIds ?? []), [highlightIds])
@@ -397,6 +400,7 @@ function ProcessGraphEditorInner({
             canEditStructure={canEditStructure}
             stock={stock}
             articleLinking={articleLinking}
+            articlesHidden={articlesHidden}
             onNodeChange={patchNode}
             onEdgeChange={patchEdge}
             onDelete={deleteSelection}

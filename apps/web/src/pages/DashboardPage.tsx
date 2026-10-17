@@ -6,10 +6,12 @@ import { LowStockCard } from '@/components/dashboard/LowStockCard'
 import { OperatorQueueGrid } from '@/components/dashboard/OperatorQueueGrid'
 import { useAuth } from '@/hooks/useAuth'
 import { useDashboardData } from '@/hooks/useDashboardData'
+import { useOrganization } from '@/hooks/useOrganization'
 
 function DashboardPage(): React.JSX.Element {
   const { t } = useTranslation()
   const { currentUser } = useAuth()
+  const { modules } = useOrganization()
   const {
     summary,
     monthlyOrders,
@@ -119,7 +121,7 @@ function DashboardPage(): React.JSX.Element {
               />
             )}
 
-            {currentUser.role === 'admin' && <LowStockCard />}
+            {currentUser.role === 'admin' && modules.stock && <LowStockCard />}
 
             <DashboardActionSection
               clientAttentionRows={clientAttentionRows}

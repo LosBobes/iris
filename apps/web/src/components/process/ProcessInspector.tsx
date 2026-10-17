@@ -43,6 +43,8 @@ interface ProcessInspectorProps {
   stock?: StockLevelMap
   /** Show the catalog-article link control (needs an organization session). */
   articleLinking?: boolean
+  /** Hides the article section entirely (Magacin module off). */
+  articlesHidden?: boolean
   onNodeChange: (id: string, patch: Partial<ProcessNode>) => void
   onEdgeChange: (id: string, patch: Partial<ProcessEdge>) => void
   onDelete: () => void
@@ -61,6 +63,7 @@ export function ProcessInspector({
   canEditStructure,
   stock,
   articleLinking = false,
+  articlesHidden = false,
   onNodeChange,
   onEdgeChange,
   onDelete,
@@ -181,7 +184,7 @@ export function ProcessInspector({
         </div>
       )}
 
-      {isItem && (articleLinking || linkedId) && (
+      {isItem && !articlesHidden && (articleLinking || linkedId) && (
         <div className="space-y-1.5" data-testid="inspector-article">
           <Label>{t('process.inspector.article')}</Label>
           {linkedId ? (

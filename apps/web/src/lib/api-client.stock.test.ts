@@ -45,3 +45,27 @@ describe('stock HTTP client', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual(count)
   })
 })
+
+describe('organization modules HTTP client', () => {
+  it('PUTs the modules to the platform route and returns the tenant', async () => {
+    const tenant = { slug: 'demo', modules: { processes: true, stock: true } }
+    const { api, fetchMock } = setup(tenant)
+    expect(await api.setPlatformTenantModules('de mo', { processes: true, stock: true })).toEqual(tenant)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('http://api.test/platform/tenants/de%20mo/modules')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body)).toEqual({ processes: true, stock: true })
+  })
+
+  it('never sends modules in updateSettings and defaults missing modules to off', async () => {
+    const { api, fetchMock } = setup({ firmName: 'X' })
+    const result = await api.updateSettings({ firmName: 'X', modules: { processes: true, stock: true } } as never)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ firmName: 'X' })
+    expect(result.modules).toEqual({ processes: false, stock: false })
+  })
+
+  it('treats processes without stock as processes off when reading settings', async () => {
+    const { api } = setup({ firmName: 'X', modules: { processes: true, stock: false } })
+    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: false })
+  })
+})

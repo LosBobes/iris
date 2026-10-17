@@ -14,6 +14,7 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "tenant.update": "platform.activity.kinds.tenantUpdate",
   "tenant.suspend": "platform.activity.kinds.tenantSuspend",
   "tenant.reactivate": "platform.activity.kinds.tenantReactivate",
+  "tenant.modules": "platform.activity.kinds.tenantModules",
   "user.password_reset": "platform.activity.kinds.passwordReset",
   impersonate: "platform.activity.kinds.impersonate",
   "process_template.create": "platform.activity.kinds.processTemplateCreate",
@@ -45,6 +46,16 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
   }
   if (event.detail?.toSlug) {
     lines.push(t("platform.activity.reslugged", { from: event.detail.fromSlug, to: event.detail.toSlug }));
+  }
+  if (event.action === "tenant.modules" && event.detail) {
+    const state = (value: string | undefined): string =>
+      t(value === "on" ? "platform.activity.moduleOn" : "platform.activity.moduleOff");
+    lines.push(
+      t("platform.activity.modules", {
+        stock: state(event.detail.stock),
+        processes: state(event.detail.processes),
+      }),
+    );
   }
   const session = event.impersonation;
   if (session) {

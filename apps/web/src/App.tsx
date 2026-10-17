@@ -17,18 +17,22 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPalette } from "@/components/CommandPalette";
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { InteractiveTourProvider } from "@/components/tour/InteractiveTourProvider";
+import { ModuleGate } from "@/components/ModuleGate";
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
 import {
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
+  DEFAULT_ORGANIZATION_MODULES,
   DEFAULT_PDF_SECTIONS,
   DEFAULT_PRINT_ITEM_COLUMNS,
   DEFAULT_PRIORITY_DEFAULTS,
   DEFAULT_SHOW_SHIPPING_OPTIONS,
+  normalizeOrganizationModules,
   normalizePrintItemColumns,
   type BillingDefaults,
+  type OrganizationModules,
   type OrganizationSettings,
   type PDFSections,
   type PrintItemColumn,
@@ -163,6 +167,9 @@ function AppContent(): React.JSX.Element {
   const [showShippingOptions, setShowShippingOptions] = useState(
     DEFAULT_SHOW_SHIPPING_OPTIONS,
   );
+  const [modules, setModules] = useState<OrganizationModules>(
+    DEFAULT_ORGANIZATION_MODULES,
+  );
 
   /**
    * Applies a settings response, falling back to the default for anything the
@@ -187,6 +194,8 @@ function AppContent(): React.JSX.Element {
           ? settings.showShippingOptions
           : DEFAULT_SHOW_SHIPPING_OPTIONS,
       );
+      // Optional modules are off unless the server says otherwise.
+      setModules(normalizeOrganizationModules(settings?.modules));
     },
     [],
   );
@@ -349,6 +358,7 @@ function AppContent(): React.JSX.Element {
       setPrintItemColumns,
       showShippingOptions,
       setShowShippingOptions,
+      modules,
     }),
     [
       firmName,
@@ -357,6 +367,7 @@ function AppContent(): React.JSX.Element {
       priorityDefaults,
       printItemColumns,
       showShippingOptions,
+      modules,
     ],
   );
 
@@ -406,8 +417,8 @@ function AppContent(): React.JSX.Element {
                             <Route path="/catalog" element={<CatalogPage />} />
                             <Route path="/catalog/new" element={<CatalogDetailPage />} />
                             <Route path="/catalog/:id" element={<CatalogDetailPage />} />
-                            <Route path="/stock" element={<StockPage />} />
-                            <Route path="/stock/:catalogItemId" element={<StockHistoryPage />} />
+                            <Route path="/stock" element={<ModuleGate module="stock"><StockPage /></ModuleGate>} />
+                            <Route path="/stock/:catalogItemId" element={<ModuleGate module="stock"><StockHistoryPage /></ModuleGate>} />
                             <Route path="/work-orders" element={<WorkOrdersPage />} />
                             <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
                             <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
@@ -418,8 +429,8 @@ function AppContent(): React.JSX.Element {
                               <>
                                 <Route path="/cost-review" element={<CostReviewPage />} />
                                 <Route path="/users" element={<UsersPage />} />
-                                <Route path="/settings/processes/new" element={<ProcessTemplatePage />} />
-                                <Route path="/settings/processes/:id" element={<ProcessTemplatePage />} />
+                                <Route path="/settings/processes/new" element={<ModuleGate module="processes"><ProcessTemplatePage /></ModuleGate>} />
+                                <Route path="/settings/processes/:id" element={<ModuleGate module="processes"><ProcessTemplatePage /></ModuleGate>} />
                               </>
                             )}
                           </Route>

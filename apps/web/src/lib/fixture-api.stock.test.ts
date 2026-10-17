@@ -32,7 +32,7 @@ async function withStep(orderId: string, stepId: string, status: 'pending' | 'do
 }
 
 beforeEach(async () => {
-  api = createFixtureApi()
+  api = createFixtureApi({ modules: { processes: true, stock: true } })
   // Each createFixtureApi() has a fresh process store and ledger.
   await api.applyProcessTemplate(OPEN_ORDER, 'pt-offset')
 })

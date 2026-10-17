@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/errors'
+import { STOCK_DISABLED_MESSAGE } from '@/lib/modules'
 import { isLowStock, planCountPosting, planProcessPosting, reservedAcrossGraphs, roundQuantity } from '@/lib/stock/posting'
 import type { ExistingNet } from '@/lib/stock/posting'
 import type { WorkOrderStatus } from '@/types/work-order'
@@ -51,6 +52,8 @@ export interface StockCatalogArticle {
 
 export interface StockFixtureContext {
   currentUser: () => { username: string; role: 'admin' | 'user' } | null
+  /** Whether the organization's Magacin module is on; every /stock call is 403 otherwise. */
+  enabled: () => boolean
   catalogItems: () => StockCatalogArticle[]
   workOrder: (id: string) => { number: string; status: WorkOrderStatus } | null
   orderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
@@ -90,6 +93,7 @@ export function createStockFixtureStore(context: StockFixtureContext): StockFixt
   const nowIso = (): string => new Date().toISOString()
 
   const requireUser = (): { username: string; role: 'admin' | 'user' } => {
+    if (!context.enabled()) throw fixtureError(403, STOCK_DISABLED_MESSAGE)
     const user = context.currentUser()
     if (!user) throw fixtureError(401, MESSAGES.loginRequired)
     return user
