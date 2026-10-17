@@ -14,6 +14,8 @@ tags:
   - name: Customers
   - name: Work Orders
   - name: Dashboard
+  - name: Processes
+    description: Process templates (steps with inputs, products and byproducts) and each work order's own editable copy.
   - name: Platform
     description: Backoffice (/backoffice in the web app). Superadmin accounts stored apart from organization users (own table, sessions and cookie); aggregate metrics only.
 paths:
@@ -1029,6 +1031,356 @@ paths:
       responses:
         '204':
           description: The lock was released (or the caller did not hold it).
+  /process-templates:
+    get:
+      tags: [Processes]
+      summary: List the organization's process templates
+      operationId: listProcessTemplates
+      responses:
+        '200':
+          description: Templates, default first then by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Processes]
+      summary: Create a process template (admin only)
+      description: >-
+        Per-order state (status, actualQuantity) in the graph is stripped. `isDefault: true` clears the flag on the organization's other templates; new work orders get a copy of the default.
+      operationId: createProcessTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '201':
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /process-templates/{id}:
+    get:
+      tags: [Processes]
+      summary: Get a process template
+      operationId: getProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Processes]
+      summary: Replace a process template (admin only)
+      operationId: updateProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Processes]
+      summary: Delete a process template (admin only)
+      description: >-
+        Work-order processes already copied from the template are kept; their `templateId` becomes null.
+      operationId: deleteProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /work-orders/{id}/process:
+    get:
+      tags: [Processes]
+      summary: Get a work order's process
+      operationId: getWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order not found, or it has no process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Processes]
+      summary: Attach a copy of a process template to a work order
+      description: >-
+        Copies the template graph with every step set to `pending`. Any signed-in user may do this once per work order.
+      operationId: applyProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyProcessTemplateInput'
+      responses:
+        '201':
+          description: The new work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order or template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The work order already has a process (`Radni nalog već ima proces.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: templateId missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Processes]
+      summary: Replace a work order's process graph
+      description: >-
+        Admins may change anything. Other users may change only per-order state (status, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
+      operationId: updateWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderProcessInput'
+      responses:
+        '200':
+          description: Updated work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Structural change by a non-admin (`Samo administrator može menjati strukturu procesa.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order not found, or it has no process yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Processes]
+      summary: Remove a work order's process (admin only)
+      operationId: deleteWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Removed
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order has no process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /public/work-orders/{token}:
     parameters:
       - name: token
@@ -1711,6 +2063,206 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/process-templates:
+    get:
+      tags: [Platform]
+      summary: List an organization's process templates (operator only)
+      operationId: listPlatformProcessTemplates
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Templates, default first then by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Create a process template for an organization (operator only)
+      description: >-
+        Same validation as the organization's own route. Recorded as `process_template.create` with detail `{name}`.
+      operationId: createPlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '201':
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/process-templates/{id}:
+    put:
+      tags: [Platform]
+      summary: Replace an organization's process template (operator only)
+      description: >-
+        Recorded as `process_template.update` with detail `{name}`.
+      operationId: updatePlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Platform]
+      summary: Delete an organization's process template (operator only)
+      description: >-
+        Recorded as `process_template.delete` with detail `{name}`. Existing work-order processes are kept.
+      operationId: deletePlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
@@ -1750,6 +2302,155 @@ components:
         type: string
         enum: [purchase, sale, both]
   schemas:
+    ProcessNode:
+      type: object
+      required: [id, kind, label, x, y]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Client-generated, unique within the graph.
+        kind:
+          type: string
+          enum: [step, input, product, byproduct]
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        x:
+          type: number
+          description: Canvas position.
+        y:
+          type: number
+        quantity:
+          type: number
+          minimum: 0
+          description: Planned quantity. Item nodes only; dropped on steps.
+        unit:
+          type: string
+          maxLength: 20
+          description: Item nodes only; dropped on steps.
+        catalogItemId:
+          type: string
+          description: Optional link to a catalog item. Item nodes only; dropped on steps.
+        note:
+          type: string
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/ProcessStepStatus'
+        actualQuantity:
+          type: number
+          minimum: 0
+          description: Per-order state. Item nodes only; stripped from templates.
+    ProcessStepStatus:
+      type: string
+      enum: [pending, in_progress, done, skipped]
+      description: Per-order state of a step node; dropped on item nodes and stripped from templates.
+    ProcessEdge:
+      type: object
+      required: [id, source, target]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        source:
+          type: string
+          description: Id of an existing node.
+        target:
+          type: string
+          description: Id of an existing node.
+        label:
+          type: string
+          maxLength: 60
+    ProcessGraph:
+      type: object
+      description: >-
+        Directed acyclic graph of 1-200 nodes (at least one `step`) and 0-400
+        edges. Allowed connections are input to step, step to step, step to
+        product, step to byproduct, product to step and byproduct to step; edges
+        may not be self-loops or duplicate a (source, target) pair.
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ProcessNode'
+        edges:
+          type: array
+          maxItems: 400
+          items:
+            $ref: '#/components/schemas/ProcessEdge'
+    ProcessTemplate:
+      type: object
+      required: [id, name, description, isDefault, graph, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        isDefault:
+          type: boolean
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProcessTemplateInput:
+      type: object
+      required: [name, graph]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Unique per organization (case-sensitive).
+        description:
+          type: string
+        isDefault:
+          type: boolean
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+    WorkOrderProcess:
+      type: object
+      required: [workOrderId, templateId, templateName, graph, updatedAt, updatedBy]
+      properties:
+        workOrderId:
+          type: string
+        templateId:
+          type: [string, 'null']
+          description: Null once the template it was copied from is deleted.
+        templateName:
+          type: string
+          description: Template name at the time it was applied.
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+          description: Username of the last editor.
+    WorkOrderProcessInput:
+      type: object
+      required: [graph]
+      properties:
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+    ApplyProcessTemplateInput:
+      type: object
+      required: [templateId]
+      properties:
+        templateId:
+          type: string
     DashboardData:
       type: object
       required:
@@ -3007,7 +3708,7 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, user.password_reset, impersonate]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
         tenantSlug:
           type: string
           description: As it was at the time.

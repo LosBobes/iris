@@ -137,6 +137,10 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/reactivate", s.handlePlatformSuspendTenant(false))
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/users/{id}/password", s.handlePlatformResetPassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/process-templates", s.handlePlatformProcessTemplates)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/process-templates", s.handlePlatformCreateProcessTemplate)
+	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformUpdateProcessTemplate)
+	r.With(s.requirePlatformAdmin).Delete("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformDeleteProcessTemplate)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -162,6 +166,17 @@ func (s *Server) Routes() http.Handler {
 		protected.Delete("/work-orders/{id}/edit-lock", s.handleReleaseEditLock)
 		protected.Patch("/work-orders/{id}", s.handleUpdateWorkOrder)
 		protected.Delete("/work-orders/{id}", s.requireAdmin(s.handleDeleteWorkOrder))
+		protected.Get("/work-orders/{id}/process", s.handleWorkOrderProcess)
+		protected.Post("/work-orders/{id}/process", s.handleApplyProcessTemplate)
+		// Operators may change a process's per-order state and layout only; the
+		// store rejects structural changes unless the caller is an admin.
+		protected.Put("/work-orders/{id}/process", s.handleUpdateWorkOrderProcess)
+		protected.Delete("/work-orders/{id}/process", s.requireAdmin(s.handleDeleteWorkOrderProcess))
+		protected.Get("/process-templates", s.handleProcessTemplates)
+		protected.Get("/process-templates/{id}", s.handleProcessTemplateByID)
+		protected.Post("/process-templates", s.requireAdmin(s.handleCreateProcessTemplate))
+		protected.Put("/process-templates/{id}", s.requireAdmin(s.handleUpdateProcessTemplate))
+		protected.Delete("/process-templates/{id}", s.requireAdmin(s.handleDeleteProcessTemplate))
 		protected.Get("/enum-values", s.handleEnumValues)
 		protected.Post("/enum-values", s.requireAdmin(s.handleCreateEnumValue))
 		protected.Put("/enum-values/{id}", s.requireAdmin(s.handleUpdateEnumValue))

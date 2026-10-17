@@ -61,6 +61,9 @@ type FixtureStore struct {
 	showShippingOptions *bool
 	loginLogo           *domain.LoginLogo
 	sessions            map[string]fixtureSession
+	processTemplates    []domain.ProcessTemplate
+	nextProcessSequence int
+	workOrderProcesses  map[string]domain.WorkOrderProcess
 }
 
 type fixtureSession struct {
@@ -520,6 +523,7 @@ func (s *FixtureStore) CreateWorkOrder(
 	}
 
 	s.workOrders = append(s.workOrders, newOrder)
+	s.attachDefaultProcessLocked(newOrder.ID, input.IssuedBy, createdAt)
 	return cloneWorkOrder(newOrder), nil
 }
 
@@ -585,6 +589,7 @@ func (s *FixtureStore) DeleteWorkOrder(_ context.Context, id string) (domain.Del
 		}
 
 		s.workOrders = append(s.workOrders[:index], s.workOrders[index+1:]...)
+		delete(s.workOrderProcesses, id)
 		return domain.DeleteWorkOrderResponse{Success: true}, nil
 	}
 

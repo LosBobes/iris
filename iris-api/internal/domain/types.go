@@ -1007,3 +1007,100 @@ type DashboardData struct {
 	QueueSummary          DashboardQueueSummary    `json:"queueSummary"`
 	OperatorQueue         DashboardOperatorQueue   `json:"operatorQueue"`
 }
+
+// ProcessNodeKind is the role a node plays in a process graph.
+type ProcessNodeKind string
+
+const (
+	ProcessNodeStep      ProcessNodeKind = "step"
+	ProcessNodeInput     ProcessNodeKind = "input"
+	ProcessNodeProduct   ProcessNodeKind = "product"
+	ProcessNodeByproduct ProcessNodeKind = "byproduct"
+)
+
+// ProcessStepStatus is the per-work-order progress of a step node.
+type ProcessStepStatus string
+
+const (
+	ProcessStepPending    ProcessStepStatus = "pending"
+	ProcessStepInProgress ProcessStepStatus = "in_progress"
+	ProcessStepDone       ProcessStepStatus = "done"
+	ProcessStepSkipped    ProcessStepStatus = "skipped"
+)
+
+// ProcessNode is one vertex of a process graph. Step nodes carry Status; item
+// nodes (input, product, byproduct) carry the quantity fields.
+type ProcessNode struct {
+	ID             string            `json:"id"`
+	Kind           ProcessNodeKind   `json:"kind"`
+	Label          string            `json:"label"`
+	X              float64           `json:"x"`
+	Y              float64           `json:"y"`
+	Quantity       *float64          `json:"quantity,omitempty"`
+	Unit           string            `json:"unit,omitempty"`
+	CatalogItemID  string            `json:"catalogItemId,omitempty"`
+	Note           string            `json:"note,omitempty"`
+	Status         ProcessStepStatus `json:"status,omitempty"`
+	ActualQuantity *float64          `json:"actualQuantity,omitempty"`
+}
+
+// ProcessEdge is a directed connection between two process nodes.
+type ProcessEdge struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Label  string `json:"label,omitempty"`
+}
+
+// ProcessGraph is the directed acyclic graph of a process.
+type ProcessGraph struct {
+	Nodes []ProcessNode `json:"nodes"`
+	Edges []ProcessEdge `json:"edges"`
+}
+
+// ProcessTemplate is a tenant-defined reusable process graph.
+type ProcessTemplate struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	IsDefault   bool         `json:"isDefault"`
+	Graph       ProcessGraph `json:"graph"`
+	CreatedAt   string       `json:"createdAt"`
+	UpdatedAt   string       `json:"updatedAt"`
+}
+
+// ProcessTemplateInput is the create/update payload for a process template.
+type ProcessTemplateInput struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	IsDefault   bool         `json:"isDefault"`
+	Graph       ProcessGraph `json:"graph"`
+}
+
+// WorkOrderProcess is a work order's own copy of a process graph plus its
+// per-order state. TemplateID is nil once the source template is deleted.
+type WorkOrderProcess struct {
+	WorkOrderID  string       `json:"workOrderId"`
+	TemplateID   *string      `json:"templateId"`
+	TemplateName string       `json:"templateName"`
+	Graph        ProcessGraph `json:"graph"`
+	UpdatedAt    string       `json:"updatedAt"`
+	UpdatedBy    string       `json:"updatedBy"`
+}
+
+// ApplyProcessTemplateInput attaches a template to a work order.
+type ApplyProcessTemplateInput struct {
+	TemplateID string `json:"templateId"`
+}
+
+// WorkOrderProcessInput replaces a work order's process graph.
+type WorkOrderProcessInput struct {
+	Graph ProcessGraph `json:"graph"`
+}
+
+// Backoffice audit actions for process templates.
+const (
+	AuditProcessTemplateCreate = "process_template.create"
+	AuditProcessTemplateUpdate = "process_template.update"
+	AuditProcessTemplateDelete = "process_template.delete"
+)

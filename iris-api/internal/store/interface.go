@@ -146,6 +146,24 @@ type Store interface {
 	// DeleteLoginLogo removes the tenant's sign-in logo (a no-op when unset).
 	DeleteLoginLogo(ctx context.Context) error
 
+	// Process templates (tenant-defined process graphs) and each work order's own
+	// copy. ProcessTemplateByID and WorkOrderProcess return nil when missing;
+	// the write methods return the sentinel errors in process_graph.go
+	// (ErrProcessTemplateNotFound, ErrWorkOrderNotFound, ErrProcessExists,
+	// ErrProcessStructureLocked, ErrProcessNotFound).
+	ProcessTemplates(ctx context.Context) ([]domain.ProcessTemplate, error)
+	ProcessTemplateByID(ctx context.Context, id string) (*domain.ProcessTemplate, error)
+	CreateProcessTemplate(ctx context.Context, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
+	UpdateProcessTemplate(ctx context.Context, id string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
+	DeleteProcessTemplate(ctx context.Context, id string) error
+	WorkOrderProcess(ctx context.Context, workOrderID string) (*domain.WorkOrderProcess, error)
+	ApplyProcessTemplate(ctx context.Context, workOrderID, templateID, username string) (*domain.WorkOrderProcess, error)
+	// UpdateWorkOrderProcess replaces the graph; without allowStructural only
+	// per-order state and positions may change (else ErrProcessStructureLocked).
+	// It returns nil when the order has no process.
+	UpdateWorkOrderProcess(ctx context.Context, workOrderID string, graph domain.ProcessGraph, username string, allowStructural bool) (*domain.WorkOrderProcess, error)
+	DeleteWorkOrderProcess(ctx context.Context, workOrderID string) error
+
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	UserByID(ctx context.Context, id string) (*domain.User, error)
 	CreateUserAccount(ctx context.Context, input domain.CreateUserInput) (*domain.User, error)
