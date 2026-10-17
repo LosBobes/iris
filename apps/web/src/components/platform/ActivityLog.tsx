@@ -193,7 +193,7 @@ export function ActivityLog(): React.JSX.Element {
         <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("platform.activity.empty")}</p>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[960px] text-[13px]">
               <thead className="text-left text-[12px] text-[color:var(--pf-muted)]">
                 <tr>
