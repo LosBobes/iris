@@ -19,6 +19,7 @@ WORKDIR /src/apps/web
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 
+COPY VERSION /src/VERSION
 COPY apps/web/ ./
 RUN npm run build
 

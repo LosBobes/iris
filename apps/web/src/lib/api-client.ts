@@ -1,3 +1,4 @@
+import { APP_VERSION } from '@/lib/app-version'
 import type {
   Customer,
   CreateWorkOrderInput,
@@ -427,7 +428,7 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
 
   return withOperationReporting({
     async getAppVersion() {
-      return '0.1.0-dev'
+      return APP_VERSION
     },
 
     async getBackendStatus() {
