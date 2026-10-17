@@ -48,6 +48,13 @@ type PlatformStore interface {
 	// EndImpersonationSessions deletes every organization session the
 	// superadmin opened by impersonation.
 	EndImpersonationSessions(ctx context.Context, adminID string) error
+	// RecordImpersonationAction adds a change request to an impersonation's trail.
+	RecordImpersonationAction(ctx context.Context, impersonationID int64, action domain.PlatformImpersonationAction) error
+	// ImpersonationLog lists impersonations, newest first.
+	ImpersonationLog(ctx context.Context, limit, offset int) (domain.PlatformImpersonationLog, error)
+	// ImpersonationActions returns one impersonation's trail, oldest first;
+	// the bool is false when no such impersonation exists.
+	ImpersonationActions(ctx context.Context, impersonationID int64) ([]domain.PlatformImpersonationAction, bool, error)
 }
 
 var _ PlatformStore = (*SQLiteStore)(nil)

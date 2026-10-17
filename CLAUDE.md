@@ -105,7 +105,12 @@ edits, and blocks production/destructive commands the user did not ask for.
   `sessions.impersonated_by` and audited in `impersonation_events`; `/auth/session`
   reports `impersonatedBy`, which drives the app's top banner ("Prekini
   impersonaciju" logs out back to `/backoffice`). It is not counted as a login,
-  and signing out of the Backoffice ends it.
+  and signing out of the Backoffice ends it. Every change request (POST/PUT/
+  PATCH/DELETE, not edit-lock heartbeats, never bodies) made in such a session is
+  traced to it in `impersonation_actions` (`serveTraced` in `requireAuth`); the
+  Backoffice's "Impersonacije" tab (`/backoffice/impersonations`,
+  `GET /platform/impersonations[/{id}/actions]`) shows the log and each trail.
+  New mutating routes should get a label in `components/platform/impersonation-actions.ts`.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

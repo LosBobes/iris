@@ -38,6 +38,8 @@ import type {
   PlatformRangeDays,
   PlatformTenantUsers,
   PlatformImpersonationResponse,
+  PlatformImpersonationLog,
+  PlatformImpersonationAction,
 } from '@/types/platform'
 import type {
   CreateUserInput,
@@ -119,6 +121,8 @@ declare global {
       getPlatformTenantUsers: (slug: string) => Promise<PlatformTenantUsers>
       /** Replaces this browser's organization session with one as the chosen user. */
       platformImpersonate: (slug: string, userId: string) => Promise<PlatformImpersonationResponse>
+      getPlatformImpersonations: (query: { limit: number; offset: number }) => Promise<PlatformImpersonationLog>
+      getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

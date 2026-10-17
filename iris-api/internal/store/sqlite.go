@@ -202,18 +202,19 @@ func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*do
 	var user domain.User
 	var expiresAtRaw string
 	var impersonatedBy sql.NullString
+	var impersonationID sql.NullInt64
 	// An impersonation session (see CreateImpersonationSession) carries the
 	// superadmin who opened it; ordinary sign-ins leave impersonated_by NULL.
 	err := s.db.QueryRowContext(
 		ctx,
 		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at,
-		        platform_admins.username
+		        platform_admins.username, sessions.impersonation_id
 		 FROM sessions
 		 JOIN users ON users.id = sessions.user_id
 		 LEFT JOIN platform_admins ON platform_admins.id = sessions.impersonated_by
 		 WHERE sessions.token = ?`,
 		token,
-	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw, &impersonatedBy)
+	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw, &impersonatedBy, &impersonationID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -227,11 +228,17 @@ func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*do
 	}
 	if impersonatedBy.Valid {
 		user.ImpersonatedBy = &impersonatedBy.String
+		user.ImpersonationID = impersonationID.Int64
 	}
 	return &user, nil
 }
 
 func (s *SQLiteStore) DeleteSession(ctx context.Context, token string) error {
+	// Signing out of an impersonated session (or its expiry) ends that
+	// impersonation in the log.
+	if err := s.markImpersonationsEnded(ctx, `token = ?`, token); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}

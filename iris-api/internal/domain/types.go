@@ -386,6 +386,38 @@ type PlatformImpersonationResponse struct {
 	ExpiresAt string `json:"expiresAt,omitempty"`
 }
 
+// PlatformImpersonation is one row of the impersonation log: who signed in as
+// whom, where and when, and how many changes they made.
+type PlatformImpersonation struct {
+	ID            int64   `json:"id"`
+	AdminUsername string  `json:"adminUsername"`
+	TenantSlug    string  `json:"tenantSlug"`
+	TenantName    string  `json:"tenantName"`
+	UserID        string  `json:"userId"`
+	Username      string  `json:"username"`
+	IP            string  `json:"ip"`
+	StartedAt     string  `json:"startedAt"`
+	ExpiresAt     string  `json:"expiresAt"`
+	EndedAt       *string `json:"endedAt"`
+	ActionCount   int     `json:"actionCount"`
+}
+
+// PlatformImpersonationLog is a page of the impersonation log, newest first.
+type PlatformImpersonationLog struct {
+	Items []PlatformImpersonation `json:"items"`
+	Total int                     `json:"total"`
+}
+
+// PlatformImpersonationAction is one change request made during an
+// impersonation. Request bodies are never kept (they can hold passwords).
+type PlatformImpersonationAction struct {
+	At     string `json:"at"`
+	Method string `json:"method"`
+	Route  string `json:"route"`
+	Path   string `json:"path"`
+	Status int    `json:"status"`
+}
+
 // PlatformMetrics is the operator dashboard payload: counts, dates and sizes
 // only. It never carries a customer, user or work-order record.
 type PlatformMetrics struct {
@@ -461,6 +493,9 @@ type User struct {
 	// ImpersonatedBy is set only on a session a Backoffice superadmin opened
 	// "as" this user: it names that superadmin, so the app can say so.
 	ImpersonatedBy *string `json:"impersonatedBy,omitempty"`
+	// ImpersonationID links an impersonated session to its audit row, so every
+	// change made in it is traced back (server-side only; 0 otherwise).
+	ImpersonationID int64 `json:"-"`
 }
 
 // Tenant is an organization (shop) whose data is isolated from every other

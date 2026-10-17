@@ -378,7 +378,7 @@ function AppContent(): React.JSX.Element {
           <Routes>
             <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
             {/* Backoffice: superadmin session, independent of any organization. */}
-            <Route path="/backoffice" element={<PlatformConsole />} />
+            <Route path="/backoffice/*" element={<PlatformConsole />} />
             <Route
               path="*"
               element={

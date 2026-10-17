@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -85,11 +87,49 @@ func TestPlatformImpersonation(t *testing.T) {
 		t.Fatalf("ordinary session = %s", rec.Body.String())
 	}
 
-	// Audited, and not counted as a login or an active session.
-	events, err := sqliteStore.ImpersonationEvents(ctx, 10)
-	if err != nil || len(events) != 1 || events[0].AdminUsername != "ops" || events[0].Username != "operater" {
-		t.Fatalf("events = %+v, err %v", events, err)
+	// Change requests are traced to the impersonation; reads are not.
+	if rec := platformRequest(t, server, session, http.MethodPost, "/work-orders/reserve-number", ""); rec.Code >= 300 {
+		t.Fatalf("reserve number as impersonated operator = %d %s", rec.Code, rec.Body.String())
 	}
+	if rec := platformRequest(t, server, session, http.MethodDelete, "/customers/nope", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("admin delete as impersonated operator = %d, want 403", rec.Code)
+	}
+	// Edit-lock heartbeats are not traced.
+	platformRequest(t, server, session, http.MethodPost, "/work-orders/nope/edit-lock", "")
+	// The same requests from an ordinary session leave no trail.
+	platformRequest(t, server, tenantCookie, http.MethodPost, "/work-orders/reserve-number", "")
+
+	rec = platformRequest(t, server, platformSession, http.MethodGet, "/platform/impersonations", "")
+	var log domain.PlatformImpersonationLog
+	if err := json.Unmarshal(rec.Body.Bytes(), &log); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("log = %d %s", rec.Code, rec.Body.String())
+	}
+	if log.Total != 1 || len(log.Items) != 1 {
+		t.Fatalf("log = %+v", log)
+	}
+	entry := log.Items[0]
+	if entry.AdminUsername != "ops" || entry.Username != "operater" || entry.TenantSlug != "demo" ||
+		entry.ActionCount != 2 || entry.EndedAt != nil || entry.ExpiresAt == "" {
+		t.Fatalf("log entry = %+v", entry)
+	}
+	rec = platformRequest(t, server, platformSession, http.MethodGet, fmt.Sprintf("/platform/impersonations/%d/actions", entry.ID), "")
+	var actions []domain.PlatformImpersonationAction
+	if err := json.Unmarshal(rec.Body.Bytes(), &actions); err != nil || len(actions) != 2 {
+		t.Fatalf("actions = %d %s", rec.Code, rec.Body.String())
+	}
+	if actions[0].Method != http.MethodPost || actions[0].Route != "/work-orders/reserve-number" || actions[0].Status >= 300 ||
+		actions[1].Method != http.MethodDelete || actions[1].Route != "/customers/{id}" || actions[1].Path != "/customers/nope" ||
+		actions[1].Status != http.StatusForbidden {
+		t.Fatalf("actions = %+v", actions)
+	}
+	if rec := platformRequest(t, server, platformSession, http.MethodGet, "/platform/impersonations/999/actions", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown impersonation actions = %d, want 404", rec.Code)
+	}
+	if rec := platformRequest(t, server, tenantCookie, http.MethodGet, "/platform/impersonations", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("log with tenant session = %d, want 401", rec.Code)
+	}
+
+	// Not counted as a login or an active session.
 	rec = platformRequest(t, server, platformSession, http.MethodGet, "/platform/metrics", "")
 	var metrics domain.PlatformMetrics
 	if err := json.Unmarshal(rec.Body.Bytes(), &metrics); err != nil {
@@ -108,5 +148,28 @@ func TestPlatformImpersonation(t *testing.T) {
 	rec = platformRequest(t, server, tenantCookie, http.MethodGet, "/auth/session", "")
 	if err := json.Unmarshal(rec.Body.Bytes(), &current); err != nil || !current.Success {
 		t.Fatalf("ordinary session after platform logout = %s", rec.Body.String())
+	}
+	// ...and the log shows it ended.
+	ended, err := sqliteStore.ImpersonationLog(ctx, 10, 0)
+	if err != nil || ended.Items[0].EndedAt == nil {
+		t.Fatalf("log after platform logout = %+v, err %v", ended, err)
+	}
+}
+
+func TestImpersonationEndsOnTenantLogout(t *testing.T) {
+	server, _, _ := newServerWithRoles(t)
+	sqliteStore := server.store.(*store.SQLiteStore)
+	ctx := context.Background()
+	token, user, err := sqliteStore.CreateImpersonationSession(ctx, store.ImpersonationInput{
+		AdminID: "platform-admin", AdminUsername: "admin", TenantID: store.DemoTenantID, UserID: "user-1",
+		ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil || user == nil {
+		t.Fatalf("impersonate: user=%v err=%v", user, err)
+	}
+	platformRequest(t, server, &http.Cookie{Name: server.config.SessionCookieName, Value: token}, http.MethodPost, "/auth/logout", "")
+	log, err := sqliteStore.ImpersonationLog(ctx, 10, 0)
+	if err != nil || len(log.Items) != 1 || log.Items[0].EndedAt == nil || log.Items[0].ActionCount != 0 {
+		t.Fatalf("log after logout = %+v, err %v", log, err)
 	}
 }

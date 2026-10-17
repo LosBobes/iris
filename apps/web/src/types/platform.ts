@@ -32,6 +32,37 @@ export interface PlatformImpersonationResponse {
   expiresAt?: string
 }
 
+/** One row of GET /platform/impersonations. */
+export interface PlatformImpersonation {
+  id: number
+  adminUsername: string
+  tenantSlug: string
+  tenantName: string
+  userId: string
+  username: string
+  ip: string
+  startedAt: string
+  expiresAt: string
+  /** Set once signed out (or found expired); null while it may be active. */
+  endedAt: string | null
+  actionCount: number
+}
+
+export interface PlatformImpersonationLog {
+  items: PlatformImpersonation[]
+  total: number
+}
+
+/** A change request made during an impersonation (bodies are never kept). */
+export interface PlatformImpersonationAction {
+  at: string
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  /** The API route pattern, e.g. `/work-orders/{id}`. */
+  route: string
+  path: string
+  status: number
+}
+
 export interface PlatformPasswordChange {
   currentPassword: string
   newPassword: string

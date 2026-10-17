@@ -1060,6 +1060,15 @@ export function createFixtureApi(): Window['api'] {
       throw new Error('Impersonacija nije dostupna u demo režimu.')
     },
 
+    async getPlatformImpersonations() {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return { items: [], total: 0 }
+    },
+
+    async getPlatformImpersonationActions() {
+      throw new Error('Impersonacija ne postoji.')
+    },
+
     async getWorkOrders(query) {
       return listFixtureWorkOrders(query)
     },

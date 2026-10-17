@@ -36,6 +36,8 @@ import type {
   PlatformRangeDays,
   PlatformTenantUsers,
   PlatformImpersonationResponse,
+  PlatformImpersonationLog,
+  PlatformImpersonationAction,
 } from '@/types/platform'
 import type {
   CreateUserInput,
@@ -718,6 +720,19 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
         jsonRequest('POST', { userId }),
       )
       return readJSON<PlatformImpersonationResponse>(response)
+    },
+
+    async getPlatformImpersonations({ limit, offset }: { limit: number; offset: number }) {
+      const response = await fetchImpl(
+        url(`/platform/impersonations?limit=${limit}&offset=${offset}`),
+        credentialedRequest(),
+      )
+      return readJSON<PlatformImpersonationLog>(response)
+    },
+
+    async getPlatformImpersonationActions(id: number) {
+      const response = await fetchImpl(url(`/platform/impersonations/${id}/actions`), credentialedRequest())
+      return readJSON<PlatformImpersonationAction[]>(response)
     },
 
     async listUsers() {

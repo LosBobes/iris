@@ -12,8 +12,9 @@ import (
 // Impersonation: a Backoffice superadmin opens an organization session as one
 // of that organization's users, to see and do exactly what that user can. The
 // session is an ordinary row in sessions (so every tenant-scoped check applies
-// unchanged) marked with impersonated_by, and each one is written to
-// impersonation_events. It is never counted as a login.
+// unchanged) marked with impersonated_by and linked to its impersonation_events
+// row, and every change request made in it is written to impersonation_actions.
+// It is never counted as a login.
 
 // ImpersonationInput describes one impersonation request.
 type ImpersonationInput struct {
@@ -59,78 +60,142 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 	); err != nil {
 		return "", nil, fmt.Errorf("sweep expired sessions: %w", err)
 	}
-	if _, err := tx.ExecContext(
+	result, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO sessions(token, user_id, expires_at, impersonated_by) VALUES (?, ?, ?, ?)`,
-		token, user.ID, input.ExpiresAt.UTC().Format(time.RFC3339), input.AdminID,
-	); err != nil {
-		return "", nil, fmt.Errorf("create impersonation session: %w", err)
+		`INSERT INTO impersonation_events(admin_id, admin_username, tenant_id, user_id, username, ip, at, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		input.AdminID, input.AdminUsername, input.TenantID, user.ID, user.Username, input.IP,
+		now.Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return "", nil, fmt.Errorf("record impersonation: %w", err)
+	}
+	impersonationID, err := result.LastInsertId()
+	if err != nil {
+		return "", nil, fmt.Errorf("record impersonation: %w", err)
 	}
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO impersonation_events(admin_id, admin_username, tenant_id, user_id, username, ip, at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		input.AdminID, input.AdminUsername, input.TenantID, user.ID, user.Username, input.IP, now.Format(time.RFC3339),
+		`INSERT INTO sessions(token, user_id, expires_at, impersonated_by, impersonation_id) VALUES (?, ?, ?, ?, ?)`,
+		token, user.ID, input.ExpiresAt.UTC().Format(time.RFC3339), input.AdminID, impersonationID,
 	); err != nil {
-		return "", nil, fmt.Errorf("record impersonation: %w", err)
+		return "", nil, fmt.Errorf("create impersonation session: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return "", nil, fmt.Errorf("commit impersonation: %w", err)
 	}
 	user.ImpersonatedBy = &input.AdminUsername
+	user.ImpersonationID = impersonationID
 	return token, user, nil
 }
 
+// markImpersonationsEnded stamps ended_at on the impersonations behind the
+// sessions matched by where (a condition on sessions) before they are deleted.
+func (s *SQLiteStore) markImpersonationsEnded(ctx context.Context, where string, args ...any) error {
+	args = append([]any{time.Now().UTC().Format(time.RFC3339)}, args...)
+	if _, err := s.db.ExecContext(
+		ctx,
+		// A session found expired only on a later lookup ended at its expiry.
+		`UPDATE impersonation_events SET ended_at = MIN(?, expires_at)
+		 WHERE ended_at IS NULL AND id IN (SELECT impersonation_id FROM sessions WHERE impersonation_id IS NOT NULL AND `+where+`)`,
+		args...,
+	); err != nil {
+		return fmt.Errorf("end impersonation: %w", err)
+	}
+	return nil
+}
+
 func (s *SQLiteStore) EndImpersonationSessions(ctx context.Context, adminID string) error {
+	if err := s.markImpersonationsEnded(ctx, `impersonated_by = ?`, adminID); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE impersonated_by = ?`, adminID); err != nil {
 		return fmt.Errorf("end impersonation sessions: %w", err)
 	}
 	return nil
 }
 
-// ImpersonationEvent is one row of the impersonation audit log.
-type ImpersonationEvent struct {
-	AdminUsername string
-	TenantID      string
-	UserID        string
-	Username      string
-	IP            string
-	At            string
+// RecordImpersonationAction adds one change request to an impersonation's trail.
+func (s *SQLiteStore) RecordImpersonationAction(ctx context.Context, impersonationID int64, action domain.PlatformImpersonationAction) error {
+	if _, err := s.db.ExecContext(
+		ctx,
+		`INSERT INTO impersonation_actions(impersonation_id, at, method, route, path, status) VALUES (?, ?, ?, ?, ?, ?)`,
+		impersonationID, action.At, action.Method, action.Route, action.Path, action.Status,
+	); err != nil {
+		return fmt.Errorf("record impersonation action: %w", err)
+	}
+	return nil
 }
 
-// ImpersonationEvents returns the audit log, newest first (for irisctl and tests).
-func (s *SQLiteStore) ImpersonationEvents(ctx context.Context, limit int) ([]ImpersonationEvent, error) {
+func (s *SQLiteStore) ImpersonationLog(ctx context.Context, limit, offset int) (domain.PlatformImpersonationLog, error) {
+	log := domain.PlatformImpersonationLog{Items: []domain.PlatformImpersonation{}}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM impersonation_events`).Scan(&log.Total); err != nil {
+		return log, fmt.Errorf("count impersonations: %w", err)
+	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT admin_username, tenant_id, user_id, username, ip, at
-		 FROM impersonation_events ORDER BY id DESC LIMIT ?`,
-		limit,
+		`SELECT e.id, e.admin_username, t.slug, t.name, e.user_id, e.username, COALESCE(e.ip, ''),
+		        e.at, e.expires_at, e.ended_at,
+		        (SELECT COUNT(*) FROM impersonation_actions a WHERE a.impersonation_id = e.id)
+		 FROM impersonation_events e
+		 JOIN tenants t ON t.id = e.tenant_id
+		 ORDER BY e.id DESC LIMIT ? OFFSET ?`,
+		limit, offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list impersonation events: %w", err)
+		return log, fmt.Errorf("list impersonations: %w", err)
 	}
 	defer rows.Close()
-	events := []ImpersonationEvent{}
 	for rows.Next() {
-		var event ImpersonationEvent
-		var ip sql.NullString
-		if err := rows.Scan(&event.AdminUsername, &event.TenantID, &event.UserID, &event.Username, &ip, &event.At); err != nil {
-			return nil, fmt.Errorf("scan impersonation event: %w", err)
+		var item domain.PlatformImpersonation
+		var ended sql.NullString
+		if err := rows.Scan(
+			&item.ID, &item.AdminUsername, &item.TenantSlug, &item.TenantName, &item.UserID, &item.Username, &item.IP,
+			&item.StartedAt, &item.ExpiresAt, &ended, &item.ActionCount,
+		); err != nil {
+			return log, fmt.Errorf("scan impersonation: %w", err)
 		}
-		event.IP = ip.String
-		events = append(events, event)
+		if ended.Valid {
+			item.EndedAt = &ended.String
+		}
+		log.Items = append(log.Items, item)
 	}
-	return events, rows.Err()
+	return log, rows.Err()
 }
 
-// platformImpersonationMigration marks impersonation sessions and adds their
-// audit log. The log keeps the superadmin's username as text, so it outlives
-// the account; it goes with the organization when that is deleted.
+func (s *SQLiteStore) ImpersonationActions(ctx context.Context, impersonationID int64) ([]domain.PlatformImpersonationAction, bool, error) {
+	var exists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM impersonation_events WHERE id = ?`, impersonationID).Scan(&exists); err != nil {
+		return nil, false, fmt.Errorf("load impersonation: %w", err)
+	}
+	if exists == 0 {
+		return nil, false, nil
+	}
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT at, method, route, path, status FROM impersonation_actions WHERE impersonation_id = ? ORDER BY id`,
+		impersonationID,
+	)
+	if err != nil {
+		return nil, true, fmt.Errorf("list impersonation actions: %w", err)
+	}
+	defer rows.Close()
+	actions := []domain.PlatformImpersonationAction{}
+	for rows.Next() {
+		var action domain.PlatformImpersonationAction
+		if err := rows.Scan(&action.At, &action.Method, &action.Route, &action.Path, &action.Status); err != nil {
+			return nil, true, fmt.Errorf("scan impersonation action: %w", err)
+		}
+		actions = append(actions, action)
+	}
+	return actions, true, rows.Err()
+}
+
+// platformImpersonationMigration adds the impersonation audit log and its
+// per-request trail, and links impersonation sessions to them. The log keeps
+// the superadmin's username as text, so it outlives the account; it goes with
+// the organization when that is deleted.
 const platformImpersonationMigration = `
-ALTER TABLE sessions ADD COLUMN impersonated_by TEXT REFERENCES platform_admins(id) ON DELETE CASCADE;
-
-CREATE INDEX IF NOT EXISTS idx_sessions_impersonated_by ON sessions(impersonated_by);
-
 CREATE TABLE IF NOT EXISTS impersonation_events (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	admin_id TEXT NOT NULL,
@@ -139,8 +204,28 @@ CREATE TABLE IF NOT EXISTS impersonation_events (
 	user_id TEXT NOT NULL,
 	username TEXT NOT NULL,
 	ip TEXT,
-	at TEXT NOT NULL
+	at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	ended_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_impersonation_events_tenant_at ON impersonation_events(tenant_id, at);
+
+CREATE TABLE IF NOT EXISTS impersonation_actions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	impersonation_id INTEGER NOT NULL REFERENCES impersonation_events(id) ON DELETE CASCADE,
+	at TEXT NOT NULL,
+	method TEXT NOT NULL,
+	route TEXT NOT NULL,
+	path TEXT NOT NULL,
+	status INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_impersonation_actions_impersonation ON impersonation_actions(impersonation_id);
+
+ALTER TABLE sessions ADD COLUMN impersonated_by TEXT REFERENCES platform_admins(id) ON DELETE CASCADE;
+
+ALTER TABLE sessions ADD COLUMN impersonation_id INTEGER REFERENCES impersonation_events(id);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_impersonated_by ON sessions(impersonated_by);
 `

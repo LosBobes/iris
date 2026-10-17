@@ -115,7 +115,8 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user -tenant grafika-co
 # Backoffice (/backoffice) superadmins, kept apart from organization users. A database
 # with none gets admin / admin123321, which must pick a new password (>= 12 chars) on
 # first login. Superadmins can also impersonate any organization user from the
-# Backoffice (1 h session, audited in impersonation_events). More accounts:
+# Backoffice (1 h session, audited in impersonation_events, every change traced in
+# impersonation_actions; see the Backoffice "Impersonacije" tab). More accounts:
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-platform-admin -username ops -password '<long secret>'
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports

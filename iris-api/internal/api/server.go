@@ -129,6 +129,8 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
 	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/users", s.handlePlatformTenantUsers)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/impersonate", s.handlePlatformImpersonate)
+	r.With(s.requirePlatformAdmin).Get("/platform/impersonations", s.handlePlatformImpersonations)
+	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -249,6 +251,10 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		// store query) to the request context.
 		ctx := context.WithValue(r.Context(), currentUserContextKey, user)
 		ctx = store.ContextWithTenant(ctx, user.TenantID)
+		if user.ImpersonationID != 0 {
+			s.serveTraced(w, r.WithContext(ctx), next, user.ImpersonationID)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

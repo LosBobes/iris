@@ -1306,7 +1306,8 @@ paths:
         Sets an ordinary `iris_session` cookie for the chosen user (replacing any
         organization session in this browser), valid for one hour. The session
         reports `impersonatedBy` on `/auth/session`, is written to the
-        `impersonation_events` audit log, is not counted as a login, and ends on
+        `impersonation_events` audit log (every change request made with it is
+        traced, see `/platform/impersonations`), is not counted as a login, and ends on
         `/auth/logout` or when the superadmin signs out of the Backoffice.
       operationId: platformImpersonate
       security:
@@ -1355,6 +1356,92 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: No user chosen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/impersonations:
+    get:
+      tags: [Platform]
+      summary: Impersonation log, newest first (operator only)
+      operationId: getPlatformImpersonations
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of the log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformImpersonationLog'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/impersonations/{id}/actions:
+    get:
+      tags: [Platform]
+      summary: Change requests made during one impersonation, oldest first (operator only)
+      description: >
+        Every POST/PUT/PATCH/DELETE made with the impersonated session: method,
+        route pattern, path, response status and time. Request bodies are never
+        recorded; reads are not traced.
+      operationId: getPlatformImpersonationActions
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The trail
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformImpersonationAction'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such impersonation
           content:
             application/json:
               schema:
@@ -2586,6 +2673,66 @@ components:
         expiresAt:
           type: string
           format: date-time
+    PlatformImpersonation:
+      type: object
+      required: [id, adminUsername, tenantSlug, tenantName, userId, username, ip, startedAt, expiresAt, endedAt, actionCount]
+      properties:
+        id:
+          type: integer
+          format: int64
+        adminUsername:
+          type: string
+        tenantSlug:
+          type: string
+        tenantName:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        ip:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when the session was signed out (or found expired); null while it may still be active.
+        actionCount:
+          type: integer
+    PlatformImpersonationLog:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformImpersonation'
+        total:
+          type: integer
+    PlatformImpersonationAction:
+      type: object
+      required: [at, method, route, path, status]
+      properties:
+        at:
+          type: string
+          format: date-time
+        method:
+          type: string
+          enum: [POST, PUT, PATCH, DELETE]
+        route:
+          type: string
+          example: /work-orders/{id}
+        path:
+          type: string
+          example: /work-orders/wo-123
+        status:
+          type: integer
     PlatformMetrics:
       type: object
       required: [generatedAt, rangeDays, rangeStart, totals, system, tenants, daily]
