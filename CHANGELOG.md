@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 1.1.2 — 2026-10-17
+
+### Patch
+
+- Backoffice organizations page works on phones: organizations show as cards and dialogs open on-screen.
+
 ## 1.1.1 — 2026-10-17
 
 ### Patch
