@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { PlatformTenant } from "@/types/platform";
 import { formatCount, formatDate, formatDateTime } from "./format";
 import {
@@ -31,6 +32,9 @@ export function OrganizationsPanel(): React.JSX.Element {
   const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
   const [busy, setBusy] = useState(false);
+  // From tablet width up the organizations are a table; on a phone each is a
+  // card, so the name and actions are visible without scrolling sideways.
+  const isWide = useMediaQuery("(min-width: 768px)");
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -63,6 +67,37 @@ export function OrganizationsPanel(): React.JSX.Element {
     }
   };
 
+  const status = (tenant: PlatformTenant): React.JSX.Element =>
+    tenant.suspendedAt ? (
+      <span className="inline-flex items-center gap-1.5 text-[#e66767]">
+        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#e66767]" />
+        {t("platform.orgs.suspendedSince", { date: formatDateTime(tenant.suspendedAt) })}
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1.5 text-[color:var(--pf-text-2)]">
+        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#5fb88a]" />
+        {t("platform.orgs.active")}
+      </span>
+    );
+
+  const actions = (tenant: PlatformTenant): React.JSX.Element => (
+    <>
+      <button type="button" onClick={() => setDialog({ kind: "users", tenant })} className={backofficeSmallButtonClass}>
+        {t("platform.orgs.manageUsers")}
+      </button>
+      <button type="button" onClick={() => setDialog({ kind: "edit", tenant })} className={backofficeSmallButtonClass}>
+        {t("platform.orgs.edit")}
+      </button>
+      <button
+        type="button"
+        onClick={() => setDialog({ kind: "suspend", tenant })}
+        className={`${backofficeSmallButtonClass} ${tenant.suspendedAt ? "" : "text-[#e66767]"}`}
+      >
+        {tenant.suspendedAt ? t("platform.orgs.reactivate") : t("platform.orgs.suspend")}
+      </button>
+    </>
+  );
+
   return (
     <section className="min-w-0 rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
       <header className="flex items-center justify-between gap-3 border-b border-[color:var(--pf-border)] px-4 py-3">
@@ -88,8 +123,36 @@ export function OrganizationsPanel(): React.JSX.Element {
         error ? null : <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("common.loading")}</p>
       ) : tenants.length === 0 ? (
         <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("platform.orgs.empty")}</p>
+      ) : !isWide ? (
+        <ul className="mt-1">
+          {tenants.map((tenant) => (
+            <li key={tenant.id} className="space-y-2.5 border-t border-[color:var(--pf-border)] px-4 py-3 first:border-t-0 text-[13px]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-[14px] text-[color:var(--pf-text)]">{tenant.name}</div>
+                  <div className="truncate text-[11px] text-[color:var(--pf-muted)]">/login/{tenant.slug}</div>
+                </div>
+                <div className="shrink-0 text-right text-[12px]">{status(tenant)}</div>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[color:var(--pf-text-2)]">
+                <span>
+                  {t("platform.orgs.users")}:{" "}
+                  <span className="tabular-nums text-[color:var(--pf-text)]">{formatCount(tenant.users)}</span>
+                  <span className="text-[color:var(--pf-muted)]"> / {formatCount(tenant.admins)}</span>
+                </span>
+                <span>
+                  {t("platform.orgs.created")}: {formatDate(tenant.createdAt)}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">{actions(tenant)}</div>
+            </li>
+          ))}
+        </ul>
       ) : (
-        <div className="mt-1 overflow-x-auto">
+        // `relative` keeps the header's absolutely positioned sr-only label
+        // inside the scroller; without it the label sits at the table's right
+        // edge and widens the whole page on a phone.
+        <div className="relative mt-1 overflow-x-auto">
           <table className="w-full min-w-[860px] text-[13px]">
             <thead className="text-left text-[12px] text-[color:var(--pf-muted)]">
               <tr>
@@ -114,35 +177,9 @@ export function OrganizationsPanel(): React.JSX.Element {
                     <span className="text-[color:var(--pf-muted)]"> / {formatCount(tenant.admins)}</span>
                   </td>
                   <td className="px-3 py-2 text-[color:var(--pf-text-2)]">{formatDate(tenant.createdAt)}</td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    {tenant.suspendedAt ? (
-                      <span className="inline-flex items-center gap-1.5 text-[#e66767]">
-                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#e66767]" />
-                        {t("platform.orgs.suspendedSince", { date: formatDateTime(tenant.suspendedAt) })}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-[color:var(--pf-text-2)]">
-                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#5fb88a]" />
-                        {t("platform.orgs.active")}
-                      </span>
-                    )}
-                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">{status(tenant)}</td>
                   <td className="px-4 py-2">
-                    <div className="flex justify-end gap-1.5">
-                      <button type="button" onClick={() => setDialog({ kind: "users", tenant })} className={backofficeSmallButtonClass}>
-                        {t("platform.orgs.manageUsers")}
-                      </button>
-                      <button type="button" onClick={() => setDialog({ kind: "edit", tenant })} className={backofficeSmallButtonClass}>
-                        {t("platform.orgs.edit")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDialog({ kind: "suspend", tenant })}
-                        className={`${backofficeSmallButtonClass} ${tenant.suspendedAt ? "" : "text-[#e66767]"}`}
-                      >
-                        {tenant.suspendedAt ? t("platform.orgs.reactivate") : t("platform.orgs.suspend")}
-                      </button>
-                    </div>
+                    <div className="flex justify-end gap-1.5">{actions(tenant)}</div>
                   </td>
                 </tr>
               ))}
