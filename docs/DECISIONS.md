@@ -177,4 +177,16 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
+## D-018: Iris owns warehouse stock as a movement ledger
+- **Status**: `accepted` (extends [D-017](#d-017-model-work-order-processes-as-a-separate-graph-not-as-new-statuses))
+- **Context**: Process graphs only mean something if the app knows what material is actually in the warehouse (magacin). Stock was not tracked anywhere in Iris; the shop keeps a partial record outside it.
+- **Decision**: Iris becomes the source of truth for stock. Catalog **articles** (never services) carry stock in an append-only `stock_movements` ledger (migration v21): `opening`, `receipt`, `consumption`, `production`, `adjustment`. On-hand is the sum of movements; corrections are new movements. The opening balance is imported once (`irisctl import-stock` or the in-app stock count, "Popis"). Process item nodes link to articles via `catalogItemId`; when a step is marked done the API posts consumption for its inputs and production for its products/byproducts in the same transaction. Posting is computed as "desired net per node minus already-posted net", so undoing a step or changing an actual quantity posts only the difference.
+- **Consequences**:
+  - `reserved` = planned inputs of open orders not yet consumed; `available` = on-hand − reserved. The simulator and the tester compare requirements against it and flag shortages.
+  - Negative stock is allowed (recording can lag the floor) but highlighted.
+  - Deleting a work order or its process does not reverse movements (material was used). An article with movements cannot be deleted, only deactivated.
+  - One warehouse per tenant for now. Multiple locations would add a `location_id` to movements.
+
+---
+
 *Last verified against the checked-in repository state on 2026-10-17.*

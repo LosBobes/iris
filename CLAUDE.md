@@ -138,6 +138,12 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   only step status / actual quantities (structural change → 403). New orders get the
   default template. Backoffice edits templates via `/platform/tenants/{slug}/process-templates`
   (audited). Shape sync: openapi ↔ domain types ↔ `apps/web/src/types/process.ts`.
+- **Magacin / stock** (D-018): Iris owns article stock as an append-only
+  `stock_movements` ledger (`/stock`, `/stock/movements`, `POST /stock/receipts`,
+  admin `POST /stock/counts`; `irisctl import-stock` for the opening balance).
+  Process item nodes link to articles (`catalogItemId`); marking a step done posts
+  consumption/production automatically (diff of desired vs posted net per node, so
+  undo and quantity edits post only the delta). Never edit or delete movements.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

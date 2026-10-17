@@ -132,6 +132,20 @@ Admin-modeled production graphs (see [D-017](DECISIONS.md#d-017-model-work-order
 
 Allowed edges: input→step, step→step, step→product, step→byproduct, product→step, byproduct→step; the graph must be acyclic.
 
+## Warehouse (Magacin)
+
+Stock of catalog **articles**, kept as a movement ledger (see [D-018](DECISIONS.md#d-018-iris-owns-warehouse-stock-as-a-movement-ledger)).
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **On hand** | `onHand` | `Na stanju` | Sum of the article's stock movements. |
+| **Reserved** | `reserved` | `Rezervisano` | Planned inputs of open work orders whose consuming step is not done yet. |
+| **Available** | `available` | `Raspoloživo` | On hand − reserved. |
+| **Minimum stock** | `minStock` | `Minimalna zaliha` | Optional threshold; below it the article is flagged as low. |
+| **Goods receipt** | `receipt` | `Prijem robe` | Incoming material (+). Any user. |
+| **Stock count** | `adjustment` / `opening` | `Popis` / `Početno stanje` | Admin enters counted quantities; the difference is posted. The first count of an article is its opening balance. |
+| **Consumption / Production** | `consumption` / `production` | `Utrošak` / `Proizvodnja` | Posted automatically from work-order processes when steps are done. |
+
 ## Concurrency & Reservation
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |

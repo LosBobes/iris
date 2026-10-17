@@ -147,6 +147,16 @@ Web client
   card, Backoffice "Procesi" per organization; canvas via `@xyflow/react`.
   See [D-017](docs/DECISIONS.md).
 
+### Warehouse stock (magacin)
+
+- Catalog articles carry stock in the append-only `stock_movements` ledger
+  (migration v21). `GET /stock` returns on-hand / reserved / available per article;
+  `POST /stock/receipts` (any user) and `POST /stock/counts` (admin, also the opening
+  balance) post movements; `irisctl import-stock` imports an opening balance CSV.
+  Linked process nodes post consumption/production automatically when steps are
+  done. Web: "Magacin" page (`/stock`), stock in Catalog, material shortages on the
+  work-order process card and in the simulator/tester. See [D-018](docs/DECISIONS.md).
+
 ### Organization settings
 
 - `GET`/`PUT /settings` back the admin **Settings** page. Values are stored per
