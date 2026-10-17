@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 1.2.2 — 2026-10-17
+
+### Patch
+
+- Backoffice organization actions are grouped: Users, Processes and Modules as equal tiles, with Edit and Suspend/Reactivate set apart below them.
+
 ## 1.2.1 — 2026-10-17
 
 ### Patch
