@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { Ban, Blocks, Pencil, Plus, RotateCcw, Users, Workflow } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { staggerStyle } from "@/lib/motion";
 import type { PlatformTenant } from "@/types/platform";
@@ -16,6 +16,9 @@ import { OrganizationFormDialog } from "./OrganizationFormDialog";
 import { OrganizationModulesDialog } from "./OrganizationModulesDialog";
 import { OrganizationProcessesDialog } from "./OrganizationProcessesDialog";
 import { OrganizationUsersDialog } from "./OrganizationUsersDialog";
+
+const ghostButtonBase = "iris-focusable flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] hover:bg-white/5";
+const ghostButtonClass = `${ghostButtonBase} text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]`;
 
 type OpenDialog =
   | { kind: "create" }
@@ -109,28 +112,31 @@ export function OrganizationsPanel(): React.JSX.Element {
     );
   };
 
-  const actions = (tenant: PlatformTenant): React.JSX.Element => (
-    <>
-      <button type="button" onClick={() => setDialog({ kind: "users", tenant })} className={backofficeSmallButtonClass}>
-        {t("platform.orgs.manageUsers")}
-      </button>
-      <button type="button" onClick={() => setDialog({ kind: "processes", tenant })} className={backofficeSmallButtonClass}>
-        {t("platform.orgs.processes")}
-      </button>
-      <button type="button" onClick={() => setDialog({ kind: "modules", tenant })} className={backofficeSmallButtonClass}>
-        {t("platform.orgs.modules.button")}
-      </button>
-      <button type="button" onClick={() => setDialog({ kind: "edit", tenant })} className={backofficeSmallButtonClass}>
-        {t("platform.orgs.edit")}
-      </button>
-      <button
-        type="button"
-        onClick={() => setDialog({ kind: "suspend", tenant })}
-        className={`${backofficeSmallButtonClass} ${tenant.suspendedAt ? "" : "text-[#e66767]"}`}
-      >
-        {tenant.suspendedAt ? t("platform.orgs.reactivate") : t("platform.orgs.suspend")}
-      </button>
-    </>
+  // The actions fall into two groups: the three ways into an organization
+  // (users, processes, modules) get equal weight; editing and suspending are
+  // housekeeping, set apart and quieter, with suspend in the danger colour.
+  const openActions: { kind: "users" | "processes" | "modules"; label: string; icon: React.JSX.Element }[] = [
+    { kind: "users", label: t("platform.orgs.manageUsers"), icon: <Users className="h-4 w-4" /> },
+    { kind: "processes", label: t("platform.orgs.processes"), icon: <Workflow className="h-4 w-4" /> },
+    { kind: "modules", label: t("platform.orgs.modules.button"), icon: <Blocks className="h-4 w-4" /> },
+  ];
+
+  const editButton = (tenant: PlatformTenant): React.JSX.Element => (
+    <button type="button" onClick={() => setDialog({ kind: "edit", tenant })} className={ghostButtonClass}>
+      <Pencil className="h-3.5 w-3.5" />
+      {t("platform.orgs.edit")}
+    </button>
+  );
+
+  const suspendButton = (tenant: PlatformTenant): React.JSX.Element => (
+    <button
+      type="button"
+      onClick={() => setDialog({ kind: "suspend", tenant })}
+      className={tenant.suspendedAt ? ghostButtonClass : `${ghostButtonBase} text-[#e66767]`}
+    >
+      {tenant.suspendedAt ? <RotateCcw className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
+      {tenant.suspendedAt ? t("platform.orgs.reactivate") : t("platform.orgs.suspend")}
+    </button>
   );
 
   return (
@@ -180,7 +186,23 @@ export function OrganizationsPanel(): React.JSX.Element {
                 </span>
                 {moduleBadges(tenant)}
               </div>
-              <div className="flex flex-wrap gap-1.5">{actions(tenant)}</div>
+              <div className="grid grid-cols-3 gap-1.5 pt-1">
+                {openActions.map((action) => (
+                  <button
+                    key={action.kind}
+                    type="button"
+                    onClick={() => setDialog({ kind: action.kind, tenant })}
+                    className="iris-focusable flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-md border border-[color:var(--pf-border)] px-1 text-[12px] text-[color:var(--pf-text)] hover:bg-white/5"
+                  >
+                    <span className="text-[color:var(--pf-text-2)]">{action.icon}</span>
+                    <span className="max-w-full truncate">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-between">
+                {editButton(tenant)}
+                {suspendButton(tenant)}
+              </div>
             </li>
           ))}
         </ul>
@@ -221,7 +243,24 @@ export function OrganizationsPanel(): React.JSX.Element {
                   <td className="px-3 py-2">{moduleBadges(tenant)}</td>
                   <td className="whitespace-nowrap px-3 py-2">{status(tenant)}</td>
                   <td className="px-4 py-2">
-                    <div className="flex justify-end gap-1.5">{actions(tenant)}</div>
+                    <div className="flex items-center justify-end gap-2">
+                      <div role="group" className="flex divide-x divide-[color:var(--pf-border)] overflow-hidden rounded-md border border-[color:var(--pf-border)]">
+                        {openActions.map((action) => (
+                          <button
+                            key={action.kind}
+                            type="button"
+                            onClick={() => setDialog({ kind: action.kind, tenant })}
+                            className="iris-focusable flex h-9 items-center gap-1.5 px-3 text-[13px] text-[color:var(--pf-text)] hover:bg-white/5"
+                          >
+                            <span className="text-[color:var(--pf-text-2)]">{action.icon}</span>
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                      {editButton(tenant)}
+                      <span aria-hidden className="h-5 w-px bg-[color:var(--pf-border)]" />
+                      {suspendButton(tenant)}
+                    </div>
                   </td>
                 </tr>
               ))}
