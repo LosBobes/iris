@@ -27,6 +27,7 @@ import {
   validateGraph,
 } from '@/lib/process/graph'
 import { hasNewItems } from '@/lib/motion'
+import type { SimNodeState } from '@/lib/process/simulation'
 import {
   PROCESS_NODE_KINDS,
   type ProcessEdge,
@@ -54,15 +55,26 @@ export interface ProcessGraphEditorProps {
   canEditStructure?: boolean
   /** Extra classes for the outer wrapper. */
   className?: string
+  /** Simulator mode: no editing, dragging, inspector or toolbar; nodes can still be selected. */
+  readOnly?: boolean
+  /** Simulator playback state per node id. */
+  simStates?: ReadonlyMap<string, SimNodeState>
+  /** Nodes to show as selected from outside (e.g. tester issues). */
+  highlightIds?: readonly string[]
 }
 
 function ProcessGraphEditorInner({
   mode,
   value,
   onChange,
-  canEditStructure = true,
+  canEditStructure: canEditStructureProp = true,
   className,
+  readOnly = false,
+  simStates,
+  highlightIds,
 }: ProcessGraphEditorProps): React.JSX.Element {
+  const canEditStructure = canEditStructureProp && !readOnly
+  const highlighted = useMemo(() => new Set(highlightIds ?? []), [highlightIds])
   const { t } = useTranslation()
   const { screenToFlowPosition } = useReactFlow<ProcessFlowNode, Edge>()
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -106,16 +118,17 @@ function ProcessGraphEditorInner({
           node,
           mode,
           ready: readyIds.has(node.id),
+          sim: simStates?.get(node.id),
           enter: initialOrder.has(node.id)
             ? { index: initialOrder.get(node.id) as number }
             : ('pop' as const),
         },
-        selected: selection?.type === 'node' && selection.id === node.id,
+        selected: (selection?.type === 'node' && selection.id === node.id) || highlighted.has(node.id),
         deletable: canEditStructure,
         connectable: canEditStructure,
-        draggable: true,
+        draggable: !readOnly,
       })),
-    [value.nodes, mode, readyIds, selection, canEditStructure, measured, initialOrder],
+    [value.nodes, mode, readyIds, selection, canEditStructure, measured, initialOrder, simStates, highlighted, readOnly],
   )
 
   // Edges feeding a step that is in progress flow (dashes); reduced motion stops
@@ -313,7 +326,7 @@ function ProcessGraphEditorInner({
         </div>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className={cn('grid gap-3', !readOnly && 'lg:grid-cols-[minmax(0,1fr)_280px]')}>
         <div
           ref={canvasRef}
           role="group"
@@ -331,7 +344,7 @@ function ProcessGraphEditorInner({
             onDelete={handleDelete}
             isValidConnection={isValidConnection}
             nodesConnectable={canEditStructure}
-            nodesDraggable
+            nodesDraggable={!readOnly}
             elementsSelectable
             edgesReconnectable={false}
             deleteKeyCode={canEditStructure ? 'Delete' : null}
@@ -352,22 +365,24 @@ function ProcessGraphEditorInner({
           </ReactFlow>
         </div>
 
-        <ProcessInspector
-          graph={value}
-          selection={selection}
-          mode={mode}
-          canEditStructure={canEditStructure}
-          onNodeChange={patchNode}
-          onEdgeChange={patchEdge}
-          onDelete={deleteSelection}
-        />
+        {!readOnly && (
+          <ProcessInspector
+            graph={value}
+            selection={selection}
+            mode={mode}
+            canEditStructure={canEditStructure}
+            onNodeChange={patchNode}
+            onEdgeChange={patchEdge}
+            onDelete={deleteSelection}
+          />
+        )}
       </div>
 
       {canEditStructure && (
         <p className="text-[11px] text-[color:var(--iris-ink-soft)]">{t('process.rulesHint')}</p>
       )}
 
-      {errors.length > 0 && (
+      {!readOnly && errors.length > 0 && (
         <ul
           key={shakeKey}
           role="alert"

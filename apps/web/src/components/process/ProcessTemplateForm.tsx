@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { graphsEqual, normalizeGraphForKinds, stripOrderState, validateGraph, MAX_LABEL_LENGTH } from '@/lib/process/graph'
 import type { ProcessGraph, ProcessTemplate, ProcessTemplateInput } from '@/types/process'
 import { ProcessGraphEditor } from './ProcessGraphEditor'
+import { ProcessSimulatorButton } from './ProcessSimulatorButton'
 
 const EMPTY_TEMPLATE_GRAPH: ProcessGraph = { nodes: [], edges: [] }
 
@@ -29,6 +30,8 @@ interface ProcessTemplateFormProps {
   onCancel: () => void
   /** Reports unsaved edits so the host can arm a navigation guard. */
   onDirtyChange?: (dirty: boolean) => void
+  /** Which dialog shell the simulator opens in; `backoffice` inside the dark console. */
+  variant?: 'app' | 'backoffice'
 }
 
 /** Name / description / default + graph editor for one process template. */
@@ -37,6 +40,7 @@ export function ProcessTemplateForm({
   onSubmit,
   onCancel,
   onDirtyChange,
+  variant = 'app',
 }: ProcessTemplateFormProps): React.JSX.Element {
   const { t } = useTranslation()
   const schema = useMemo(
@@ -158,6 +162,9 @@ export function ProcessTemplateForm({
         <Button type="button" variant="outline" onClick={onCancel}>
           {t('common.cancel')}
         </Button>
+        <div className="ml-auto">
+          <ProcessSimulatorButton graph={graph} variant={variant} />
+        </div>
       </div>
     </form>
   )

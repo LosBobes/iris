@@ -1,6 +1,9 @@
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
+
+/** Open dialogs, innermost last: Escape closes only the topmost one. */
+const openDialogs: symbol[] = [];
 
 /**
  * Modal shell for Backoffice dialogs, drawn with the console's dark-surface
@@ -24,9 +27,19 @@ export function BackofficeDialog({
   const { t } = useTranslation();
   const titleId = useId();
 
+  const token = useRef(Symbol("backoffice-dialog"));
+  useEffect(() => {
+    const mine = token.current;
+    openDialogs.push(mine);
+    return () => {
+      const index = openDialogs.indexOf(mine);
+      if (index >= 0) openDialogs.splice(index, 1);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && openDialogs[openDialogs.length - 1] === token.current) onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

@@ -26,6 +26,7 @@ import { ApiError, formatActionError, reportUnexpectedError } from '@/lib/errors
 import { graphsEqual, readySteps, summarizeProgress, validateGraph } from '@/lib/process/graph'
 import { percentToScale, staggerStyle } from '@/lib/motion'
 import { formatWorkOrderDateTime } from '@/shared/utils/work-orders'
+import { ProcessSimulatorButton } from './ProcessSimulatorButton'
 import type { ProcessGraph, ProcessTemplate, WorkOrderProcess } from '@/types/process'
 
 // React Flow is heavy; it only loads once somebody opens the graph.
@@ -273,6 +274,8 @@ export function WorkOrderProcessPanel({
             {expanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}
             {expanded ? t('process.order.hideGraph') : t('process.order.showGraph')}
           </Button>
+          {/* Previews the current draft only; the simulator never saves or mutates it. */}
+          <ProcessSimulatorButton graph={draft} />
           {dirty && (
             <span className="text-[11px] text-[color:var(--iris-status-active)]">{t('process.order.unsaved')}</span>
           )}

@@ -107,6 +107,7 @@ export function OrganizationProcessesDialog({
               template={view.template}
               onSubmit={save}
               onCancel={() => setView({ kind: "list" })}
+              variant="backoffice"
             />
           </div>
         ) : templates === null ? (

@@ -63,6 +63,21 @@ describe('WorkOrderProcessPanel', () => {
     expect(screen.queryByRole('button', { name: 'Ukloni proces' })).not.toBeInTheDocument()
   })
 
+  it('previews the process in the simulator without saving anything', async () => {
+    const user = userEvent.setup()
+    const updateWorkOrderProcess = vi.fn()
+    vi.stubGlobal('api', {
+      getWorkOrderProcess: vi.fn().mockResolvedValue(processOf(graph)),
+      updateWorkOrderProcess,
+    })
+    render(<WorkOrderProcessPanel workOrderId="wo-1" canEditStructure />)
+
+    await user.click(await screen.findByRole('button', { name: 'Simuliraj' }))
+    expect(await screen.findByTestId('process-simulator')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Korak napred' }))
+    expect(updateWorkOrderProcess).not.toHaveBeenCalled()
+  })
+
   it('offers the template picker when the order has no process and applies it', async () => {
     const user = userEvent.setup()
     const applyProcessTemplate = vi.fn().mockResolvedValue(processOf(graph))

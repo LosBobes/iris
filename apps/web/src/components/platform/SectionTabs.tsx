@@ -41,8 +41,8 @@ export function SectionTabs({ tabs, label }: { tabs: SectionTab[]; label: string
           aria-current={tab.current ? "page" : undefined}
           className={`iris-focusable flex min-h-9 items-center rounded-md px-2.5 text-[13px] font-medium ${
             tab.current
-              ? "bg-white/10 text-[color:var(--pf-text)]"
-              : "text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]"
+              ? "text-[color:var(--pf-text)]"
+              : "text-[color:var(--pf-text-2)] hover:bg-white/5 hover:text-[color:var(--pf-text)]"
           }`}
         >
           {tab.label}
@@ -52,7 +52,7 @@ export function SectionTabs({ tabs, label }: { tabs: SectionTab[]; label: string
         <span
           aria-hidden
           data-testid="section-tab-indicator"
-          className="pointer-events-none absolute -bottom-px left-0 h-0.5 w-px origin-left bg-[color:var(--pf-text)] transition-[translate,scale] duration-[var(--iris-dur-slow)] ease-[var(--iris-ease-out-decisive)]"
+          className="pointer-events-none absolute -bottom-0.5 left-0 h-0.5 w-px origin-left bg-[color:var(--pf-text)] transition-[translate,scale] duration-[var(--iris-dur-slow)] ease-[var(--iris-ease-out-decisive)]"
           style={{ translate: `${bar.x}px 0`, scale: `${bar.width} 1` }}
         />
       ) : null}

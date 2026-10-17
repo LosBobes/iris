@@ -1,9 +1,11 @@
 import { memo, useState } from 'react'
+import { Check } from 'lucide-react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { stepStatus } from '@/lib/process/graph'
 import { staggerStyle } from '@/lib/motion'
+import type { SimNodeState } from '@/lib/process/simulation'
 import type { ProcessNode, ProcessNodeKind } from '@/types/process'
 import { KIND_META } from './kind-meta'
 import { StepStatusBadge } from './StepStatusBadge'
@@ -15,6 +17,8 @@ export type ProcessFlowNode = Node<
     ready: boolean
     /** First reveal: `{ index }` staggers in with the canvas; `'pop'` is a node added later. */
     enter?: { index: number } | 'pop'
+    /** Simulator playback state; absent outside the simulator. */
+    sim?: SimNodeState
   },
   ProcessNodeKind
 >
@@ -26,7 +30,7 @@ function formatQuantity(quantity: number | undefined, unit: string | undefined):
 
 function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode>): React.JSX.Element {
   const { t } = useTranslation()
-  const { node, mode, ready, enter } = data
+  const { node, mode, ready, enter, sim } = data
   const kind = type
   const meta = KIND_META[kind]
   const Icon = meta.icon
@@ -47,7 +51,12 @@ function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode
   return (
     <div
       style={typeof enter === 'object' ? staggerStyle(enter.index) : undefined}
+      data-sim={sim}
       className={cn(
+        sim === 'produced' && 'animate-iris-pop',
+        sim === 'consumed' && 'opacity-55',
+        sim === 'unavailable' && 'opacity-40',
+        sim === 'running' && 'border-[color:var(--iris-status-active)] ring-2 ring-[color:var(--iris-status-active)]/30',
         'iris-node-card w-[180px] rounded-sm border border-l-4 bg-card px-2.5 py-2 text-card-foreground shadow-sm',
         typeof enter === 'object' && 'iris-node-enter',
         enter === 'pop' && 'iris-node-pop',
@@ -56,6 +65,14 @@ function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode
         isStep && mode === 'order' && status === 'skipped' && 'opacity-60',
       )}
     >
+      {sim === 'consumed' && (
+        <span
+          aria-hidden
+          className="animate-iris-pop absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-[color:var(--iris-status-done)] text-background"
+        >
+          <Check className="size-3" />
+        </span>
+      )}
       {showReady && <span aria-hidden className="iris-node-ready" />}
       {pulse > 0 && <span key={pulse} aria-hidden className="iris-node-pulse" />}
       {kind !== 'input' && <Handle type="target" position={Position.Left} />}
