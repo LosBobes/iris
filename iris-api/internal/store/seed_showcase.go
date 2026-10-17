@@ -273,17 +273,19 @@ func (b *showcaseBuilder) stock() error {
 	return nil
 }
 
-// graphBuilder lays a process out left to right: a step per column (220px
-// apart), its inputs stacked above it and its byproducts below, products one
-// column after their step.
+// graphBuilder lays a process out left to right: a step per column (300px
+// apart), its inputs above it (side by side when there are two, at col±0.37)
+// and its byproducts below, products one column after their step. The web
+// editor draws inputs and byproducts as vertical lines into/out of the step.
 type graphBuilder struct {
 	b     *showcaseBuilder
 	graph domain.ProcessGraph
 }
 
 const (
-	showcaseColumn = 220.0
-	showcaseRow    = 110.0
+	showcaseColumn = 300.0
+	showcaseRow    = 120.0 // step row → byproduct row
+	showcaseInRow  = 170.0 // input row → step row; room for right-angled side streams
 )
 
 func (g *graphBuilder) step(id, label string, col, y float64) {
@@ -323,9 +325,9 @@ func (b *showcaseBuilder) processTemplates() error {
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("secenje", "Sečenje", 2, lane)
 			g.step("pakovanje", "Pakovanje", 3, lane)
-			g.item(in, "ploce", "Offset ploče", "ploca", 4, 0, lane-showcaseRow)
-			g.item(in, "papir", "Papir 80g A3", "papir80", 100, 1, lane-showcaseRow)
-			g.item(in, "boja", "Boja CMYK", "boja", 2, 1, lane-2*showcaseRow)
+			g.item(in, "ploce", "Offset ploče", "ploca", 4, 0, lane-showcaseInRow)
+			g.item(in, "papir", "Papir 80g A3", "papir80", 100, 0.63, lane-showcaseInRow)
+			g.item(in, "boja", "Boja CMYK", "boja", 2, 1.37, lane-showcaseInRow)
 			g.item(by, "mak-stampa", "Makulatura (štampa)", "makulatura", 3, 1, lane+showcaseRow)
 			g.item(by, "mak-secenje", "Makulatura (sečenje)", "makulatura", 2, 2, lane+showcaseRow)
 			g.item(pr, "otisci", "Gotovi otisci", "", 0, 4, lane)
@@ -336,8 +338,8 @@ func (b *showcaseBuilder) processTemplates() error {
 			g.step("priprema", "Priprema fajla", 0, lane)
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("dorada", "Dorada", 2, lane)
-			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 50, 1, lane-showcaseRow)
-			g.item(in, "toner", "Toner", "toner", 1, 1, lane-2*showcaseRow)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 50, 0.63, lane-showcaseInRow)
+			g.item(in, "toner", "Toner", "toner", 1, 1.37, lane-showcaseInRow)
 			g.item(pr, "otisci", "Digitalni otisci", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "dorada", "dorada", "otisci", "papir", "stampa", "toner", "stampa")
 		}},
@@ -346,12 +348,12 @@ func (b *showcaseBuilder) processTemplates() error {
 			g.step("savijanje", "Savijanje", 2, lane)
 			g.step("sivenje", "Šivenje", 3, lane)
 			g.step("obrezivanje", "Obrezivanje", 4, lane)
-			g.step("stampa-korica", "Štampa korica", 0, lane+280)
-			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 200, 0, lane-showcaseRow)
-			g.item(in, "boja", "Boja CMYK", "boja", 3, 0, lane-2*showcaseRow)
+			g.step("stampa-korica", "Štampa korica", 1, lane+320)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 200, -0.37, lane-showcaseInRow)
+			g.item(in, "boja", "Boja CMYK", "boja", 3, 0.37, lane-showcaseInRow)
 			g.item(pr, "tabaci", "Štampani tabaci", "", 0, 1, lane)
-			g.item(in, "karton", "Karton 300g", "karton", 50, 0, lane+280+showcaseRow)
-			g.item(in, "zica", "Žica za povez", "zica", 1, 3, lane-showcaseRow)
+			g.item(in, "karton", "Karton 300g", "karton", 50, 1, lane+320-showcaseInRow)
+			g.item(in, "zica", "Žica za povez", "zica", 1, 3, lane-showcaseInRow)
 			g.item(by, "mak", "Makulatura", "makulatura", 5, 4, lane+showcaseRow)
 			g.item(pr, "brosure", "Brošure", "", 0, 5, lane)
 			g.edges("stampa-tabaka", "tabaci", "tabaci", "savijanje", "savijanje", "sivenje", "stampa-korica", "sivenje",
@@ -362,7 +364,7 @@ func (b *showcaseBuilder) processTemplates() error {
 			g.step("priprema", "Priprema", 0, lane)
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("ojacanje", "Ojačanje i ringlovanje", 2, lane)
-			g.item(in, "baner", "Banner PVC 510g", "baner", 12, 1, lane-showcaseRow)
+			g.item(in, "baner", "Banner PVC 510g", "baner", 12, 1, lane-showcaseInRow)
 			g.item(by, "otpad", "Otpad bannera", "otpad", 1, 1, lane+showcaseRow)
 			g.item(pr, "gotov", "Baner", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "ojacanje", "ojacanje", "gotov", "baner", "stampa", "stampa", "otpad")

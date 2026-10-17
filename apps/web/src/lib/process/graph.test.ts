@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProcessGraph, ProcessNode } from '@/types/process'
 import {
   canConnect,
+  edgeHandles,
   checkConnection,
   copyTemplateToOrder,
   generateId,
@@ -234,5 +235,19 @@ describe('copies and ids', () => {
       expect(taken.has(id)).toBe(false)
       taken.add(id)
     }
+  })
+})
+
+describe('edgeHandles', () => {
+  it('draws inputs and byproducts as vertical side streams', () => {
+    expect(edgeHandles('input', 'step')).toEqual({ sourceHandle: 'bottom', targetHandle: 'top' })
+    expect(edgeHandles('step', 'byproduct')).toEqual({ sourceHandle: 'bottom', targetHandle: 'top' })
+  })
+
+  it('keeps the main flow left to right', () => {
+    expect(edgeHandles('step', 'step')).toEqual({ sourceHandle: 'out', targetHandle: 'in' })
+    expect(edgeHandles('step', 'product')).toEqual({ sourceHandle: 'out', targetHandle: 'in' })
+    expect(edgeHandles('product', 'step')).toEqual({ sourceHandle: 'out', targetHandle: 'in' })
+    expect(edgeHandles('byproduct', 'step')).toEqual({ sourceHandle: 'out', targetHandle: 'in' })
   })
 })

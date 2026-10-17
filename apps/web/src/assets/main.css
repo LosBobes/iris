@@ -1045,11 +1045,27 @@
 }
 
 .iris-flow .react-flow__handle {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-width: 1.5px;
   border-style: solid;
   border-color: var(--xy-handle-border-color);
+  /* Handles stay out of the way so edges and arrowheads meet the node border;
+     they appear on hover, on the selected node and while connecting. */
+  opacity: 0;
+  transition: opacity var(--iris-dur-fast) var(--iris-ease-out);
+}
+
+.iris-flow .react-flow__node:hover .react-flow__handle,
+.iris-flow .react-flow__node.selected .react-flow__handle,
+.iris-flow .react-flow__handle.connectingfrom,
+.iris-flow .react-flow__handle.connectingto {
+  opacity: 1;
+}
+
+/* Read-only canvases (simulator, operators) never show connection points. */
+.iris-flow.iris-flow-readonly .react-flow__handle {
+  opacity: 0 !important;
 }
 
 .iris-flow .react-flow__handle.connectingto.valid,

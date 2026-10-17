@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
   canConnect,
+  edgeHandles,
   generateEdgeId,
   generateNodeId,
   readySteps,
@@ -168,12 +169,18 @@ function ProcessGraphEditorInner({
     [mode, value.nodes],
   )
 
+  const kindById = useMemo(() => new Map(value.nodes.map((node) => [node.id, node.kind])), [value.nodes])
   const edges = useMemo<Edge[]>(
     () =>
       value.edges.map((edge) => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
+        ...edgeHandles(kindById.get(edge.source), kindById.get(edge.target)),
+        // Orthogonal routing keeps the main flow and the vertical side streams
+        // on straight, aligned lines; offsets turn into clean right angles.
+        type: 'smoothstep',
+        pathOptions: { borderRadius: 6 },
         label: edge.label,
         markerEnd: { type: MarkerType.ArrowClosed },
         animated: activeTargets.has(edge.target),
@@ -181,7 +188,7 @@ function ProcessGraphEditorInner({
         deletable: canEditStructure,
         reconnectable: false,
       })),
-    [value.edges, selection, canEditStructure, activeTargets],
+    [value.edges, selection, canEditStructure, activeTargets, kindById],
   )
 
   const errors = useMemo(() => validateGraph(value), [value])
@@ -361,7 +368,7 @@ function ProcessGraphEditorInner({
           className="animate-iris-fade h-[420px] min-w-0 border border-border lg:h-[520px]"
         >
           <ReactFlow<ProcessFlowNode, Edge>
-            className="iris-flow"
+            className={cn('iris-flow', !canEditStructure && 'iris-flow-readonly')}
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}

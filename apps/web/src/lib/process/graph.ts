@@ -397,3 +397,18 @@ export function normalizeGraphForKinds(graph: ProcessGraph): ProcessGraph {
   })
   return copy
 }
+
+/**
+ * Which handles an edge is drawn between. The main flow (step → step,
+ * step → product, product/byproduct → later step) runs left to right; an input
+ * drops into the top of its step and a byproduct hangs off the bottom, so side
+ * streams read as vertical lines. Edges store no handles; this is display only.
+ */
+export function edgeHandles(
+  sourceKind: ProcessNodeKind | undefined,
+  targetKind: ProcessNodeKind | undefined,
+): { sourceHandle: string; targetHandle: string } {
+  if (sourceKind === 'input' && targetKind === 'step') return { sourceHandle: 'bottom', targetHandle: 'top' }
+  if (sourceKind === 'step' && targetKind === 'byproduct') return { sourceHandle: 'bottom', targetHandle: 'top' }
+  return { sourceHandle: 'out', targetHandle: 'in' }
+}

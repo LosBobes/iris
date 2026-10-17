@@ -78,7 +78,10 @@ function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode
       )}
       {showReady && <span aria-hidden className="iris-node-ready" />}
       {pulse > 0 && <span key={pulse} aria-hidden className="iris-node-pulse" />}
-      {kind !== 'input' && <Handle type="target" position={Position.Left} />}
+      {/* Main flow runs left to right (step → step → product); inputs drop in from
+          the top of a step and byproducts leave from its bottom. See edgeHandles. */}
+      {(kind === 'step' || kind === 'product') && <Handle type="target" position={Position.Left} id="in" />}
+      {(kind === 'step' || kind === 'byproduct') && <Handle type="target" position={Position.Top} id="top" />}
       <div className="flex items-start gap-2">
         <span className={cn('mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-sm', meta.iconWrap)}>
           <Icon className="size-3.5" aria-hidden />
@@ -130,7 +133,8 @@ function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode
           )}
         </div>
       )}
-      <Handle type="source" position={Position.Right} />
+      {kind !== 'input' && <Handle type="source" position={Position.Right} id="out" />}
+      {(kind === 'step' || kind === 'input') && <Handle type="source" position={Position.Bottom} id="bottom" />}
     </div>
   )
 }

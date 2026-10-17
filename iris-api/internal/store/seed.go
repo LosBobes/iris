@@ -152,9 +152,11 @@ func seedDemoProcessTemplate(ctx context.Context, sqliteStore *SQLiteStore) erro
 				step("stampa", "Štampa", 480),
 				step("secenje", "Sečenje", 720),
 				step("pakovanje", "Pakovanje", 960),
-				linked(item("papir", domain.ProcessNodeInput, "Papir", 0, 0), demoPaperID, "tabak", 100),
-				linked(item("boja", domain.ProcessNodeInput, "Boja", 0, 160), demoInkID, "kg", 2),
-				linked(item("ploce", domain.ProcessNodeInput, "Ploče", 0, 320), demoPlateID, "kom", 4),
+				// Inputs sit above the step they feed and byproducts below it, so side
+				// streams draw as vertical lines (see the web editor's edgeHandles).
+				linked(item("papir", domain.ProcessNodeInput, "Papir", 380, 0), demoPaperID, "tabak", 100),
+				linked(item("boja", domain.ProcessNodeInput, "Boja", 580, 0), demoInkID, "kg", 2),
+				linked(item("ploce", domain.ProcessNodeInput, "Ploče", 240, 0), demoPlateID, "kom", 4),
 				// Finished prints are not a catalog article, so the product stays unlinked.
 				item("otisci", domain.ProcessNodeProduct, "Gotovi otisci", 1200, 160),
 				// Both scrap nodes return to the same Makulatura article.
