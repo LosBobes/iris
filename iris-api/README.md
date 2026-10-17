@@ -122,10 +122,15 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-platform-admin -usernam
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup -out ./backups/iris.db
+# Warehouse opening balance / stock count from a CSV (code,quantity[,note]):
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-cobanovic --file ./stock.csv --dry-run
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-cobanovic --file ./stock.csv --apply
 ```
 
 `create-user` requires `-tenant <slug>`; `import-csv --apply` writes rows and also
-requires `-tenant <slug>` (a `--dry-run` only validates CSV shape).
+requires `-tenant <slug>` (a `--dry-run` only validates CSV shape). `import-stock` always
+needs `-tenant` (it matches CSV codes against the catalog); `--apply` posts a stock count as
+user `irisctl` (opening movements for articles without stock history) and reports unknown codes.
 
 Verification:
 

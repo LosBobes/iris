@@ -194,6 +194,10 @@ func (s *Server) Routes() http.Handler {
 		// full upsert.
 		protected.Put("/catalog-items/{id}", s.handleUpsertCatalogItem)
 		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
+		protected.Get("/stock", s.handleStockLevels)
+		protected.Get("/stock/movements", s.handleStockMovements)
+		protected.Post("/stock/receipts", s.handlePostStockReceipt)
+		protected.Post("/stock/counts", s.requireAdmin(s.handlePostStockCount))
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
 		protected.Get("/settings/login-logo", s.handleLoginLogo)

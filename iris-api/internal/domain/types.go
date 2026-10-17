@@ -130,8 +130,14 @@ type CatalogItem struct {
 	TaxGroup      *string         `json:"taxGroup"`
 	Description   *string         `json:"description"`
 	IsActive      bool            `json:"isActive"`
-	CreatedAt     string          `json:"createdAt,omitempty"`
-	UpdatedAt     string          `json:"updatedAt,omitempty"`
+	// StockOnHand is the warehouse balance (sum of the article's stock
+	// movements). Read-only and computed; nil for services.
+	StockOnHand *float64 `json:"stockOnHand"`
+	// MinStock is the reorder threshold (>= 0) for articles; nil when unset and
+	// for services. Editable through CatalogItemInput.
+	MinStock  *float64 `json:"minStock"`
+	CreatedAt string   `json:"createdAt,omitempty"`
+	UpdatedAt string   `json:"updatedAt,omitempty"`
 }
 
 // DefaultTaxGroup is the PDV type a catalog item gets when none is set: the
@@ -172,6 +178,7 @@ type CatalogItemInput struct {
 	TaxGroup      *string         `json:"taxGroup"`
 	Description   *string         `json:"description"`
 	IsActive      bool            `json:"isActive"`
+	MinStock      *float64        `json:"minStock"`
 	EffectiveFrom *string         `json:"effectiveFrom,omitempty"`
 }
 

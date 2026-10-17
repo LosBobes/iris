@@ -132,6 +132,24 @@ func main() {
 		report, err := importCSV(importCtx, sqliteStore, *dir, *apply)
 		must(err)
 		fmt.Print(report)
+	case "import-stock":
+		cmd := flag.NewFlagSet("import-stock", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		file := cmd.String("file", "", "CSV fajl sa kolonama code,quantity[,note]")
+		dryRun := cmd.Bool("dry-run", false, "samo prikaži šta bi bilo upisano")
+		apply := cmd.Bool("apply", false, "upiši stanje kao popis")
+		_ = cmd.Parse(os.Args[2:])
+		if *dryRun == *apply {
+			log.Fatal("koristite --dry-run ili --apply")
+		}
+		if *file == "" {
+			log.Fatal("koristite --file <putanja do CSV fajla>")
+		}
+		sqliteStore := mustOpen(ctx, dbPathFromEnv())
+		defer sqliteStore.Close()
+		report, err := importStock(mustTenantContext(ctx, sqliteStore, *tenantSlug), sqliteStore, *file, *apply)
+		must(err)
+		fmt.Print(report)
 	default:
 		usage()
 		os.Exit(2)
@@ -394,8 +412,13 @@ func usage() {
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
   irisctl import-csv -tenant oznaka --dry-run --dir import/
   irisctl import-csv -tenant oznaka --apply --dir import/
+  irisctl import-stock -tenant oznaka --file stanje.csv --dry-run
+  irisctl import-stock -tenant oznaka --file stanje.csv --apply
   irisctl create-platform-admin -username ime -password lozinka
   irisctl backup [-out backups/iris.db]
+
+import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
+a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }

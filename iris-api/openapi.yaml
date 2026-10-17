@@ -16,6 +16,11 @@ tags:
   - name: Dashboard
   - name: Processes
     description: Process templates (steps with inputs, products and byproducts) and each work order's own editable copy.
+  - name: Stock
+    description: >-
+      Warehouse stock (magacin). Stock is an append-only movement ledger per catalog article (on-hand is the sum of
+      its movements; services never carry stock). Goods receipts and counts post movements here; work-order
+      processes post consumption/production automatically. A single warehouse per organization; negative stock is allowed.
   - name: Platform
     description: Backoffice (/backoffice in the web app). Superadmin accounts stored apart from organization users (own table, sessions and cookie); aggregate metrics only.
 paths:
@@ -382,6 +387,12 @@ paths:
                     type: boolean
         '403':
           description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The article has stock movements and cannot be deleted; deactivate it instead (`Artikal ima promet u magacinu i ne može se obrisati.`)
           content:
             application/json:
               schema:
@@ -1031,6 +1042,171 @@ paths:
       responses:
         '204':
           description: The lock was released (or the caller did not hold it).
+  /stock:
+    get:
+      tags: [Stock]
+      summary: List articles with their stock position
+      description: >-
+        Articles only, active first then by name. Inactive articles are listed only while they hold non-zero stock.
+        `reserved` is the planned quantity of linked `input` nodes in the process graphs of open work orders (status
+        not completed, cancelled or invoiced) whose consuming steps are not yet done; `available = onHand - reserved`.
+        `low` is true when `onHand` is negative or `available` is below `minStock`.
+      operationId: listStockLevels
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Case- and diacritic-insensitive match on article name or code.
+        - name: lowOnly
+          in: query
+          schema:
+            type: boolean
+          description: Only levels with `low = true`.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A page of stock levels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLevelList'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/movements:
+    get:
+      tags: [Stock]
+      summary: List stock movements, newest first
+      operationId: listStockMovements
+      parameters:
+        - name: catalogItemId
+          in: query
+          schema:
+            type: string
+        - name: workOrderId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A page of movements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMovementList'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/receipts:
+    post:
+      tags: [Stock]
+      summary: Receive goods (prijem robe)
+      description: Any signed-in user. Posts one `receipt` movement per line, atomically.
+      operationId: postStockReceipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockReceiptInput'
+      responses:
+        '201':
+          description: The movements that were posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPostingResult'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown article or service item (`Artikal nije pronađen u katalogu.`), quantity not above zero (`Količina mora biti veća od nule.`), duplicate article (`Artikal se ponavlja.`), or a line count outside 1-200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/counts:
+    post:
+      tags: [Stock]
+      summary: Post a stock count (popis / opening balance, admin only)
+      description: >-
+        For each line posts `countedQuantity - onHand` as an `adjustment` movement (zero differences post nothing).
+        An article that has no movements yet gets an `opening` movement instead. The whole count is atomic.
+      operationId: postStockCount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockCountInput'
+      responses:
+        '201':
+          description: The movements that were posted (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPostingResult'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown article or service item (`Artikal nije pronađen u katalogu.`), negative counted quantity, duplicate article (`Artikal se ponavlja.`), or a line count outside 1-1000
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /process-templates:
     get:
       tags: [Processes]
@@ -1244,7 +1420,7 @@ paths:
       tags: [Processes]
       summary: Attach a copy of a process template to a work order
       description: >-
-        Copies the template graph with every step set to `pending`. Any signed-in user may do this once per work order.
+        Copies the template graph with every step set to `pending`. Any signed-in user may do this once per work order. Stock is reconciled as for the PUT (a no-op for a fresh copy, since nothing is done yet).
       operationId: applyProcessTemplate
       parameters:
         - name: id
@@ -1300,6 +1476,12 @@ paths:
       summary: Replace a work order's process graph
       description: >-
         Admins may change anything. Other users may change only per-order state (status, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
+
+
+        **Automatic stock posting.** In the same transaction the server reconciles the warehouse ledger with the graph (only item nodes whose `catalogItemId` links an article). The desired net per node is `+qty` when a step that outputs a product/byproduct node is `done`, plus `-qty` when any step the node feeds (input, or a product/byproduct consumed as input) is `done`; an intermediate product produced and consumed nets out. `qty` is `actualQuantity`, else `quantity`, else 0; `pending`, `in_progress` and `skipped` count as not done. The difference to the net already posted for that work order and node is inserted as one `consumption` (negative) or `production` (positive) movement, so repeating a request posts nothing, un-doing a step reverses it and a changed `actualQuantity` posts only the delta. If a node's article changes (or the node is removed), the old article's net is reversed and the new one posted. Deleting a process or a work order does not reverse movements.
+
+
+        **Article links.** `catalogItemId` must reference an existing article of the organization (`Artikal nije pronađen u katalogu.`, 422). An empty `unit` is filled from the article; a differing non-empty unit (case-insensitive) is rejected (`Jedinica mora odgovarati jedinici artikla „{name}“.`, 422). Links already stored on the same node are not re-validated.
       operationId: updateWorkOrderProcess
       parameters:
         - name: id
@@ -1345,7 +1527,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
-          description: Invalid graph
+          description: Invalid graph, unknown article link or unit mismatch with the linked article
           content:
             application/json:
               schema:
@@ -2333,7 +2515,11 @@ components:
           description: Item nodes only; dropped on steps.
         catalogItemId:
           type: string
-          description: Optional link to a catalog item. Item nodes only; dropped on steps.
+          description: >-
+            Optional link to a catalog article. Item nodes only; dropped on steps. Must reference an existing
+            article of the organization (services are rejected) on templates and work-order processes; an empty
+            `unit` is filled from the article and a differing one is rejected (422). Linked nodes move warehouse
+            stock automatically (see PUT /work-orders/{id}/process).
         note:
           type: string
           maxLength: 500
@@ -3037,6 +3223,16 @@ components:
           type: [string, 'null']
         isActive:
           type: boolean
+        stockOnHand:
+          type: [number, 'null']
+          format: double
+          description: >-
+            Warehouse balance (sum of the article's stock movements). Read-only; null for services.
+        minStock:
+          type: [number, 'null']
+          format: double
+          minimum: 0
+          description: Reorder threshold for articles; null when unset and for services.
         createdAt:
           type: string
           format: date-time
@@ -3210,6 +3406,13 @@ components:
           type: [string, 'null']
         isActive:
           type: boolean
+        minStock:
+          type: [number, 'null']
+          format: double
+          minimum: 0
+          description: >-
+            Reorder threshold, 0 or more (admin only; operators cannot change it). Articles only: ignored for
+            services. Omitted or null clears it, like every other field of this full update.
         effectiveFrom:
           type: [string, 'null']
           format: date
@@ -3218,6 +3421,148 @@ components:
             today. Must be today or later — past dates are rejected. A future date
             schedules the new price without changing the item's displayed current
             price until that date arrives.
+    StockLevel:
+      type: object
+      required: [catalogItemId, code, name, unit, isActive, onHand, reserved, available, minStock, low, lastMovementAt]
+      properties:
+        catalogItemId:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        isActive:
+          type: boolean
+        onHand:
+          type: number
+          description: Sum of the article's movements; may be negative.
+        reserved:
+          type: number
+          description: Planned input quantity still to be consumed by open work orders.
+        available:
+          type: number
+          description: onHand minus reserved.
+        minStock:
+          type: [number, 'null']
+        low:
+          type: boolean
+          description: onHand is negative, or minStock is set and available is below it.
+        lastMovementAt:
+          type: [string, 'null']
+          format: date-time
+    StockLevelList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockLevel'
+        total:
+          type: integer
+          description: Number of matching levels before pagination.
+    StockMovementKind:
+      type: string
+      enum: [opening, receipt, consumption, production, adjustment]
+    StockMovement:
+      type: object
+      required: [id, catalogItemId, itemCode, itemName, unit, kind, quantity, workOrderId, workOrderNumber, processNodeId, documentRef, note, createdAt, createdBy]
+      properties:
+        id:
+          type: string
+        catalogItemId:
+          type: string
+        itemCode:
+          type: string
+        itemName:
+          type: string
+        unit:
+          type: string
+        kind:
+          $ref: '#/components/schemas/StockMovementKind'
+        quantity:
+          type: number
+          description: Signed; negative removes stock.
+        workOrderId:
+          type: [string, 'null']
+          description: Null for manual movements and after the work order was deleted.
+        workOrderNumber:
+          type: [string, 'null']
+        processNodeId:
+          type: [string, 'null']
+        documentRef:
+          type: [string, 'null']
+        note:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+    StockMovementList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+        total:
+          type: integer
+    StockReceiptInput:
+      type: object
+      required: [lines]
+      properties:
+        documentRef:
+          type: string
+          maxLength: 500
+          description: Supplier document number.
+        note:
+          type: string
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [catalogItemId, quantity]
+            properties:
+              catalogItemId:
+                type: string
+              quantity:
+                type: number
+                exclusiveMinimum: 0
+    StockCountInput:
+      type: object
+      required: [lines]
+      properties:
+        note:
+          type: string
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [catalogItemId, countedQuantity]
+            properties:
+              catalogItemId:
+                type: string
+              countedQuantity:
+                type: number
+                minimum: 0
+    StockPostingResult:
+      type: object
+      required: [movements]
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
     CustomerCommunication:
       type: object
       required: [publicToken, notificationEmail, emailNotificationsEnabled, signedBy, signedAt]

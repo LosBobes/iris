@@ -112,6 +112,9 @@ func (s *FixtureStore) CreateProcessTemplate(_ context.Context, input domain.Pro
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if prepared.graph, err = s.resolveGraphLinksLocked(prepared.graph, nil); err != nil {
+		return nil, err
+	}
 	if s.processNameTakenLocked(prepared.name, "") {
 		return nil, newValidationError(duplicateProcessTemplateMessage)
 	}
@@ -144,6 +147,9 @@ func (s *FixtureStore) UpdateProcessTemplate(_ context.Context, id string, input
 	i := s.processTemplateIndexLocked(id)
 	if i < 0 {
 		return nil, ErrProcessTemplateNotFound
+	}
+	if prepared.graph, err = s.resolveGraphLinksLocked(prepared.graph, existingLinkSkip(s.processTemplates[i].Graph)); err != nil {
+		return nil, err
 	}
 	if s.processNameTakenLocked(prepared.name, id) {
 		return nil, newValidationError(duplicateProcessTemplateMessage)
@@ -208,7 +214,10 @@ func (s *FixtureStore) ApplyProcessTemplate(_ context.Context, workOrderID, temp
 	if _, exists := s.workOrderProcesses[workOrderID]; exists {
 		return nil, ErrProcessExists
 	}
-	return s.setWorkOrderProcessLocked(workOrderID, s.processTemplates[i], username, time.Now().UTC().Format(time.RFC3339)), nil
+	now := time.Now().UTC().Format(time.RFC3339)
+	process := s.setWorkOrderProcessLocked(workOrderID, s.processTemplates[i], username, now)
+	s.postWorkOrderStockLocked(workOrderID, process.Graph, username, now)
+	return process, nil
 }
 
 func (s *FixtureStore) UpdateWorkOrderProcess(_ context.Context, workOrderID string, graph domain.ProcessGraph, username string, allowStructural bool) (*domain.WorkOrderProcess, error) {
@@ -225,8 +234,13 @@ func (s *FixtureStore) UpdateWorkOrderProcess(_ context.Context, workOrderID str
 	if !allowStructural && domain.ProcessStructureChanged(current.Graph, next) {
 		return nil, ErrProcessStructureLocked
 	}
-	current.Graph, current.UpdatedAt, current.UpdatedBy = next, time.Now().UTC().Format(time.RFC3339), username
+	if next, err = s.resolveGraphLinksLocked(next, existingLinkSkip(current.Graph)); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	current.Graph, current.UpdatedAt, current.UpdatedBy = next, now, username
 	s.workOrderProcesses[workOrderID] = current
+	s.postWorkOrderStockLocked(workOrderID, next, username, now)
 	return cloneWorkOrderProcess(current), nil
 }
 

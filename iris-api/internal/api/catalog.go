@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -145,6 +146,7 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 		TaxGroup:      input.TaxGroup,
 		Description:   input.Description,
 		IsActive:      input.IsActive,
+		MinStock:      input.MinStock,
 	}
 	if id := chi.URLParam(r, "id"); id != "" {
 		item.ID = id
@@ -200,6 +202,10 @@ func (s *Server) updateCatalogItemKind(w http.ResponseWriter, r *http.Request, k
 
 func (s *Server) handleDeleteCatalogItem(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.DeleteCatalogItem(r.Context(), chi.URLParam(r, "id")); err != nil {
+		if errors.Is(err, store.ErrCatalogItemHasMovements) {
+			writeAPIError(w, r, http.StatusConflict, catalogItemHasMovementsMessage, nil)
+			return
+		}
 		writeServerError(w, r, err)
 		return
 	}

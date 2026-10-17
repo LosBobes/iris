@@ -164,6 +164,16 @@ type Store interface {
 	UpdateWorkOrderProcess(ctx context.Context, workOrderID string, graph domain.ProcessGraph, username string, allowStructural bool) (*domain.WorkOrderProcess, error)
 	DeleteWorkOrderProcess(ctx context.Context, workOrderID string) error
 
+	// Warehouse stock (magacin). StockLevels/StockMovements are read-only views of
+	// the movement ledger; the Post* methods append movements in one transaction
+	// and return *ValidationError (422) for unknown articles, services, bad
+	// quantities and duplicate lines. Work-order process writes post their own
+	// consumption/production movements (see domain.PlanStockPostings).
+	StockLevels(ctx context.Context, query StockLevelQuery) (domain.StockLevelList, error)
+	StockMovements(ctx context.Context, query StockMovementQuery) (domain.StockMovementList, error)
+	PostStockReceipt(ctx context.Context, input domain.StockReceiptInput, username string) (domain.StockPostingResult, error)
+	PostStockCount(ctx context.Context, input domain.StockCountInput, username string) (domain.StockPostingResult, error)
+
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	UserByID(ctx context.Context, id string) (*domain.User, error)
 	CreateUserAccount(ctx context.Context, input domain.CreateUserInput) (*domain.User, error)

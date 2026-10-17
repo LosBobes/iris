@@ -56,7 +56,60 @@ func SeedDemoFromFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixture
 			return fmt.Errorf("seed work order %s: %w", workOrder.ID, err)
 		}
 	}
+	if err := seedDemoStock(ctx, sqliteStore); err != nil {
+		return err
+	}
 	return seedDemoProcessTemplate(ctx, sqliteStore)
+}
+
+// Demo warehouse articles. The ids are stable so seed-demo can tell whether it
+// already created them and the demo process template can link to them.
+const (
+	demoPaperID = "cat-demo-papir"
+	demoInkID   = "cat-demo-boja"
+	demoPlateID = "cat-demo-ploca"
+	demoWasteID = "cat-demo-makulatura"
+)
+
+// seedDemoStock creates the demo tenant's consumable articles and posts their
+// opening balance as a stock count. An article that already exists is left
+// alone (including its stock), so re-running seed-demo is idempotent and never
+// resets stock that was moved since.
+func seedDemoStock(ctx context.Context, sqliteStore *SQLiteStore) error {
+	price := func(value float64) *float64 { return &value }
+	articles := []struct {
+		item    domain.CatalogItem
+		opening float64
+	}{
+		{domain.CatalogItem{ID: demoPaperID, Code: "PAP-80-A3", Name: "Papir 80g A3", Unit: "tabak", PurchasePrice: price(12.5)}, 5000},
+		{domain.CatalogItem{ID: demoInkID, Code: "BOJ-CMYK", Name: "Boja CMYK", Unit: "kg", PurchasePrice: price(1800), MinStock: price(5)}, 40},
+		{domain.CatalogItem{ID: demoPlateID, Code: "PLO-OFF", Name: "Offset ploča", Unit: "kom", PurchasePrice: price(650), MinStock: price(20)}, 120},
+		{domain.CatalogItem{ID: demoWasteID, Code: "MAK-001", Name: "Makulatura", Unit: "tabak"}, 0},
+	}
+	counts := make([]domain.StockCountLine, 0, len(articles))
+	for _, article := range articles {
+		existing, err := sqliteStore.CatalogItemByID(ctx, article.item.ID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			continue
+		}
+		item := article.item
+		item.Kind = domain.CatalogItemKindArticle
+		item.IsActive = true
+		if _, err := sqliteStore.UpsertCatalogItem(ctx, item, ""); err != nil {
+			return fmt.Errorf("seed article %s: %w", item.Code, err)
+		}
+		counts = append(counts, domain.StockCountLine{CatalogItemID: item.ID, CountedQuantity: article.opening})
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+	if _, err := sqliteStore.PostStockCount(ctx, domain.StockCountInput{Note: "Početno stanje (demo)", Lines: counts}, "admin"); err != nil {
+		return fmt.Errorf("seed opening stock: %w", err)
+	}
+	return nil
 }
 
 // seedDemoProcessTemplate adds the demo tenant's default "Offset štampa"
@@ -76,8 +129,14 @@ func seedDemoProcessTemplate(ctx context.Context, sqliteStore *SQLiteStore) erro
 	step := func(id, label string, x float64) domain.ProcessNode {
 		return domain.ProcessNode{ID: id, Kind: domain.ProcessNodeStep, Label: label, X: x, Y: 160}
 	}
+	// Linked items carry the planned quantity per batch; the unit comes from the
+	// article when the template is saved.
 	item := func(id string, kind domain.ProcessNodeKind, label string, x, y float64) domain.ProcessNode {
 		return domain.ProcessNode{ID: id, Kind: kind, Label: label, X: x, Y: y}
+	}
+	linked := func(node domain.ProcessNode, articleID string, quantity float64) domain.ProcessNode {
+		node.CatalogItemID, node.Quantity = articleID, &quantity
+		return node
 	}
 	edge := func(source, target string) domain.ProcessEdge {
 		return domain.ProcessEdge{ID: source + "-" + target, Source: source, Target: target}
@@ -92,12 +151,14 @@ func seedDemoProcessTemplate(ctx context.Context, sqliteStore *SQLiteStore) erro
 				step("stampa", "Štampa", 480),
 				step("secenje", "Sečenje", 720),
 				step("pakovanje", "Pakovanje", 960),
-				item("papir", domain.ProcessNodeInput, "Papir", 0, 0),
-				item("boja", domain.ProcessNodeInput, "Boja", 0, 160),
-				item("ploce", domain.ProcessNodeInput, "Ploče", 0, 320),
+				linked(item("papir", domain.ProcessNodeInput, "Papir", 0, 0), demoPaperID, 100),
+				linked(item("boja", domain.ProcessNodeInput, "Boja", 0, 160), demoInkID, 2),
+				linked(item("ploce", domain.ProcessNodeInput, "Ploče", 0, 320), demoPlateID, 4),
+				// Finished prints are not a catalog article, so the product stays unlinked.
 				item("otisci", domain.ProcessNodeProduct, "Gotovi otisci", 1200, 160),
-				item("makulatura", domain.ProcessNodeByproduct, "Makulatura", 480, 340),
-				item("otpad", domain.ProcessNodeByproduct, "Otpad papira", 720, 340),
+				// Both scrap nodes return to the same Makulatura article.
+				linked(item("makulatura", domain.ProcessNodeByproduct, "Makulatura", 480, 340), demoWasteID, 3),
+				linked(item("otpad", domain.ProcessNodeByproduct, "Otpad papira", 720, 340), demoWasteID, 2),
 			},
 			Edges: []domain.ProcessEdge{
 				edge("priprema", "stampa"), edge("stampa", "secenje"), edge("secenje", "pakovanje"),

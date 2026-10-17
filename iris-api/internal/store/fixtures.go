@@ -64,6 +64,8 @@ type FixtureStore struct {
 	processTemplates    []domain.ProcessTemplate
 	nextProcessSequence int
 	workOrderProcesses  map[string]domain.WorkOrderProcess
+	stockMovements      []domain.StockMovement
+	nextStockSequence   int
 }
 
 type fixtureSession struct {
@@ -590,6 +592,12 @@ func (s *FixtureStore) DeleteWorkOrder(_ context.Context, id string) (domain.Del
 
 		s.workOrders = append(s.workOrders[:index], s.workOrders[index+1:]...)
 		delete(s.workOrderProcesses, id)
+		// Movements outlive the order (the material was used); they just detach.
+		for i := range s.stockMovements {
+			if s.stockMovements[i].WorkOrderID != nil && *s.stockMovements[i].WorkOrderID == id {
+				s.stockMovements[i].WorkOrderID = nil
+			}
+		}
 		return domain.DeleteWorkOrderResponse{Success: true}, nil
 	}
 

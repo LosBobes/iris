@@ -201,6 +201,9 @@ func createProcessTemplate(ctx context.Context, q dbExecQuerier, tenantID string
 	if err != nil {
 		return nil, err
 	}
+	if prepared.graph, err = resolveGraphLinks(ctx, q, tenantID, prepared.graph, nil); err != nil {
+		return nil, err
+	}
 	id, err := newProcessTemplateID()
 	if err != nil {
 		return nil, err
@@ -245,6 +248,9 @@ func updateProcessTemplate(ctx context.Context, q dbExecQuerier, tenantID, id st
 	}
 	if current == nil {
 		return nil, ErrProcessTemplateNotFound
+	}
+	if prepared.graph, err = resolveGraphLinks(ctx, q, tenantID, prepared.graph, existingLinkSkip(current.Graph)); err != nil {
+		return nil, err
 	}
 	graph, err := encodeProcessGraph(prepared.graph)
 	if err != nil {
@@ -482,8 +488,12 @@ func (s *SQLiteStore) ApplyProcessTemplate(ctx context.Context, workOrderID, tem
 	if existing != nil {
 		return nil, ErrProcessExists
 	}
-	process, err := insertWorkOrderProcess(ctx, tx, tenantID, workOrderID, *template, username, time.Now().UTC().Format(time.RFC3339))
+	now := time.Now().UTC().Format(time.RFC3339)
+	process, err := insertWorkOrderProcess(ctx, tx, tenantID, workOrderID, *template, username, now)
 	if err != nil {
+		return nil, err
+	}
+	if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, process.Graph, username, now); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -516,6 +526,9 @@ func (s *SQLiteStore) UpdateWorkOrderProcess(ctx context.Context, workOrderID st
 	if !allowStructural && domain.ProcessStructureChanged(current.Graph, next) {
 		return nil, ErrProcessStructureLocked
 	}
+	if next, err = resolveGraphLinks(ctx, tx, tenantID, next, existingLinkSkip(current.Graph)); err != nil {
+		return nil, err
+	}
 	raw, err := encodeProcessGraph(next)
 	if err != nil {
 		return nil, err
@@ -527,6 +540,9 @@ func (s *SQLiteStore) UpdateWorkOrderProcess(ctx context.Context, workOrderID st
 		raw, now, username, workOrderID, tenantID,
 	); err != nil {
 		return nil, fmt.Errorf("update work order process: %w", err)
+	}
+	if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, next, username, now); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit update work order process: %w", err)

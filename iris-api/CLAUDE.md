@@ -20,7 +20,7 @@ note in older docs is stale; fixtures are for tests and `seed-demo`).
 | Path | Role |
 | --- | --- |
 | `cmd/server/` | HTTP server wiring |
-| `cmd/irisctl/` | CLI: migrate, seed-demo, create-tenant, import-csv, create-user, backup |
+| `cmd/irisctl/` | CLI: migrate, seed-demo, create-tenant, import-csv, import-stock, create-user, backup |
 | `internal/api/` | chi router, auth middleware, handlers (thin) |
 | `internal/domain/` | Go structs — contract with OpenAPI |
 | `internal/store/` | SQLite store, migrations, seed; fixture store for tests |
