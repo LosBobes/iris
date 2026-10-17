@@ -386,26 +386,76 @@ type PlatformImpersonationResponse struct {
 	ExpiresAt string `json:"expiresAt,omitempty"`
 }
 
-// PlatformImpersonation is one row of the impersonation log: who signed in as
-// whom, where and when, and how many changes they made.
-type PlatformImpersonation struct {
-	ID            int64   `json:"id"`
-	AdminUsername string  `json:"adminUsername"`
-	TenantSlug    string  `json:"tenantSlug"`
-	TenantName    string  `json:"tenantName"`
-	UserID        string  `json:"userId"`
-	Username      string  `json:"username"`
-	IP            string  `json:"ip"`
-	StartedAt     string  `json:"startedAt"`
-	ExpiresAt     string  `json:"expiresAt"`
-	EndedAt       *string `json:"endedAt"`
-	ActionCount   int     `json:"actionCount"`
+// PlatformTenant is an organization as the Backoffice manages it.
+type PlatformTenant struct {
+	ID          string  `json:"id"`
+	Slug        string  `json:"slug"`
+	Name        string  `json:"name"`
+	CreatedAt   string  `json:"createdAt"`
+	SuspendedAt *string `json:"suspendedAt"`
+	Users       int     `json:"users"`
+	Admins      int     `json:"admins"`
 }
 
-// PlatformImpersonationLog is a page of the impersonation log, newest first.
-type PlatformImpersonationLog struct {
-	Items []PlatformImpersonation `json:"items"`
-	Total int                     `json:"total"`
+// PlatformCreateTenantInput creates an organization with its first admin.
+type PlatformCreateTenantInput struct {
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	AdminUsername string `json:"adminUsername"`
+	AdminPassword string `json:"adminPassword"`
+}
+
+// PlatformUpdateTenantInput renames an organization and/or changes its
+// sign-in slug; a nil field is left unchanged.
+type PlatformUpdateTenantInput struct {
+	Name *string `json:"name"`
+	Slug *string `json:"slug"`
+}
+
+// PlatformPasswordReset sets a new password for an organization user.
+type PlatformPasswordReset struct {
+	Password string `json:"password"`
+}
+
+// Backoffice audit actions (PlatformAuditEvent.Action).
+const (
+	AuditTenantCreate       = "tenant.create"
+	AuditTenantUpdate       = "tenant.update"
+	AuditTenantSuspend      = "tenant.suspend"
+	AuditTenantReactivate   = "tenant.reactivate"
+	AuditUserPasswordReset  = "user.password_reset"
+	AuditImpersonationStart = "impersonate"
+)
+
+// PlatformAuditEvent is one superadmin action in the Backoffice activity log.
+// Organization name and slug are as they were at the time.
+type PlatformAuditEvent struct {
+	ID             int64             `json:"id"`
+	At             string            `json:"at"`
+	AdminUsername  string            `json:"adminUsername"`
+	Action         string            `json:"action"`
+	TenantSlug     string            `json:"tenantSlug"`
+	TenantName     string            `json:"tenantName"`
+	TargetUsername string            `json:"targetUsername,omitempty"`
+	Detail         map[string]string `json:"detail,omitempty"`
+	IP             string            `json:"ip"`
+	// Impersonation is set on an "impersonate" event: its session state and
+	// how many changes it made (see /platform/impersonations/{id}/actions).
+	Impersonation *PlatformImpersonationStatus `json:"impersonation,omitempty"`
+}
+
+// PlatformImpersonationStatus is the session side of an impersonation.
+type PlatformImpersonationStatus struct {
+	ID          int64   `json:"id"`
+	ExpiresAt   string  `json:"expiresAt"`
+	EndedAt     *string `json:"endedAt"`
+	ActionCount int     `json:"actionCount"`
+}
+
+// PlatformAuditLog is a page of the activity log, newest first.
+type PlatformAuditLog struct {
+	Items []PlatformAuditEvent `json:"items"`
+	Total int                  `json:"total"`
 }
 
 // PlatformImpersonationAction is one change request made during an
@@ -496,6 +546,9 @@ type User struct {
 	// ImpersonationID links an impersonated session to its audit row, so every
 	// change made in it is traced back (server-side only; 0 otherwise).
 	ImpersonationID int64 `json:"-"`
+	// TenantSuspended blocks every ordinary session of a suspended
+	// organization; impersonation still works (server-side only).
+	TenantSuspended bool `json:"-"`
 }
 
 // Tenant is an organization (shop) whose data is isolated from every other
@@ -504,6 +557,8 @@ type Tenant struct {
 	ID   string `json:"id"`
 	Slug string `json:"slug"`
 	Name string `json:"name"`
+	// Suspended organizations cannot sign in (server-side only).
+	Suspended bool `json:"-"`
 }
 
 // CreateUserInput is the payload an admin submits to add a user account.

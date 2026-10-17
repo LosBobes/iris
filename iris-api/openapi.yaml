@@ -1307,7 +1307,7 @@ paths:
         organization session in this browser), valid for one hour. The session
         reports `impersonatedBy` on `/auth/session`, is written to the
         `impersonation_events` audit log (every change request made with it is
-        traced, see `/platform/impersonations`), is not counted as a login, and ends on
+        traced, see `/platform/audit`), is not counted as a login, and ends on
         `/auth/logout` or when the superadmin signs out of the Backoffice.
       operationId: platformImpersonate
       security:
@@ -1360,48 +1360,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /platform/impersonations:
-    get:
-      tags: [Platform]
-      summary: Impersonation log, newest first (operator only)
-      operationId: getPlatformImpersonations
-      security:
-        - PlatformSession: []
-      parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-      responses:
-        '200':
-          description: A page of the log
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PlatformImpersonationLog'
-        '401':
-          description: No operator session
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: The account must change its password first
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /platform/impersonations/{id}/actions:
     get:
       tags: [Platform]
@@ -1442,6 +1400,313 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: No such impersonation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants:
+    get:
+      tags: [Platform]
+      summary: List organizations with status and account counts (operator only)
+      operationId: getPlatformTenants
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Create an organization and its first admin (operator only)
+      description: Recorded in the activity log as `tenant.create`.
+      operationId: createPlatformTenant
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformCreateTenantInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid name, slug, username or password, or the slug is taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}:
+    patch:
+      tags: [Platform]
+      summary: Rename an organization and/or change its sign-in slug (operator only)
+      description: >
+        Recorded as `tenant.update` with the old and new values. A new slug
+        changes the `/login/<slug>` address; devices that remembered the old
+        one have to choose the organization again.
+      operationId: updatePlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformUpdateTenantInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid name or slug, or the slug is taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/suspend:
+    post:
+      tags: [Platform]
+      summary: Suspend an organization (operator only)
+      description: >
+        Ends every ordinary session of its users and refuses new sign-ins
+        (after a correct password, with a "suspended" message). Data is kept and
+        Backoffice impersonation still works. Recorded as `tenant.suspend`; a
+        repeat is a no-op.
+      operationId: suspendPlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/reactivate:
+    post:
+      tags: [Platform]
+      summary: Reactivate a suspended organization (operator only)
+      description: Recorded as `tenant.reactivate`; a repeat is a no-op.
+      operationId: reactivatePlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/users/{id}/password:
+    post:
+      tags: [Platform]
+      summary: Set a new password for an organization user (operator only)
+      description: >
+        Signs that user out everywhere (impersonation sessions aside). Recorded
+        as `user.password_reset`; the password itself is never logged.
+      operationId: resetPlatformUserPassword
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPasswordReset'
+      responses:
+        '200':
+          description: Password set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Password too short or too long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/audit:
+    get:
+      tags: [Platform]
+      summary: Backoffice activity log, newest first (operator only)
+      description: >
+        Every superadmin operation: organizations created, edited, suspended and
+        reactivated, passwords reset, and impersonations (with their session
+        state and change count; the changes themselves are at
+        `/platform/impersonations/{id}/actions`).
+      operationId: getPlatformAudit
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of the log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAuditLog'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
           content:
             application/json:
               schema:
@@ -2673,46 +2938,115 @@ components:
         expiresAt:
           type: string
           format: date-time
-    PlatformImpersonation:
+    PlatformTenant:
       type: object
-      required: [id, adminUsername, tenantSlug, tenantName, userId, username, ip, startedAt, expiresAt, endedAt, actionCount]
+      required: [id, slug, name, createdAt, suspendedAt, users, admins]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+        suspendedAt:
+          type: string
+          format: date-time
+          nullable: true
+        users:
+          type: integer
+        admins:
+          type: integer
+    PlatformCreateTenantInput:
+      type: object
+      required: [name, slug, adminUsername, adminPassword]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          minLength: 2
+          maxLength: 64
+        adminUsername:
+          type: string
+        adminPassword:
+          type: string
+          minLength: 6
+    PlatformUpdateTenantInput:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          minLength: 2
+          maxLength: 64
+    PlatformPasswordReset:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 6
+    PlatformAuditEvent:
+      type: object
+      required: [id, at, adminUsername, action, tenantSlug, tenantName, ip]
       properties:
         id:
           type: integer
           format: int64
+        at:
+          type: string
+          format: date-time
         adminUsername:
           type: string
+        action:
+          type: string
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, user.password_reset, impersonate]
         tenantSlug:
           type: string
+          description: As it was at the time.
         tenantName:
           type: string
-        userId:
+          description: As it was at the time.
+        targetUsername:
           type: string
-        username:
-          type: string
+        detail:
+          type: object
+          additionalProperties:
+            type: string
+          description: For tenant.update, fromName/toName and fromSlug/toSlug of what changed.
         ip:
           type: string
-        startedAt:
-          type: string
-          format: date-time
-        expiresAt:
-          type: string
-          format: date-time
-        endedAt:
-          type: string
-          format: date-time
-          nullable: true
-          description: Set when the session was signed out (or found expired); null while it may still be active.
-        actionCount:
-          type: integer
-    PlatformImpersonationLog:
+        impersonation:
+          type: object
+          required: [id, expiresAt, endedAt, actionCount]
+          properties:
+            id:
+              type: integer
+              format: int64
+            expiresAt:
+              type: string
+              format: date-time
+            endedAt:
+              type: string
+              format: date-time
+              nullable: true
+            actionCount:
+              type: integer
+    PlatformAuditLog:
       type: object
       required: [items, total]
       properties:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/PlatformImpersonation'
+            $ref: '#/components/schemas/PlatformAuditEvent'
         total:
           type: integer
     PlatformImpersonationAction:

@@ -107,10 +107,14 @@ edits, and blocks production/destructive commands the user did not ask for.
   impersonaciju" logs out back to `/backoffice`). It is not counted as a login,
   and signing out of the Backoffice ends it. Every change request (POST/PUT/
   PATCH/DELETE, not edit-lock heartbeats, never bodies) made in such a session is
-  traced to it in `impersonation_actions` (`serveTraced` in `requireAuth`); the
-  Backoffice's "Impersonacije" tab (`/backoffice/impersonations`,
-  `GET /platform/impersonations[/{id}/actions]`) shows the log and each trail.
+  traced to it in `impersonation_actions` (`serveTraced` in `requireAuth`).
   New mutating routes should get a label in `components/platform/impersonation-actions.ts`.
+  **Organization management** ("Organizacije" tab, `/platform/tenants…`): create
+  (with first admin), rename / change slug, suspend / reactivate (`tenants.suspended_at`:
+  ordinary sessions end and sign-in is refused, impersonation still works), and
+  reset a user's password. Every superadmin operation, impersonations included,
+  is written to `platform_audit_events` in the same transaction and shown in the
+  "Aktivnost" tab (`GET /platform/audit`; trails at `/platform/impersonations/{id}/actions`).
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

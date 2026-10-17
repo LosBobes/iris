@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -13,7 +12,8 @@ import (
 // of that organization's users, to see and do exactly what that user can. The
 // session is an ordinary row in sessions (so every tenant-scoped check applies
 // unchanged) marked with impersonated_by and linked to its impersonation_events
-// row, and every change request made in it is written to impersonation_actions.
+// row (and to its platform_audit_events entry), and every change request made
+// in it is written to impersonation_actions.
 // It is never counted as a login.
 
 // ImpersonationInput describes one impersonation request.
@@ -81,6 +81,19 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 	); err != nil {
 		return "", nil, fmt.Errorf("create impersonation session: %w", err)
 	}
+	tenant := domain.Tenant{ID: input.TenantID}
+	if err := tx.QueryRowContext(ctx, `SELECT slug, name FROM tenants WHERE id = ?`, input.TenantID).Scan(&tenant.Slug, &tenant.Name); err != nil {
+		return "", nil, fmt.Errorf("load tenant: %w", err)
+	}
+	if err := writeAudit(ctx, tx, AuditActor{AdminID: input.AdminID, AdminUsername: input.AdminUsername, IP: input.IP}, auditEntry{
+		action:          domain.AuditImpersonationStart,
+		tenant:          &tenant,
+		targetUserID:    user.ID,
+		targetUsername:  user.Username,
+		impersonationID: impersonationID,
+	}); err != nil {
+		return "", nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return "", nil, fmt.Errorf("commit impersonation: %w", err)
 	}
@@ -125,42 +138,6 @@ func (s *SQLiteStore) RecordImpersonationAction(ctx context.Context, impersonati
 		return fmt.Errorf("record impersonation action: %w", err)
 	}
 	return nil
-}
-
-func (s *SQLiteStore) ImpersonationLog(ctx context.Context, limit, offset int) (domain.PlatformImpersonationLog, error) {
-	log := domain.PlatformImpersonationLog{Items: []domain.PlatformImpersonation{}}
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM impersonation_events`).Scan(&log.Total); err != nil {
-		return log, fmt.Errorf("count impersonations: %w", err)
-	}
-	rows, err := s.db.QueryContext(
-		ctx,
-		`SELECT e.id, e.admin_username, t.slug, t.name, e.user_id, e.username, COALESCE(e.ip, ''),
-		        e.at, e.expires_at, e.ended_at,
-		        (SELECT COUNT(*) FROM impersonation_actions a WHERE a.impersonation_id = e.id)
-		 FROM impersonation_events e
-		 JOIN tenants t ON t.id = e.tenant_id
-		 ORDER BY e.id DESC LIMIT ? OFFSET ?`,
-		limit, offset,
-	)
-	if err != nil {
-		return log, fmt.Errorf("list impersonations: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var item domain.PlatformImpersonation
-		var ended sql.NullString
-		if err := rows.Scan(
-			&item.ID, &item.AdminUsername, &item.TenantSlug, &item.TenantName, &item.UserID, &item.Username, &item.IP,
-			&item.StartedAt, &item.ExpiresAt, &ended, &item.ActionCount,
-		); err != nil {
-			return log, fmt.Errorf("scan impersonation: %w", err)
-		}
-		if ended.Valid {
-			item.EndedAt = &ended.String
-		}
-		log.Items = append(log.Items, item)
-	}
-	return log, rows.Err()
 }
 
 func (s *SQLiteStore) ImpersonationActions(ctx context.Context, impersonationID int64) ([]domain.PlatformImpersonationAction, bool, error) {

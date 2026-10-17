@@ -50,11 +50,19 @@ type PlatformStore interface {
 	EndImpersonationSessions(ctx context.Context, adminID string) error
 	// RecordImpersonationAction adds a change request to an impersonation's trail.
 	RecordImpersonationAction(ctx context.Context, impersonationID int64, action domain.PlatformImpersonationAction) error
-	// ImpersonationLog lists impersonations, newest first.
-	ImpersonationLog(ctx context.Context, limit, offset int) (domain.PlatformImpersonationLog, error)
 	// ImpersonationActions returns one impersonation's trail, oldest first;
 	// the bool is false when no such impersonation exists.
 	ImpersonationActions(ctx context.Context, impersonationID int64) ([]domain.PlatformImpersonationAction, bool, error)
+
+	// Organization management (platform_tenants.go). Each operation writes a
+	// platform_audit_events row; a nil result means no such organization (or
+	// user).
+	PlatformTenants(ctx context.Context) ([]domain.PlatformTenant, error)
+	PlatformCreateTenant(ctx context.Context, actor AuditActor, input domain.PlatformCreateTenantInput) (*domain.PlatformTenant, error)
+	PlatformUpdateTenant(ctx context.Context, actor AuditActor, slug string, input domain.PlatformUpdateTenantInput) (*domain.PlatformTenant, error)
+	PlatformSetTenantSuspended(ctx context.Context, actor AuditActor, slug string, suspended bool) (*domain.PlatformTenant, error)
+	PlatformResetUserPassword(ctx context.Context, actor AuditActor, slug, userID, password string) (*domain.User, error)
+	PlatformAuditLog(ctx context.Context, limit, offset int) (domain.PlatformAuditLog, error)
 }
 
 var _ PlatformStore = (*SQLiteStore)(nil)

@@ -208,13 +208,14 @@ func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*do
 	err := s.db.QueryRowContext(
 		ctx,
 		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at,
-		        platform_admins.username, sessions.impersonation_id
+		        platform_admins.username, sessions.impersonation_id, tenants.suspended_at IS NOT NULL
 		 FROM sessions
 		 JOIN users ON users.id = sessions.user_id
+		 JOIN tenants ON tenants.id = users.tenant_id
 		 LEFT JOIN platform_admins ON platform_admins.id = sessions.impersonated_by
 		 WHERE sessions.token = ?`,
 		token,
-	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw, &impersonatedBy, &impersonationID)
+	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw, &impersonatedBy, &impersonationID, &user.TenantSuspended)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -251,9 +252,9 @@ func (s *SQLiteStore) TenantBySlug(ctx context.Context, slug string) (*domain.Te
 	var tenant domain.Tenant
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, slug, name FROM tenants WHERE slug = ? COLLATE NOCASE`,
+		`SELECT id, slug, name, suspended_at IS NOT NULL FROM tenants WHERE slug = ? COLLATE NOCASE`,
 		strings.TrimSpace(slug),
-	).Scan(&tenant.ID, &tenant.Slug, &tenant.Name)
+	).Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.Suspended)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

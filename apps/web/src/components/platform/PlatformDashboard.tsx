@@ -5,8 +5,8 @@ import { Check, RefreshCw } from "lucide-react";
 import { BackofficeMenu } from "./BackofficeMenu";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { PlatformChangePassword } from "./PlatformChangePassword";
-import { ImpersonateDialog } from "./ImpersonateDialog";
-import { ImpersonationLog } from "./ImpersonationLog";
+import { OrganizationsPanel } from "./OrganizationsPanel";
+import { ActivityLog } from "./ActivityLog";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -81,13 +81,18 @@ export function PlatformDashboard({
   const [loading, setLoading] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [impersonating, setImpersonating] = useState<{ slug: string; name: string } | null>(null);
   // Range and refresh sit in the header from tablet width up; on a phone the
   // range gets its own row and refresh moves into the menu.
   const isWide = useMediaQuery("(min-width: 768px)");
-  // Two sections: the metrics overview at /backoffice and the impersonation
-  // log at /backoffice/impersonations.
-  const showLog = useLocation().pathname.startsWith("/backoffice/impersonations");
+  // Sections: the metrics overview at /backoffice, organization management
+  // and the activity log below it.
+  const pathname = useLocation().pathname;
+  const section: "overview" | "organizations" | "activity" = pathname.startsWith("/backoffice/organizations")
+    ? "organizations"
+    : pathname.startsWith("/backoffice/activity")
+      ? "activity"
+      : "overview";
+  const showLog = section !== "overview";
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -207,8 +212,9 @@ export function PlatformDashboard({
             <span className="hidden truncate text-[15px] text-[color:var(--pf-text-2)] sm:inline">{t("platform.title")}</span>
             <nav aria-label={t("platform.nav.label")} className="ml-1 flex items-center gap-1">
               {[
-                { to: "/backoffice", label: t("platform.nav.overview"), current: !showLog },
-                { to: "/backoffice/impersonations", label: t("platform.nav.impersonations"), current: showLog },
+                { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
+                { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
+                { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
               ].map((tab) => (
                 <Link
                   key={tab.to}
@@ -261,10 +267,6 @@ export function PlatformDashboard({
         </div>
       ) : null}
 
-      {impersonating ? (
-        <ImpersonateDialog tenant={impersonating} onClose={() => setImpersonating(null)} />
-      ) : null}
-
       <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-5 sm:px-6">
         {notice ? (
           <div role="status" className="rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
@@ -273,8 +275,10 @@ export function PlatformDashboard({
         ) : null}
         {showLog ? (
           <>
-            <h1 className="text-[22px] font-medium tracking-[-0.3px]">{t("platform.nav.impersonations")}</h1>
-            <ImpersonationLog />
+            <h1 className="text-[22px] font-medium tracking-[-0.3px]">
+              {section === "organizations" ? t("platform.nav.organizations") : t("platform.nav.activity")}
+            </h1>
+            {section === "organizations" ? <OrganizationsPanel /> : <ActivityLog />}
           </>
         ) : (
         <>
@@ -347,7 +351,7 @@ export function PlatformDashboard({
 
             <Panel title={t("platform.table.title")}>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1140px] text-[13px]">
+                <table className="w-full min-w-[1040px] text-[13px]">
                   <thead className="text-left text-[12px] text-[color:var(--pf-muted)]">
                     <tr>
                       <th className="px-4 py-2.5 font-normal">{t("platform.table.organization")}</th>
@@ -363,10 +367,7 @@ export function PlatformDashboard({
                       <th className="px-3 py-2 font-normal">{t("platform.table.lastWorkOrder")}</th>
                       <th className="px-3 py-2 font-normal">{t("platform.table.lastLogin")}</th>
                       <th className="px-3 py-2 font-normal">{t("platform.table.logo")}</th>
-                      <th className="px-3 py-2 font-normal">{t("platform.table.created")}</th>
-                      <th className="px-4 py-2.5 font-normal">
-                        <span className="sr-only">{t("platform.impersonate.column")}</span>
-                      </th>
+                      <th className="px-4 py-2.5 font-normal">{t("platform.table.created")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -404,16 +405,7 @@ export function PlatformDashboard({
                               <span className="text-[color:var(--pf-muted)]">—</span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-[color:var(--pf-text-2)]">{formatDate(tenant.createdAt)}</td>
-                          <td className="px-4 py-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => setImpersonating({ slug: tenant.slug, name: tenant.name })}
-                              className="iris-focusable h-8 whitespace-nowrap rounded-md border border-[color:var(--pf-border)] px-2.5 text-[12px] text-[color:var(--pf-text)] hover:bg-white/5"
-                            >
-                              {t("platform.impersonate.action")}
-                            </button>
-                          </td>
+                          <td className="px-4 py-2 text-[color:var(--pf-text-2)]">{formatDate(tenant.createdAt)}</td>
                         </tr>
                       );
                     })}

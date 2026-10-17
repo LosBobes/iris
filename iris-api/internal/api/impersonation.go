@@ -132,29 +132,6 @@ func (s *Server) serveTraced(w http.ResponseWriter, r *http.Request, next http.H
 	}
 }
 
-func (s *Server) handlePlatformImpersonations(w http.ResponseWriter, r *http.Request) {
-	platform, ok := s.platformStore()
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if offset < 0 {
-		offset = 0
-	}
-	result, err := platform.ImpersonationLog(r.Context(), limit, offset)
-	if err != nil {
-		writeServerError(w, r, err)
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, result)
-}
-
 func (s *Server) handlePlatformImpersonationActions(w http.ResponseWriter, r *http.Request) {
 	platform, ok := s.platformStore()
 	if !ok {

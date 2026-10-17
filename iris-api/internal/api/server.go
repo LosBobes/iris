@@ -129,7 +129,13 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
 	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/users", s.handlePlatformTenantUsers)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/impersonate", s.handlePlatformImpersonate)
-	r.With(s.requirePlatformAdmin).Get("/platform/impersonations", s.handlePlatformImpersonations)
+	r.With(s.requirePlatformAdmin).Get("/platform/audit", s.handlePlatformAudit)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants", s.handlePlatformTenants)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants", s.handlePlatformCreateTenant)
+	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/suspend", s.handlePlatformSuspendTenant(true))
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/reactivate", s.handlePlatformSuspendTenant(false))
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/users/{id}/password", s.handlePlatformResetPassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)
 
 	r.Group(func(protected chi.Router) {
@@ -286,6 +292,13 @@ func (s *Server) userFromRequest(w http.ResponseWriter, r *http.Request) (*domai
 		writeAPIError(w, r, http.StatusUnauthorized, "Sesija je istekla.", nil)
 		return nil, false
 	}
+	// A suspended organization keeps no ordinary sessions; a Backoffice
+	// impersonation still gets in.
+	if user.TenantSuspended && user.ImpersonationID == 0 {
+		clearSessionCookie(w, s.config)
+		writeAPIError(w, r, http.StatusUnauthorized, tenantSuspendedMessage, nil)
+		return nil, false
+	}
 	return user, true
 }
 
@@ -351,6 +364,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Said only after the credentials check out, so it reveals nothing to
+	// someone guessing.
+	if tenant.Suspended {
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: tenantSuspendedMessage})
+		return
+	}
 
 	s.recordLogin(r, user)
 
@@ -381,6 +400,11 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		clearSessionCookie(w, s.config)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false})
+		return
+	}
+	if user.TenantSuspended && user.ImpersonationID == 0 {
+		clearSessionCookie(w, s.config)
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: tenantSuspendedMessage})
 		return
 	}
 	writeJSON(w, http.StatusOK, domain.LoginResponse{Success: true, User: user})

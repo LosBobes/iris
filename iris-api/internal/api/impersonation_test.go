@@ -99,8 +99,8 @@ func TestPlatformImpersonation(t *testing.T) {
 	// The same requests from an ordinary session leave no trail.
 	platformRequest(t, server, tenantCookie, http.MethodPost, "/work-orders/reserve-number", "")
 
-	rec = platformRequest(t, server, platformSession, http.MethodGet, "/platform/impersonations", "")
-	var log domain.PlatformImpersonationLog
+	rec = platformRequest(t, server, platformSession, http.MethodGet, "/platform/audit", "")
+	var log domain.PlatformAuditLog
 	if err := json.Unmarshal(rec.Body.Bytes(), &log); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("log = %d %s", rec.Code, rec.Body.String())
 	}
@@ -108,11 +108,12 @@ func TestPlatformImpersonation(t *testing.T) {
 		t.Fatalf("log = %+v", log)
 	}
 	entry := log.Items[0]
-	if entry.AdminUsername != "ops" || entry.Username != "operater" || entry.TenantSlug != "demo" ||
-		entry.ActionCount != 2 || entry.EndedAt != nil || entry.ExpiresAt == "" {
+	if entry.Action != domain.AuditImpersonationStart || entry.AdminUsername != "ops" || entry.TargetUsername != "operater" ||
+		entry.TenantSlug != "demo" || entry.Impersonation == nil || entry.Impersonation.ActionCount != 2 ||
+		entry.Impersonation.EndedAt != nil || entry.Impersonation.ExpiresAt == "" {
 		t.Fatalf("log entry = %+v", entry)
 	}
-	rec = platformRequest(t, server, platformSession, http.MethodGet, fmt.Sprintf("/platform/impersonations/%d/actions", entry.ID), "")
+	rec = platformRequest(t, server, platformSession, http.MethodGet, fmt.Sprintf("/platform/impersonations/%d/actions", entry.Impersonation.ID), "")
 	var actions []domain.PlatformImpersonationAction
 	if err := json.Unmarshal(rec.Body.Bytes(), &actions); err != nil || len(actions) != 2 {
 		t.Fatalf("actions = %d %s", rec.Code, rec.Body.String())
@@ -125,7 +126,7 @@ func TestPlatformImpersonation(t *testing.T) {
 	if rec := platformRequest(t, server, platformSession, http.MethodGet, "/platform/impersonations/999/actions", ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown impersonation actions = %d, want 404", rec.Code)
 	}
-	if rec := platformRequest(t, server, tenantCookie, http.MethodGet, "/platform/impersonations", ""); rec.Code != http.StatusUnauthorized {
+	if rec := platformRequest(t, server, tenantCookie, http.MethodGet, "/platform/audit", ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("log with tenant session = %d, want 401", rec.Code)
 	}
 
@@ -150,8 +151,8 @@ func TestPlatformImpersonation(t *testing.T) {
 		t.Fatalf("ordinary session after platform logout = %s", rec.Body.String())
 	}
 	// ...and the log shows it ended.
-	ended, err := sqliteStore.ImpersonationLog(ctx, 10, 0)
-	if err != nil || ended.Items[0].EndedAt == nil {
+	ended, err := sqliteStore.PlatformAuditLog(ctx, 10, 0)
+	if err != nil || ended.Items[0].Impersonation.EndedAt == nil {
 		t.Fatalf("log after platform logout = %+v, err %v", ended, err)
 	}
 }
@@ -168,8 +169,8 @@ func TestImpersonationEndsOnTenantLogout(t *testing.T) {
 		t.Fatalf("impersonate: user=%v err=%v", user, err)
 	}
 	platformRequest(t, server, &http.Cookie{Name: server.config.SessionCookieName, Value: token}, http.MethodPost, "/auth/logout", "")
-	log, err := sqliteStore.ImpersonationLog(ctx, 10, 0)
-	if err != nil || len(log.Items) != 1 || log.Items[0].EndedAt == nil || log.Items[0].ActionCount != 0 {
+	log, err := sqliteStore.PlatformAuditLog(ctx, 10, 0)
+	if err != nil || len(log.Items) != 1 || log.Items[0].Impersonation.EndedAt == nil || log.Items[0].Impersonation.ActionCount != 0 {
 		t.Fatalf("log after logout = %+v, err %v", log, err)
 	}
 }

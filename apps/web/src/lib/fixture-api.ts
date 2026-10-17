@@ -1060,9 +1060,41 @@ export function createFixtureApi(): Window['api'] {
       throw new Error('Impersonacija nije dostupna u demo režimu.')
     },
 
-    async getPlatformImpersonations() {
+    async getPlatformAudit() {
       if (!platformSignedIn) throw new Error('Prijava je obavezna.')
       return { items: [], total: 0 }
+    },
+
+    async getPlatformTenants() {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return [
+        {
+          id: FIXTURE_ORGANIZATION.slug,
+          ...FIXTURE_ORGANIZATION,
+          createdAt: '2026-01-01 00:00:00',
+          suspendedAt: null,
+          users: users.length,
+          admins: users.filter((user) => user.role === 'admin').length,
+        },
+      ]
+    },
+
+    // Organization management needs the real API: fixture mode has a single,
+    // fixed organization.
+    async createPlatformTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async updatePlatformTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async setPlatformTenantSuspended() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async resetPlatformUserPassword() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
     },
 
     async getPlatformImpersonationActions() {

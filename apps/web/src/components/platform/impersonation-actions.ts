@@ -2,7 +2,7 @@ import type { PlatformImpersonationAction } from '@/types/platform'
 
 // Readable names for the change requests an impersonation trail records,
 // keyed by "<METHOD> <API route pattern>" (see the routes in iris-api
-// server.go). Values are keys under platform.impersonations.actions; anything
+// server.go). Values are keys under platform.activity.actions; anything
 // not listed is shown as its method and path.
 const ACTION_KEYS: Record<string, string> = {
   'POST /customers': 'customerCreate',
@@ -35,7 +35,7 @@ const ACTION_KEYS: Record<string, string> = {
 /** The i18n key for an action, or null to fall back to method + path. */
 export function actionLabelKey(action: Pick<PlatformImpersonationAction, 'method' | 'route'>): string | null {
   const key = ACTION_KEYS[`${action.method} ${action.route}`]
-  return key ? `platform.impersonations.actions.${key}` : null
+  return key ? `platform.activity.actions.${key}` : null
 }
 
 /** The record the action touched: the `{id}` segment of its path, if any. */
