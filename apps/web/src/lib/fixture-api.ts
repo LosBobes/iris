@@ -46,6 +46,7 @@ import {
   type PublicOrganization,
 } from '@/types/settings'
 import type { PlatformMetrics, PlatformRangeDays } from '@/types/platform'
+import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 
 interface FixtureUser extends AuthenticatedUser {
   password: string
@@ -655,7 +656,15 @@ function validateCreateInput(input: WorkOrder): void {
 }
 
 export function createFixtureApi(): Window['api'] {
+  const processStore = createProcessFixtureStore({
+    currentUser: () => sessionUser ?? users.find((user) => user.role === 'admin') ?? null,
+    workOrderExists: (id) => workOrders.some((order) => order.id === id),
+    tenantSlug: FIXTURE_ORGANIZATION.slug,
+    platformSignedIn: () => platformSignedIn,
+  })
+
   return {
+    ...processStore.api,
     async getAppVersion() {
       return APP_VERSION
     },
@@ -1202,6 +1211,7 @@ export function createFixtureApi(): Window['api'] {
       validateCreateInput(order)
 
       workOrders = [...workOrders, order]
+      processStore.attachDefaultProcess(order.id)
       return cloneValue(order)
     },
 

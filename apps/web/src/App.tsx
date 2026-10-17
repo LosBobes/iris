@@ -55,6 +55,7 @@ const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
 const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
 const CostReviewPage = lazy(() => import("@/pages/CostReviewPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const ProcessTemplatePage = lazy(() => import("@/pages/ProcessTemplatePage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const HelpPage = lazy(() => import("@/pages/HelpPage"));
 const PlatformConsole = lazy(() => import("@/components/platform/PlatformConsole"));
@@ -413,6 +414,8 @@ function AppContent(): React.JSX.Element {
                               <>
                                 <Route path="/cost-review" element={<CostReviewPage />} />
                                 <Route path="/users" element={<UsersPage />} />
+                                <Route path="/settings/processes/new" element={<ProcessTemplatePage />} />
+                                <Route path="/settings/processes/:id" element={<ProcessTemplatePage />} />
                               </>
                             )}
                           </Route>

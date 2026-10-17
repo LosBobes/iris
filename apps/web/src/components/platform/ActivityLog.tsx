@@ -15,6 +15,9 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "tenant.reactivate": "platform.activity.kinds.tenantReactivate",
   "user.password_reset": "platform.activity.kinds.passwordReset",
   impersonate: "platform.activity.kinds.impersonate",
+  "process_template.create": "platform.activity.kinds.processTemplateCreate",
+  "process_template.update": "platform.activity.kinds.processTemplateUpdate",
+  "process_template.delete": "platform.activity.kinds.processTemplateDelete",
 };
 
 type Trail =
@@ -32,6 +35,9 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
         username: event.targetUsername,
       }),
     );
+  }
+  if (event.action.startsWith("process_template.") && event.detail?.name) {
+    lines.push(t("platform.activity.processTemplate", { name: event.detail.name }));
   }
   if (event.detail?.toName) {
     lines.push(t("platform.activity.renamed", { from: event.detail.fromName, to: event.detail.toName }));

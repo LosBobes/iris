@@ -44,6 +44,13 @@ import type {
   PlatformUpdateTenantInput,
 } from '@/types/platform'
 import type {
+  ProcessGraph,
+  ProcessTemplate,
+  ProcessTemplateInput,
+  WorkOrderProcess,
+  WorkOrderProcessInput,
+} from '@/types/process'
+import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
@@ -205,6 +212,13 @@ async function bufferJSONBody(
   return { response: replay, failure }
 }
 
+// A successful 204 has no body to parse; anything else goes through readJSON so
+// the failure carries the server's message and status like every other call.
+async function readNoContent(response: Response): Promise<void> {
+  if (response.ok) return
+  await readJSON<unknown>(response)
+}
+
 async function readJSON<T>(response: Response): Promise<T> {
   // Error responses are not guaranteed to be JSON (e.g. an HTML page from a
   // proxy), so parse failures must not mask the HTTP status.
@@ -275,6 +289,19 @@ function normalizeWorkOrderListResult(value: WorkOrderListResult): WorkOrderList
 
 function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path}`
+}
+
+// normalizeGraph guards against a nil Go slice surfacing as null.
+function normalizeGraph(graph: ProcessGraph | null | undefined): ProcessGraph {
+  return { nodes: readArray(graph?.nodes), edges: readArray(graph?.edges) }
+}
+
+function normalizeTemplate(template: ProcessTemplate): ProcessTemplate {
+  return { ...template, graph: normalizeGraph(template?.graph) }
+}
+
+function normalizeProcess(process: WorkOrderProcess): WorkOrderProcess {
+  return { ...process, graph: normalizeGraph(process?.graph) }
 }
 
 function jsonRequest(method: string, body: unknown): RequestInit {
@@ -894,6 +921,106 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
 
     getWorkOrderReportUrl(id: string) {
       return url(`/work-orders/${encodeURIComponent(id)}/report`)
+    },
+
+    async getProcessTemplates() {
+      const response = await fetchImpl(url('/process-templates'), credentialedRequest())
+      return readArray(await readJSON<ProcessTemplate[]>(response)).map(normalizeTemplate)
+    },
+
+    async getProcessTemplate(id: string) {
+      const response = await fetchImpl(
+        url(`/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async createProcessTemplate(input: ProcessTemplateInput) {
+      const response = await fetchImpl(url('/process-templates'), jsonRequest('POST', input))
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async updateProcessTemplate(id: string, input: ProcessTemplateInput) {
+      const response = await fetchImpl(
+        url(`/process-templates/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async deleteProcessTemplate(id: string) {
+      const response = await fetchImpl(
+        url(`/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async getWorkOrderProcess(workOrderId: string) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return normalizeProcess(await readJSON<WorkOrderProcess>(response))
+    },
+
+    async applyProcessTemplate(workOrderId: string, templateId: string) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        jsonRequest('POST', { templateId }),
+      )
+      return normalizeProcess(await readJSON<WorkOrderProcess>(response))
+    },
+
+    async updateWorkOrderProcess(workOrderId: string, input: WorkOrderProcessInput) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        jsonRequest('PUT', input),
+      )
+      return normalizeProcess(await readJSON<WorkOrderProcess>(response))
+    },
+
+    async deleteWorkOrderProcess(workOrderId: string) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async getPlatformProcessTemplates(slug: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates`),
+        credentialedRequest(),
+      )
+      return readArray(await readJSON<ProcessTemplate[]>(response)).map(normalizeTemplate)
+    },
+
+    async createPlatformProcessTemplate(slug: string, input: ProcessTemplateInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates`),
+        jsonRequest('POST', input),
+      )
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async updatePlatformProcessTemplate(slug: string, id: string, input: ProcessTemplateInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async deletePlatformProcessTemplate(slug: string, id: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
     },
   })
 }

@@ -12,6 +12,7 @@ import { LoginLogoSettings } from "@/components/settings/LoginLogoSettings";
 import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
 import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
+import { ProcessTemplatesSettings } from "@/components/settings/ProcessTemplatesSettings";
 import { PdfSectionsSettings } from "@/components/settings/PdfSectionsSettings";
 import { PrintItemColumnsSettings } from "@/components/settings/PrintItemColumnsSettings";
 import { BillingDefaultsSettings } from "@/components/settings/BillingDefaultsSettings";
@@ -263,6 +264,8 @@ export function SettingsPage(): React.JSX.Element {
           {isAdmin && <PrintItemColumnsSettings />}
 
           {isAdmin && <EnumValuesSettings />}
+
+          {isAdmin && <ProcessTemplatesSettings />}
         </div>
       </div>
     </>

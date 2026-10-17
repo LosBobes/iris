@@ -63,6 +63,9 @@ export type PlatformAuditAction =
   | 'tenant.reactivate'
   | 'user.password_reset'
   | 'impersonate'
+  | 'process_template.create'
+  | 'process_template.update'
+  | 'process_template.delete'
 
 /** One superadmin action in the Backoffice activity log (GET /platform/audit). */
 export interface PlatformAuditEvent {

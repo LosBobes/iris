@@ -11,11 +11,14 @@ export function BackofficeDialog({
   title,
   description,
   onClose,
+  wide = false,
   children,
 }: {
   title: string;
   description?: ReactNode;
   onClose: () => void;
+  /** Wide layout for content that needs room (the process graph editor). */
+  wide?: boolean;
   children: ReactNode;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -39,7 +42,7 @@ export function BackofficeDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[calc(100dvh-32px)] w-full max-w-[460px] overflow-y-auto rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] text-[color:var(--pf-text)] shadow-2xl">
+      <div className={`max-h-[calc(100dvh-32px)] w-full ${wide ? "max-w-[1100px]" : "max-w-[460px]"} overflow-y-auto rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] text-[color:var(--pf-text)] shadow-2xl`}>
         <header className="flex items-start gap-3 border-b border-[color:var(--pf-border)] px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 id={titleId} className="text-[15px] font-medium">

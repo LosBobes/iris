@@ -866,3 +866,69 @@
     line-height: 1;
   }
 }
+
+/* Process graph editor (React Flow). The library's base stylesheet is
+   unthemed; map its --xy-* variables onto the Iris tokens so light and dark
+   mode follow the app theme. */
+:root {
+  --iris-proc-step: oklch(0.52 0.09 250);
+  --iris-proc-input: oklch(0.52 0.08 155);
+  --iris-proc-product: oklch(0.58 0.13 45);
+  --iris-proc-byproduct: oklch(0.55 0.02 75);
+}
+
+.dark {
+  --iris-proc-step: oklch(0.72 0.10 250);
+  --iris-proc-input: oklch(0.72 0.10 155);
+  --iris-proc-product: oklch(0.74 0.13 50);
+  --iris-proc-byproduct: oklch(0.68 0.02 75);
+}
+
+.iris-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-dots-color: var(--iris-ink-faint);
+  --xy-edge-stroke: var(--iris-ink-mute);
+  --xy-edge-stroke-selected: var(--iris-accent);
+  --xy-edge-stroke-width: 1.5;
+  --xy-connectionline-stroke: var(--iris-accent);
+  --xy-connectionline-stroke-width: 2;
+  --xy-handle-background-color: var(--card);
+  --xy-handle-border-color: var(--iris-ink-soft);
+  --xy-selection-background-color: color-mix(in oklch, var(--iris-accent) 10%, transparent);
+  --xy-selection-border: 1px dotted var(--iris-accent);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(in oklch, var(--background) 70%, transparent);
+  --xy-minimap-node-background-color: var(--iris-ink-faint);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: none;
+  --xy-edge-label-color: var(--foreground);
+  --xy-edge-label-background-color: var(--card);
+  --xy-attribution-background-color: transparent;
+}
+
+.iris-flow .react-flow__attribution {
+  font-size: 9px;
+  color: var(--iris-ink-mute);
+}
+
+.iris-flow .react-flow__controls button svg {
+  fill: currentColor;
+}
+
+.iris-flow .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+  border-style: solid;
+  border-color: var(--xy-handle-border-color);
+}
+
+.iris-flow .react-flow__handle.connectingto.valid,
+.iris-flow .react-flow__handle.connectionindicator:hover {
+  background: var(--iris-accent);
+  border-color: var(--iris-accent);
+}

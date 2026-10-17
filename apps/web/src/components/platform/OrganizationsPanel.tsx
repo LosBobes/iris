@@ -12,12 +12,14 @@ import {
   backofficeSmallButtonClass,
 } from "./BackofficeDialog";
 import { OrganizationFormDialog } from "./OrganizationFormDialog";
+import { OrganizationProcessesDialog } from "./OrganizationProcessesDialog";
 import { OrganizationUsersDialog } from "./OrganizationUsersDialog";
 
 type OpenDialog =
   | { kind: "create" }
   | { kind: "edit"; tenant: PlatformTenant }
   | { kind: "users"; tenant: PlatformTenant }
+  | { kind: "processes"; tenant: PlatformTenant }
   | { kind: "suspend"; tenant: PlatformTenant };
 
 /**
@@ -84,6 +86,9 @@ export function OrganizationsPanel(): React.JSX.Element {
     <>
       <button type="button" onClick={() => setDialog({ kind: "users", tenant })} className={backofficeSmallButtonClass}>
         {t("platform.orgs.manageUsers")}
+      </button>
+      <button type="button" onClick={() => setDialog({ kind: "processes", tenant })} className={backofficeSmallButtonClass}>
+        {t("platform.orgs.processes")}
       </button>
       <button type="button" onClick={() => setDialog({ kind: "edit", tenant })} className={backofficeSmallButtonClass}>
         {t("platform.orgs.edit")}
@@ -200,6 +205,7 @@ export function OrganizationsPanel(): React.JSX.Element {
         />
       ) : null}
       {dialog?.kind === "users" ? <OrganizationUsersDialog tenant={dialog.tenant} onClose={close} /> : null}
+      {dialog?.kind === "processes" ? <OrganizationProcessesDialog tenant={dialog.tenant} onClose={close} /> : null}
       {dialog?.kind === "suspend" ? (
         <BackofficeDialog
           title={t(dialog.tenant.suspendedAt ? "platform.orgs.reactivateTitle" : "platform.orgs.suspendTitle", { name: dialog.tenant.name })}

@@ -45,6 +45,12 @@ import type {
   PlatformUpdateTenantInput,
 } from '@/types/platform'
 import type {
+  ProcessTemplate,
+  ProcessTemplateInput,
+  WorkOrderProcess,
+  WorkOrderProcessInput,
+} from '@/types/process'
+import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
@@ -154,6 +160,23 @@ declare global {
       getPublicWorkOrderStatus: (token: string) => Promise<PublicWorkOrderStatus | null>
       getPublicTrackingUrl: (token: string) => string
       getWorkOrderReportUrl: (id: string) => string
+      /** Process templates (read: any user; write: admin). */
+      getProcessTemplates: () => Promise<ProcessTemplate[]>
+      getProcessTemplate: (id: string) => Promise<ProcessTemplate | null>
+      createProcessTemplate: (input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      updateProcessTemplate: (id: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      deleteProcessTemplate: (id: string) => Promise<void>
+      /** The order's process; null when the order has none (or does not exist). */
+      getWorkOrderProcess: (workOrderId: string) => Promise<WorkOrderProcess | null>
+      /** Copies a template onto an order that has no process yet (409 otherwise). */
+      applyProcessTemplate: (workOrderId: string, templateId: string) => Promise<WorkOrderProcess>
+      updateWorkOrderProcess: (workOrderId: string, input: WorkOrderProcessInput) => Promise<WorkOrderProcess>
+      deleteWorkOrderProcess: (workOrderId: string) => Promise<void>
+      /** Backoffice: any organization's templates. */
+      getPlatformProcessTemplates: (slug: string) => Promise<ProcessTemplate[]>
+      createPlatformProcessTemplate: (slug: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      updatePlatformProcessTemplate: (slug: string, id: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      deletePlatformProcessTemplate: (slug: string, id: string) => Promise<void>
     }
   }
 }
