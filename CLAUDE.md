@@ -131,6 +131,13 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   reset a user's password. Every superadmin operation, impersonations included,
   is written to `platform_audit_events` in the same transaction and shown in the
   "Aktivnost" tab (`GET /platform/audit`; trails at `/platform/impersonations/{id}/actions`).
+- **Work-order processes** (D-017): per-tenant `process_templates` (graph of
+  `step`/`input`/`product`/`byproduct` nodes, JSON, acyclic) and a per-order copy in
+  `work_order_processes` (`/process-templates`, `/work-orders/{id}/process`). Not part
+  of the `WorkOrder` shape or its status lifecycle. Admins edit structure; operators
+  only step status / actual quantities (structural change → 403). New orders get the
+  default template. Backoffice edits templates via `/platform/tenants/{slug}/process-templates`
+  (audited). Shape sync: openapi ↔ domain types ↔ `apps/web/src/types/process.ts`.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

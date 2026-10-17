@@ -117,6 +117,21 @@ setting needs no migration.
 | **Priority Defaults** | `priorityDefaults` | `Podrazumevani prioritet` | Default `priority` for new orders + `allowOverride`. Default `normal`, not overridable. |
 | **Show Shipping Options** | `showShippingOptions` | `Prikaži opcije otpreme` | Toggles the extra shipping/handling fields on the work-order form. Off by default. |
 
+## Work-Order Processes
+
+Admin-modeled production graphs (see [D-017](DECISIONS.md#d-017-model-work-order-processes-as-a-separate-graph-not-as-new-statuses)). Independent of the order `status` lifecycle.
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **Process Template** | `ProcessTemplate` | `Proces rada` | Per-tenant reusable graph. At most one is the default (`isDefault`), copied onto every new work order. |
+| **Work-Order Process** | `WorkOrderProcess` | `Proces rada naloga` | The order's own editable copy of a template graph plus per-order state. |
+| **Step** | `step` | `Korak` | A process stage. Per-order `status`: `pending` (`Na čekanju`), `in_progress` (`U toku`), `done` (`Završeno`), `skipped` (`Preskočeno`). |
+| **Input** | `input` | `Ulaz` | Material a step consumes (planned `quantity`/`unit`, per-order `actualQuantity`). Only connects into a step. |
+| **Product** | `product` | `Proizvod` | Output of a step; may feed a later step as an intermediate product. |
+| **Byproduct** | `byproduct` | `Nusproizvod` | Side output of a step (waste, offcuts, makulatura); may feed a later step. |
+
+Allowed edges: input→step, step→step, step→product, step→byproduct, product→step, byproduct→step; the graph must be acyclic.
+
 ## Concurrency & Reservation
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |

@@ -165,4 +165,16 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-*Last verified against the checked-in repository state on 2026-06-26.*
+## D-017: Model work-order processes as a separate graph, not as new statuses
+- **Status**: `accepted`
+- **Context**: Shops want to model how an order is actually produced: the steps, what each step consumes (inputs), what it yields (products) and what it leaves over (byproducts), with per-order progress. The existing `status` lifecycle (`new` → `invoiced`) drives filters, the dashboard, public tracking and the PDF, so replacing it would ripple through every surface.
+- **Decision**: Add per-tenant **process templates** (a directed acyclic graph of `step`, `input`, `product` and `byproduct` nodes) and a per-order **work-order process** (an editable copy of a template graph plus per-order state: step status, actual quantities) in their own tables (`process_templates`, `work_order_processes`, migration v20) and endpoints (`/process-templates`, `/work-orders/{id}/process`). The `WorkOrder` shape and its status lifecycle are unchanged. Graphs are stored as JSON and validated server-side (allowed connections, acyclic, limits).
+- **Consequences**:
+  - Tenant admins edit templates and each order's structure; operators may change only per-order state and node positions (structural changes return 403).
+  - Backoffice superadmins edit any organization's templates directly via `/platform/tenants/{slug}/process-templates` (configuration, not records; audited in `platform_audit_events`). Per-order graphs stay behind impersonation, like every other record.
+  - A new order gets a copy of the tenant's default template. Deleting a template keeps existing order copies (`templateId` becomes `null`).
+  - The graph shape is a contract-sync point: `openapi.yaml`, Go domain types and `apps/web/src/types/process.ts` change together.
+
+---
+
+*Last verified against the checked-in repository state on 2026-10-17.*

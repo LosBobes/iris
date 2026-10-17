@@ -135,6 +135,18 @@ Web client
   `release-number`, migration v11, 12h TTL): the create form can show the next
   `RN-<year>-<seq>` (5-digit) number before save.
 
+### Work-order processes
+
+- Per-tenant **process templates** (`GET/POST/PUT/DELETE /process-templates`, admin
+  writes) hold a directed acyclic graph of `step`, `input`, `product` and `byproduct`
+  nodes (stored as JSON, migration v20). Each work order can carry its own copy
+  with per-order state (`/work-orders/{id}/process`): step status and actual
+  quantities. Operators may change only that state; structure needs admin.
+  A new order gets the default template. Backoffice: `/platform/tenants/{slug}/process-templates`
+  (audited). Web: Settings → "Procesi rada", work-order detail "Proces rada"
+  card, Backoffice "Procesi" per organization; canvas via `@xyflow/react`.
+  See [D-017](docs/DECISIONS.md).
+
 ### Organization settings
 
 - `GET`/`PUT /settings` back the admin **Settings** page. Values are stored per
