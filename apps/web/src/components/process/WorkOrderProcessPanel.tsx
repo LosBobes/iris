@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ChevronRight, Loader2, Save, Trash2, Workflow } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Package, Save, Trash2, Workflow } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -22,6 +23,10 @@ import {
 } from '@/components/ui/select'
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog'
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
+import { useStockLevels } from '@/hooks/useStockLevels'
+import { formatStockQuantity } from '@/lib/stock/format'
+import { linkedArticleIds, materialRows, shortages, stockContextFor } from '@/lib/stock/posting'
+import { cn } from '@/lib/utils'
 import { ApiError, formatActionError, reportUnexpectedError } from '@/lib/errors'
 import { graphsEqual, readySteps, summarizeProgress, validateGraph } from '@/lib/process/graph'
 import { percentToScale, staggerStyle } from '@/lib/motion'
@@ -108,6 +113,15 @@ export function WorkOrderProcessPanel({
   const dirty = process != null && draft !== null && !graphsEqual(draft, process.graph)
   const guard = useUnsavedChangesGuard(dirty)
 
+  // Live warehouse state of the linked articles. The order's own reservation is
+  // added back (see materialRows), so an order never reports a shortage caused
+  // only by its own planned material.
+  const linkedIds = useMemo(() => (draft ? linkedArticleIds(draft) : []), [draft])
+  const { levels, loaded: stockLoaded, reload: reloadStock } = useStockLevels(linkedIds)
+  const materials = useMemo(() => (draft ? materialRows(draft, 'order', levels) : []), [draft, levels])
+  const missing = useMemo(() => shortages(materials), [materials])
+  const stockContext = useMemo(() => (draft ? stockContextFor(draft, 'order', levels) : undefined), [draft, levels])
+
   const progress = useMemo(() => (draft ? summarizeProgress(draft) : null), [draft])
   const ready = useMemo(() => (draft ? readySteps(draft) : []), [draft])
 
@@ -143,6 +157,8 @@ export function WorkOrderProcessPanel({
     setBusy(true)
     try {
       adopt(await window.api.updateWorkOrderProcess(workOrderId, { graph: draft }))
+      // Saving may have moved stock (completed steps post movements): refresh it.
+      reloadStock()
       toast.success(t('process.order.saved'))
     } catch (cause) {
       const status = errorStatus(cause)
@@ -263,7 +279,106 @@ export function WorkOrderProcessPanel({
           </p>
         </div>
 
-        <div className="animate-iris-enter iris-stagger flex flex-wrap items-center gap-2" style={staggerStyle(1)}>
+        {linkedIds.length > 0 && (
+          <section
+            aria-label={t('process.materials.title')}
+            data-testid="process-materials"
+            className="animate-iris-enter iris-stagger space-y-2"
+            style={staggerStyle(1)}
+          >
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+              <Package className="size-3.5 text-[color:var(--iris-accent)]" aria-hidden />
+              {t('process.materials.title')}
+              <Link
+                to="/stock"
+                className="iris-focusable ml-auto normal-case tracking-normal text-[color:var(--iris-ink-soft)] underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {t('process.materials.openStock')}
+              </Link>
+            </div>
+            {missing.length > 0 && (
+              <p
+                role="alert"
+                className="animate-iris-rise flex items-start gap-2 border-l-2 border-destructive bg-destructive/10 px-3 py-2 text-[12px] text-destructive"
+              >
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                <span>
+                  {t('process.materials.warning', {
+                    items: missing
+                      .map((row) =>
+                        t('process.materials.warningItem', {
+                          name: row.name,
+                          qty: formatStockQuantity(row.shortage, row.unit),
+                        }),
+                      )
+                      .join(', '),
+                  })}
+                </span>
+              </p>
+            )}
+            {!stockLoaded ? (
+              <div className="flex items-center gap-2 text-[12px] text-[color:var(--iris-ink-soft)]">
+                <Loader2 className="size-4 animate-spin" aria-hidden /> {t('process.materials.loading')}
+              </div>
+            ) : materials.length === 0 ? (
+              <p className="text-[12px] text-[color:var(--iris-ink-soft)]">{t('process.materials.empty')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[480px] text-left text-[12px]">
+                  <thead>
+                    <tr className="border-b border-border text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)]">
+                      <th scope="col" className="py-1.5 pr-3 font-normal">{t('process.materials.article')}</th>
+                      <th scope="col" className="py-1.5 pr-3 text-right font-normal">{t('process.materials.planned')}</th>
+                      <th scope="col" className="py-1.5 pr-3 text-right font-normal">{t('process.materials.actual')}</th>
+                      <th scope="col" className="py-1.5 pr-3 text-right font-normal">{t('process.materials.available')}</th>
+                      <th scope="col" className="py-1.5 text-right font-normal">{t('process.materials.shortage')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[color:var(--iris-border-soft)]">
+                    {materials.map((row, index) => (
+                      <tr
+                        key={row.catalogItemId}
+                        data-short={row.shortage > 0 ? 'true' : undefined}
+                        className="iris-row animate-iris-rise iris-stagger"
+                        style={staggerStyle(index)}
+                      >
+                        <th scope="row" className="py-1.5 pr-3 font-normal text-foreground">
+                          {row.name}
+                          {row.nodeLabels.length > 0 && (
+                            <span className="ml-2 text-[11px] text-[color:var(--iris-ink-mute)]">
+                              {row.nodeLabels.join(', ')}
+                            </span>
+                          )}
+                        </th>
+                        <td className="tnum py-1.5 pr-3 text-right">{formatStockQuantity(row.planned, row.unit)}</td>
+                        <td className="tnum py-1.5 pr-3 text-right">
+                          {row.actual === null ? '—' : formatStockQuantity(row.actual, row.unit)}
+                        </td>
+                        <td className="tnum py-1.5 pr-3 text-right">{formatStockQuantity(row.available, row.unit)}</td>
+                        <td
+                          className={cn(
+                            'tnum py-1.5 text-right',
+                            row.shortage > 0
+                              ? 'font-medium text-destructive'
+                              : 'text-[color:var(--iris-status-done)]',
+                          )}
+                        >
+                          {row.consumed
+                            ? t('process.materials.consumed')
+                            : row.shortage > 0
+                              ? formatStockQuantity(row.shortage, row.unit)
+                              : t('process.materials.enough')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        <div className="animate-iris-enter iris-stagger flex flex-wrap items-center gap-2" style={staggerStyle(2)}>
           <Button
             type="button"
             variant="outline"
@@ -275,7 +390,7 @@ export function WorkOrderProcessPanel({
             {expanded ? t('process.order.hideGraph') : t('process.order.showGraph')}
           </Button>
           {/* Previews the current draft only; the simulator never saves or mutates it. */}
-          <ProcessSimulatorButton graph={draft} />
+          <ProcessSimulatorButton graph={draft} stock={stockContext} />
           {dirty && (
             <span className="text-[11px] text-[color:var(--iris-status-active)]">{t('process.order.unsaved')}</span>
           )}
@@ -292,6 +407,8 @@ export function WorkOrderProcessPanel({
           </div>
         </div>
 
+        <p className="text-[11px] text-[color:var(--iris-ink-soft)]">{t('process.materials.autoPosting')}</p>
+
         {expanded && (
           <Suspense
             fallback={
@@ -305,6 +422,8 @@ export function WorkOrderProcessPanel({
               value={draft}
               onChange={setDraft}
               canEditStructure={canEditStructure}
+              stock={levels}
+              articleLinking
             />
           </Suspense>
         )}

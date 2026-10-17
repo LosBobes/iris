@@ -48,6 +48,8 @@ const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
 const CustomerDetailPage = lazy(() => import("@/pages/CustomerDetailPage"));
 const CatalogPage = lazy(() => import("@/pages/CatalogPage"));
 const CatalogDetailPage = lazy(() => import("@/pages/CatalogDetailPage"));
+const StockPage = lazy(() => import("@/pages/StockPage"));
+const StockHistoryPage = lazy(() => import("@/pages/StockHistoryPage"));
 const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
 const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
@@ -404,6 +406,8 @@ function AppContent(): React.JSX.Element {
                             <Route path="/catalog" element={<CatalogPage />} />
                             <Route path="/catalog/new" element={<CatalogDetailPage />} />
                             <Route path="/catalog/:id" element={<CatalogDetailPage />} />
+                            <Route path="/stock" element={<StockPage />} />
+                            <Route path="/stock/:catalogItemId" element={<StockHistoryPage />} />
                             <Route path="/work-orders" element={<WorkOrdersPage />} />
                             <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
                             <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />

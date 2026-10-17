@@ -51,6 +51,15 @@ import type {
   WorkOrderProcessInput,
 } from '@/types/process'
 import type {
+  StockCountInput,
+  StockLevelList,
+  StockLevelQuery,
+  StockMovementList,
+  StockMovementQuery,
+  StockPostingResult,
+  StockReceiptInput,
+} from '@/types/stock'
+import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
@@ -921,6 +930,45 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
 
     getWorkOrderReportUrl(id: string) {
       return url(`/work-orders/${encodeURIComponent(id)}/report`)
+    },
+
+    async getStockLevels(query: StockLevelQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.search) params.set('search', query.search)
+      if (query.lowOnly) params.set('lowOnly', 'true')
+      if (query.limit !== undefined) params.set('limit', String(query.limit))
+      if (query.offset !== undefined) params.set('offset', String(query.offset))
+      const search = params.toString()
+      const response = await fetchImpl(url(`/stock${search ? `?${search}` : ''}`), credentialedRequest())
+      const result = await readJSON<StockLevelList>(response)
+      return { items: readArray(result?.items), total: result?.total ?? 0 }
+    },
+
+    async getStockMovements(query: StockMovementQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.catalogItemId) params.set('catalogItemId', query.catalogItemId)
+      if (query.workOrderId) params.set('workOrderId', query.workOrderId)
+      if (query.limit !== undefined) params.set('limit', String(query.limit))
+      if (query.offset !== undefined) params.set('offset', String(query.offset))
+      const search = params.toString()
+      const response = await fetchImpl(
+        url(`/stock/movements${search ? `?${search}` : ''}`),
+        credentialedRequest(),
+      )
+      const result = await readJSON<StockMovementList>(response)
+      return { items: readArray(result?.items), total: result?.total ?? 0 }
+    },
+
+    async postStockReceipt(input: StockReceiptInput) {
+      const response = await fetchImpl(url('/stock/receipts'), jsonRequest('POST', input))
+      const result = await readJSON<StockPostingResult>(response)
+      return { movements: readArray(result?.movements) }
+    },
+
+    async postStockCount(input: StockCountInput) {
+      const response = await fetchImpl(url('/stock/counts'), jsonRequest('POST', input))
+      const result = await readJSON<StockPostingResult>(response)
+      return { movements: readArray(result?.movements) }
     },
 
     async getProcessTemplates() {

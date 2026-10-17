@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { stepStatus } from '@/lib/process/graph'
 import { staggerStyle } from '@/lib/motion'
 import type { SimNodeState } from '@/lib/process/simulation'
+import { formatStockQuantity } from '@/lib/stock/format'
 import type { ProcessNode, ProcessNodeKind } from '@/types/process'
 import { KIND_META } from './kind-meta'
 import { StepStatusBadge } from './StepStatusBadge'
@@ -19,6 +20,8 @@ export type ProcessFlowNode = Node<
     enter?: { index: number } | 'pop'
     /** Simulator playback state; absent outside the simulator. */
     sim?: SimNodeState
+    /** Live warehouse state of a node linked to an article; absent when unlinked or unknown. */
+    stock?: { onHand: number; unit: string; shortage: number }
   },
   ProcessNodeKind
 >
@@ -30,7 +33,7 @@ function formatQuantity(quantity: number | undefined, unit: string | undefined):
 
 function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode>): React.JSX.Element {
   const { t } = useTranslation()
-  const { node, mode, ready, enter, sim } = data
+  const { node, mode, ready, enter, sim, stock } = data
   const kind = type
   const meta = KIND_META[kind]
   const Icon = meta.icon
@@ -107,6 +110,22 @@ function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode
           {mode === 'order' && actual && (
             <span>
               {t('process.actual')}: <span className="tnum text-foreground">{actual}</span>
+            </span>
+          )}
+        </div>
+      )}
+      {!isStep && stock && (
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-[color:var(--iris-ink-soft)]">
+          <span data-testid="node-stock">
+            {t('process.stock.onStock', { qty: formatStockQuantity(stock.onHand, stock.unit || node.unit) })}
+          </span>
+          {stock.shortage > 0 && (
+            <span
+              data-testid="node-shortage"
+              aria-label={t('process.stock.shortAria', { qty: formatStockQuantity(stock.shortage, stock.unit || node.unit) })}
+              className="animate-iris-pop rounded-sm bg-destructive/10 px-1 py-px font-medium text-destructive"
+            >
+              {t('process.stock.short', { qty: formatStockQuantity(stock.shortage, stock.unit || node.unit) })}
             </span>
           )}
         </div>

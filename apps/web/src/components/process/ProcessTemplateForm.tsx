@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useStockLevels } from '@/hooks/useStockLevels'
+import { linkedArticleIds, stockContextFor } from '@/lib/stock/posting'
 import { graphsEqual, normalizeGraphForKinds, stripOrderState, validateGraph, MAX_LABEL_LENGTH } from '@/lib/process/graph'
 import type { ProcessGraph, ProcessTemplate, ProcessTemplateInput } from '@/types/process'
 import { ProcessGraphEditor } from './ProcessGraphEditor'
@@ -63,6 +65,15 @@ export function ProcessTemplateForm({
   )
   const [graph, setGraph] = useState<ProcessGraph>(initialGraph)
   const [submitting, setSubmitting] = useState(false)
+
+  // Catalog links and live stock need an organization session; the backoffice
+  // console edits templates with a platform session, so it skips them.
+  const stockEnabled = variant === 'app'
+  const { levels } = useStockLevels(useMemo(() => linkedArticleIds(graph), [graph]), stockEnabled)
+  const stockContext = useMemo(
+    () => (stockEnabled ? stockContextFor(graph, 'template', levels) : undefined),
+    [stockEnabled, graph, levels],
+  )
 
   const {
     register,
@@ -152,7 +163,14 @@ export function ProcessTemplateForm({
         )}
       />
 
-      <ProcessGraphEditor mode="template" value={graph} onChange={setGraph} canEditStructure />
+      <ProcessGraphEditor
+        mode="template"
+        value={graph}
+        onChange={setGraph}
+        canEditStructure
+        stock={stockEnabled ? levels : undefined}
+        articleLinking={stockEnabled}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" disabled={submitting}>
@@ -163,7 +181,7 @@ export function ProcessTemplateForm({
           {t('common.cancel')}
         </Button>
         <div className="ml-auto">
-          <ProcessSimulatorButton graph={graph} variant={variant} />
+          <ProcessSimulatorButton graph={graph} variant={variant} stock={stockContext} />
         </div>
       </div>
     </form>

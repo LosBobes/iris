@@ -1,6 +1,6 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Trash2 } from 'lucide-react'
+import { Link2, Link2Off, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { CatalogPickerDialog } from '@/components/WorkOrders/CatalogPickerDialog'
+import { formatStockQuantity } from '@/lib/stock/format'
+import type { StockLevelMap } from '@/lib/stock/posting'
 import {
   MAX_EDGE_LABEL_LENGTH,
   MAX_LABEL_LENGTH,
@@ -36,6 +39,10 @@ interface ProcessInspectorProps {
   selection: ProcessSelection
   mode: 'template' | 'order'
   canEditStructure: boolean
+  /** Warehouse levels by article id (names and on-hand of linked articles). */
+  stock?: StockLevelMap
+  /** Show the catalog-article link control (needs an organization session). */
+  articleLinking?: boolean
   onNodeChange: (id: string, patch: Partial<ProcessNode>) => void
   onEdgeChange: (id: string, patch: Partial<ProcessEdge>) => void
   onDelete: () => void
@@ -52,12 +59,17 @@ export function ProcessInspector({
   selection,
   mode,
   canEditStructure,
+  stock,
+  articleLinking = false,
   onNodeChange,
   onEdgeChange,
   onDelete,
 }: ProcessInspectorProps): React.JSX.Element {
   const { t } = useTranslation()
   const uid = useId()
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // Names of articles picked in this session (the stock list may not know them yet).
+  const [pickedNames, setPickedNames] = useState<Record<string, string>>({})
   const node = selection?.type === 'node' ? graph.nodes.find((n) => n.id === selection.id) : undefined
   const edge = selection?.type === 'edge' ? graph.edges.find((e) => e.id === selection.id) : undefined
 
@@ -113,6 +125,9 @@ export function ProcessInspector({
   const isItem = isItemKind(current.kind)
   const isStep = current.kind === 'step'
   const noteEditable = canEditStructure || mode === 'order'
+  const linkedId = isItem ? current.catalogItemId : undefined
+  const linkedLevel = linkedId ? stock?.[linkedId] : undefined
+  const linkedName = linkedId ? (linkedLevel?.name ?? pickedNames[linkedId] ?? linkedId) : ''
 
   return shell(
     <>
@@ -153,10 +168,65 @@ export function ProcessInspector({
               id={`${uid}-unit`}
               value={current.unit ?? ''}
               maxLength={MAX_UNIT_LENGTH}
-              readOnly={!canEditStructure}
+              readOnly={!canEditStructure || Boolean(linkedId)}
+              aria-describedby={linkedId ? `${uid}-unit-hint` : undefined}
               onChange={(event) => onNodeChange(current.id, { unit: event.target.value || undefined })}
             />
+            {linkedId && (
+              <p id={`${uid}-unit-hint`} className="text-[10px] text-[color:var(--iris-ink-soft)]">
+                {t('process.inspector.unitFollowsArticle')}
+              </p>
+            )}
           </div>
+        </div>
+      )}
+
+      {isItem && (articleLinking || linkedId) && (
+        <div className="space-y-1.5" data-testid="inspector-article">
+          <Label>{t('process.inspector.article')}</Label>
+          {linkedId ? (
+            <p className="text-foreground">
+              {t('process.inspector.articleLinked', { name: linkedName })}
+              {linkedLevel && (
+                <span className="block text-[11px] text-[color:var(--iris-ink-soft)]">
+                  {t('process.inspector.articleOnStock', {
+                    qty: formatStockQuantity(linkedLevel.onHand, linkedLevel.unit),
+                  })}
+                </span>
+              )}
+            </p>
+          ) : (
+            <p className="text-[11px] text-[color:var(--iris-ink-soft)]">{t('process.inspector.articleNone')}</p>
+          )}
+          {articleLinking && canEditStructure && (
+            <div className="flex flex-wrap gap-1.5">
+              <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+                <Link2 aria-hidden />{' '}
+                {linkedId ? t('process.inspector.articleChange') : t('process.inspector.articlePick')}
+              </Button>
+              {linkedId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onNodeChange(current.id, { catalogItemId: undefined })}
+                >
+                  <Link2Off aria-hidden /> {t('process.inspector.articleUnlink')}
+                </Button>
+              )}
+            </div>
+          )}
+          <CatalogPickerDialog
+            kind="article"
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            usedIds={new Set()}
+            onSelect={(item) => {
+              setPickedNames((names) => ({ ...names, [item.id]: item.name }))
+              // The node keeps the article's unit from now on.
+              onNodeChange(current.id, { catalogItemId: item.id, unit: item.unit })
+            }}
+          />
         </div>
       )}
 

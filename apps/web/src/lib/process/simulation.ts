@@ -1,5 +1,7 @@
 import i18n from '@/i18n'
 import type { ProcessGraph, ProcessNode, ProcessStepStatus } from '@/types/process'
+import type { StockContext } from '@/lib/stock/posting'
+import { STOCK_EPSILON } from '@/lib/stock/posting'
 import { hasCycle, validateGraph } from './graph'
 
 // Pure, client-side process "tester" and "simulator". Nothing here touches the
@@ -18,6 +20,8 @@ export type IssueCode =
   | 'noProduct'
   | 'itemUnproduced'
   | 'stepUnreachable'
+  | 'inputUnlinked'
+  | 'insufficientStock'
 
 export interface ProcessIssue {
   severity: IssueSeverity
@@ -49,11 +53,30 @@ function labelOf(node: ProcessNode): string {
  *   with no incoming edges). In an acyclic graph every node is reachable from a
  *   root, so this only fires for steps caught in a cycle.
  *
+ * With `options.stock` (the warehouse state; leave it out where stock does not
+ * apply, e.g. the backoffice) two more checks run:
+ *
+ * - `inputUnlinked` (warning): an input node without a catalog article, so its
+ *   stock is not tracked.
+ * - `insufficientStock` (error): the simulated run (`options.quantity`, minus
+ *   `options.skipped` steps) needs more of a linked article than is available.
+ *   One issue per article, highlighting all its input nodes.
+ *
+ * The function stays pure: stock is passed in, never fetched.
+ *
  * Deliberately NOT flagged: a product or byproduct with no outgoing edge. That
  * is a terminal output (the final product or a by-product leaving the process),
  * which is the normal way for a process to end.
  */
-export function analyzeProcess(graph: ProcessGraph): ProcessIssue[] {
+export interface AnalyzeOptions {
+  /** Warehouse state; enables the stock checks. */
+  stock?: StockContext
+  /** Simulated quantity multiplier (default 1). */
+  quantity?: number
+  skipped?: ReadonlySet<string>
+}
+
+export function analyzeProcess(graph: ProcessGraph, options: AnalyzeOptions = {}): ProcessIssue[] {
   const issues: ProcessIssue[] = []
   for (const message of validateGraph(graph)) {
     issues.push({ severity: 'error', code: 'invalid', nodeIds: [], message })
@@ -115,6 +138,26 @@ export function analyzeProcess(graph: ProcessGraph): ProcessIssue[] {
     for (const next of outgoing.get(id) ?? []) stack.push(next)
   }
   warn('stepUnreachable', steps.filter((node) => !reached.has(node.id)))
+
+  if (options.stock) {
+    warn('inputUnlinked', items.filter((node) => node.kind === 'input' && !node.catalogItemId))
+    if (!hasCycle(graph)) {
+      const plan = planSimulation(graph, { quantity: options.quantity, skipped: options.skipped })
+      for (const row of stockRequirements(graph, plan, options.stock)) {
+        if (row.shortage <= STOCK_EPSILON) continue
+        issues.push({
+          severity: 'error',
+          code: 'insufficientStock',
+          nodeIds: row.nodeIds,
+          message: i18n.t('process.sim.issue.insufficientStock', {
+            label: row.name,
+            required: formatSimQuantity(row.required, row.unit),
+            available: formatSimQuantity(row.available, row.unit),
+          }),
+        })
+      }
+    }
+  }
 
   return issues
 }
@@ -344,6 +387,56 @@ export function computeYield(products: SimItem[], byproducts: SimItem[]): number
   const total = all.reduce((sum, item) => sum + (item.quantity as number), 0)
   if (total <= 0) return null
   return Math.round((made / total) * 1000) / 10
+}
+
+/** What a simulated run needs of one linked article, against the warehouse. */
+export interface StockRequirement {
+  catalogItemId: string
+  name: string
+  unit: string
+  /** Input nodes of this article consumed in the run. */
+  nodeIds: string[]
+  /** Scaled planned quantity needed. */
+  required: number
+  onHand: number
+  /** Available to this process (a work order's own reservation is already added back). */
+  available: number
+  /** max(0, required - available) */
+  shortage: number
+}
+
+/**
+ * Requirement of the simulated run per linked article: scaled planned
+ * quantities of the linked input nodes that a running (not skipped) step
+ * consumes. Nodes in `stock.settledNodeIds` are left out (their stock is
+ * already booked out), and so are articles missing from `stock.items` (unknown
+ * stock is never guessed). Pure.
+ */
+export function stockRequirements(graph: ProcessGraph, plan: SimPlan, stock: StockContext): StockRequirement[] {
+  const rows = new Map<string, StockRequirement>()
+  for (const node of graph.nodes) {
+    if (node.kind !== 'input' || !node.catalogItemId) continue
+    if (plan.consumedAt[node.id] === undefined || stock.settledNodeIds?.has(node.id)) continue
+    const entry = stock.items[node.catalogItemId]
+    if (!entry) continue
+    const row = rows.get(node.catalogItemId) ?? {
+      catalogItemId: node.catalogItemId,
+      name: entry.name,
+      unit: entry.unit,
+      nodeIds: [],
+      required: 0,
+      onHand: entry.onHand,
+      available: entry.available,
+      shortage: 0,
+    }
+    row.nodeIds.push(node.id)
+    row.required += scale(node.quantity, plan.quantity) ?? 0
+    rows.set(node.catalogItemId, row)
+  }
+  return [...rows.values()].map((row) => {
+    const required = Math.round(row.required * 1000) / 1000
+    return { ...row, required, shortage: Math.round(Math.max(0, required - row.available) * 1000) / 1000 }
+  })
 }
 
 /** "12.5 kg", "40" or "—" when the quantity is unknown. */

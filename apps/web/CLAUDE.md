@@ -43,6 +43,12 @@ vars and must not be committed.
   `build.ts`) is the TypeScript reference implementation that fixture mode serves —
   keep it behaviorally identical to the Go port when changing either. Shapes live in
   `src/types/dashboard.ts` (contract-sync with the `Dashboard*` OpenAPI schemas).
+- **Magacin (warehouse stock)**: `src/types/stock.ts` (contract-sync with the `Stock*`
+  schemas), pages `StockPage` (`/stock`) and `StockHistoryPage` (`/stock/:catalogItemId`).
+  Posting math lives in pure `src/lib/stock/posting.ts`; fixture mode keeps a real ledger
+  (`src/lib/stock/fixture-store.ts`) that posts automatically when a work-order process is
+  saved. Process item nodes link to catalog articles (`catalogItemId`); backoffice template
+  editing (platform session) skips linking and live stock.
 - Forms: `react-hook-form` + `zod` (`src/lib/work-orders/validation.ts`).
 - Visible UI text and messages in Serbian (`sr-Latn`); code/tests in English.
 - Dates: `YYYY-MM-DD` stored, `DD.MM.YYYY` displayed (`src/lib/i18n-date.ts`).

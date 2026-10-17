@@ -28,6 +28,7 @@ import {
 } from '@/lib/process/graph'
 import { hasNewItems } from '@/lib/motion'
 import type { SimNodeState } from '@/lib/process/simulation'
+import { materialRows, type StockLevelMap } from '@/lib/stock/posting'
 import {
   PROCESS_NODE_KINDS,
   type ProcessEdge,
@@ -61,6 +62,10 @@ export interface ProcessGraphEditorProps {
   simStates?: ReadonlyMap<string, SimNodeState>
   /** Nodes to show as selected from outside (e.g. tester issues). */
   highlightIds?: readonly string[]
+  /** Warehouse levels by article id; linked item nodes then show live stock and shortages. */
+  stock?: StockLevelMap
+  /** Lets admins link item nodes to catalog articles in the inspector (needs an organization session). */
+  articleLinking?: boolean
 }
 
 function ProcessGraphEditorInner({
@@ -72,6 +77,8 @@ function ProcessGraphEditorInner({
   readOnly = false,
   simStates,
   highlightIds,
+  stock,
+  articleLinking = false,
 }: ProcessGraphEditorProps): React.JSX.Element {
   const canEditStructure = canEditStructureProp && !readOnly
   const highlighted = useMemo(() => new Set(highlightIds ?? []), [highlightIds])
@@ -107,6 +114,22 @@ function ProcessGraphEditorInner({
     [mode, value],
   )
 
+  // Per-node stock line + shortage badge. Shortage is per article (all its
+  // input nodes together) and is shown on each of its input nodes.
+  const nodeStock = useMemo(() => {
+    const map = new Map<string, { onHand: number; unit: string; shortage: number }>()
+    if (!stock) return map
+    const shortageByNode = new Map<string, number>()
+    for (const row of materialRows(value, mode, stock)) {
+      for (const id of row.nodeIds) shortageByNode.set(id, row.shortage)
+    }
+    for (const node of value.nodes) {
+      const level = node.kind !== 'step' && node.catalogItemId ? stock[node.catalogItemId] : undefined
+      if (level) map.set(node.id, { onHand: level.onHand, unit: level.unit, shortage: shortageByNode.get(node.id) ?? 0 })
+    }
+    return map
+  }, [stock, value, mode])
+
   const nodes = useMemo<ProcessFlowNode[]>(
     () =>
       value.nodes.map((node) => ({
@@ -119,6 +142,7 @@ function ProcessGraphEditorInner({
           mode,
           ready: readyIds.has(node.id),
           sim: simStates?.get(node.id),
+          stock: nodeStock.get(node.id),
           enter: initialOrder.has(node.id)
             ? { index: initialOrder.get(node.id) as number }
             : ('pop' as const),
@@ -128,7 +152,7 @@ function ProcessGraphEditorInner({
         connectable: canEditStructure,
         draggable: !readOnly,
       })),
-    [value.nodes, mode, readyIds, selection, canEditStructure, measured, initialOrder, simStates, highlighted, readOnly],
+    [value.nodes, mode, readyIds, selection, canEditStructure, measured, initialOrder, simStates, highlighted, readOnly, nodeStock],
   )
 
   // Edges feeding a step that is in progress flow (dashes); reduced motion stops
@@ -371,6 +395,8 @@ function ProcessGraphEditorInner({
             selection={selection}
             mode={mode}
             canEditStructure={canEditStructure}
+            stock={stock}
+            articleLinking={articleLinking}
             onNodeChange={patchNode}
             onEdgeChange={patchEdge}
             onDelete={deleteSelection}

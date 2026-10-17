@@ -9,6 +9,7 @@ import {
   Coins,
   Users,
   Package,
+  Warehouse,
   PanelLeft,
   Settings,
   UserCog,
@@ -84,6 +85,7 @@ const NAV_ITEMS: NavItemDef[] = [
   { labelKey: "nav.costReview", to: "/cost-review", icon: Coins, adminOnly: true },
   { labelKey: "nav.customers", to: "/customers", icon: Users },
   { labelKey: "nav.catalog", to: "/catalog", icon: Package },
+  { labelKey: "nav.stock", to: "/stock", icon: Warehouse },
 ];
 
 interface AppShellProps {

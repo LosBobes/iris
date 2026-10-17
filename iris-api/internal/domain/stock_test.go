@@ -191,6 +191,9 @@ func TestPlanStockPostingsIsIdempotentAndReversible(t *testing.T) {
 		if math.Abs(m.Quantity+existing[StockNodeKey{NodeID: m.NodeID, CatalogItemID: m.CatalogItemID}]) > 1e-9 {
 			t.Errorf("%s reverse = %v", m.NodeID, m.Quantity)
 		}
+		if m.Kind != StockMovementAdjustment {
+			t.Errorf("%s reverse kind = %s, want adjustment", m.NodeID, m.Kind)
+		}
 	}
 
 	// Changed actual quantity posts only the delta.
@@ -201,8 +204,9 @@ func TestPlanStockPostingsIsIdempotentAndReversible(t *testing.T) {
 		}
 	}
 	delta := PlanStockPostings(changed, existing)
-	if len(delta) != 1 || delta[0].NodeID != "paper" || delta[0].Quantity != 5 || delta[0].Kind != StockMovementProduction {
-		t.Fatalf("delta = %+v, want +5 on paper", delta)
+	// Using less paper than posted gives material back: a correction, not production.
+	if len(delta) != 1 || delta[0].NodeID != "paper" || delta[0].Quantity != 5 || delta[0].Kind != StockMovementAdjustment {
+		t.Fatalf("delta = %+v, want +5 adjustment on paper", delta)
 	}
 }
 

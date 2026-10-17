@@ -2,11 +2,14 @@ import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DashboardActionSection } from '@/components/dashboard/DashboardActionSection'
 import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
+import { LowStockCard } from '@/components/dashboard/LowStockCard'
 import { OperatorQueueGrid } from '@/components/dashboard/OperatorQueueGrid'
+import { useAuth } from '@/hooks/useAuth'
 import { useDashboardData } from '@/hooks/useDashboardData'
 
 function DashboardPage(): React.JSX.Element {
   const { t } = useTranslation()
+  const { currentUser } = useAuth()
   const {
     summary,
     monthlyOrders,
@@ -115,6 +118,8 @@ function DashboardPage(): React.JSX.Element {
                 isFilteredEmpty={isFilteredEmpty}
               />
             )}
+
+            {currentUser.role === 'admin' && <LowStockCard />}
 
             <DashboardActionSection
               clientAttentionRows={clientAttentionRows}

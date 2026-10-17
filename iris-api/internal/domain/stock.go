@@ -316,6 +316,11 @@ type PlannedStockMovement struct {
 // reversed. The result is ordered deterministically.
 func PlanStockPostings(graph ProcessGraph, existing map[StockNodeKey]float64) []PlannedStockMovement {
 	desired := DesiredStockNet(graph)
+	steps, consumers, producers := graphStepLinks(graph)
+	nodes := map[string]ProcessNode{}
+	for _, node := range graph.Nodes {
+		nodes[node.ID] = node
+	}
 	keys := map[StockNodeKey]bool{}
 	for key := range existing {
 		keys[key] = true
@@ -344,15 +349,37 @@ func PlanStockPostings(graph ProcessGraph, existing map[StockNodeKey]float64) []
 		if math.Abs(diff) <= StockEpsilon {
 			continue
 		}
-		kind := StockMovementProduction
-		if diff < 0 {
-			kind = StockMovementConsumption
-		}
 		planned = append(planned, PlannedStockMovement{
-			CatalogItemID: key.CatalogItemID, NodeID: key.NodeID, Quantity: diff, Kind: kind,
+			CatalogItemID: key.CatalogItemID, NodeID: key.NodeID, Quantity: diff,
+			Kind: postingKind(key, diff, nodes, steps, consumers, producers),
 		})
 	}
 	return planned
+}
+
+// postingKind labels a planned movement. Material taken by a done consuming
+// step is consumption and output of a done producing step is production;
+// anything else — a step undone, a lower actual quantity, a relinked or
+// removed node — is a correction (adjustment), so the history never shows
+// paper "produced" just because a printing step was reopened.
+func postingKind(
+	key StockNodeKey,
+	diff float64,
+	nodes map[string]ProcessNode,
+	steps map[string]ProcessNode,
+	consumers, producers map[string][]string,
+) StockMovementKind {
+	node, ok := nodes[key.NodeID]
+	if !ok || node.CatalogItemID != key.CatalogItemID {
+		return StockMovementAdjustment
+	}
+	if diff < 0 && anyStepDone(steps, consumers[node.ID]) {
+		return StockMovementConsumption
+	}
+	if diff > 0 && node.Kind != ProcessNodeInput && anyStepDone(steps, producers[node.ID]) {
+		return StockMovementProduction
+	}
+	return StockMovementAdjustment
 }
 
 // ValidateStockReceipt checks a receipt payload shape (not article existence).

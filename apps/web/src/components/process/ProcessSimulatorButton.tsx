@@ -5,6 +5,7 @@ import { Loader2, Play, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getOverlayContainer } from '@/lib/overlay-container'
 import { BackofficeDialog } from '@/components/platform/BackofficeDialog'
+import type { StockContext } from '@/lib/stock/posting'
 import type { ProcessGraph } from '@/types/process'
 
 // The simulator pulls in React Flow; load it only when somebody opens it.
@@ -16,6 +17,8 @@ interface ProcessSimulatorButtonProps {
   /** `backoffice` uses the console's dark dialog shell. */
   variant?: 'app' | 'backoffice'
   disabled?: boolean
+  /** Warehouse state; enables the stock table and the stock checks. Omit where stock does not apply. */
+  stock?: StockContext
 }
 
 /** "Simuliraj" button that opens the process simulator in a large dialog. */
@@ -23,6 +26,7 @@ export function ProcessSimulatorButton({
   graph,
   variant = 'app',
   disabled,
+  stock,
 }: ProcessSimulatorButtonProps): React.JSX.Element {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -35,7 +39,7 @@ export function ProcessSimulatorButton({
         </div>
       }
     >
-      <ProcessSimulator graph={graph} />
+      <ProcessSimulator graph={graph} stock={stock} />
     </Suspense>
   )
 

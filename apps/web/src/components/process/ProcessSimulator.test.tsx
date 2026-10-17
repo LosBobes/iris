@@ -140,6 +140,54 @@ describe('ProcessSimulator', () => {
   })
 })
 
+describe('ProcessSimulator with stock', () => {
+  const linked: ProcessGraph = {
+    ...graph,
+    nodes: graph.nodes.map((node) => (node.id === 'paper' ? { ...node, catalogItemId: 'a1' } : node)),
+  }
+  const stock = (available: number) => ({
+    items: { a1: { name: 'Papir 80g', unit: 'kg', onHand: available, available } },
+  })
+
+  it('shows required / on hand / missing in the summary and an error in the tester', async () => {
+    const user = userEvent.setup()
+    render(<ProcessSimulator graph={linked} stock={stock(25)} />)
+    const quantity = screen.getByLabelText('Količina')
+    await user.clear(quantity)
+    await user.type(quantity, '3')
+    for (let i = 0; i < 4; i += 1) await user.click(screen.getByRole('button', { name: 'Korak napred' }))
+
+    const table = within(screen.getByTestId('sim-stock'))
+    expect(table.getByRole('row', { name: /Papir 80g/ })).toHaveTextContent('30 kg')
+    expect(table.getByRole('row', { name: /Papir 80g/ })).toHaveTextContent('25 kg')
+    expect(table.getByRole('row', { name: /Papir 80g/ })).toHaveTextContent('5 kg')
+
+    await user.click(screen.getByRole('tab', { name: /Testiranje/ }))
+    expect(screen.getByText(/Nedovoljno materijala „Papir 80g“: potrebno 30 kg, raspoloživo 25 kg/)).toBeInTheDocument()
+    expect(screen.getByText('Greške (1)')).toBeInTheDocument()
+  })
+
+  it('shows no shortage when stock is enough and warns about unlinked inputs', async () => {
+    const user = userEvent.setup()
+    const withUnlinked: ProcessGraph = {
+      ...linked,
+      nodes: [...linked.nodes, { id: 'glue', kind: 'input', label: 'Lepak', x: 0, y: 300 }],
+      edges: [...linked.edges, { id: 'e9', source: 'glue', target: 'print' }],
+    }
+    render(<ProcessSimulator graph={withUnlinked} stock={stock(500)} />)
+    await user.click(screen.getByRole('tab', { name: /Testiranje/ }))
+    expect(screen.getByText('Ulaz „Lepak“ nije povezan sa artiklom iz kataloga — stanje se ne prati.')).toBeInTheDocument()
+    expect(screen.queryByText(/Nedovoljno materijala/)).not.toBeInTheDocument()
+  })
+
+  it('does not run stock checks when no stock is passed', async () => {
+    const user = userEvent.setup()
+    render(<ProcessSimulator graph={linked} />)
+    await user.click(screen.getByRole('tab', { name: 'Testiranje' }))
+    expect(screen.getByText('Nema problema')).toBeInTheDocument()
+  })
+})
+
 describe('ProcessSimulatorButton', () => {
   it('opens the simulator in a dialog', async () => {
     const user = userEvent.setup()

@@ -29,6 +29,8 @@ const MESSAGES = {
   orderMissing: 'Radni nalog nije pronađen.',
   orderHasProcess: 'Radni nalog već ima proces.',
   tenantMissing: 'Organizacija nije pronađena.',
+  articleMissing: 'Artikal nije pronađen u katalogu.',
+  unitMismatch: (name: string): string => `Jedinica mora odgovarati jedinici artikla „${name}“.`,
   loginRequired: 'Prijava je obavezna.',
 }
 
@@ -59,10 +61,12 @@ function seedGraph(): ProcessGraph {
       node('step-print', 'step', 'Štampa', 280, 150),
       node('step-cut', 'step', 'Sečenje', 560, 150),
       node('step-pack', 'step', 'Pakovanje', 840, 150),
-      node('in-plates', 'input', 'Ploče', 0, 0, { quantity: 4, unit: 'kom' }),
-      node('in-paper', 'input', 'Papir', 280, 0, { quantity: 1000, unit: 'tabaka' }),
-      node('in-ink', 'input', 'Boja', 420, 0, { quantity: 2, unit: 'kg' }),
-      node('out-waste-ink', 'byproduct', 'Makulatura', 280, 300, { quantity: 50, unit: 'tabaka' }),
+      // Inputs and Makulatura are linked to the demo warehouse articles (see
+      // fixture-api.ts); the finished product and paper scrap stay unlinked.
+      node('in-plates', 'input', 'Ploče', 0, 0, { quantity: 4, unit: 'kom', catalogItemId: 'cat-6' }),
+      node('in-paper', 'input', 'Papir', 280, 0, { quantity: 100, unit: 'tabak', catalogItemId: 'cat-4' }),
+      node('in-ink', 'input', 'Boja', 420, 0, { quantity: 2, unit: 'kg', catalogItemId: 'cat-5' }),
+      node('out-waste-ink', 'byproduct', 'Makulatura', 280, 300, { quantity: 3, unit: 'tabak', catalogItemId: 'cat-7' }),
       node('out-scrap', 'byproduct', 'Otpad papira', 560, 300, { quantity: 5, unit: 'kg' }),
       node('out-product', 'product', 'Gotovi otisci', 840, 300, { quantity: 950, unit: 'kom' }),
     ],
@@ -87,6 +91,13 @@ interface ProcessFixtureContext {
   /** The single fixture organization's slug. */
   tenantSlug: string
   platformSignedIn: () => boolean
+  /**
+   * Catalog lookup used to validate `catalogItemId` links (must be an existing
+   * article; unit must match). Omitted = links are stored unchecked.
+   */
+  findCatalogItem?: (id: string) => { name: string; kind: 'service' | 'article'; unit: string } | undefined
+  /** Called after an order's process was stored (apply/update); the stock ledger posts from it. */
+  onOrderProcessSaved?: (workOrderId: string, graph: ProcessGraph, username: string) => void
 }
 
 type ProcessApi = Pick<
@@ -110,6 +121,8 @@ export interface ProcessFixtureStore {
   api: ProcessApi
   /** Called when a work order is created: attaches the default template, if any. */
   attachDefaultProcess: (workOrderId: string) => void
+  /** Every order's current process graph (the stock ledger derives reservations from it). */
+  listOrderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
 }
 
 export function createProcessFixtureStore(context: ProcessFixtureContext): ProcessFixtureStore {
@@ -155,6 +168,32 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
     if (first) throw fixtureError(422, first)
   }
 
+  // Validates item-node article links and applies the unit rule: a linked node
+  // keeps the article's unit (an empty node unit is filled in; a different one
+  // is rejected).
+  const resolveLinks = (graph: ProcessGraph): ProcessGraph => {
+    const find = context.findCatalogItem
+    return {
+      ...graph,
+      nodes: graph.nodes.map((item) => {
+        if (item.kind === 'step' || !item.catalogItemId) {
+          if (item.catalogItemId === undefined) return item
+          const rest = { ...item }
+          delete rest.catalogItemId
+          return rest
+        }
+        if (!find) return item
+        const article = find(item.catalogItemId)
+        if (!article || article.kind !== 'article') throw fixtureError(422, MESSAGES.articleMissing)
+        const unit = item.unit?.trim() ?? ''
+        if (unit !== '' && unit.toLowerCase() !== article.unit.trim().toLowerCase()) {
+          throw fixtureError(422, MESSAGES.unitMismatch(article.name))
+        }
+        return { ...item, unit: unit === '' ? article.unit : item.unit }
+      }),
+    }
+  }
+
   const saveTemplate = (input: ProcessTemplateInput, id?: string): ProcessTemplate => {
     const name = (input.name ?? '').trim()
     if (name === '') throw fixtureError(422, MESSAGES.nameRequired)
@@ -162,7 +201,7 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
     if (templates.some((item) => item.id !== id && item.name.toLowerCase() === name.toLowerCase())) {
       throw fixtureError(422, MESSAGES.duplicateName)
     }
-    const graph = stripOrderState(normalizeGraphForKinds(input.graph))
+    const graph = resolveLinks(stripOrderState(normalizeGraphForKinds(input.graph)))
     checkGraph(graph)
 
     const timestamp = now()
@@ -215,10 +254,15 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
       updatedBy: username,
     }
     processes.set(workOrderId, created)
+    context.onOrderProcessSaved?.(workOrderId, created.graph, username)
     return created
   }
 
   return {
+    listOrderProcesses() {
+      return [...processes].map(([workOrderId, process]) => ({ workOrderId, graph: clone(process.graph) }))
+    },
+
     attachDefaultProcess(workOrderId) {
       const template = templates.find((item) => item.isDefault)
       if (!template) return
@@ -265,16 +309,19 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
         const user = requireUser()
         const current = processes.get(workOrderId)
         if (!current) throw fixtureError(404, MESSAGES.orderMissing)
-        const graph = normalizeGraphForKinds(input.graph)
-        graph.nodes = graph.nodes.map((item) =>
+        const normalized = normalizeGraphForKinds(input.graph)
+        normalized.nodes = normalized.nodes.map((item) =>
           item.kind === 'step' ? { ...item, status: item.status ?? 'pending' } : item,
         )
+        const graph = resolveLinks(normalized)
         checkGraph(graph)
         if (user.role !== 'admin' && hasStructuralChange(current.graph, graph)) {
           throw fixtureError(403, MESSAGES.forbidden)
         }
         const updated: WorkOrderProcess = { ...current, graph, updatedAt: now(), updatedBy: user.username }
         processes.set(workOrderId, updated)
+        // Same "transaction": the ledger is brought in line with the saved graph.
+        context.onOrderProcessSaved?.(workOrderId, updated.graph, user.username)
         return clone(updated)
       },
       async deleteWorkOrderProcess(workOrderId) {

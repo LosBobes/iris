@@ -33,6 +33,8 @@ const ACTION_KEYS: Record<string, string> = {
   'POST /work-orders/{id}/process': 'orderProcessApply',
   'PUT /work-orders/{id}/process': 'orderProcessUpdate',
   'DELETE /work-orders/{id}/process': 'orderProcessDelete',
+  'POST /stock/receipts': 'stockReceipt',
+  'POST /stock/counts': 'stockCount',
   'POST /users': 'userCreate',
   'PUT /users/{id}': 'userUpdate',
   'DELETE /users/{id}': 'userDelete',

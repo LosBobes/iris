@@ -9,6 +9,7 @@ import {
   nodeStatesAt,
   planSimulation,
   simulationGraph,
+  stockRequirements,
   waveAt,
 } from './simulation'
 
@@ -275,5 +276,60 @@ describe('playback helpers', () => {
     expect(view.nodes.find((x) => x.id === 'print')?.status).toBe('in_progress')
     expect(view.nodes.find((x) => x.id === 'paper')?.quantity).toBe(20)
     expect(JSON.stringify(graph)).toBe(copy)
+  })
+})
+
+describe('stock-aware tester', () => {
+  const linked: ProcessGraph = {
+    nodes: [
+      n('paper', 'input', { quantity: 10, unit: 'tabak', catalogItemId: 'a1' }),
+      n('ink', 'input', { quantity: 2, unit: 'kg' }),
+      n('print', 'step'),
+      n('out', 'product', { quantity: 9, unit: 'tabak' }),
+    ],
+    edges: [e('paper', 'print'), e('ink', 'print'), e('print', 'out')],
+  }
+  const stock = (available: number, extra: { settledNodeIds?: Set<string> } = {}) => ({
+    items: { a1: { name: 'Papir 80g', unit: 'tabak', onHand: available, available } },
+    ...extra,
+  })
+
+  it('does not run stock checks without a stock snapshot', () => {
+    expect(analyzeProcess(linked).map((i) => i.code)).not.toContain('inputUnlinked')
+  })
+
+  it('warns about unlinked inputs when stock is tracked', () => {
+    const issues = analyzeProcess(linked, { stock: stock(100) })
+    const warning = issues.find((i) => i.code === 'inputUnlinked')
+    expect(warning).toMatchObject({ severity: 'warning', nodeIds: ['ink'] })
+    expect(warning?.message).toBe('Ulaz „ink“ nije povezan sa artiklom iz kataloga — stanje se ne prati.')
+    expect(issues.find((i) => i.code === 'insufficientStock')).toBeUndefined()
+  })
+
+  it('reports an error when the simulated quantity exceeds the available stock', () => {
+    const issues = analyzeProcess(linked, { stock: stock(25), quantity: 3 })
+    const error = issues.find((i) => i.code === 'insufficientStock')
+    expect(error).toMatchObject({ severity: 'error', nodeIds: ['paper'] })
+    expect(error?.message).toBe('Nedovoljno materijala „Papir 80g“: potrebno 30 tabak, raspoloživo 25 tabak.')
+    // Exactly enough is fine.
+    expect(analyzeProcess(linked, { stock: stock(30), quantity: 3 }).some((i) => i.code === 'insufficientStock')).toBe(false)
+  })
+
+  it('ignores skipped steps and already settled inputs', () => {
+    expect(
+      analyzeProcess(linked, { stock: stock(1), skipped: new Set(['print']) }).some((i) => i.code === 'insufficientStock'),
+    ).toBe(false)
+    expect(
+      analyzeProcess(linked, { stock: stock(1, { settledNodeIds: new Set(['paper']) }) }).some(
+        (i) => i.code === 'insufficientStock',
+      ),
+    ).toBe(false)
+  })
+
+  it('computes requirements per article with the scaled quantity', () => {
+    const plan = planSimulation(linked, { quantity: 2 })
+    expect(stockRequirements(linked, plan, stock(15))).toEqual([
+      { catalogItemId: 'a1', name: 'Papir 80g', unit: 'tabak', nodeIds: ['paper'], required: 20, onHand: 15, available: 15, shortage: 5 },
+    ])
   })
 })

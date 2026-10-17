@@ -51,6 +51,15 @@ import type {
   WorkOrderProcessInput,
 } from '@/types/process'
 import type {
+  StockCountInput,
+  StockLevelList,
+  StockLevelQuery,
+  StockMovementList,
+  StockMovementQuery,
+  StockPostingResult,
+  StockReceiptInput,
+} from '@/types/stock'
+import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
@@ -160,6 +169,13 @@ declare global {
       getPublicWorkOrderStatus: (token: string) => Promise<PublicWorkOrderStatus | null>
       getPublicTrackingUrl: (token: string) => string
       getWorkOrderReportUrl: (id: string) => string
+      /** Warehouse stock (Magacin): levels and movement ledger (any user). */
+      getStockLevels: (query?: StockLevelQuery) => Promise<StockLevelList>
+      getStockMovements: (query?: StockMovementQuery) => Promise<StockMovementList>
+      /** Prijem robe (any user). 422 on unknown article / quantity <= 0 / duplicates. */
+      postStockReceipt: (input: StockReceiptInput) => Promise<StockPostingResult>
+      /** Popis / opening balance (admin). Posts counted - onHand per line. */
+      postStockCount: (input: StockCountInput) => Promise<StockPostingResult>
       /** Process templates (read: any user; write: admin). */
       getProcessTemplates: () => Promise<ProcessTemplate[]>
       getProcessTemplate: (id: string) => Promise<ProcessTemplate | null>

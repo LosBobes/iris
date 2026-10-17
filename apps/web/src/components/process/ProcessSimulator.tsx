@@ -14,10 +14,12 @@ import {
   nodeStatesAt,
   planSimulation,
   simulationGraph,
+  stockRequirements,
   waveAt,
   type SimItem,
   type SimTotal,
 } from '@/lib/process/simulation'
+import type { StockContext } from '@/lib/stock/posting'
 import type { ProcessGraph } from '@/types/process'
 import ProcessGraphEditor from './ProcessGraphEditor'
 
@@ -48,6 +50,12 @@ function totalsText(totals: SimTotal[], empty: string, unknownLabel: (count: num
 export interface ProcessSimulatorProps {
   /** The graph to preview. It is only read, never changed or saved. */
   graph: ProcessGraph
+  /**
+   * Real warehouse state. Templates pass on-hand; work orders pass available plus
+   * the order's own reservation (so an order never blocks itself) and the input
+   * nodes already consumed. Omitted = no stock table and no stock checks.
+   */
+  stock?: StockContext
 }
 
 /**
@@ -55,7 +63,7 @@ export interface ProcessSimulatorProps {
  * (running, then finished) next to a read-only graph view, with a tester tab
  * listing structural problems.
  */
-export function ProcessSimulator({ graph }: ProcessSimulatorProps): React.JSX.Element {
+export function ProcessSimulator({ graph, stock }: ProcessSimulatorProps): React.JSX.Element {
   const { t } = useTranslation()
   const uid = useId()
   const [tab, setTab] = useState<Tab>('flow')
@@ -70,7 +78,11 @@ export function ProcessSimulator({ graph }: ProcessSimulatorProps): React.JSX.El
   const quantity = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
 
   const plan = useMemo(() => planSimulation(graph, { quantity, skipped }), [graph, quantity, skipped])
-  const issues = useMemo(() => analyzeProcess(graph), [graph])
+  const issues = useMemo(
+    () => analyzeProcess(graph, { stock, quantity, skipped }),
+    [graph, stock, quantity, skipped],
+  )
+  const requirements = useMemo(() => (stock ? stockRequirements(graph, plan, stock) : []), [graph, plan, stock])
   const errors = issues.filter((issue) => issue.severity === 'error')
   const warnings = issues.filter((issue) => issue.severity === 'warning')
 
@@ -335,6 +347,56 @@ export function ProcessSimulator({ graph }: ProcessSimulatorProps): React.JSX.El
                       <p className="text-[11px] text-[color:var(--iris-ink-mute)]">
                         {t('process.sim.summary.yieldUnavailable')}
                       </p>
+                    )}
+                    {requirements.length > 0 && (
+                      <div className="space-y-1 pt-2" data-testid="sim-stock">
+                        <h4 className="text-[11px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                          {t('process.sim.summary.stock.title')}
+                        </h4>
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)]">
+                              <th scope="col" className="py-1 pr-2 font-normal">
+                                {t('process.sim.summary.stock.article')}
+                              </th>
+                              <th scope="col" className="py-1 pr-2 text-right font-normal">
+                                {t('process.sim.summary.stock.required')}
+                              </th>
+                              <th scope="col" className="py-1 pr-2 text-right font-normal">
+                                {t('process.sim.summary.stock.onStock')}
+                              </th>
+                              <th scope="col" className="py-1 text-right font-normal">
+                                {t('process.sim.summary.stock.missing')}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {requirements.map((row) => (
+                              <tr key={row.catalogItemId} data-short={row.shortage > 0 ? 'true' : undefined}>
+                                <th scope="row" className="py-1 pr-2 align-top font-normal text-foreground">
+                                  {row.name}
+                                </th>
+                                <td className="tnum py-1 pr-2 text-right text-foreground">
+                                  {formatSimQuantity(row.required, row.unit)}
+                                </td>
+                                <td className="tnum py-1 pr-2 text-right text-foreground">
+                                  {formatSimQuantity(row.available, row.unit)}
+                                </td>
+                                <td
+                                  className={cn(
+                                    'tnum py-1 text-right',
+                                    row.shortage > 0 ? 'font-medium text-destructive' : 'text-[color:var(--iris-status-done)]',
+                                  )}
+                                >
+                                  {row.shortage > 0
+                                    ? formatSimQuantity(row.shortage, row.unit)
+                                    : t('process.sim.summary.stock.enough')}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </section>
                 )}
