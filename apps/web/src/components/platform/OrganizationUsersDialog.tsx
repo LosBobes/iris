@@ -114,9 +114,10 @@ export function OrganizationUsersDialog({
             {data.users.map((user) => {
               const editing = resetting?.id === user.id ? resetting : null;
               return (
-                <li key={user.id} className="rounded-md px-2 py-1.5 hover:bg-white/[0.03]">
-                  <div className="flex min-h-11 flex-wrap items-center gap-2">
-                    <div className="min-w-0 flex-1">
+                <li key={user.id} className="rounded-md px-2 py-2 hover:bg-white/[0.03] sm:py-1.5">
+                  {/* Phones: name on its own line, both actions side by side below it. */}
+                  <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-2">
+                    <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                       <div className="truncate text-[14px]">{user.username}</div>
                       <div className="text-[11px] text-[color:var(--pf-muted)]">
                         {user.role === "admin" ? t("platform.impersonate.admin") : t("platform.impersonate.operator")}
@@ -130,7 +131,7 @@ export function OrganizationUsersDialog({
                         setNotice(null);
                         setResetting(editing ? null : { id: user.id, password: "", error: null });
                       }}
-                      className={backofficeSmallButtonClass}
+                      className={`${backofficeSmallButtonClass} flex-1 justify-center sm:flex-none`}
                     >
                       <KeyRound className="h-4 w-4" />
                       {t("platform.impersonate.resetPassword")}
@@ -139,7 +140,7 @@ export function OrganizationUsersDialog({
                       type="button"
                       disabled={pendingId !== null}
                       onClick={() => void impersonate(user.id)}
-                      className={backofficeSmallButtonClass}
+                      className={`${backofficeSmallButtonClass} flex-1 justify-center sm:flex-none`}
                     >
                       <LogIn className="h-4 w-4" />
                       {t("platform.impersonate.start")}
