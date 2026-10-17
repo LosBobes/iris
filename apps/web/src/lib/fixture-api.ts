@@ -39,13 +39,19 @@ import {
   DEFAULT_SHOW_SHIPPING_OPTIONS,
   normalizePrintItemColumns,
   type BillingDefaults,
+  type OrganizationModules,
   type OrganizationSettings,
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
   type PublicOrganization,
+  normalizeOrganizationModules,
 } from '@/types/settings'
-import type { PlatformMetrics, PlatformRangeDays } from '@/types/platform'
+import type { PlatformMetrics, PlatformRangeDays, PlatformTenant } from '@/types/platform'
+import { PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
+import { createProcessFixtureStore } from '@/lib/process/fixture-store'
+import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
+import { ApiError } from '@/lib/errors'
 
 interface FixtureUser extends AuthenticatedUser {
   password: string
@@ -477,9 +483,67 @@ let catalogItems: CatalogItem[] = [
     taxGroup: null,
     description: null,
     isActive: true,
+    minStock: 5,
+  },
+  // Demo warehouse articles; the "Offset štampa" template inputs link to these.
+  {
+    id: 'cat-4',
+    code: 'ART-2',
+    name: 'Papir 80g A3',
+    kind: 'article',
+    unit: 'tabak',
+    purchasePrice: 6,
+    salePrice: 9,
+    barcode: null,
+    taxGroup: null,
+    description: null,
+    isActive: true,
+    minStock: 200,
+  },
+  {
+    id: 'cat-5',
+    code: 'ART-3',
+    name: 'Boja CMYK',
+    kind: 'article',
+    unit: 'kg',
+    purchasePrice: 2400,
+    salePrice: 3200,
+    barcode: null,
+    taxGroup: null,
+    description: null,
+    isActive: true,
+    minStock: 10,
+  },
+  {
+    id: 'cat-6',
+    code: 'ART-4',
+    name: 'Offset ploča',
+    kind: 'article',
+    unit: 'kom',
+    purchasePrice: 650,
+    salePrice: 900,
+    barcode: null,
+    taxGroup: null,
+    description: null,
+    isActive: true,
+    minStock: 10,
+  },
+  {
+    id: 'cat-7',
+    code: 'ART-5',
+    name: 'Makulatura',
+    kind: 'article',
+    unit: 'tabak',
+    purchasePrice: 0,
+    salePrice: null,
+    barcode: null,
+    taxGroup: null,
+    description: null,
+    isActive: true,
+    minStock: null,
   },
 ]
-let nextCatalogSequence = 4
+let nextCatalogSequence = 8
 
 let firmName = DEFAULT_FIRM_NAME
 let pdfSections: PDFSections = { ...DEFAULT_PDF_SECTIONS }
@@ -654,8 +718,82 @@ function validateCreateInput(input: WorkOrder): void {
   }
 }
 
-export function createFixtureApi(): Window['api'] {
+export interface FixtureApiOptions {
+  /**
+   * Initial module switches (both off by default, like a fresh organization).
+   * In the dev server they are switched through the Backoffice
+   * (/backoffice, operater / operater-demo -> Organizacije -> Moduli).
+   */
+  modules?: Partial<OrganizationModules>
+}
+
+export function createFixtureApi(options: FixtureApiOptions = {}): Window['api'] {
+  // Per instance (not module state) so every createFixtureApi() starts with the
+  // modules off, together with its fresh process store and ledger.
+  let modules: OrganizationModules = normalizeOrganizationModules(options.modules)
+  const fixtureTenant = (): PlatformTenant => ({
+    id: FIXTURE_ORGANIZATION.slug,
+    ...FIXTURE_ORGANIZATION,
+    createdAt: '2026-01-01 00:00:00',
+    suspendedAt: null,
+    users: users.length,
+    admins: users.filter((user) => user.role === 'admin').length,
+    modules: { ...modules },
+  })
+  const currentFixtureUser = () => sessionUser ?? users.find((user) => user.role === 'admin') ?? null
+  // The ledger and the process store reference each other (automatic posting
+  // reads order graphs, the process store validates article links), so the
+  // cross references are lazy closures.
+  const stockStore = createStockFixtureStore({
+    currentUser: currentFixtureUser,
+    enabled: () => modules.stock,
+    catalogItems: () =>
+      catalogItems.map((item) => ({
+        id: item.id,
+        code: item.code,
+        name: item.name,
+        kind: item.kind,
+        unit: item.unit,
+        isActive: item.isActive,
+        minStock: item.kind === 'article' ? (item.minStock ?? null) : null,
+      })),
+    workOrder: (id) => {
+      const order = workOrders.find((candidate) => candidate.id === id)
+      return order ? { number: order.orderNumber, status: order.status } : null
+    },
+    orderProcesses: () => processStore.listOrderProcesses(),
+  })
+  const processStore = createProcessFixtureStore({
+    currentUser: currentFixtureUser,
+    workOrderExists: (id) => workOrders.some((order) => order.id === id),
+    tenantSlug: FIXTURE_ORGANIZATION.slug,
+    platformSignedIn: () => platformSignedIn,
+    modules: () => modules,
+    findCatalogItem: (id) => catalogItems.find((item) => item.id === id),
+    onOrderProcessSaved: stockStore.onProcessSaved,
+  })
+
+  // Opening balances of the demo articles ("Početno stanje").
+  for (const [id, quantity] of [
+    ['cat-3', 25],
+    ['cat-4', 620],
+    ['cat-5', 8],
+    ['cat-6', 40],
+    ['cat-7', 120],
+  ] as const) {
+    stockStore.seedOpening(id, quantity, 'admin', 'Početno stanje (demo)')
+  }
+
+  // Catalog reads carry the computed stock fields (articles only); with the
+  // stock module off the on-hand quantity is null (minStock stays as config).
+  const withStock = (item: CatalogItem): CatalogItem =>
+    item.kind === 'article' && modules.stock
+      ? { ...item, stockOnHand: stockStore.onHand(item.id), minStock: item.minStock ?? null }
+      : { ...item, stockOnHand: null, minStock: item.kind === 'article' ? (item.minStock ?? null) : null }
+
   return {
+    ...processStore.api,
+    ...stockStore.api,
     async getAppVersion() {
       return APP_VERSION
     },
@@ -864,7 +1002,7 @@ export function createFixtureApi(): Window['api'] {
     },
 
     async getCatalogItems(query = {}) {
-      let items = cloneValue(catalogItems)
+      let items = catalogItems.map(withStock)
       if (query.kind) items = items.filter((item) => item.kind === query.kind)
       if (query.active) items = items.filter((item) => item.isActive)
       if (query.q) {
@@ -881,7 +1019,7 @@ export function createFixtureApi(): Window['api'] {
 
     async getCatalogItemById(id) {
       const found = catalogItems.find((item) => item.id === id)
-      return found ? cloneValue(found) : null
+      return found ? withStock(found) : null
     },
 
     async getCatalogItemCostHistory(id) {
@@ -916,9 +1054,10 @@ export function createFixtureApi(): Window['api'] {
         code: code || id,
         name,
         unit: (input.unit || 'kom').toLowerCase(),
+        minStock: input.kind === 'article' ? (input.minStock ?? null) : null,
       }
       catalogItems.push(created)
-      return cloneValue(created)
+      return withStock(created)
     },
 
     async updateCatalogItem(id, input) {
@@ -937,34 +1076,48 @@ export function createFixtureApi(): Window['api'] {
         code,
         name,
         unit: (input.unit || 'kom').toLowerCase(),
+        minStock:
+          input.kind === 'article'
+            ? input.minStock !== undefined
+              ? input.minStock
+              : (catalogItems[index].minStock ?? null)
+            : null,
       }
       catalogItems[index] = updated
-      return cloneValue(updated)
+      return withStock(updated)
     },
 
     async deleteCatalogItem(id) {
+      if (stockStore.hasMovements(id)) {
+        throw new ApiError(ARTICLE_HAS_STOCK_MESSAGE, { status: 409, url: 'fixture://catalog-items', method: 'DELETE' })
+      }
       catalogItems = catalogItems.filter((item) => item.id !== id)
       return { success: true }
     },
 
     async previewCatalogCleanup(filter) {
-      const items = catalogItems.filter((item) => matchesCleanupFilter(item, filter))
+      const items = catalogItems
+        .filter((item) => matchesCleanupFilter(item, filter) && !stockStore.hasMovements(item.id))
+        .map(withStock)
       return { items, total: items.length }
     },
 
     async cleanupCatalogItems(filter) {
       const before = catalogItems.length
-      catalogItems = catalogItems.filter((item) => !matchesCleanupFilter(item, filter))
+      catalogItems = catalogItems.filter(
+        (item) => !matchesCleanupFilter(item, filter) || stockStore.hasMovements(item.id),
+      )
       return { deleted: before - catalogItems.length }
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules: { ...modules } }
     },
 
     async updateSettings(
-      settings: Partial<OrganizationSettings>,
+      settings: Partial<Omit<OrganizationSettings, 'modules'>>,
     ): Promise<OrganizationSettings> {
+      // Like the server, any `modules` in the body is ignored.
       if (settings.firmName !== undefined) {
         const next = settings.firmName.trim()
         if (!next) throw new Error('Naziv firme je obavezan.')
@@ -985,7 +1138,7 @@ export function createFixtureApi(): Window['api'] {
       if (settings.showShippingOptions !== undefined) {
         showShippingOptions = settings.showShippingOptions
       }
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules: { ...modules } }
     },
 
     async getPublicOrganization(slug): Promise<PublicOrganization | null> {
@@ -1067,16 +1220,20 @@ export function createFixtureApi(): Window['api'] {
 
     async getPlatformTenants() {
       if (!platformSignedIn) throw new Error('Prijava je obavezna.')
-      return [
-        {
-          id: FIXTURE_ORGANIZATION.slug,
-          ...FIXTURE_ORGANIZATION,
-          createdAt: '2026-01-01 00:00:00',
-          suspendedAt: null,
-          users: users.length,
-          admins: users.filter((user) => user.role === 'admin').length,
-        },
-      ]
+      return [fixtureTenant()]
+    },
+    async setPlatformTenantModules(slug, next) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (slug !== FIXTURE_ORGANIZATION.slug) throw new Error('Organizacija ne postoji.')
+      if (next.processes && !next.stock) {
+        throw new ApiError(PROCESSES_REQUIRE_STOCK_MESSAGE, {
+          status: 422,
+          url: 'fixture://platform/modules',
+          method: 'PUT',
+        })
+      }
+      modules = normalizeOrganizationModules(next)
+      return fixtureTenant()
     },
 
     // Organization management needs the real API: fixture mode has a single,
@@ -1202,6 +1359,7 @@ export function createFixtureApi(): Window['api'] {
       validateCreateInput(order)
 
       workOrders = [...workOrders, order]
+      processStore.attachDefaultProcess(order.id)
       return cloneValue(order)
     },
 

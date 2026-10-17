@@ -65,6 +65,8 @@ export function toCatalogInput(
     taxGroup: blankToNull(item.taxGroup),
     description: blankToNull(item.description),
     isActive: item.isActive,
+    // Only articles carry stock thresholds; services never do.
+    ...(item.kind === "article" ? { minStock: item.minStock ?? null } : {}),
     effectiveFrom: effectiveFrom ?? undefined,
   };
 }

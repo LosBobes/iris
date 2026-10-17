@@ -137,18 +137,28 @@ describe('catalog cleanup against the fixture API', () => {
 
   let api: FixtureApi
 
+  // Demo articles with warehouse movements cannot be deleted (409) and are never
+  // swept by a cleanup, so they stay in the catalog next to the seeded matrix.
+  const seeded = new Set(seeds.map((seed) => seed.code))
+  const ownCodes = (items: CatalogItem[]): string[] =>
+    items.map((item) => item.code).filter((code) => seeded.has(code)).sort()
+
   async function catalogCodes(): Promise<string[]> {
     const { items } = await api.getCatalogItems()
-    return items.map((item: CatalogItem) => item.code).sort()
+    return ownCodes(items)
   }
 
   beforeEach(async () => {
-    api = createFixtureApi()
+    api = createFixtureApi({ modules: { processes: true, stock: true } })
     // The fixture catalog is module state shared across instances: clear it so
     // the matrix below is the whole world.
     const existing = await api.getCatalogItems()
     for (const item of existing.items) {
-      await api.deleteCatalogItem(item.id)
+      try {
+        await api.deleteCatalogItem(item.id)
+      } catch (cause) {
+        if ((cause as { status?: number }).status !== 409) throw cause
+      }
     }
     for (const seed of seeds) {
       await api.createCatalogItem({
@@ -170,8 +180,8 @@ describe('catalog cleanup against the fixture API', () => {
     'previews and deletes exactly the items for %s',
     async (_name, filter, want) => {
       const preview = await api.previewCatalogCleanup(filter)
-      expect(preview.items.map((item: CatalogItem) => item.code).sort()).toEqual(want)
-      expect(preview.total).toBe(want.length)
+      expect(ownCodes(preview.items)).toEqual(want)
+      expect(preview.items.length).toBe(want.length)
 
       const { deleted } = await api.cleanupCatalogItems(filter)
       expect(deleted).toBe(want.length)
@@ -207,8 +217,28 @@ describe('catalog cleanup against the fixture API', () => {
   it('never deletes an item that has the price being filtered on', async () => {
     await api.cleanupCatalogItems({ kinds: bothKinds, missing: 'purchase' })
     const { items } = await api.getCatalogItems()
-    for (const item of items) {
+    for (const item of items.filter((entry) => seeded.has(entry.code))) {
       expect(item.purchasePrice).not.toBeNull()
     }
+  })
+
+  it('skips articles with warehouse movements', async () => {
+    const created = await api.createCatalogItem({
+      code: 'A-stocked',
+      name: 'Artikal sa prometom',
+      kind: 'article',
+      unit: 'kom',
+      purchasePrice: null,
+      salePrice: null,
+      barcode: null,
+      taxGroup: null,
+      description: null,
+      isActive: true,
+    })
+    await api.postStockReceipt({ lines: [{ catalogItemId: created.id, quantity: 3 }] })
+    const filter = { kinds: articles, missing: 'both' } as const
+    expect((await api.previewCatalogCleanup(filter)).items.map((item) => item.code)).not.toContain('A-stocked')
+    await api.cleanupCatalogItems(filter)
+    expect((await api.getCatalogItems()).items.map((item) => item.code)).toContain('A-stocked')
   })
 })

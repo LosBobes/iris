@@ -20,6 +20,7 @@ const demo: PlatformTenant = {
   suspendedAt: null,
   users: 2,
   admins: 1,
+  modules: { processes: false, stock: false },
 };
 
 afterEach(() => {

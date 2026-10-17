@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WorkOrderProcessPanel } from "@/components/process/WorkOrderProcessPanel";
 import { WorkOrderDescription } from "@/components/WorkOrders/WorkOrderDescription";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
@@ -1013,6 +1014,9 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           )}
         </div>
       </div>
+
+      {/* Renders nothing (and requests nothing) while the processes module is off. */}
+      <WorkOrderProcessPanel workOrderId={order.id} canEditStructure={isAdmin} />
     </>
   );
 }

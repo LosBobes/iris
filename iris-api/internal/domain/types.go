@@ -130,8 +130,14 @@ type CatalogItem struct {
 	TaxGroup      *string         `json:"taxGroup"`
 	Description   *string         `json:"description"`
 	IsActive      bool            `json:"isActive"`
-	CreatedAt     string          `json:"createdAt,omitempty"`
-	UpdatedAt     string          `json:"updatedAt,omitempty"`
+	// StockOnHand is the warehouse balance (sum of the article's stock
+	// movements). Read-only and computed; nil for services.
+	StockOnHand *float64 `json:"stockOnHand"`
+	// MinStock is the reorder threshold (>= 0) for articles; nil when unset and
+	// for services. Editable through CatalogItemInput.
+	MinStock  *float64 `json:"minStock"`
+	CreatedAt string   `json:"createdAt,omitempty"`
+	UpdatedAt string   `json:"updatedAt,omitempty"`
 }
 
 // DefaultTaxGroup is the PDV type a catalog item gets when none is set: the
@@ -172,6 +178,7 @@ type CatalogItemInput struct {
 	TaxGroup      *string         `json:"taxGroup"`
 	Description   *string         `json:"description"`
 	IsActive      bool            `json:"isActive"`
+	MinStock      *float64        `json:"minStock"`
 	EffectiveFrom *string         `json:"effectiveFrom,omitempty"`
 }
 
@@ -285,6 +292,27 @@ type OrganizationSettings struct {
 	// fields (drives-out, wait-for-payment, packaging, labeling, fragile,
 	// signature, insurance). Off by default so the form stays compact.
 	ShowShippingOptions bool `json:"showShippingOptions"`
+	// Modules reports which optional modules the organization has. Read-only
+	// here: only Backoffice superadmins switch them (PUT /platform/tenants/{slug}/modules),
+	// and PUT /settings ignores it.
+	Modules OrganizationModules `json:"modules"`
+}
+
+// OrganizationModules are the optional per-organization feature modules. Both
+// are off by default and independent of each other: "processes" enables process
+// templates, per-order processes and the simulator; "stock" enables the
+// warehouse (magacin). With both on, process item nodes link to articles and
+// steps post stock movements.
+type OrganizationModules struct {
+	Processes bool `json:"processes"`
+	Stock     bool `json:"stock"`
+}
+
+// OrganizationModulesUpdate is a partial module switch used by irisctl
+// set-modules; a nil field is left unchanged.
+type OrganizationModulesUpdate struct {
+	Processes *bool
+	Stock     *bool
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
@@ -395,6 +423,8 @@ type PlatformTenant struct {
 	SuspendedAt *string `json:"suspendedAt"`
 	Users       int     `json:"users"`
 	Admins      int     `json:"admins"`
+	// Modules are the organization's optional feature modules (both off by default).
+	Modules OrganizationModules `json:"modules"`
 }
 
 // PlatformCreateTenantInput creates an organization with its first admin.
@@ -423,6 +453,7 @@ const (
 	AuditTenantUpdate       = "tenant.update"
 	AuditTenantSuspend      = "tenant.suspend"
 	AuditTenantReactivate   = "tenant.reactivate"
+	AuditTenantModules      = "tenant.modules"
 	AuditUserPasswordReset  = "user.password_reset"
 	AuditImpersonationStart = "impersonate"
 )
@@ -1007,3 +1038,100 @@ type DashboardData struct {
 	QueueSummary          DashboardQueueSummary    `json:"queueSummary"`
 	OperatorQueue         DashboardOperatorQueue   `json:"operatorQueue"`
 }
+
+// ProcessNodeKind is the role a node plays in a process graph.
+type ProcessNodeKind string
+
+const (
+	ProcessNodeStep      ProcessNodeKind = "step"
+	ProcessNodeInput     ProcessNodeKind = "input"
+	ProcessNodeProduct   ProcessNodeKind = "product"
+	ProcessNodeByproduct ProcessNodeKind = "byproduct"
+)
+
+// ProcessStepStatus is the per-work-order progress of a step node.
+type ProcessStepStatus string
+
+const (
+	ProcessStepPending    ProcessStepStatus = "pending"
+	ProcessStepInProgress ProcessStepStatus = "in_progress"
+	ProcessStepDone       ProcessStepStatus = "done"
+	ProcessStepSkipped    ProcessStepStatus = "skipped"
+)
+
+// ProcessNode is one vertex of a process graph. Step nodes carry Status; item
+// nodes (input, product, byproduct) carry the quantity fields.
+type ProcessNode struct {
+	ID             string            `json:"id"`
+	Kind           ProcessNodeKind   `json:"kind"`
+	Label          string            `json:"label"`
+	X              float64           `json:"x"`
+	Y              float64           `json:"y"`
+	Quantity       *float64          `json:"quantity,omitempty"`
+	Unit           string            `json:"unit,omitempty"`
+	CatalogItemID  string            `json:"catalogItemId,omitempty"`
+	Note           string            `json:"note,omitempty"`
+	Status         ProcessStepStatus `json:"status,omitempty"`
+	ActualQuantity *float64          `json:"actualQuantity,omitempty"`
+}
+
+// ProcessEdge is a directed connection between two process nodes.
+type ProcessEdge struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Label  string `json:"label,omitempty"`
+}
+
+// ProcessGraph is the directed acyclic graph of a process.
+type ProcessGraph struct {
+	Nodes []ProcessNode `json:"nodes"`
+	Edges []ProcessEdge `json:"edges"`
+}
+
+// ProcessTemplate is a tenant-defined reusable process graph.
+type ProcessTemplate struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	IsDefault   bool         `json:"isDefault"`
+	Graph       ProcessGraph `json:"graph"`
+	CreatedAt   string       `json:"createdAt"`
+	UpdatedAt   string       `json:"updatedAt"`
+}
+
+// ProcessTemplateInput is the create/update payload for a process template.
+type ProcessTemplateInput struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	IsDefault   bool         `json:"isDefault"`
+	Graph       ProcessGraph `json:"graph"`
+}
+
+// WorkOrderProcess is a work order's own copy of a process graph plus its
+// per-order state. TemplateID is nil once the source template is deleted.
+type WorkOrderProcess struct {
+	WorkOrderID  string       `json:"workOrderId"`
+	TemplateID   *string      `json:"templateId"`
+	TemplateName string       `json:"templateName"`
+	Graph        ProcessGraph `json:"graph"`
+	UpdatedAt    string       `json:"updatedAt"`
+	UpdatedBy    string       `json:"updatedBy"`
+}
+
+// ApplyProcessTemplateInput attaches a template to a work order.
+type ApplyProcessTemplateInput struct {
+	TemplateID string `json:"templateId"`
+}
+
+// WorkOrderProcessInput replaces a work order's process graph.
+type WorkOrderProcessInput struct {
+	Graph ProcessGraph `json:"graph"`
+}
+
+// Backoffice audit actions for process templates.
+const (
+	AuditProcessTemplateCreate = "process_template.create"
+	AuditProcessTemplateUpdate = "process_template.update"
+	AuditProcessTemplateDelete = "process_template.delete"
+)

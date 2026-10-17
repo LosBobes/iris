@@ -192,6 +192,8 @@
     --iris-lift: 6px;
     --iris-shift: 10px;
     --iris-rule-scale: 0;
+    /* How far a "pop" shrinks from rest (scale 1 - depth). */
+    --iris-pop-depth: 0.06;
   }
 
   /* Honor reduced-motion without going silent. "Reduce motion" asks us to drop
@@ -207,6 +209,7 @@
       --iris-lift: 0px;
       --iris-shift: 0px;
       --iris-rule-scale: 1;
+      --iris-pop-depth: 0;
     }
 
     /* tw-animate-css sets its travel/zoom/spin on the element itself, so an
@@ -228,7 +231,15 @@
 
     /* Looping and attention-seeking motion has no calm equivalent — drop it. */
     .iris-tour-spotlight,
-    .animate-iris-shake {
+    .animate-iris-shake,
+    .iris-node-ready,
+    .iris-dot-ping {
+      animation: none !important;
+    }
+
+    /* React Flow's flowing-dash edges loop forever; show them as plain edges. */
+    .react-flow__edge.animated path,
+    .react-flow__connection .animated {
       animation: none !important;
     }
 
@@ -323,6 +334,120 @@
 
   .animate-iris-fade {
     animation: iris-fade-in var(--iris-dur-base) var(--iris-ease-out) both;
+  }
+
+  /* Pop: a quick scale + fade for things that change in place (status badge,
+     default marker, dialog panel, freshly added graph node). Uses the `scale`
+     property and fill-mode `backwards`, so nothing is pinned after the end and
+     fixed-position descendants keep their containing block. */
+  @keyframes iris-pop {
+    from {
+      opacity: 0;
+      scale: calc(1 - var(--iris-pop-depth));
+    }
+    to {
+      opacity: 1;
+      scale: 1;
+    }
+  }
+
+  /* Progress fill grows from the left to its own value (`--iris-bar`, 0-1). */
+  @keyframes iris-bar-grow {
+    from {
+      scale: calc(var(--iris-rule-scale) * var(--iris-bar, 1)) 1;
+    }
+  }
+
+  /* One-shot ring that expands off a node and fades out (step completed). */
+  @keyframes iris-ring-out {
+    from {
+      opacity: 0.7;
+      scale: 1;
+    }
+    to {
+      opacity: 0;
+      scale: calc(1 + var(--iris-pop-depth) * 2);
+    }
+  }
+
+  /* Looping soft glow for steps that are ready to start. Opacity only. */
+  @keyframes iris-ready-breathe {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.75; }
+  }
+
+  /* Looping, very faint ping behind the "active organization" dot. */
+  @keyframes iris-dot-ping {
+    0% { opacity: 0.4; scale: 1; }
+    70%, 100% { opacity: 0; scale: 2.8; }
+  }
+
+  /* Section/tab content change: fade + small lift. Fill-mode `backwards` so no
+     transform is left behind to trap position:fixed dialogs inside. */
+  .animate-iris-rise {
+    animation: iris-fade-up var(--iris-dur-base) var(--iris-ease-out) backwards;
+  }
+
+  .animate-iris-pop {
+    animation: iris-pop var(--iris-dur-base) var(--iris-ease-out-decisive) backwards;
+  }
+
+  /* Pair with an entrance class and set --iris-stagger-index (see lib/motion). */
+  .iris-stagger {
+    animation-delay: calc(var(--iris-stagger-index, 0) * 45ms);
+  }
+
+  .iris-bar {
+    transform-origin: left center;
+    animation: iris-bar-grow var(--iris-dur-page) var(--iris-ease-out-decisive) backwards;
+    transition: scale var(--iris-dur-slow) var(--iris-ease-out);
+  }
+
+  /* Process graph nodes. React Flow owns .react-flow__node's `transform`, so
+     all node motion lives on the inner card and uses animatable properties
+     that don't touch it (translate/scale/opacity). */
+  .iris-node-card {
+    position: relative;
+    transition: border-color var(--iris-dur-base) var(--iris-ease-out),
+      box-shadow var(--iris-dur-base) var(--iris-ease-out),
+      translate var(--iris-dur-fast) var(--iris-ease-out),
+      opacity var(--iris-dur-base) var(--iris-ease-out);
+  }
+  .iris-node-card:hover {
+    translate: 0 calc(var(--iris-lift) * -0.34);
+  }
+  .iris-node-enter {
+    animation: iris-fade-up var(--iris-dur-slow) var(--iris-ease-out-decisive) backwards;
+    animation-delay: calc(120ms + var(--iris-stagger-index, 0) * 55ms);
+  }
+  .iris-node-pop {
+    animation: iris-pop var(--iris-dur-base) var(--iris-ease-out-decisive) backwards;
+  }
+  .iris-node-ready {
+    position: absolute;
+    inset: -3px;
+    border-radius: 4px;
+    border: 1.5px solid var(--iris-accent);
+    pointer-events: none;
+    opacity: 0.5;
+    animation: iris-ready-breathe 2.4s var(--iris-ease-out-soft) infinite;
+  }
+  .iris-node-pulse {
+    position: absolute;
+    inset: -2px;
+    border-radius: 4px;
+    border: 2px solid var(--iris-status-done);
+    pointer-events: none;
+    animation: iris-ring-out var(--iris-dur-page) var(--iris-ease-out) both;
+  }
+
+  .iris-dot-ping {
+    opacity: 0;
+    animation: iris-dot-ping 2.6s var(--iris-ease-out-soft) infinite;
+  }
+
+  .iris-row {
+    transition: background-color var(--iris-dur-fast) var(--iris-ease-out);
   }
 
   /* Runs only while the drawer is open, and only at drawer widths — so it
@@ -865,4 +990,111 @@
     font-style: italic;
     line-height: 1;
   }
+}
+
+/* Process graph editor (React Flow). The library's base stylesheet is
+   unthemed; map its --xy-* variables onto the Iris tokens so light and dark
+   mode follow the app theme. */
+:root {
+  --iris-proc-step: oklch(0.52 0.09 250);
+  --iris-proc-input: oklch(0.52 0.08 155);
+  --iris-proc-product: oklch(0.58 0.13 45);
+  --iris-proc-byproduct: oklch(0.55 0.02 75);
+}
+
+.dark {
+  --iris-proc-step: oklch(0.72 0.10 250);
+  --iris-proc-input: oklch(0.72 0.10 155);
+  --iris-proc-product: oklch(0.74 0.13 50);
+  --iris-proc-byproduct: oklch(0.68 0.02 75);
+}
+
+.iris-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-dots-color: var(--iris-ink-faint);
+  --xy-edge-stroke: var(--iris-ink-mute);
+  --xy-edge-stroke-selected: var(--iris-accent);
+  --xy-edge-stroke-width: 1.5;
+  --xy-connectionline-stroke: var(--iris-accent);
+  --xy-connectionline-stroke-width: 2;
+  --xy-handle-background-color: var(--card);
+  --xy-handle-border-color: var(--iris-ink-soft);
+  --xy-selection-background-color: color-mix(in oklch, var(--iris-accent) 10%, transparent);
+  --xy-selection-border: 1px dotted var(--iris-accent);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(in oklch, var(--background) 70%, transparent);
+  --xy-minimap-node-background-color: var(--iris-ink-faint);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: none;
+  --xy-edge-label-color: var(--foreground);
+  --xy-edge-label-background-color: var(--card);
+  --xy-attribution-background-color: transparent;
+}
+
+.iris-flow .react-flow__attribution {
+  font-size: 9px;
+  color: var(--iris-ink-mute);
+}
+
+.iris-flow .react-flow__controls button svg {
+  fill: currentColor;
+}
+
+/* Edge streams: inputs (green), products (orange) and byproducts (dashed)
+   stand apart from the neutral step-to-step flow. */
+.iris-flow .react-flow__edge .react-flow__edge-path {
+  stroke-width: 1.75;
+}
+.iris-flow .react-flow__edge.iris-edge-flow .react-flow__edge-path {
+  stroke: var(--iris-ink-soft);
+}
+.iris-flow .react-flow__edge.iris-edge-input .react-flow__edge-path {
+  stroke: var(--iris-proc-input);
+  stroke-width: 2.25;
+}
+.iris-flow .react-flow__edge.iris-edge-product .react-flow__edge-path {
+  stroke: var(--iris-proc-product);
+  stroke-width: 2.25;
+}
+.iris-flow .react-flow__edge.iris-edge-byproduct .react-flow__edge-path {
+  stroke: var(--iris-proc-byproduct);
+  stroke-width: 2.25;
+  stroke-dasharray: 6 4;
+}
+.iris-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--iris-accent);
+}
+
+.iris-flow .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  border-width: 1.5px;
+  border-style: solid;
+  border-color: var(--xy-handle-border-color);
+  /* Handles stay out of the way so edges and arrowheads meet the node border;
+     they appear on hover, on the selected node and while connecting. */
+  opacity: 0;
+  transition: opacity var(--iris-dur-fast) var(--iris-ease-out);
+}
+
+.iris-flow .react-flow__node:hover .react-flow__handle,
+.iris-flow .react-flow__node.selected .react-flow__handle,
+.iris-flow .react-flow__handle.connectingfrom,
+.iris-flow .react-flow__handle.connectingto {
+  opacity: 1;
+}
+
+/* Read-only canvases (simulator, operators) never show connection points. */
+.iris-flow.iris-flow-readonly .react-flow__handle {
+  opacity: 0 !important;
+}
+
+.iris-flow .react-flow__handle.connectingto.valid,
+.iris-flow .react-flow__handle.connectionindicator:hover {
+  background: var(--iris-accent);
+  border-color: var(--iris-accent);
 }

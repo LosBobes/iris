@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
 import { startOfDay } from "date-fns";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import {
@@ -32,7 +33,9 @@ import {
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
 import { cn } from "@/lib/utils";
 import { DEFAULT_VAT_TYPE, VAT_TYPES, isVatTypeCode } from "@/shared/utils/vat";
-import { reportUnexpectedError } from "@/lib/errors";
+import { ApiError, reportUnexpectedError } from "@/lib/errors";
+import { formatStockQuantity } from "@/lib/stock/format";
+import { minStockSchema } from "@/lib/stock/validation";
 
 function snapshotOf(value: CatalogItem, effective: string): string {
   return JSON.stringify([value, effective]);
@@ -44,6 +47,8 @@ function CatalogDetailPage(): React.JSX.Element {
   const { id: routeId } = useParams<{ id: string }>();
   const isNew = routeId === undefined || routeId === "new";
   const { currentUser } = useAuth();
+  const { modules } = useOrganization();
+  const stockEnabled = modules.stock;
   const isAdmin = currentUser.role === "admin";
   const readOnly = !isAdmin;
 
@@ -100,6 +105,10 @@ function CatalogDetailPage(): React.JSX.Element {
       toast.error(t("catalog.detail.nameRequired"));
       return;
     }
+    if (stockEnabled && item.kind === "article" && !minStockSchema.safeParse(item.minStock ?? null).success) {
+      toast.error(t("catalog.detail.minStockInvalid"));
+      return;
+    }
     setSaving(true);
     try {
       // Only send an effective date when the admin can schedule a price change;
@@ -128,7 +137,7 @@ function CatalogDetailPage(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom, allowNavigation]);
+  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom, allowNavigation, stockEnabled]);
 
   const handleDelete = useCallback(async () => {
     try {
@@ -138,7 +147,12 @@ function CatalogDetailPage(): React.JSX.Element {
       navigate("/catalog");
     } catch (error: unknown) {
       reportUnexpectedError("CatalogDetailPage.delete", error);
-      toast.error(formatActionError(t("catalog.detail.deleteError"), error));
+      // 409: the article has warehouse movements, so it can only be deactivated.
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error(t("catalog.detail.deleteHasStock"));
+      } else {
+        toast.error(formatActionError(t("catalog.detail.deleteError"), error));
+      }
     } finally {
       setConfirmDelete(false);
     }
@@ -204,6 +218,7 @@ function CatalogDetailPage(): React.JSX.Element {
               canSchedulePrice={canSchedulePrice}
               effectiveFrom={effectiveFrom}
               onEffectiveFromChange={setEffectiveFrom}
+              stockEnabled={stockEnabled}
             />
             {canSchedulePrice && (
               <PriceHistoryPanel itemId={item.id} refreshToken={historyRefresh} />
@@ -233,6 +248,23 @@ function CatalogDetailPage(): React.JSX.Element {
                 />
               )}
               <SummaryRow label={t("catalog.detail.code")} value={item.code || null} />
+              {!isNew && stockEnabled && item.kind === "article" && typeof item.stockOnHand === "number" && (
+                <div className="flex items-center justify-between gap-3" data-testid="catalog-detail-stock">
+                  <dt className="text-[color:var(--iris-ink-soft)]">{t("catalog.detail.stockOnHand")}</dt>
+                  <dd className="tnum min-w-0 truncate text-foreground">
+                    <Link
+                      to={`/stock/${encodeURIComponent(item.id)}`}
+                      title={t("catalog.detail.stockHistory")}
+                      className={
+                        "iris-focusable underline-offset-2 hover:underline " +
+                        (item.stockOnHand < 0 ? "text-destructive" : "")
+                      }
+                    >
+                      {formatStockQuantity(item.stockOnHand, item.unit)}
+                    </Link>
+                  </dd>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <dt className="text-[color:var(--iris-ink-soft)]">{t("catalog.detail.status")}</dt>
                 <dd className="text-foreground">{item.isActive ? t("catalog.detail.active") : t("catalog.detail.inactive")}</dd>
@@ -325,7 +357,9 @@ function DetailsForm({
   canSchedulePrice,
   effectiveFrom,
   onEffectiveFromChange,
+  stockEnabled,
 }: {
+  stockEnabled: boolean;
   value: CatalogItem;
   readOnly: boolean;
   onChange: (value: CatalogItem) => void;
@@ -405,6 +439,34 @@ function DetailsForm({
             </span>
           </label>
         )}
+        {/* Low-stock threshold: articles only, admin-editable. */}
+        {stockEnabled && value.kind === "article" &&
+          (readOnly ? (
+            <ReadOnlyValue
+              label={t("catalog.detail.minStockField")}
+              value={value.minStock === null || value.minStock === undefined ? "" : formatStockQuantity(value.minStock, value.unit)}
+            />
+          ) : (
+            <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
+              {t("catalog.detail.minStockField")}
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={value.minStock ?? ""}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    minStock: event.target.value === "" ? null : Number(event.target.value),
+                  })
+                }
+                className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+              <span className="mt-1 block text-[10px] text-[color:var(--iris-ink-mute)]">
+                {t("catalog.detail.minStockHint")}
+              </span>
+            </label>
+          ))}
         <Field
           label={t("catalog.detail.barcode")}
           value={value.barcode ?? ""}

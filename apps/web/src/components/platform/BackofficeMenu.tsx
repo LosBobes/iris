@@ -72,7 +72,7 @@ export function BackofficeMenu({
       {open ? (
         <div
           id={panelId}
-          className="absolute right-0 top-12 z-30 w-[min(320px,calc(100vw-32px))] rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-2 shadow-2xl"
+          className="animate-iris-pop absolute right-0 top-12 z-30 origin-top-right w-[min(320px,calc(100vw-32px))] rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] p-2 shadow-2xl"
         >
           <div className="flex items-center justify-between gap-3 px-3 py-2.5">
             <div className="min-w-0">

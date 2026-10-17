@@ -397,6 +397,9 @@ var sqliteMigrations = []struct {
 	{version: 17, fn: platformDefaultAdminMigration},
 	{version: 18, sql: platformImpersonationMigration},
 	{version: 19, sql: platformManagementMigration},
+	{version: 20, sql: processGraphMigration},
+	{version: 21, sql: stockMigration},
+	{version: 22, sql: workOrderProcessStockTrackedMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

@@ -31,7 +31,7 @@ func (s *FixtureStore) CatalogItems(
 			!strings.Contains(strings.ToLower(item.Code), search) {
 			continue
 		}
-		matched = append(matched, cloneCatalogItem(item))
+		matched = append(matched, s.withStockLocked(item))
 	}
 
 	total := len(matched)
@@ -60,7 +60,7 @@ func (s *FixtureStore) CatalogItemByID(_ context.Context, id string) (*domain.Ca
 
 	for _, item := range s.catalogItems {
 		if item.ID == id {
-			result := cloneCatalogItem(item)
+			result := s.withStockLocked(item)
 			return &result, nil
 		}
 	}
@@ -125,12 +125,12 @@ func (s *FixtureStore) UpsertCatalogItem(
 		if existing.ID == normalized.ID {
 			normalized.CreatedAt = existing.CreatedAt
 			s.catalogItems[index] = normalized
-			result := cloneCatalogItem(normalized)
+			result := s.withStockLocked(normalized)
 			return &result, nil
 		}
 	}
 	s.catalogItems = append(s.catalogItems, normalized)
-	result := cloneCatalogItem(normalized)
+	result := s.withStockLocked(normalized)
 	return &result, nil
 }
 
@@ -139,6 +139,9 @@ func (s *FixtureStore) DeleteCatalogItem(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.hasStockMovementsLocked(id) {
+		return ErrCatalogItemHasMovements
+	}
 	remaining := make([]domain.CatalogItem, 0, len(s.catalogItems))
 	for _, existing := range s.catalogItems {
 		if existing.ID != id {
@@ -183,8 +186,8 @@ func (s *FixtureStore) CatalogItemsMissingPrices(_ context.Context, filter Catal
 
 	items := make([]domain.CatalogItem, 0)
 	for _, existing := range s.catalogItems {
-		if matchesCatalogCleanup(existing, filter) {
-			items = append(items, cloneCatalogItem(existing))
+		if matchesCatalogCleanup(existing, filter) && !s.hasStockMovementsLocked(existing.ID) {
+			items = append(items, s.withStockLocked(existing))
 		}
 	}
 	return items, nil
@@ -199,7 +202,7 @@ func (s *FixtureStore) DeleteCatalogItemsMissingPrices(_ context.Context, filter
 	remaining := make([]domain.CatalogItem, 0, len(s.catalogItems))
 	deleted := 0
 	for _, existing := range s.catalogItems {
-		if matchesCatalogCleanup(existing, filter) {
+		if matchesCatalogCleanup(existing, filter) && !s.hasStockMovementsLocked(existing.ID) {
 			deleted++
 			continue
 		}
@@ -236,5 +239,7 @@ func cloneCatalogItem(item domain.CatalogItem) domain.CatalogItem {
 	cloned.Barcode = clonePtrString(item.Barcode)
 	cloned.TaxGroup = clonePtrString(item.TaxGroup)
 	cloned.Description = clonePtrString(item.Description)
+	cloned.StockOnHand = clonePtrFloat64(item.StockOnHand)
+	cloned.MinStock = clonePtrFloat64(item.MinStock)
 	return cloned
 }

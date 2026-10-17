@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { staggerStyle } from "@/lib/motion";
 import type { PlatformTenant } from "@/types/platform";
 import { formatCount, formatDate, formatDateTime } from "./format";
 import {
@@ -12,12 +13,16 @@ import {
   backofficeSmallButtonClass,
 } from "./BackofficeDialog";
 import { OrganizationFormDialog } from "./OrganizationFormDialog";
+import { OrganizationModulesDialog } from "./OrganizationModulesDialog";
+import { OrganizationProcessesDialog } from "./OrganizationProcessesDialog";
 import { OrganizationUsersDialog } from "./OrganizationUsersDialog";
 
 type OpenDialog =
   | { kind: "create" }
   | { kind: "edit"; tenant: PlatformTenant }
   | { kind: "users"; tenant: PlatformTenant }
+  | { kind: "processes"; tenant: PlatformTenant }
+  | { kind: "modules"; tenant: PlatformTenant }
   | { kind: "suspend"; tenant: PlatformTenant };
 
 /**
@@ -75,15 +80,45 @@ export function OrganizationsPanel(): React.JSX.Element {
       </span>
     ) : (
       <span className="inline-flex items-center gap-1.5 text-[color:var(--pf-text-2)]">
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#5fb88a]" />
+        <span aria-hidden className="relative flex h-1.5 w-1.5">
+          <span className="iris-dot-ping absolute inset-0 rounded-full bg-[#5fb88a]" />
+          <span className="relative h-1.5 w-1.5 rounded-full bg-[#5fb88a]" />
+        </span>
         {t("platform.orgs.active")}
       </span>
     );
+
+  // Compact "which modules are on" badges (off ones are simply absent).
+  const moduleBadges = (tenant: PlatformTenant): React.JSX.Element => {
+    const on = [
+      tenant.modules.stock ? t("platform.orgs.modules.stock") : null,
+      tenant.modules.stock && tenant.modules.processes ? t("platform.orgs.modules.processes") : null,
+    ].filter((label): label is string => label !== null);
+    return on.length === 0 ? (
+      <span data-testid="module-badges" className="text-[11px] text-[color:var(--pf-muted)]">
+        {t("platform.orgs.modules.none")}
+      </span>
+    ) : (
+      <span data-testid="module-badges" className="flex flex-wrap gap-1">
+        {on.map((label) => (
+          <span key={label} className="rounded border border-[color:var(--pf-border)] px-1.5 py-0.5 text-[11px] text-[color:var(--pf-text-2)]">
+            {label}
+          </span>
+        ))}
+      </span>
+    );
+  };
 
   const actions = (tenant: PlatformTenant): React.JSX.Element => (
     <>
       <button type="button" onClick={() => setDialog({ kind: "users", tenant })} className={backofficeSmallButtonClass}>
         {t("platform.orgs.manageUsers")}
+      </button>
+      <button type="button" onClick={() => setDialog({ kind: "processes", tenant })} className={backofficeSmallButtonClass}>
+        {t("platform.orgs.processes")}
+      </button>
+      <button type="button" onClick={() => setDialog({ kind: "modules", tenant })} className={backofficeSmallButtonClass}>
+        {t("platform.orgs.modules.button")}
       </button>
       <button type="button" onClick={() => setDialog({ kind: "edit", tenant })} className={backofficeSmallButtonClass}>
         {t("platform.orgs.edit")}
@@ -125,8 +160,8 @@ export function OrganizationsPanel(): React.JSX.Element {
         <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("platform.orgs.empty")}</p>
       ) : !isWide ? (
         <ul className="mt-1">
-          {tenants.map((tenant) => (
-            <li key={tenant.id} className="space-y-2.5 border-t border-[color:var(--pf-border)] px-4 py-3 first:border-t-0 text-[13px]">
+          {tenants.map((tenant, index) => (
+            <li key={tenant.id} style={staggerStyle(index)} className="animate-iris-rise iris-stagger space-y-2.5 border-t border-[color:var(--pf-border)] px-4 py-3 first:border-t-0 text-[13px]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate text-[14px] text-[color:var(--pf-text)]">{tenant.name}</div>
@@ -143,6 +178,7 @@ export function OrganizationsPanel(): React.JSX.Element {
                 <span>
                   {t("platform.orgs.created")}: {formatDate(tenant.createdAt)}
                 </span>
+                {moduleBadges(tenant)}
               </div>
               <div className="flex flex-wrap gap-1.5">{actions(tenant)}</div>
             </li>
@@ -153,12 +189,13 @@ export function OrganizationsPanel(): React.JSX.Element {
         // inside the scroller; without it the label sits at the table's right
         // edge and widens the whole page on a phone.
         <div className="relative mt-1 overflow-x-auto">
-          <table className="w-full min-w-[860px] text-[13px]">
+          <table className="w-full min-w-[980px] text-[13px]">
             <thead className="text-left text-[12px] text-[color:var(--pf-muted)]">
               <tr>
                 <th className="px-4 py-2.5 font-normal">{t("platform.orgs.name")}</th>
                 <th className="px-3 py-2.5 text-right font-normal">{t("platform.orgs.users")}</th>
                 <th className="px-3 py-2.5 font-normal">{t("platform.orgs.created")}</th>
+                <th className="px-3 py-2.5 font-normal">{t("platform.orgs.modules.column")}</th>
                 <th className="px-3 py-2.5 font-normal">{t("platform.orgs.status")}</th>
                 <th className="px-4 py-2.5 text-right font-normal">
                   <span className="sr-only">{t("platform.orgs.actionsLabel")}</span>
@@ -166,8 +203,12 @@ export function OrganizationsPanel(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {tenants.map((tenant) => (
-                <tr key={tenant.id} className="h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]">
+              {tenants.map((tenant, index) => (
+                <tr
+                  key={tenant.id}
+                  style={staggerStyle(index)}
+                  className="animate-iris-rise iris-stagger iris-row h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]"
+                >
                   <td className="px-4 py-2">
                     <div className="text-[color:var(--pf-text)]">{tenant.name}</div>
                     <div className="text-[11px] text-[color:var(--pf-muted)]">/login/{tenant.slug}</div>
@@ -177,6 +218,7 @@ export function OrganizationsPanel(): React.JSX.Element {
                     <span className="text-[color:var(--pf-muted)]"> / {formatCount(tenant.admins)}</span>
                   </td>
                   <td className="px-3 py-2 text-[color:var(--pf-text-2)]">{formatDate(tenant.createdAt)}</td>
+                  <td className="px-3 py-2">{moduleBadges(tenant)}</td>
                   <td className="whitespace-nowrap px-3 py-2">{status(tenant)}</td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1.5">{actions(tenant)}</div>
@@ -200,6 +242,18 @@ export function OrganizationsPanel(): React.JSX.Element {
         />
       ) : null}
       {dialog?.kind === "users" ? <OrganizationUsersDialog tenant={dialog.tenant} onClose={close} /> : null}
+      {dialog?.kind === "modules" ? (
+        <OrganizationModulesDialog
+          tenant={dialog.tenant}
+          onClose={close}
+          onSaved={(saved) => {
+            setNotice(t("platform.orgs.modules.savedNotice", { name: saved.name }));
+            setDialog(null);
+            void load();
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "processes" ? <OrganizationProcessesDialog tenant={dialog.tenant} onClose={close} /> : null}
       {dialog?.kind === "suspend" ? (
         <BackofficeDialog
           title={t(dialog.tenant.suspendedAt ? "platform.orgs.reactivateTitle" : "platform.orgs.suspendTitle", { name: dialog.tenant.name })}

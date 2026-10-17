@@ -61,8 +61,19 @@ type PlatformStore interface {
 	PlatformCreateTenant(ctx context.Context, actor AuditActor, input domain.PlatformCreateTenantInput) (*domain.PlatformTenant, error)
 	PlatformUpdateTenant(ctx context.Context, actor AuditActor, slug string, input domain.PlatformUpdateTenantInput) (*domain.PlatformTenant, error)
 	PlatformSetTenantSuspended(ctx context.Context, actor AuditActor, slug string, suspended bool) (*domain.PlatformTenant, error)
+	// PlatformSetTenantModules switches the organization's optional modules and
+	// audits the change; nil when no organization has that slug.
+	PlatformSetTenantModules(ctx context.Context, actor AuditActor, slug string, modules domain.OrganizationModules) (*domain.PlatformTenant, error)
 	PlatformResetUserPassword(ctx context.Context, actor AuditActor, slug, userID, password string) (*domain.User, error)
 	PlatformAuditLog(ctx context.Context, limit, offset int) (domain.PlatformAuditLog, error)
+
+	// Process templates of any organization (platform_processes.go). Mutations
+	// write a platform_audit_events row. ErrTenantNotFound means no organization
+	// has that slug; ErrProcessTemplateNotFound an unknown template id.
+	PlatformProcessTemplates(ctx context.Context, slug string) ([]domain.ProcessTemplate, error)
+	PlatformCreateProcessTemplate(ctx context.Context, actor AuditActor, slug string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
+	PlatformUpdateProcessTemplate(ctx context.Context, actor AuditActor, slug, id string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
+	PlatformDeleteProcessTemplate(ctx context.Context, actor AuditActor, slug, id string) error
 }
 
 var _ PlatformStore = (*SQLiteStore)(nil)

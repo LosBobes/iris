@@ -134,12 +134,21 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants", s.handlePlatformCreateTenant)
 	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/suspend", s.handlePlatformSuspendTenant(true))
+	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/modules", s.handlePlatformSetTenantModules)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/reactivate", s.handlePlatformSuspendTenant(false))
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/users/{id}/password", s.handlePlatformResetPassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/process-templates", s.handlePlatformProcessTemplates)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/process-templates", s.handlePlatformCreateProcessTemplate)
+	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformUpdateProcessTemplate)
+	r.With(s.requirePlatformAdmin).Delete("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformDeleteProcessTemplate)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
+		// Optional per-organization modules: each group answers 403 while the
+		// Backoffice has not switched its module on for the organization.
+		processes := protected.With(s.requireModule(moduleProcesses))
+		stock := protected.With(s.requireModule(moduleStock))
 		protected.Get("/customers", s.handleCustomers)
 		protected.Get("/customers/{id}", s.handleCustomerByID)
 		protected.Post("/customers", s.handleUpsertCustomer)
@@ -162,6 +171,17 @@ func (s *Server) Routes() http.Handler {
 		protected.Delete("/work-orders/{id}/edit-lock", s.handleReleaseEditLock)
 		protected.Patch("/work-orders/{id}", s.handleUpdateWorkOrder)
 		protected.Delete("/work-orders/{id}", s.requireAdmin(s.handleDeleteWorkOrder))
+		processes.Get("/work-orders/{id}/process", s.handleWorkOrderProcess)
+		processes.Post("/work-orders/{id}/process", s.handleApplyProcessTemplate)
+		// Operators may change a process's per-order state and layout only; the
+		// store rejects structural changes unless the caller is an admin.
+		processes.Put("/work-orders/{id}/process", s.handleUpdateWorkOrderProcess)
+		processes.Delete("/work-orders/{id}/process", s.requireAdmin(s.handleDeleteWorkOrderProcess))
+		processes.Get("/process-templates", s.handleProcessTemplates)
+		processes.Get("/process-templates/{id}", s.handleProcessTemplateByID)
+		processes.Post("/process-templates", s.requireAdmin(s.handleCreateProcessTemplate))
+		processes.Put("/process-templates/{id}", s.requireAdmin(s.handleUpdateProcessTemplate))
+		processes.Delete("/process-templates/{id}", s.requireAdmin(s.handleDeleteProcessTemplate))
 		protected.Get("/enum-values", s.handleEnumValues)
 		protected.Post("/enum-values", s.requireAdmin(s.handleCreateEnumValue))
 		protected.Put("/enum-values/{id}", s.requireAdmin(s.handleUpdateEnumValue))
@@ -179,6 +199,10 @@ func (s *Server) Routes() http.Handler {
 		// full upsert.
 		protected.Put("/catalog-items/{id}", s.handleUpsertCatalogItem)
 		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
+		stock.Get("/stock", s.handleStockLevels)
+		stock.Get("/stock/movements", s.handleStockMovements)
+		stock.Post("/stock/receipts", s.handlePostStockReceipt)
+		stock.Post("/stock/counts", s.requireAdmin(s.handlePostStockCount))
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
 		protected.Get("/settings/login-logo", s.handleLoginLogo)
@@ -263,6 +287,44 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// Optional organization modules gated by requireModule.
+const (
+	moduleProcesses = "processes"
+	moduleStock     = "stock"
+
+	moduleProcessesDisabledMessage = "Modul „Procesi rada“ nije uključen za ovu organizaciju."
+	moduleStockDisabledMessage     = "Modul „Magacin“ nije uključen za ovu organizaciju."
+)
+
+// requireModule rejects the request with 403 unless the signed-in user's
+// organization has the module switched on. It must run after requireAuth (it
+// reads the tenant from the context). The flag is one indexed key read, so it
+// is not cached: a Backoffice switch takes effect on the next request.
+func (s *Server) requireModule(module string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// A browser navigation to an SPA path that shares the API route (for
+			// example /stock) gets the app shell, which has no data to protect.
+			if s.serveWebIfHTML(w, r) {
+				return
+			}
+			modules, err := s.store.OrganizationModules(r.Context())
+			if err != nil {
+				writeServerError(w, r, err)
+				return
+			}
+			switch {
+			case module == moduleProcesses && !modules.Processes:
+				writeAPIError(w, r, http.StatusForbidden, moduleProcessesDisabledMessage, nil)
+			case module == moduleStock && !modules.Stock:
+				writeAPIError(w, r, http.StatusForbidden, moduleStockDisabledMessage, nil)
+			default:
+				next.ServeHTTP(w, r)
+			}
+		})
+	}
 }
 
 func (s *Server) requireAdmin(handler http.HandlerFunc) http.HandlerFunc {

@@ -101,6 +101,33 @@ func (s *Server) handlePlatformSuspendTenant(suspended bool) http.HandlerFunc {
 	}
 }
 
+// handlePlatformSetTenantModules switches an organization's optional modules.
+// Tenant admins cannot do this; only a superadmin, and the change is audited.
+func (s *Server) handlePlatformSetTenantModules(w http.ResponseWriter, r *http.Request) {
+	platform, ok := s.platformStore()
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	var input domain.OrganizationModules
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	slug := chi.URLParam(r, "slug")
+	tenant, err := platform.PlatformSetTenantModules(r.Context(), auditActor(r), slug, input)
+	if err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	if tenant == nil {
+		writeAPIError(w, r, http.StatusNotFound, tenantNotFoundMessage, nil)
+		return
+	}
+	log.Printf("platform admin %q set modules of organization %q: processes=%t stock=%t",
+		currentPlatformAdmin(r).Username, tenant.Slug, input.Processes, input.Stock)
+	writeJSON(w, http.StatusOK, tenant)
+}
+
 func (s *Server) handlePlatformResetPassword(w http.ResponseWriter, r *http.Request) {
 	platform, ok := s.platformStore()
 	if !ok {

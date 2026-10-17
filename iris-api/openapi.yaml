@@ -14,6 +14,13 @@ tags:
   - name: Customers
   - name: Work Orders
   - name: Dashboard
+  - name: Processes
+    description: Process templates (steps with inputs, products and byproducts) and each work order's own editable copy.
+  - name: Stock
+    description: >-
+      Warehouse stock (magacin). Stock is an append-only movement ledger per catalog article (on-hand is the sum of
+      its movements; services never carry stock). Goods receipts and counts post movements here; work-order
+      processes post consumption/production automatically. A single warehouse per organization; negative stock is allowed.
   - name: Platform
     description: Backoffice (/backoffice in the web app). Superadmin accounts stored apart from organization users (own table, sessions and cookie); aggregate metrics only.
 paths:
@@ -380,6 +387,12 @@ paths:
                     type: boolean
         '403':
           description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The article has stock movements and cannot be deleted; deactivate it instead (`Artikal ima promet u magacinu i ne može se obrisati.`)
           content:
             application/json:
               schema:
@@ -1029,6 +1042,549 @@ paths:
       responses:
         '204':
           description: The lock was released (or the caller did not hold it).
+  /stock:
+    get:
+      tags: [Stock]
+      summary: List articles with their stock position
+      description: >-
+        Articles only, active first then by name. Inactive articles are listed only while they hold non-zero stock.
+        `reserved` is the planned quantity of linked `input` nodes in the process graphs of open work orders (status
+        not completed, cancelled or invoiced) whose consuming steps are not yet done; `available = onHand - reserved`.
+        `low` is true when `onHand` is negative or `available` is below `minStock`. Only processes that are stock
+        tracked (created while the "Magacin" module was on) reserve stock. Requires the "Magacin" module (403 otherwise).
+      operationId: listStockLevels
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Case- and diacritic-insensitive match on article name or code.
+        - name: lowOnly
+          in: query
+          schema:
+            type: boolean
+          description: Only levels with `low = true`.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '403':
+          $ref: '#/components/responses/StockModuleDisabled'
+        '200':
+          description: A page of stock levels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLevelList'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/movements:
+    get:
+      tags: [Stock]
+      summary: List stock movements, newest first
+      operationId: listStockMovements
+      parameters:
+        - name: catalogItemId
+          in: query
+          schema:
+            type: string
+        - name: workOrderId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '403':
+          $ref: '#/components/responses/StockModuleDisabled'
+        '200':
+          description: A page of movements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMovementList'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/receipts:
+    post:
+      tags: [Stock]
+      summary: Receive goods (prijem robe)
+      description: Any signed-in user. Posts one `receipt` movement per line, atomically.
+      operationId: postStockReceipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockReceiptInput'
+      responses:
+        '403':
+          $ref: '#/components/responses/StockModuleDisabled'
+        '201':
+          description: The movements that were posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPostingResult'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown article or service item (`Artikal nije pronađen u katalogu.`), quantity not above zero (`Količina mora biti veća od nule.`), duplicate article (`Artikal se ponavlja.`), or a line count outside 1-200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/counts:
+    post:
+      tags: [Stock]
+      summary: Post a stock count (popis / opening balance, admin only)
+      description: >-
+        For each line posts `countedQuantity - onHand` as an `adjustment` movement (zero differences post nothing).
+        An article that has no movements yet gets an `opening` movement instead. The whole count is atomic.
+      operationId: postStockCount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockCountInput'
+      responses:
+        '201':
+          description: The movements that were posted (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPostingResult'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned (`Modul „Magacin“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown article or service item (`Artikal nije pronađen u katalogu.`), negative counted quantity, duplicate article (`Artikal se ponavlja.`), or a line count outside 1-1000
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /process-templates:
+    get:
+      tags: [Processes]
+      summary: List the organization's process templates
+      description: >-
+        Every `/process-templates*` and `/work-orders/{id}/process*` route requires the "Procesi rada" module, which
+        needs "Magacin" too (Backoffice-controlled, off by default) and answers 403 otherwise. While it is off,
+        POST /work-orders does not auto-attach the default template. Backoffice template routes
+        (`/platform/tenants/{slug}/process-templates*`) work regardless of the flag.
+      operationId: listProcessTemplates
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '200':
+          description: Templates, default first then by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Processes]
+      summary: Create a process template (admin only)
+      description: >-
+        Per-order state (status, actualQuantity) in the graph is stripped. `isDefault: true` clears the flag on the organization's other templates; new work orders get a copy of the default.
+      operationId: createProcessTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '201':
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /process-templates/{id}:
+    get:
+      tags: [Processes]
+      summary: Get a process template
+      operationId: getProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '200':
+          description: The template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Processes]
+      summary: Replace a process template (admin only)
+      operationId: updateProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Processes]
+      summary: Delete a process template (admin only)
+      description: >-
+        Work-order processes already copied from the template are kept; their `templateId` becomes null.
+      operationId: deleteProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /work-orders/{id}/process:
+    get:
+      tags: [Processes]
+      summary: Get a work order's process
+      operationId: getWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '200':
+          description: The work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order not found, or it has no process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Processes]
+      summary: Attach a copy of a process template to a work order
+      description: >-
+        Copies the template graph with every step set to `pending`. Any signed-in user may do this once per work order. Stock is reconciled as for the PUT (a no-op for a fresh copy, since nothing is done yet). The copy is marked stock tracked only when the "Magacin" module is on. POST /work-orders auto-attaches the default template under the same rule, and only while the "Procesi rada" module is on.
+      operationId: applyProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyProcessTemplateInput'
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '201':
+          description: The new work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order or template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The work order already has a process (`Radni nalog već ima proces.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: templateId missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Processes]
+      summary: Replace a work order's process graph
+      description: >-
+        Admins may change anything. Other users may change only per-order state (status, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
+
+
+        **Automatic stock posting.** In the same transaction the server reconciles the warehouse ledger with the graph (only item nodes whose `catalogItemId` links an article). The desired net per node is `+qty` when a step that outputs a product/byproduct node is `done`, plus `-qty` when any step the node feeds (input, or a product/byproduct consumed as input) is `done`; an intermediate product produced and consumed nets out. `qty` is `actualQuantity`, else `quantity`, else 0; `pending`, `in_progress` and `skipped` count as not done. The difference to the net already posted for that work order and node is inserted as one `consumption` (negative) or `production` (positive) movement, so repeating a request posts nothing, un-doing a step reverses it and a changed `actualQuantity` posts only the delta. If a node's article changes (or the node is removed), the old article's net is reversed and the new one posted. Deleting a process or a work order does not reverse movements.
+
+        **Module gating.** Posting happens only while the "Magacin" module is on AND the process is stock tracked (created while "Magacin" was on - by apply or auto-attach; processes created while it was off never post, not even after it is switched on). While "Magacin" is off nothing is posted and article links are neither validated nor unit-filled (kept as-is). Turning it off and on again resumes tracked processes: the next save posts the difference (material really used meanwhile). Reserved quantities in GET /stock count tracked processes only. All routes here answer 403 while "Procesi rada" is off.
+
+
+        **Article links.** `catalogItemId` must reference an existing article of the organization (`Artikal nije pronađen u katalogu.`, 422). An empty `unit` is filled from the article; a differing non-empty unit (case-insensitive) is rejected (`Jedinica mora odgovarati jedinici artikla „{name}“.`, 422). Links already stored on the same node are not re-validated.
+      operationId: updateWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderProcessInput'
+      responses:
+        '200':
+          description: Updated work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Structural change by a non-admin (`Samo administrator može menjati strukturu procesa.`). Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order not found, or it has no process yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, unknown article link or unit mismatch with the linked article
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Processes]
+      summary: Remove a work order's process (admin only)
+      operationId: deleteWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Removed
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order has no process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /public/work-orders/{token}:
     parameters:
       - name: token
@@ -1567,6 +2123,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/modules:
+    put:
+      tags: [Platform]
+      summary: Switch an organization's optional modules (operator only)
+      description: >-
+        Sets both modules ("Procesi rada" and "Magacin") of the organization. `processes: true` requires
+        `stock: true` (422 `Modul „Procesi rada“ zahteva uključen modul „Magacin“.`, nothing written). Recorded as
+        `tenant.modules` in the activity log, in the same transaction, with detail
+        `{"processes":"on|off","stock":"on|off","changed":"processes,stock"}` (new values; `changed` lists the
+        names that differ). Setting the current state is a no-op: 200 and no audit row.
+      operationId: setPlatformTenantModules
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationModules'
+      responses:
+        '200':
+          description: The organization with its modules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: '`processes` without `stock`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /platform/tenants/{slug}/reactivate:
     post:
       tags: [Platform]
@@ -1711,6 +2323,206 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/process-templates:
+    get:
+      tags: [Platform]
+      summary: List an organization's process templates (operator only)
+      operationId: listPlatformProcessTemplates
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Templates, default first then by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Create a process template for an organization (operator only)
+      description: >-
+        Same validation as the organization's own route. Recorded as `process_template.create` with detail `{name}`.
+      operationId: createPlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '201':
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/process-templates/{id}:
+    put:
+      tags: [Platform]
+      summary: Replace an organization's process template (operator only)
+      description: >-
+        Recorded as `process_template.update` with detail `{name}`.
+      operationId: updatePlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Platform]
+      summary: Delete an organization's process template (operator only)
+      description: >-
+        Recorded as `process_template.delete` with detail `{name}`. Existing work-order processes are kept.
+      operationId: deletePlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
@@ -1721,6 +2533,23 @@ components:
       type: apiKey
       in: cookie
       name: iris_platform_session
+  responses:
+    ProcessesModuleDisabled:
+      description: >-
+        The organization has not enabled the "Procesi rada" module (Backoffice-controlled, off by default; it also
+        counts as off while "Magacin" is off). Body: `{"error":"Modul „Procesi rada“ nije uključen za ovu organizaciju."}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    StockModuleDisabled:
+      description: >-
+        The organization has not enabled the "Magacin" module (Backoffice-controlled, off by default).
+        Body: `{"error":"Modul „Magacin“ nije uključen za ovu organizaciju."}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   parameters:
     CatalogCleanupKind:
       name: kind
@@ -1750,6 +2579,159 @@ components:
         type: string
         enum: [purchase, sale, both]
   schemas:
+    ProcessNode:
+      type: object
+      required: [id, kind, label, x, y]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Client-generated, unique within the graph.
+        kind:
+          type: string
+          enum: [step, input, product, byproduct]
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        x:
+          type: number
+          description: Canvas position.
+        y:
+          type: number
+        quantity:
+          type: number
+          minimum: 0
+          description: Planned quantity. Item nodes only; dropped on steps.
+        unit:
+          type: string
+          maxLength: 20
+          description: Item nodes only; dropped on steps.
+        catalogItemId:
+          type: string
+          description: >-
+            Optional link to a catalog article. Item nodes only; dropped on steps. Must reference an existing
+            article of the organization (services are rejected) on templates and work-order processes; an empty
+            `unit` is filled from the article and a differing one is rejected (422). Linked nodes move warehouse
+            stock automatically (see PUT /work-orders/{id}/process).
+        note:
+          type: string
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/ProcessStepStatus'
+        actualQuantity:
+          type: number
+          minimum: 0
+          description: Per-order state. Item nodes only; stripped from templates.
+    ProcessStepStatus:
+      type: string
+      enum: [pending, in_progress, done, skipped]
+      description: Per-order state of a step node; dropped on item nodes and stripped from templates.
+    ProcessEdge:
+      type: object
+      required: [id, source, target]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        source:
+          type: string
+          description: Id of an existing node.
+        target:
+          type: string
+          description: Id of an existing node.
+        label:
+          type: string
+          maxLength: 60
+    ProcessGraph:
+      type: object
+      description: >-
+        Directed acyclic graph of 1-200 nodes (at least one `step`) and 0-400
+        edges. Allowed connections are input to step, step to step, step to
+        product, step to byproduct, product to step and byproduct to step; edges
+        may not be self-loops or duplicate a (source, target) pair.
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ProcessNode'
+        edges:
+          type: array
+          maxItems: 400
+          items:
+            $ref: '#/components/schemas/ProcessEdge'
+    ProcessTemplate:
+      type: object
+      required: [id, name, description, isDefault, graph, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        isDefault:
+          type: boolean
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProcessTemplateInput:
+      type: object
+      required: [name, graph]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Unique per organization (case-sensitive).
+        description:
+          type: string
+        isDefault:
+          type: boolean
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+    WorkOrderProcess:
+      type: object
+      required: [workOrderId, templateId, templateName, graph, updatedAt, updatedBy]
+      properties:
+        workOrderId:
+          type: string
+        templateId:
+          type: [string, 'null']
+          description: Null once the template it was copied from is deleted.
+        templateName:
+          type: string
+          description: Template name at the time it was applied.
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+          description: Username of the last editor.
+    WorkOrderProcessInput:
+      type: object
+      required: [graph]
+      properties:
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+    ApplyProcessTemplateInput:
+      type: object
+      required: [templateId]
+      properties:
+        templateId:
+          type: string
     DashboardData:
       type: object
       required:
@@ -2336,6 +3318,17 @@ components:
           type: [string, 'null']
         isActive:
           type: boolean
+        stockOnHand:
+          type: [number, 'null']
+          format: double
+          description: >-
+            Warehouse balance (sum of the article's stock movements). Read-only; null for services, and null for
+            every item while the organization's "Magacin" module is off.
+        minStock:
+          type: [number, 'null']
+          format: double
+          minimum: 0
+          description: Reorder threshold for articles; null when unset and for services.
         createdAt:
           type: string
           format: date-time
@@ -2435,8 +3428,13 @@ components:
       example: [quantity, unitPrice, total]
     OrganizationSettings:
       type: object
-      required: [firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions]
+      required: [firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules]
       properties:
+        modules:
+          readOnly: true
+          description: >-
+            Backoffice-controlled optional modules. Read-only: `PUT /settings` ignores it.
+          $ref: '#/components/schemas/OrganizationModules'
         firmName:
           type: string
           description: The shop's display name shown in the app branding.
@@ -2455,11 +3453,29 @@ components:
             Whether the work-order form exposes the extra shipping/handling
             fields (drives-out, wait-for-payment, packaging, labeling, fragile,
             signature, insurance). Off by default.
+    OrganizationModules:
+      type: object
+      required: [processes, stock]
+      description: >-
+        Optional per-organization modules, both off by default and switched only by Backoffice superadmins
+        (`PUT /platform/tenants/{slug}/modules`); organization admins cannot change them. `processes`
+        ("Procesi rada": process templates, work-order processes, simulator) requires `stock` ("Magacin":
+        stock ledger, receipts, counts, catalog stock). Valid combinations: both off, stock only, both on;
+        `processes` is treated as off while `stock` is off. Processes and work-order stock postings are linked:
+        a work-order process posts/validates stock only while `stock` is on AND the process was created while
+        `stock` was on (internal "stock tracked" marker, no retroactive posting). Switching stock off and on
+        again resumes tracked processes; their next save posts the difference.
+      properties:
+        processes:
+          type: boolean
+        stock:
+          type: boolean
     OrganizationSettingsUpdate:
       type: object
       description: >-
         Partial update for organization settings. Omitted fields are left
-        unchanged.
+        unchanged. A `modules` property, if sent, is ignored (only Backoffice
+        superadmins switch modules).
       properties:
         firmName:
           type: string
@@ -2509,6 +3525,13 @@ components:
           type: [string, 'null']
         isActive:
           type: boolean
+        minStock:
+          type: [number, 'null']
+          format: double
+          minimum: 0
+          description: >-
+            Reorder threshold, 0 or more (admin only; operators cannot change it). Articles only: ignored for
+            services. Omitted or null clears it, like every other field of this full update.
         effectiveFrom:
           type: [string, 'null']
           format: date
@@ -2517,6 +3540,148 @@ components:
             today. Must be today or later — past dates are rejected. A future date
             schedules the new price without changing the item's displayed current
             price until that date arrives.
+    StockLevel:
+      type: object
+      required: [catalogItemId, code, name, unit, isActive, onHand, reserved, available, minStock, low, lastMovementAt]
+      properties:
+        catalogItemId:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        isActive:
+          type: boolean
+        onHand:
+          type: number
+          description: Sum of the article's movements; may be negative.
+        reserved:
+          type: number
+          description: Planned input quantity still to be consumed by open work orders.
+        available:
+          type: number
+          description: onHand minus reserved.
+        minStock:
+          type: [number, 'null']
+        low:
+          type: boolean
+          description: onHand is negative, or minStock is set and available is below it.
+        lastMovementAt:
+          type: [string, 'null']
+          format: date-time
+    StockLevelList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockLevel'
+        total:
+          type: integer
+          description: Number of matching levels before pagination.
+    StockMovementKind:
+      type: string
+      enum: [opening, receipt, consumption, production, adjustment]
+    StockMovement:
+      type: object
+      required: [id, catalogItemId, itemCode, itemName, unit, kind, quantity, workOrderId, workOrderNumber, processNodeId, documentRef, note, createdAt, createdBy]
+      properties:
+        id:
+          type: string
+        catalogItemId:
+          type: string
+        itemCode:
+          type: string
+        itemName:
+          type: string
+        unit:
+          type: string
+        kind:
+          $ref: '#/components/schemas/StockMovementKind'
+        quantity:
+          type: number
+          description: Signed; negative removes stock.
+        workOrderId:
+          type: [string, 'null']
+          description: Null for manual movements and after the work order was deleted.
+        workOrderNumber:
+          type: [string, 'null']
+        processNodeId:
+          type: [string, 'null']
+        documentRef:
+          type: [string, 'null']
+        note:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+    StockMovementList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+        total:
+          type: integer
+    StockReceiptInput:
+      type: object
+      required: [lines]
+      properties:
+        documentRef:
+          type: string
+          maxLength: 500
+          description: Supplier document number.
+        note:
+          type: string
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [catalogItemId, quantity]
+            properties:
+              catalogItemId:
+                type: string
+              quantity:
+                type: number
+                exclusiveMinimum: 0
+    StockCountInput:
+      type: object
+      required: [lines]
+      properties:
+        note:
+          type: string
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [catalogItemId, countedQuantity]
+            properties:
+              catalogItemId:
+                type: string
+              countedQuantity:
+                type: number
+                minimum: 0
+    StockPostingResult:
+      type: object
+      required: [movements]
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
     CustomerCommunication:
       type: object
       required: [publicToken, notificationEmail, emailNotificationsEnabled, signedBy, signedAt]
@@ -2940,8 +4105,10 @@ components:
           format: date-time
     PlatformTenant:
       type: object
-      required: [id, slug, name, createdAt, suspendedAt, users, admins]
+      required: [id, slug, name, createdAt, suspendedAt, users, admins, modules]
       properties:
+        modules:
+          $ref: '#/components/schemas/OrganizationModules'
         id:
           type: string
         slug:
@@ -3007,7 +4174,7 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, user.password_reset, impersonate]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
         tenantSlug:
           type: string
           description: As it was at the time.

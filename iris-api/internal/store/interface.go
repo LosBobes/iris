@@ -138,6 +138,9 @@ type Store interface {
 	DeleteCatalogItemsMissingPrices(ctx context.Context, filter CatalogCleanupFilter) (int, error)
 
 	OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error)
+	// OrganizationModules returns the optional modules (processes, stock) of the
+	// tenant in ctx; both are off unless a Backoffice superadmin switched them on.
+	OrganizationModules(ctx context.Context) (domain.OrganizationModules, error)
 	UpdateOrganizationSettings(ctx context.Context, update domain.OrganizationSettingsUpdate) (domain.OrganizationSettings, error)
 	// LoginLogo returns the tenant's sign-in logo, or nil when none is set.
 	LoginLogo(ctx context.Context) (*domain.LoginLogo, error)
@@ -145,6 +148,34 @@ type Store interface {
 	SetLoginLogo(ctx context.Context, upload domain.LoginLogoUpload) (*domain.LoginLogo, error)
 	// DeleteLoginLogo removes the tenant's sign-in logo (a no-op when unset).
 	DeleteLoginLogo(ctx context.Context) error
+
+	// Process templates (tenant-defined process graphs) and each work order's own
+	// copy. ProcessTemplateByID and WorkOrderProcess return nil when missing;
+	// the write methods return the sentinel errors in process_graph.go
+	// (ErrProcessTemplateNotFound, ErrWorkOrderNotFound, ErrProcessExists,
+	// ErrProcessStructureLocked, ErrProcessNotFound).
+	ProcessTemplates(ctx context.Context) ([]domain.ProcessTemplate, error)
+	ProcessTemplateByID(ctx context.Context, id string) (*domain.ProcessTemplate, error)
+	CreateProcessTemplate(ctx context.Context, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
+	UpdateProcessTemplate(ctx context.Context, id string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
+	DeleteProcessTemplate(ctx context.Context, id string) error
+	WorkOrderProcess(ctx context.Context, workOrderID string) (*domain.WorkOrderProcess, error)
+	ApplyProcessTemplate(ctx context.Context, workOrderID, templateID, username string) (*domain.WorkOrderProcess, error)
+	// UpdateWorkOrderProcess replaces the graph; without allowStructural only
+	// per-order state and positions may change (else ErrProcessStructureLocked).
+	// It returns nil when the order has no process.
+	UpdateWorkOrderProcess(ctx context.Context, workOrderID string, graph domain.ProcessGraph, username string, allowStructural bool) (*domain.WorkOrderProcess, error)
+	DeleteWorkOrderProcess(ctx context.Context, workOrderID string) error
+
+	// Warehouse stock (magacin). StockLevels/StockMovements are read-only views of
+	// the movement ledger; the Post* methods append movements in one transaction
+	// and return *ValidationError (422) for unknown articles, services, bad
+	// quantities and duplicate lines. Work-order process writes post their own
+	// consumption/production movements (see domain.PlanStockPostings).
+	StockLevels(ctx context.Context, query StockLevelQuery) (domain.StockLevelList, error)
+	StockMovements(ctx context.Context, query StockMovementQuery) (domain.StockMovementList, error)
+	PostStockReceipt(ctx context.Context, input domain.StockReceiptInput, username string) (domain.StockPostingResult, error)
+	PostStockCount(ctx context.Context, input domain.StockCountInput, username string) (domain.StockPostingResult, error)
 
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	UserByID(ctx context.Context, id string) (*domain.User, error)

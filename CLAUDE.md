@@ -131,6 +131,24 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   reset a user's password. Every superadmin operation, impersonations included,
   is written to `platform_audit_events` in the same transaction and shown in the
   "Aktivnost" tab (`GET /platform/audit`; trails at `/platform/impersonations/{id}/actions`).
+- **Work-order processes** (D-017): per-tenant `process_templates` (graph of
+  `step`/`input`/`product`/`byproduct` nodes, JSON, acyclic) and a per-order copy in
+  `work_order_processes` (`/process-templates`, `/work-orders/{id}/process`). Not part
+  of the `WorkOrder` shape or its status lifecycle. Admins edit structure; operators
+  only step status / actual quantities (structural change → 403). New orders get the
+  default template. Backoffice edits templates via `/platform/tenants/{slug}/process-templates`
+  (audited). Shape sync: openapi ↔ domain types ↔ `apps/web/src/types/process.ts`.
+- **Magacin / stock** (D-018): Iris owns article stock as an append-only
+  `stock_movements` ledger (`/stock`, `/stock/movements`, `POST /stock/receipts`,
+  admin `POST /stock/counts`; `irisctl import-stock` for the opening balance).
+  Process item nodes link to articles (`catalogItemId`); marking a step done posts
+  consumption/production automatically (diff of desired vs posted net per node, so
+  undo and quantity edits post only the delta). Never edit or delete movements.
+- **Modules** (D-019): `stock` and `processes` are per-organization toggles, **off by
+  default**; `processes` requires `stock`, switched only in the Backoffice (`PUT /platform/tenants/{slug}/modules`,
+  `app_settings` key `modules`; read-only `modules` in `GET /settings`). Disabled
+  module routes return 403; gate every new process/stock UI surface on
+  `useOrganization().modules` and never call a disabled module's endpoints.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

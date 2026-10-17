@@ -28,6 +28,7 @@ import type {
 import type {
   LoginLogoInfo,
   LoginLogoUpload,
+  OrganizationModules,
   OrganizationSettings,
   PublicOrganization,
 } from '@/types/settings'
@@ -44,6 +45,21 @@ import type {
   PlatformCreateTenantInput,
   PlatformUpdateTenantInput,
 } from '@/types/platform'
+import type {
+  ProcessTemplate,
+  ProcessTemplateInput,
+  WorkOrderProcess,
+  WorkOrderProcessInput,
+} from '@/types/process'
+import type {
+  StockCountInput,
+  StockLevelList,
+  StockLevelQuery,
+  StockMovementList,
+  StockMovementQuery,
+  StockPostingResult,
+  StockReceiptInput,
+} from '@/types/stock'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -106,7 +122,8 @@ declare global {
       previewCatalogCleanup: (filter: CatalogCleanupFilter) => Promise<CatalogItemListResult>
       cleanupCatalogItems: (filter: CatalogCleanupFilter) => Promise<{ deleted: number }>
       getSettings: () => Promise<OrganizationSettings>
-      updateSettings: (settings: Partial<OrganizationSettings>) => Promise<OrganizationSettings>
+      /** `modules` is read-only for tenants (Backoffice switches it) and is never sent. */
+      updateSettings: (settings: Partial<Omit<OrganizationSettings, 'modules'>>) => Promise<OrganizationSettings>
       /** Resolves an organization slug for the first sign-in step; null when unknown. */
       getPublicOrganization: (slug: string) => Promise<PublicOrganization | null>
       /** URL of an organization's sign-in logo, versioned to bust caches. */
@@ -130,6 +147,8 @@ declare global {
       updatePlatformTenant: (slug: string, input: PlatformUpdateTenantInput) => Promise<PlatformTenant>
       /** Suspends (true) or reactivates (false) an organization. */
       setPlatformTenantSuspended: (slug: string, suspended: boolean) => Promise<PlatformTenant>
+      /** Switches an organization's optional modules (Backoffice superadmin only). */
+      setPlatformTenantModules: (slug: string, modules: OrganizationModules) => Promise<PlatformTenant>
       resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
       getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
       listUsers: () => Promise<ManagedUser[]>
@@ -154,6 +173,30 @@ declare global {
       getPublicWorkOrderStatus: (token: string) => Promise<PublicWorkOrderStatus | null>
       getPublicTrackingUrl: (token: string) => string
       getWorkOrderReportUrl: (id: string) => string
+      /** Warehouse stock (Magacin): levels and movement ledger (any user). */
+      getStockLevels: (query?: StockLevelQuery) => Promise<StockLevelList>
+      getStockMovements: (query?: StockMovementQuery) => Promise<StockMovementList>
+      /** Prijem robe (any user). 422 on unknown article / quantity <= 0 / duplicates. */
+      postStockReceipt: (input: StockReceiptInput) => Promise<StockPostingResult>
+      /** Popis / opening balance (admin). Posts counted - onHand per line. */
+      postStockCount: (input: StockCountInput) => Promise<StockPostingResult>
+      /** Process templates (read: any user; write: admin). */
+      getProcessTemplates: () => Promise<ProcessTemplate[]>
+      getProcessTemplate: (id: string) => Promise<ProcessTemplate | null>
+      createProcessTemplate: (input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      updateProcessTemplate: (id: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      deleteProcessTemplate: (id: string) => Promise<void>
+      /** The order's process; null when the order has none (or does not exist). */
+      getWorkOrderProcess: (workOrderId: string) => Promise<WorkOrderProcess | null>
+      /** Copies a template onto an order that has no process yet (409 otherwise). */
+      applyProcessTemplate: (workOrderId: string, templateId: string) => Promise<WorkOrderProcess>
+      updateWorkOrderProcess: (workOrderId: string, input: WorkOrderProcessInput) => Promise<WorkOrderProcess>
+      deleteWorkOrderProcess: (workOrderId: string) => Promise<void>
+      /** Backoffice: any organization's templates. */
+      getPlatformProcessTemplates: (slug: string) => Promise<ProcessTemplate[]>
+      createPlatformProcessTemplate: (slug: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      updatePlatformProcessTemplate: (slug: string, id: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
+      deletePlatformProcessTemplate: (slug: string, id: string) => Promise<void>
     }
   }
 }

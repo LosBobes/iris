@@ -964,6 +964,9 @@ func (s *SQLiteStore) CreateWorkOrder(
 	if err := putWorkOrder(ctx, tx, tenantID, workOrder); err != nil {
 		return nil, err
 	}
+	if err := attachDefaultProcess(ctx, tx, tenantID, workOrder.ID, input.IssuedBy, now); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit create work order: %w", err)
 	}

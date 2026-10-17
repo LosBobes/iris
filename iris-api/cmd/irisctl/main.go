@@ -48,6 +48,27 @@ func main() {
 		defer sqliteStore.Close()
 		must(cobanovic.Seed(ctx, sqliteStore, *dir))
 		fmt.Println("Čobanović podaci su upisani u SQLite bazu.")
+	case "seed-showcase":
+		cmd := flag.NewFlagSet("seed-showcase", flag.ExitOnError)
+		slug := cmd.String("slug", store.ShowcaseDefaultSlug, "oznaka showcase organizacije")
+		reset := cmd.Bool("reset", false, "obriši postojeću organizaciju i napravi je iznova")
+		adminPassword := cmd.String("admin-password", os.Getenv("IRIS_SHOWCASE_ADMIN_PASSWORD"), "lozinka naloga admin (podrazumevano IRIS_SHOWCASE_ADMIN_PASSWORD)")
+		operatorPassword := cmd.String("operator-password", os.Getenv("IRIS_SHOWCASE_OPERATOR_PASSWORD"), "lozinka naloga operater (podrazumevano IRIS_SHOWCASE_OPERATOR_PASSWORD)")
+		_ = cmd.Parse(os.Args[2:])
+		// Outside production the demo passwords are the default; production
+		// requires strong passwords of its own (see store.ShowcasePasswords).
+		production := strings.EqualFold(strings.TrimSpace(os.Getenv("IRIS_ENV")), "production")
+		adminPw, operatorPw, err := store.ShowcasePasswords(production, *adminPassword, *operatorPassword)
+		if err != nil {
+			log.Fatalf("seed-showcase: %v", err)
+		}
+		sqliteStore := mustOpen(ctx, dbPathFromEnv())
+		defer sqliteStore.Close()
+		result, err := store.SeedShowcase(ctx, sqliteStore, store.ShowcaseOptions{
+			Slug: *slug, Reset: *reset, AdminPassword: adminPw, OperatorPassword: operatorPw,
+		})
+		must(err)
+		printShowcaseSummary(result)
 	case "create-tenant":
 		cmd := flag.NewFlagSet("create-tenant", flag.ExitOnError)
 		slug := cmd.String("slug", "", "oznaka organizacije (za prijavu)")
@@ -132,10 +153,67 @@ func main() {
 		report, err := importCSV(importCtx, sqliteStore, *dir, *apply)
 		must(err)
 		fmt.Print(report)
+	case "import-stock":
+		cmd := flag.NewFlagSet("import-stock", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		file := cmd.String("file", "", "CSV fajl sa kolonama code,quantity[,note]")
+		dryRun := cmd.Bool("dry-run", false, "samo prikaži šta bi bilo upisano")
+		apply := cmd.Bool("apply", false, "upiši stanje kao popis")
+		_ = cmd.Parse(os.Args[2:])
+		if *dryRun == *apply {
+			log.Fatal("koristite --dry-run ili --apply")
+		}
+		if *file == "" {
+			log.Fatal("koristite --file <putanja do CSV fajla>")
+		}
+		sqliteStore := mustOpen(ctx, dbPathFromEnv())
+		defer sqliteStore.Close()
+		report, err := importStock(mustTenantContext(ctx, sqliteStore, *tenantSlug), sqliteStore, *file, *apply)
+		must(err)
+		fmt.Print(report)
 	default:
 		usage()
 		os.Exit(2)
 	}
+}
+
+// printShowcaseSummary tells the operator how to sign in and what to look at.
+// showcasePasswordHint prints a demo password as-is but never echoes a secret.
+func showcasePasswordHint(result store.ShowcaseResult, demo, source string) string {
+	if result.DemoPasswords {
+		return demo
+	}
+	return "(lozinka iz " + source + ")"
+}
+
+func printShowcaseSummary(result store.ShowcaseResult) {
+	if !result.Created {
+		fmt.Printf("Organizacija %q (%s) već postoji; ništa nije promenjeno. Koristite -reset da je napravite iznova.\n", result.Name, result.Slug)
+		return
+	}
+	fmt.Printf(`Showcase organizacija %q je spremna.
+
+Prijava:    /login/%s
+  admin     %s / %s
+  operater  %s / %s
+Moduli:     Magacin i Procesi rada uključeni (organizacija "demo" ima module isključene, za poređenje)
+Sadržaj:    %d šablona procesa, %d radnih naloga, magacin sa početnim stanjem i 3 prijema
+
+Šta pogledati
+  Magacin:         nizak lager (ispod minimuma): %s
+  Nedostatak:      nalog %s (Papir 80g A3 planirano 8.000, na stanju manje) - tabela Materijal i simulator
+  U toku:          nalog %s (stvarna količina papira veća od planirane); nalog %s je brošura sa dva paralelna koraka
+  Otkazan:         nalog %s ne rezerviše zalihe
+  Simulator:       šablon %q (međuproizvod "Štampani tabaci", dva koraka u istom talasu)
+Backoffice:  /backoffice, podrazumevani nalog admin / admin123321 se pravi pri prvom pokretanju servera
+             (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju.
+`,
+		result.Name, result.Slug,
+		store.ShowcaseAdminUsername, showcasePasswordHint(result, store.ShowcaseAdminPassword, "IRIS_SHOWCASE_ADMIN_PASSWORD / -admin-password"),
+		store.ShowcaseOperatorUsername, showcasePasswordHint(result, store.ShowcaseOperatorPassword, "IRIS_SHOWCASE_OPERATOR_PASSWORD / -operator-password"),
+		result.Templates, result.Orders,
+		strings.Join(result.LowArticles, ", "),
+		result.ShortageOrder, result.InProgressOrder, result.BrochureOrder, result.CancelledOrder, result.BrochureTemplate)
 }
 
 func importCSV(ctx context.Context, sqliteStore *store.SQLiteStore, dir string, apply bool) (string, error) {
@@ -385,17 +463,59 @@ func mustTenantContext(ctx context.Context, sqliteStore *store.SQLiteStore, slug
 	return store.ContextWithTenant(ctx, tenant.ID)
 }
 
+// parseOnOff reads an optional on|off flag; an empty value means "unchanged".
+func parseOnOff(name, value string) *bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return nil
+	case "on":
+		on := true
+		return &on
+	case "off":
+		off := false
+		return &off
+	}
+	log.Fatalf("--%s mora biti on ili off", name)
+	return nil
+}
+
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
+}
+
 func usage() {
 	fmt.Println(`Korišćenje:
   irisctl migrate
   irisctl seed-demo [-fixtures testdata/fixtures]
   irisctl seed-cobanovic [-dir internal/seed/cobanovic/data]
+  irisctl seed-showcase [-slug showcase] [-reset] [-admin-password … -operator-password …]
   irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
   irisctl import-csv -tenant oznaka --dry-run --dir import/
   irisctl import-csv -tenant oznaka --apply --dir import/
+  irisctl import-stock -tenant oznaka --file stanje.csv --dry-run
+  irisctl import-stock -tenant oznaka --file stanje.csv --apply
+  irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
   irisctl create-platform-admin -username ime -password lozinka
   irisctl backup [-out backups/iris.db]
+
+import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
+a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
+
+set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin);
+izostavljen modul ostaje kakav jeste. Za razliku od Backoffice-a ne upisuje zapis u aktivnost.
+Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastali.
+
+seed-showcase pravi i popunjava organizaciju za isprobavanje modula Procesi rada i Magacin
+(šabloni procesa, artikli, početno stanje, prijemi, radni nalozi u raznim statusima). Ako
+organizacija već postoji, ništa se ne menja; -reset je briše i pravi iznova. Van produkcije
+nalozi dobijaju demo lozinke; kada je IRIS_ENV=production, lozinke se moraju zadati
+(IRIS_SHOWCASE_ADMIN_PASSWORD i IRIS_SHOWCASE_OPERATOR_PASSWORD ili -admin-password i
+-operator-password, najmanje 12 znakova). Server je pravi sam pri pokretanju kada je
+IRIS_SEED_SHOWCASE=1.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }

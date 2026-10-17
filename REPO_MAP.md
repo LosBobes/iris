@@ -135,6 +135,37 @@ Web client
   `release-number`, migration v11, 12h TTL): the create form can show the next
   `RN-<year>-<seq>` (5-digit) number before save.
 
+### Work-order processes
+
+- Per-tenant **process templates** (`GET/POST/PUT/DELETE /process-templates`, admin
+  writes) hold a directed acyclic graph of `step`, `input`, `product` and `byproduct`
+  nodes (stored as JSON, migration v20). Each work order can carry its own copy
+  with per-order state (`/work-orders/{id}/process`): step status and actual
+  quantities. Operators may change only that state; structure needs admin.
+  A new order gets the default template. Backoffice: `/platform/tenants/{slug}/process-templates`
+  (audited). Web: Settings → "Procesi rada", work-order detail "Proces rada"
+  card, Backoffice "Procesi" per organization; canvas via `@xyflow/react`.
+  See [D-017](docs/DECISIONS.md).
+
+### Warehouse stock (magacin)
+
+- Catalog articles carry stock in the append-only `stock_movements` ledger
+  (migration v21). `GET /stock` returns on-hand / reserved / available per article;
+  `POST /stock/receipts` (any user) and `POST /stock/counts` (admin, also the opening
+  balance) post movements; `irisctl import-stock` imports an opening balance CSV.
+  Linked process nodes post consumption/production automatically when steps are
+  done. Web: "Magacin" page (`/stock`), stock in Catalog, material shortages on the
+  work-order process card and in the simulator/tester. See [D-018](docs/DECISIONS.md).
+
+### Modules (feature toggles)
+
+- `stock` (Magacin) and `processes` (Procesi rada, requires Magacin) are per-organization
+  modules, **off by default**, switched by superadmins in Backoffice → Organizacije →
+  Moduli (`PUT /platform/tenants/{slug}/modules`, audited). Stored in `app_settings`
+  (`modules`). The API returns 403 on disabled module routes; the web hides dependent
+  UI. Stock posting only applies to processes created while Magacin was
+  on (`stock_tracked`, migration v22). See [D-019](docs/DECISIONS.md).
+
 ### Organization settings
 
 - `GET`/`PUT /settings` back the admin **Settings** page. Values are stored per
@@ -217,6 +248,7 @@ curl http://localhost:8080/healthz
 | `IRIS_ALLOWED_ORIGINS` | CORS allowlist (comma-separated) |
 | `IRIS_WEB_DIR` | Serve built SPA + fallback routing (Docker: `/app/web`) |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary for PDF rendering (Docker: `/usr/local/bin/iris-chrome`); unset = search `chromium`, `google-chrome`, … on `$PATH` |
+| `IRIS_SEED_SHOWCASE` | `1` = create the showcase org (`/login/showcase`) on first start; production also needs `IRIS_SHOWCASE_ADMIN_PASSWORD` / `IRIS_SHOWCASE_OPERATOR_PASSWORD` (12+ chars), else skipped with a warning |
 
 Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Compose (gitignored; do not commit secrets).
 

@@ -38,6 +38,14 @@ services:
       IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-}"
       # Optional release identifier shown in Sentry (e.g. the git sha).
       IRIS_RELEASE: "${IRIS_RELEASE:-}"
+      # Optional showcase organization (/login/showcase) for trying the
+      # Procesi rada and Magacin modules. With IRIS_SEED_SHOWCASE=1 the backend
+      # creates it once, on the first start that finds it missing; later starts
+      # leave it alone. Production requires both passwords (12+ characters,
+      # not the demo ones) in the server's .env; without them it is skipped.
+      IRIS_SEED_SHOWCASE: "${IRIS_SEED_SHOWCASE:-}"
+      IRIS_SHOWCASE_ADMIN_PASSWORD: "${IRIS_SHOWCASE_ADMIN_PASSWORD:-}"
+      IRIS_SHOWCASE_OPERATOR_PASSWORD: "${IRIS_SHOWCASE_OPERATOR_PASSWORD:-}"
     # Internal only: never published to the host. nginx (frontend) reaches it
     # over the compose network on this port.
     expose:

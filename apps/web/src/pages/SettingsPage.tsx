@@ -12,6 +12,7 @@ import { LoginLogoSettings } from "@/components/settings/LoginLogoSettings";
 import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
 import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
+import { ProcessTemplatesSettings } from "@/components/settings/ProcessTemplatesSettings";
 import { PdfSectionsSettings } from "@/components/settings/PdfSectionsSettings";
 import { PrintItemColumnsSettings } from "@/components/settings/PrintItemColumnsSettings";
 import { BillingDefaultsSettings } from "@/components/settings/BillingDefaultsSettings";
@@ -32,7 +33,7 @@ export function SettingsPage(): React.JSX.Element {
   const { scale, setScale } = useFontScale();
   const { theme, setTheme } = useTheme();
   const { currentUser } = useAuth();
-  const { firmName } = useOrganization();
+  const { firmName, modules } = useOrganization();
   const isAdmin = currentUser.role === "admin";
   const currentLanguage = i18n.resolvedLanguage === "en" ? "en" : "sr";
 
@@ -263,6 +264,8 @@ export function SettingsPage(): React.JSX.Element {
           {isAdmin && <PrintItemColumnsSettings />}
 
           {isAdmin && <EnumValuesSettings />}
+
+          {isAdmin && modules.processes && <ProcessTemplatesSettings />}
         </div>
       </div>
     </>

@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { staggerStyle } from "@/lib/motion";
 import type { PlatformAuditAction, PlatformAuditEvent, PlatformImpersonationAction } from "@/types/platform";
 import { formatCount, formatDateTime } from "./format";
 import { actionLabelKey, actionTarget } from "./impersonation-actions";
@@ -13,8 +14,12 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "tenant.update": "platform.activity.kinds.tenantUpdate",
   "tenant.suspend": "platform.activity.kinds.tenantSuspend",
   "tenant.reactivate": "platform.activity.kinds.tenantReactivate",
+  "tenant.modules": "platform.activity.kinds.tenantModules",
   "user.password_reset": "platform.activity.kinds.passwordReset",
   impersonate: "platform.activity.kinds.impersonate",
+  "process_template.create": "platform.activity.kinds.processTemplateCreate",
+  "process_template.update": "platform.activity.kinds.processTemplateUpdate",
+  "process_template.delete": "platform.activity.kinds.processTemplateDelete",
 };
 
 type Trail =
@@ -33,11 +38,24 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
       }),
     );
   }
+  if (event.action.startsWith("process_template.") && event.detail?.name) {
+    lines.push(t("platform.activity.processTemplate", { name: event.detail.name }));
+  }
   if (event.detail?.toName) {
     lines.push(t("platform.activity.renamed", { from: event.detail.fromName, to: event.detail.toName }));
   }
   if (event.detail?.toSlug) {
     lines.push(t("platform.activity.reslugged", { from: event.detail.fromSlug, to: event.detail.toSlug }));
+  }
+  if (event.action === "tenant.modules" && event.detail) {
+    const state = (value: string | undefined): string =>
+      t(value === "on" ? "platform.activity.moduleOn" : "platform.activity.moduleOff");
+    lines.push(
+      t("platform.activity.modules", {
+        stock: state(event.detail.stock),
+        processes: state(event.detail.processes),
+      }),
+    );
   }
   const session = event.impersonation;
   if (session) {
@@ -209,12 +227,15 @@ export function ActivityLog(): React.JSX.Element {
                 </tr>
               </thead>
               <tbody>
-                {items.map((event) => {
+                {items.map((event, index) => {
                   const session = event.impersonation;
                   const expanded = session ? open.has(session.id) : false;
                   return (
                     <Fragment key={event.id}>
-                      <tr className="border-t border-[color:var(--pf-border)] align-top hover:bg-white/[0.02]">
+                      <tr
+                        style={staggerStyle(index)}
+                        className="animate-iris-rise iris-stagger iris-row border-t border-[color:var(--pf-border)] align-top hover:bg-white/[0.02]"
+                      >
                         <td className="px-4 py-2.5">
                           {session ? (
                             <button
@@ -241,7 +262,7 @@ export function ActivityLog(): React.JSX.Element {
                         <td className="px-4 py-2.5 font-mono text-[12px] text-[color:var(--pf-text-2)]">{event.ip || "—"}</td>
                       </tr>
                       {session && expanded ? (
-                        <tr className="bg-black/20">
+                        <tr className="animate-iris-fade bg-black/20">
                           <td />
                           <td colSpan={6} className="px-3 pb-3 pt-1">
                             <TrailList trail={trails[session.id] ?? { kind: "loading" }} />

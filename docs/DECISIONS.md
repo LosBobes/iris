@@ -165,4 +165,39 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-*Last verified against the checked-in repository state on 2026-06-26.*
+## D-017: Model work-order processes as a separate graph, not as new statuses
+- **Status**: `accepted`
+- **Context**: Shops want to model how an order is actually produced: the steps, what each step consumes (inputs), what it yields (products) and what it leaves over (byproducts), with per-order progress. The existing `status` lifecycle (`new` → `invoiced`) drives filters, the dashboard, public tracking and the PDF, so replacing it would ripple through every surface.
+- **Decision**: Add per-tenant **process templates** (a directed acyclic graph of `step`, `input`, `product` and `byproduct` nodes) and a per-order **work-order process** (an editable copy of a template graph plus per-order state: step status, actual quantities) in their own tables (`process_templates`, `work_order_processes`, migration v20) and endpoints (`/process-templates`, `/work-orders/{id}/process`). The `WorkOrder` shape and its status lifecycle are unchanged. Graphs are stored as JSON and validated server-side (allowed connections, acyclic, limits).
+- **Consequences**:
+  - Tenant admins edit templates and each order's structure; operators may change only per-order state and node positions (structural changes return 403).
+  - Backoffice superadmins edit any organization's templates directly via `/platform/tenants/{slug}/process-templates` (configuration, not records; audited in `platform_audit_events`). Per-order graphs stay behind impersonation, like every other record.
+  - A new order gets a copy of the tenant's default template. Deleting a template keeps existing order copies (`templateId` becomes `null`).
+  - The graph shape is a contract-sync point: `openapi.yaml`, Go domain types and `apps/web/src/types/process.ts` change together.
+
+---
+
+## D-018: Iris owns warehouse stock as a movement ledger
+- **Status**: `accepted` (extends [D-017](#d-017-model-work-order-processes-as-a-separate-graph-not-as-new-statuses))
+- **Context**: Process graphs only mean something if the app knows what material is actually in the warehouse (magacin). Stock was not tracked anywhere in Iris; the shop keeps a partial record outside it.
+- **Decision**: Iris becomes the source of truth for stock. Catalog **articles** (never services) carry stock in an append-only `stock_movements` ledger (migration v21): `opening`, `receipt`, `consumption`, `production`, `adjustment`. On-hand is the sum of movements; corrections are new movements. The opening balance is imported once (`irisctl import-stock` or the in-app stock count, "Popis"). Process item nodes link to articles via `catalogItemId`; when a step is marked done the API posts consumption for its inputs and production for its products/byproducts in the same transaction. Posting is computed as "desired net per node minus already-posted net", so undoing a step or changing an actual quantity posts only the difference.
+- **Consequences**:
+  - `reserved` = planned inputs of open orders not yet consumed; `available` = on-hand − reserved. The simulator and the tester compare requirements against it and flag shortages.
+  - Negative stock is allowed (recording can lag the floor) but highlighted.
+  - Deleting a work order or its process does not reverse movements (material was used). An article with movements cannot be deleted, only deactivated.
+  - One warehouse per tenant for now. Multiple locations would add a `location_id` to movements.
+
+---
+
+## D-019: Processes and Magacin are per-organization modules, off by default
+- **Status**: `accepted` (amends [D-017](#d-017-model-work-order-processes-as-a-separate-graph-not-as-new-statuses), [D-018](#d-018-iris-owns-warehouse-stock-as-a-movement-ledger))
+- **Context**: Not every shop wants production graphs or warehouse tracking, and switching them on changes daily work (automatic stock posting). They must not appear for existing organizations without a deliberate decision.
+- **Decision**: Two modules per tenant, `stock` ("Magacin") and `processes` ("Procesi rada"), where **Procesi rada requires Magacin** (flows only make sense against real stock; Magacin can run alone), stored in `app_settings` under `modules` (no migration; missing means off). Only Backoffice superadmins switch them (`PUT /platform/tenants/{slug}/modules`, audited as `tenant.modules`); tenants see them read-only in `GET /settings`. The API enforces them: disabled module routes return 403, a new order is not given the default process, and stock is neither posted nor validated. The web app hides every dependent surface and makes no requests to disabled modules.
+- **Consequences**:
+  - Switching Magacin off switches Procesi rada off too; the API rejects processes without stock (422). A work-order process created while Magacin was off is never stock-tracked (`work_order_processes.stock_tracked`, migration v22), so switching Magacin on never posts material for past work. Switching it off and on again resumes tracked processes, and their next save posts the difference.
+  - Backoffice can prepare process templates before the module is switched on.
+  - Data is kept when a module is switched off; switching it back on shows it again.
+
+---
+
+*Last verified against the checked-in repository state on 2026-10-17.*

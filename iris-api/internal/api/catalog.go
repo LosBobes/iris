@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,7 +42,32 @@ func (s *Server) handleCatalogItems(w http.ResponseWriter, r *http.Request) {
 			stripCatalogCost(&result.Items[i])
 		}
 	}
+	items := make([]*domain.CatalogItem, len(result.Items))
+	for i := range result.Items {
+		items[i] = &result.Items[i]
+	}
+	if err := s.hideStockIfOff(r, items...); err != nil {
+		writeServerError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// hideStockIfOff nulls stockOnHand while the organization's stock module is off:
+// the balance is Magacin data and must not leak through the catalog. minStock is
+// plain configuration and stays.
+func (s *Server) hideStockIfOff(r *http.Request, items ...*domain.CatalogItem) error {
+	modules, err := s.store.OrganizationModules(r.Context())
+	if err != nil {
+		return err
+	}
+	if modules.Stock {
+		return nil
+	}
+	for _, item := range items {
+		item.StockOnHand = nil
+	}
+	return nil
 }
 
 // stripCatalogCost removes the admin-only cost figure (nabavna cena / cena rada)
@@ -72,6 +98,10 @@ func (s *Server) handleCatalogItemByID(w http.ResponseWriter, r *http.Request) {
 	}
 	if !isAdmin(r) {
 		stripCatalogCost(item)
+	}
+	if err := s.hideStockIfOff(r, item); err != nil {
+		writeServerError(w, r, err)
+		return
 	}
 	writeJSON(w, http.StatusOK, item)
 }
@@ -145,6 +175,7 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 		TaxGroup:      input.TaxGroup,
 		Description:   input.Description,
 		IsActive:      input.IsActive,
+		MinStock:      input.MinStock,
 	}
 	if id := chi.URLParam(r, "id"); id != "" {
 		item.ID = id
@@ -152,6 +183,10 @@ func (s *Server) handleUpsertCatalogItem(w http.ResponseWriter, r *http.Request)
 	result, err := s.store.UpsertCatalogItem(r.Context(), item, effectiveFrom)
 	if err != nil {
 		writeStoreError(w, r, err)
+		return
+	}
+	if err := s.hideStockIfOff(r, result); err != nil {
+		writeServerError(w, r, err)
 		return
 	}
 	status := http.StatusOK
@@ -195,11 +230,19 @@ func (s *Server) updateCatalogItemKind(w http.ResponseWriter, r *http.Request, k
 	}
 	// Operators never receive cost data.
 	stripCatalogCost(result)
+	if err := s.hideStockIfOff(r, result); err != nil {
+		writeServerError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleDeleteCatalogItem(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.DeleteCatalogItem(r.Context(), chi.URLParam(r, "id")); err != nil {
+		if errors.Is(err, store.ErrCatalogItemHasMovements) {
+			writeAPIError(w, r, http.StatusConflict, catalogItemHasMovementsMessage, nil)
+			return
+		}
 		writeServerError(w, r, err)
 		return
 	}

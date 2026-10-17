@@ -9,6 +9,7 @@ import {
   Coins,
   Users,
   Package,
+  Warehouse,
   PanelLeft,
   Settings,
   UserCog,
@@ -19,6 +20,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useCostReviewCount } from "@/hooks/useCostReviewCount";
 import { useOrganization } from "@/hooks/useOrganization";
+import type { OrganizationModules } from "@/types/settings";
 import { IrisMark } from "@/components/brand/IrisMark";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import {
@@ -76,6 +78,8 @@ interface NavItemDef {
   icon: React.ComponentType<{ className?: string; size?: number }>;
   /** When true, the item is only shown to admins. */
   adminOnly?: boolean;
+  /** When set, the item is only shown while this organization module is on. */
+  module?: keyof OrganizationModules;
 }
 
 const NAV_ITEMS: NavItemDef[] = [
@@ -84,6 +88,7 @@ const NAV_ITEMS: NavItemDef[] = [
   { labelKey: "nav.costReview", to: "/cost-review", icon: Coins, adminOnly: true },
   { labelKey: "nav.customers", to: "/customers", icon: Users },
   { labelKey: "nav.catalog", to: "/catalog", icon: Package },
+  { labelKey: "nav.stock", to: "/stock", icon: Warehouse, module: "stock" },
 ];
 
 interface AppShellProps {
@@ -112,10 +117,13 @@ function getActiveNavItemIndex(
 export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const { t } = useTranslation();
   const { currentUser, onLogout } = useAuth();
-  const { firmName } = useOrganization();
+  const { firmName, modules } = useOrganization();
   const location = useLocation();
   const isAdmin = currentUser.role === "admin";
-  const navItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const navItems = NAV_ITEMS.filter(
+    (item) =>
+      (!item.adminOnly || isAdmin) && (!item.module || modules[item.module]),
+  );
   const activeNavIndex = getActiveNavItemIndex(location.pathname, navItems);
   const costReviewCount = useCostReviewCount(isAdmin);
   const isLg = useIsLg();
