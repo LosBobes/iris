@@ -157,6 +157,15 @@ Web client
   done. Web: "Magacin" page (`/stock`), stock in Catalog, material shortages on the
   work-order process card and in the simulator/tester. See [D-018](docs/DECISIONS.md).
 
+### Modules (feature toggles)
+
+- `processes` (Procesi rada) and `stock` (Magacin) are independent per-organization
+  modules, **off by default**, switched by superadmins in Backoffice → Organizacije →
+  Moduli (`PUT /platform/tenants/{slug}/modules`, audited). Stored in `app_settings`
+  (`modules`). The API returns 403 on disabled module routes; the web hides dependent
+  UI. Stock posting needs both and only applies to processes created while Magacin was
+  on (`stock_tracked`, migration v22). See [D-019](docs/DECISIONS.md).
+
 ### Organization settings
 
 - `GET`/`PUT /settings` back the admin **Settings** page. Values are stored per

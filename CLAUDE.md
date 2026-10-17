@@ -144,6 +144,11 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   Process item nodes link to articles (`catalogItemId`); marking a step done posts
   consumption/production automatically (diff of desired vs posted net per node, so
   undo and quantity edits post only the delta). Never edit or delete movements.
+- **Modules** (D-019): `processes` and `stock` are per-organization toggles, **off by
+  default**, switched only in the Backoffice (`PUT /platform/tenants/{slug}/modules`,
+  `app_settings` key `modules`; read-only `modules` in `GET /settings`). Disabled
+  module routes return 403; gate every new process/stock UI surface on
+  `useOrganization().modules` and never call a disabled module's endpoints.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

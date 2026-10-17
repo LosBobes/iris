@@ -189,4 +189,15 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
+## D-019: Processes and Magacin are per-organization modules, off by default
+- **Status**: `accepted` (amends [D-017](#d-017-model-work-order-processes-as-a-separate-graph-not-as-new-statuses), [D-018](#d-018-iris-owns-warehouse-stock-as-a-movement-ledger))
+- **Context**: Not every shop wants production graphs or warehouse tracking, and switching them on changes daily work (automatic stock posting). They must not appear for existing organizations without a deliberate decision.
+- **Decision**: Two independent modules per tenant, `processes` ("Procesi rada") and `stock` ("Magacin"), stored in `app_settings` under `modules` (no migration; missing means off). Only Backoffice superadmins switch them (`PUT /platform/tenants/{slug}/modules`, audited as `tenant.modules`); tenants see them read-only in `GET /settings`. The API enforces them: disabled module routes return 403, a new order is not given the default process, and stock is neither posted nor validated. The web app hides every dependent surface and makes no requests to disabled modules.
+- **Consequences**:
+  - Stock posting needs both modules. A work-order process created while Magacin was off is never stock-tracked (`work_order_processes.stock_tracked`, migration v22), so switching Magacin on never posts material for past work. Switching it off and on again resumes tracked processes, and their next save posts the difference.
+  - Backoffice can prepare process templates before the module is switched on.
+  - Data is kept when a module is switched off; switching it back on shows it again.
+
+---
+
 *Last verified against the checked-in repository state on 2026-10-17.*
