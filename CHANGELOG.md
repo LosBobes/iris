@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 1.1.1 — 2026-10-17
+
+### Patch
+
+- Backoffice: on a phone the section tabs (Overview, Organizations, Activity) now live in the hamburger menu instead of overflowing the top bar.
+
 ## 1.1.0 — 2026-10-17
 
 ### Minor
