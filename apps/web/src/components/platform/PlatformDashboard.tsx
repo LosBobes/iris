@@ -201,6 +201,32 @@ export function PlatformDashboard({
     </div>
   );
 
+  // The section tabs sit beside the wordmark from tablet width up; on a phone
+  // they don't fit next to the menu, so they move into it.
+  const sections = [
+    { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
+    { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
+    { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
+  ];
+  const navTabs = (
+    <nav aria-label={t("platform.nav.label")} className="ml-1 flex items-center gap-1">
+      {sections.map((tab) => (
+        <Link
+          key={tab.to}
+          to={tab.to}
+          aria-current={tab.current ? "page" : undefined}
+          className={`iris-focusable flex min-h-9 items-center rounded-md px-2.5 text-[13px] font-medium ${
+            tab.current
+              ? "bg-white/10 text-[color:var(--pf-text)]"
+              : "text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]"
+          }`}
+        >
+          {tab.label}
+        </Link>
+      ))}
+    </nav>
+  );
+
   return (
     <div className="min-h-dvh bg-[color:var(--pf-bg)] text-[color:var(--pf-text)]">
       {/* Header */}
@@ -208,28 +234,9 @@ export function PlatformDashboard({
         <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-4 px-4 sm:px-6">
           <div className="mr-auto flex min-w-0 items-center gap-3">
             <span className="text-[18px] font-medium tracking-[-0.3px]">Iris</span>
-            <span aria-hidden className="h-5 w-px bg-[color:var(--pf-border)]" />
+            <span aria-hidden className="hidden h-5 w-px bg-[color:var(--pf-border)] sm:block" />
             <span className="hidden truncate text-[15px] text-[color:var(--pf-text-2)] sm:inline">{t("platform.title")}</span>
-            <nav aria-label={t("platform.nav.label")} className="ml-1 flex items-center gap-1">
-              {[
-                { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
-                { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
-                { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
-              ].map((tab) => (
-                <Link
-                  key={tab.to}
-                  to={tab.to}
-                  aria-current={tab.current ? "page" : undefined}
-                  className={`iris-focusable flex min-h-9 items-center rounded-md px-2.5 text-[13px] font-medium ${
-                    tab.current
-                      ? "bg-white/10 text-[color:var(--pf-text)]"
-                      : "text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]"
-                  }`}
-                >
-                  {tab.label}
-                </Link>
-              ))}
-            </nav>
+            {isWide ? navTabs : null}
           </div>
 
           {isWide && !showLog ? (
@@ -242,6 +249,7 @@ export function PlatformDashboard({
           <BackofficeMenu
             username={username}
             role={role}
+            sections={isWide ? undefined : sections}
             extra={isWide || showLog ? undefined : refreshControls}
             onChangePassword={() => setChangingPassword(true)}
             onLogout={onLogout}
