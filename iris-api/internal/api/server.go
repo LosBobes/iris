@@ -47,6 +47,9 @@ type Config struct {
 	// short because it can read usage across every organization.
 	PlatformSessionCookieName string
 	PlatformSessionDuration   time.Duration
+	// ImpersonationDuration caps an organization session a superadmin opens
+	// as one of its users (see impersonation.go).
+	ImpersonationDuration time.Duration
 	// Release is shown on the operator dashboard (IRIS_RELEASE).
 	Release string
 }
@@ -74,6 +77,9 @@ func NewServer(store store.Store, configs ...Config) *Server {
 	}
 	if config.PlatformSessionDuration == 0 {
 		config.PlatformSessionDuration = 2 * time.Hour
+	}
+	if config.ImpersonationDuration == 0 {
+		config.ImpersonationDuration = time.Hour
 	}
 	return &Server{
 		store:     store,
@@ -121,6 +127,16 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/platform/auth/logout", s.handlePlatformLogout)
 	r.Post("/platform/auth/password", s.handlePlatformChangePassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/users", s.handlePlatformTenantUsers)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/impersonate", s.handlePlatformImpersonate)
+	r.With(s.requirePlatformAdmin).Get("/platform/audit", s.handlePlatformAudit)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants", s.handlePlatformTenants)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants", s.handlePlatformCreateTenant)
+	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/suspend", s.handlePlatformSuspendTenant(true))
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/reactivate", s.handlePlatformSuspendTenant(false))
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/users/{id}/password", s.handlePlatformResetPassword)
+	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -241,6 +257,10 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		// store query) to the request context.
 		ctx := context.WithValue(r.Context(), currentUserContextKey, user)
 		ctx = store.ContextWithTenant(ctx, user.TenantID)
+		if user.ImpersonationID != 0 {
+			s.serveTraced(w, r.WithContext(ctx), next, user.ImpersonationID)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -270,6 +290,13 @@ func (s *Server) userFromRequest(w http.ResponseWriter, r *http.Request) (*domai
 	if user == nil {
 		clearSessionCookie(w, s.config)
 		writeAPIError(w, r, http.StatusUnauthorized, "Sesija je istekla.", nil)
+		return nil, false
+	}
+	// A suspended organization keeps no ordinary sessions; a Backoffice
+	// impersonation still gets in.
+	if user.TenantSuspended && user.ImpersonationID == 0 {
+		clearSessionCookie(w, s.config)
+		writeAPIError(w, r, http.StatusUnauthorized, tenantSuspendedMessage, nil)
 		return nil, false
 	}
 	return user, true
@@ -337,6 +364,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Said only after the credentials check out, so it reveals nothing to
+	// someone guessing.
+	if tenant.Suspended {
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: tenantSuspendedMessage})
+		return
+	}
 
 	s.recordLogin(r, user)
 
@@ -367,6 +400,11 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		clearSessionCookie(w, s.config)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false})
+		return
+	}
+	if user.TenantSuspended && user.ImpersonationID == 0 {
+		clearSessionCookie(w, s.config)
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: tenantSuspendedMessage})
 		return
 	}
 	writeJSON(w, http.StatusOK, domain.LoginResponse{Success: true, User: user})

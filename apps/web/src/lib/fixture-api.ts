@@ -1045,6 +1045,62 @@ export function createFixtureApi(): Window['api'] {
       return fixturePlatformMetrics(days)
     },
 
+    async getPlatformTenantUsers(slug) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (slug !== FIXTURE_ORGANIZATION.slug) throw new Error('Organizacija ne postoji.')
+      return {
+        tenant: { id: FIXTURE_ORGANIZATION.slug, ...FIXTURE_ORGANIZATION },
+        users: users.map((user) => ({ id: user.id, username: user.username, role: user.role })),
+      }
+    },
+
+    async platformImpersonate() {
+      // Fixture sessions do not survive the reload that starts the impersonated
+      // session, so there is nothing meaningful to open here.
+      throw new Error('Impersonacija nije dostupna u demo režimu.')
+    },
+
+    async getPlatformAudit() {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return { items: [], total: 0 }
+    },
+
+    async getPlatformTenants() {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return [
+        {
+          id: FIXTURE_ORGANIZATION.slug,
+          ...FIXTURE_ORGANIZATION,
+          createdAt: '2026-01-01 00:00:00',
+          suspendedAt: null,
+          users: users.length,
+          admins: users.filter((user) => user.role === 'admin').length,
+        },
+      ]
+    },
+
+    // Organization management needs the real API: fixture mode has a single,
+    // fixed organization.
+    async createPlatformTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async updatePlatformTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async setPlatformTenantSuspended() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async resetPlatformUserPassword() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async getPlatformImpersonationActions() {
+      throw new Error('Impersonacija ne postoji.')
+    },
+
     async getWorkOrders(query) {
       return listFixtureWorkOrders(query)
     },

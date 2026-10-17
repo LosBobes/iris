@@ -201,14 +201,21 @@ func (s *SQLiteStore) CreateSession(
 func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*domain.User, error) {
 	var user domain.User
 	var expiresAtRaw string
+	var impersonatedBy sql.NullString
+	var impersonationID sql.NullInt64
+	// An impersonation session (see CreateImpersonationSession) carries the
+	// superadmin who opened it; ordinary sign-ins leave impersonated_by NULL.
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at
+		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at,
+		        platform_admins.username, sessions.impersonation_id, tenants.suspended_at IS NOT NULL
 		 FROM sessions
 		 JOIN users ON users.id = sessions.user_id
+		 JOIN tenants ON tenants.id = users.tenant_id
+		 LEFT JOIN platform_admins ON platform_admins.id = sessions.impersonated_by
 		 WHERE sessions.token = ?`,
 		token,
-	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw)
+	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw, &impersonatedBy, &impersonationID, &user.TenantSuspended)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -220,10 +227,19 @@ func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*do
 		_ = s.DeleteSession(ctx, token)
 		return nil, nil
 	}
+	if impersonatedBy.Valid {
+		user.ImpersonatedBy = &impersonatedBy.String
+		user.ImpersonationID = impersonationID.Int64
+	}
 	return &user, nil
 }
 
 func (s *SQLiteStore) DeleteSession(ctx context.Context, token string) error {
+	// Signing out of an impersonated session (or its expiry) ends that
+	// impersonation in the log.
+	if err := s.markImpersonationsEnded(ctx, `token = ?`, token); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
@@ -236,9 +252,9 @@ func (s *SQLiteStore) TenantBySlug(ctx context.Context, slug string) (*domain.Te
 	var tenant domain.Tenant
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, slug, name FROM tenants WHERE slug = ? COLLATE NOCASE`,
+		`SELECT id, slug, name, suspended_at IS NOT NULL FROM tenants WHERE slug = ? COLLATE NOCASE`,
 		strings.TrimSpace(slug),
-	).Scan(&tenant.ID, &tenant.Slug, &tenant.Name)
+	).Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.Suspended)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

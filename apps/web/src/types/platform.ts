@@ -1,6 +1,6 @@
 // Backoffice (the "platform" API). Contract-sync point with the Platform* schemas
-// in iris-api/openapi.yaml. Aggregates only: no customer, user or work-order
-// records ever appear here.
+// in iris-api/openapi.yaml: usage metrics, organization management and the
+// activity log.
 
 export type PlatformRangeDays = 7 | 30 | 90 | 365
 
@@ -16,6 +16,90 @@ export interface PlatformLoginResponse {
   success: boolean
   admin?: PlatformAdmin
   error?: string
+}
+
+/** GET /platform/tenants/{slug}/users: an organization and its accounts. */
+export interface PlatformTenantUsers {
+  tenant: { id: string; slug: string; name: string }
+  users: AuthenticatedUser[]
+}
+
+/** POST /platform/tenants/{slug}/impersonate: the organization session opened. */
+export interface PlatformImpersonationResponse {
+  success: boolean
+  user?: AuthenticatedUser
+  orgSlug?: string
+  expiresAt?: string
+}
+
+/** An organization as the Backoffice manages it (GET /platform/tenants). */
+export interface PlatformTenant {
+  id: string
+  slug: string
+  name: string
+  createdAt: string
+  /** Set while the organization is suspended. */
+  suspendedAt: string | null
+  users: number
+  admins: number
+}
+
+export interface PlatformCreateTenantInput {
+  name: string
+  slug: string
+  adminUsername: string
+  adminPassword: string
+}
+
+export interface PlatformUpdateTenantInput {
+  name?: string
+  slug?: string
+}
+
+export type PlatformAuditAction =
+  | 'tenant.create'
+  | 'tenant.update'
+  | 'tenant.suspend'
+  | 'tenant.reactivate'
+  | 'user.password_reset'
+  | 'impersonate'
+
+/** One superadmin action in the Backoffice activity log (GET /platform/audit). */
+export interface PlatformAuditEvent {
+  id: number
+  at: string
+  adminUsername: string
+  action: PlatformAuditAction
+  /** Organization slug and name as they were at the time. */
+  tenantSlug: string
+  tenantName: string
+  targetUsername?: string
+  /** For tenant.update: fromName/toName, fromSlug/toSlug of what changed. */
+  detail?: Record<string, string>
+  ip: string
+  /** On an "impersonate" event: its session state and change count. */
+  impersonation?: {
+    id: number
+    expiresAt: string
+    /** Set once signed out (or found expired); null while it may be active. */
+    endedAt: string | null
+    actionCount: number
+  }
+}
+
+export interface PlatformAuditLog {
+  items: PlatformAuditEvent[]
+  total: number
+}
+
+/** A change request made during an impersonation (bodies are never kept). */
+export interface PlatformImpersonationAction {
+  at: string
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  /** The API route pattern, e.g. `/work-orders/{id}`. */
+  route: string
+  path: string
+  status: number
 }
 
 export interface PlatformPasswordChange {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net"
@@ -17,9 +18,10 @@ import (
 // Backoffice (the "platform" routes). These sit outside every organization:
 // a platform admin is a separate account in platform_admins, created only from
 // the server with `irisctl create-platform-admin`, with its own cookie and a
-// short session. None exist by default, so on a fresh install every login here
-// fails. The only data they reach is the aggregate metrics in
-// store.PlatformMetrics.
+// short session. A fresh database gets one default account that must change
+// its password first. They read the aggregate metrics in store.PlatformMetrics
+// and can impersonate an organization user (impersonation.go); that is their
+// only way into an organization's records.
 
 const (
 	platformInvalidCredentials     = "Neispravno korisničko ime ili lozinka."
@@ -119,6 +121,19 @@ func (s *Server) handlePlatformSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePlatformLogout(w http.ResponseWriter, r *http.Request) {
 	if platform, ok := s.platformStore(); ok {
 		if cookie, err := r.Cookie(s.config.PlatformSessionCookieName); err == nil && cookie.Value != "" {
+			// Signing out of the Backoffice also ends every organization
+			// session this superadmin opened by impersonation.
+			admin, err := platform.PlatformAdminBySession(r.Context(), cookie.Value)
+			if err != nil {
+				writeServerError(w, r, err)
+				return
+			}
+			if admin != nil {
+				if err := platform.EndImpersonationSessions(r.Context(), admin.ID); err != nil {
+					writeServerError(w, r, err)
+					return
+				}
+			}
 			if err := platform.DeletePlatformSession(r.Context(), cookie.Value); err != nil {
 				writeServerError(w, r, err)
 				return
@@ -181,6 +196,13 @@ func (s *Server) handlePlatformChangePassword(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, domain.PlatformLoginResponse{Success: true, Admin: admin})
 }
 
+const platformAdminContextKey contextKey = "platformAdmin"
+
+func currentPlatformAdmin(r *http.Request) *domain.PlatformAdmin {
+	admin, _ := r.Context().Value(platformAdminContextKey).(*domain.PlatformAdmin)
+	return admin
+}
+
 // requirePlatformAdmin guards operator routes. A tenant session (iris_session)
 // is never accepted here, whatever its role.
 func (s *Server) requirePlatformAdmin(next http.Handler) http.Handler {
@@ -203,7 +225,7 @@ func (s *Server) requirePlatformAdmin(next http.Handler) http.Handler {
 			writeAPIError(w, r, http.StatusForbidden, platformPasswordChangeRequired, nil)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), platformAdminContextKey, admin)))
 	})
 }
 

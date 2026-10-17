@@ -35,6 +35,13 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantUsers,
+  PlatformImpersonationResponse,
+  PlatformImpersonationAction,
+  PlatformAuditLog,
+  PlatformTenant,
+  PlatformCreateTenantInput,
+  PlatformUpdateTenantInput,
 } from '@/types/platform'
 import type {
   CreateUserInput,
@@ -701,6 +708,66 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlatformMetrics(days: PlatformRangeDays) {
       const response = await fetchImpl(url(`/platform/metrics?days=${days}`), credentialedRequest())
       return readJSON<PlatformMetrics>(response)
+    },
+
+    async getPlatformTenantUsers(slug: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/users`),
+        credentialedRequest(),
+      )
+      return readJSON<PlatformTenantUsers>(response)
+    },
+
+    async platformImpersonate(slug: string, userId: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/impersonate`),
+        jsonRequest('POST', { userId }),
+      )
+      return readJSON<PlatformImpersonationResponse>(response)
+    },
+
+    async getPlatformAudit({ limit, offset }: { limit: number; offset: number }) {
+      const response = await fetchImpl(url(`/platform/audit?limit=${limit}&offset=${offset}`), credentialedRequest())
+      return readJSON<PlatformAuditLog>(response)
+    },
+
+    async getPlatformTenants() {
+      const response = await fetchImpl(url('/platform/tenants'), credentialedRequest())
+      return readJSON<PlatformTenant[]>(response)
+    },
+
+    async createPlatformTenant(input: PlatformCreateTenantInput) {
+      const response = await fetchImpl(url('/platform/tenants'), jsonRequest('POST', input))
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async updatePlatformTenant(slug: string, input: PlatformUpdateTenantInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}`),
+        jsonRequest('PATCH', input),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async setPlatformTenantSuspended(slug: string, suspended: boolean) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/${suspended ? 'suspend' : 'reactivate'}`),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async resetPlatformUserPassword(slug: string, userId: string, password: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/users/${encodeURIComponent(userId)}/password`),
+        jsonRequest('POST', { password }),
+      )
+      return readJSON<AuthenticatedUser>(response)
+    },
+
+    async getPlatformImpersonationActions(id: number) {
+      const response = await fetchImpl(url(`/platform/impersonations/${id}/actions`), credentialedRequest())
+      return readJSON<PlatformImpersonationAction[]>(response)
     },
 
     async listUsers() {

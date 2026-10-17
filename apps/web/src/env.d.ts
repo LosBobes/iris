@@ -36,6 +36,13 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantUsers,
+  PlatformImpersonationResponse,
+  PlatformImpersonationAction,
+  PlatformAuditLog,
+  PlatformTenant,
+  PlatformCreateTenantInput,
+  PlatformUpdateTenantInput,
 } from '@/types/platform'
 import type {
   CreateUserInput,
@@ -48,6 +55,8 @@ declare global {
     id: string
     username: string
     role: 'admin' | 'user'
+    /** Set only on a session a Backoffice superadmin opened as this user: their username. */
+    impersonatedBy?: string
   }
 
   interface LoginResponse {
@@ -112,6 +121,17 @@ declare global {
       platformLogout: () => Promise<void>
       changePlatformPassword: (change: PlatformPasswordChange) => Promise<PlatformLoginResponse>
       getPlatformMetrics: (days: PlatformRangeDays) => Promise<PlatformMetrics>
+      getPlatformTenantUsers: (slug: string) => Promise<PlatformTenantUsers>
+      /** Replaces this browser's organization session with one as the chosen user. */
+      platformImpersonate: (slug: string, userId: string) => Promise<PlatformImpersonationResponse>
+      getPlatformAudit: (query: { limit: number; offset: number }) => Promise<PlatformAuditLog>
+      getPlatformTenants: () => Promise<PlatformTenant[]>
+      createPlatformTenant: (input: PlatformCreateTenantInput) => Promise<PlatformTenant>
+      updatePlatformTenant: (slug: string, input: PlatformUpdateTenantInput) => Promise<PlatformTenant>
+      /** Suspends (true) or reactivates (false) an organization. */
+      setPlatformTenantSuspended: (slug: string, suspended: boolean) => Promise<PlatformTenant>
+      resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
+      getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

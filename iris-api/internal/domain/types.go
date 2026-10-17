@@ -330,8 +330,9 @@ type PublicOrganization struct {
 	LogoVersion *string `json:"logoVersion"`
 }
 
-// PlatformAdmin is an Iris operator account. It belongs to no organization and
-// can only read the aggregate usage metrics below.
+// PlatformAdmin is an Iris operator account. It belongs to no organization; it
+// reads the aggregate usage metrics below and can open an audited session as
+// any organization user (impersonation).
 // PlatformRoleSuperadmin is the Backoffice role: the only one that opens the
 // Backoffice (/backoffice in the web app, /platform/* in the API).
 const PlatformRoleSuperadmin = "superadmin"
@@ -361,6 +362,110 @@ type PlatformLoginResponse struct {
 	Success bool           `json:"success"`
 	Admin   *PlatformAdmin `json:"admin,omitempty"`
 	Error   string         `json:"error,omitempty"`
+}
+
+// PlatformTenantUsers lists one organization's accounts (id, username, role
+// only) so a superadmin can pick whom to impersonate.
+type PlatformTenantUsers struct {
+	Tenant Tenant `json:"tenant"`
+	Users  []User `json:"users"`
+}
+
+// PlatformImpersonationRequest is the POST /platform/tenants/{slug}/impersonate
+// payload.
+type PlatformImpersonationRequest struct {
+	UserID string `json:"userId"`
+}
+
+// PlatformImpersonationResponse reports the organization session that was
+// opened (as the iris_session cookie) for the chosen user.
+type PlatformImpersonationResponse struct {
+	Success   bool   `json:"success"`
+	User      *User  `json:"user,omitempty"`
+	OrgSlug   string `json:"orgSlug,omitempty"`
+	ExpiresAt string `json:"expiresAt,omitempty"`
+}
+
+// PlatformTenant is an organization as the Backoffice manages it.
+type PlatformTenant struct {
+	ID          string  `json:"id"`
+	Slug        string  `json:"slug"`
+	Name        string  `json:"name"`
+	CreatedAt   string  `json:"createdAt"`
+	SuspendedAt *string `json:"suspendedAt"`
+	Users       int     `json:"users"`
+	Admins      int     `json:"admins"`
+}
+
+// PlatformCreateTenantInput creates an organization with its first admin.
+type PlatformCreateTenantInput struct {
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	AdminUsername string `json:"adminUsername"`
+	AdminPassword string `json:"adminPassword"`
+}
+
+// PlatformUpdateTenantInput renames an organization and/or changes its
+// sign-in slug; a nil field is left unchanged.
+type PlatformUpdateTenantInput struct {
+	Name *string `json:"name"`
+	Slug *string `json:"slug"`
+}
+
+// PlatformPasswordReset sets a new password for an organization user.
+type PlatformPasswordReset struct {
+	Password string `json:"password"`
+}
+
+// Backoffice audit actions (PlatformAuditEvent.Action).
+const (
+	AuditTenantCreate       = "tenant.create"
+	AuditTenantUpdate       = "tenant.update"
+	AuditTenantSuspend      = "tenant.suspend"
+	AuditTenantReactivate   = "tenant.reactivate"
+	AuditUserPasswordReset  = "user.password_reset"
+	AuditImpersonationStart = "impersonate"
+)
+
+// PlatformAuditEvent is one superadmin action in the Backoffice activity log.
+// Organization name and slug are as they were at the time.
+type PlatformAuditEvent struct {
+	ID             int64             `json:"id"`
+	At             string            `json:"at"`
+	AdminUsername  string            `json:"adminUsername"`
+	Action         string            `json:"action"`
+	TenantSlug     string            `json:"tenantSlug"`
+	TenantName     string            `json:"tenantName"`
+	TargetUsername string            `json:"targetUsername,omitempty"`
+	Detail         map[string]string `json:"detail,omitempty"`
+	IP             string            `json:"ip"`
+	// Impersonation is set on an "impersonate" event: its session state and
+	// how many changes it made (see /platform/impersonations/{id}/actions).
+	Impersonation *PlatformImpersonationStatus `json:"impersonation,omitempty"`
+}
+
+// PlatformImpersonationStatus is the session side of an impersonation.
+type PlatformImpersonationStatus struct {
+	ID          int64   `json:"id"`
+	ExpiresAt   string  `json:"expiresAt"`
+	EndedAt     *string `json:"endedAt"`
+	ActionCount int     `json:"actionCount"`
+}
+
+// PlatformAuditLog is a page of the activity log, newest first.
+type PlatformAuditLog struct {
+	Items []PlatformAuditEvent `json:"items"`
+	Total int                  `json:"total"`
+}
+
+// PlatformImpersonationAction is one change request made during an
+// impersonation. Request bodies are never kept (they can hold passwords).
+type PlatformImpersonationAction struct {
+	At     string `json:"at"`
+	Method string `json:"method"`
+	Route  string `json:"route"`
+	Path   string `json:"path"`
+	Status int    `json:"status"`
 }
 
 // PlatformMetrics is the operator dashboard payload: counts, dates and sizes
@@ -435,6 +540,15 @@ type User struct {
 	// session/authentication) and used to scope every data query; it is never
 	// exposed to clients.
 	TenantID string `json:"-"`
+	// ImpersonatedBy is set only on a session a Backoffice superadmin opened
+	// "as" this user: it names that superadmin, so the app can say so.
+	ImpersonatedBy *string `json:"impersonatedBy,omitempty"`
+	// ImpersonationID links an impersonated session to its audit row, so every
+	// change made in it is traced back (server-side only; 0 otherwise).
+	ImpersonationID int64 `json:"-"`
+	// TenantSuspended blocks every ordinary session of a suspended
+	// organization; impersonation still works (server-side only).
+	TenantSuspended bool `json:"-"`
 }
 
 // Tenant is an organization (shop) whose data is isolated from every other
@@ -443,6 +557,8 @@ type Tenant struct {
 	ID   string `json:"id"`
 	Slug string `json:"slug"`
 	Name string `json:"name"`
+	// Suspended organizations cannot sign in (server-side only).
+	Suspended bool `json:"-"`
 }
 
 // CreateUserInput is the payload an admin submits to add a user account.

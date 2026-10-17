@@ -1,9 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link, useLocation } from "react-router-dom";
 import { Check, RefreshCw } from "lucide-react";
 import { BackofficeMenu } from "./BackofficeMenu";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { PlatformChangePassword } from "./PlatformChangePassword";
+import { OrganizationsPanel } from "./OrganizationsPanel";
+import { ActivityLog } from "./ActivityLog";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -81,6 +84,15 @@ export function PlatformDashboard({
   // Range and refresh sit in the header from tablet width up; on a phone the
   // range gets its own row and refresh moves into the menu.
   const isWide = useMediaQuery("(min-width: 768px)");
+  // Sections: the metrics overview at /backoffice, organization management
+  // and the activity log below it.
+  const pathname = useLocation().pathname;
+  const section: "overview" | "organizations" | "activity" = pathname.startsWith("/backoffice/organizations")
+    ? "organizations"
+    : pathname.startsWith("/backoffice/activity")
+      ? "activity"
+      : "overview";
+  const showLog = section !== "overview";
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -95,17 +107,17 @@ export function PlatformDashboard({
   }, [range, t]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!showLog) void load();
+  }, [load, showLog]);
 
   useEffect(() => {
-    if (!refreshSeconds) return;
+    if (!refreshSeconds || showLog) return;
     const id = window.setInterval(() => {
       // Don't poll a tab nobody is looking at.
       if (document.visibilityState === "visible") void load();
     }, refreshSeconds * 1000);
     return () => window.clearInterval(id);
-  }, [load, refreshSeconds]);
+  }, [load, refreshSeconds, showLog]);
 
   const bucketDays = range >= 90 ? 7 : 1;
   const { series, keyFor } = useMemo(
@@ -197,10 +209,30 @@ export function PlatformDashboard({
           <div className="mr-auto flex min-w-0 items-center gap-3">
             <span className="text-[18px] font-medium tracking-[-0.3px]">Iris</span>
             <span aria-hidden className="h-5 w-px bg-[color:var(--pf-border)]" />
-            <span className="truncate text-[15px] text-[color:var(--pf-text-2)]">{t("platform.title")}</span>
+            <span className="hidden truncate text-[15px] text-[color:var(--pf-text-2)] sm:inline">{t("platform.title")}</span>
+            <nav aria-label={t("platform.nav.label")} className="ml-1 flex items-center gap-1">
+              {[
+                { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
+                { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
+                { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
+              ].map((tab) => (
+                <Link
+                  key={tab.to}
+                  to={tab.to}
+                  aria-current={tab.current ? "page" : undefined}
+                  className={`iris-focusable flex min-h-9 items-center rounded-md px-2.5 text-[13px] font-medium ${
+                    tab.current
+                      ? "bg-white/10 text-[color:var(--pf-text)]"
+                      : "text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]"
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              ))}
+            </nav>
           </div>
 
-          {isWide ? (
+          {isWide && !showLog ? (
             <>
               {rangeControl}
               {refreshControls}
@@ -210,12 +242,12 @@ export function PlatformDashboard({
           <BackofficeMenu
             username={username}
             role={role}
-            extra={isWide ? undefined : refreshControls}
+            extra={isWide || showLog ? undefined : refreshControls}
             onChangePassword={() => setChangingPassword(true)}
             onLogout={onLogout}
           />
         </div>
-        {isWide ? null : <div className="px-4 pb-3">{rangeControl}</div>}
+        {isWide || showLog ? null : <div className="px-4 pb-3">{rangeControl}</div>}
       </header>
 
       {changingPassword ? (
@@ -236,6 +268,20 @@ export function PlatformDashboard({
       ) : null}
 
       <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-5 sm:px-6">
+        {notice ? (
+          <div role="status" className="rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
+            {notice}
+          </div>
+        ) : null}
+        {showLog ? (
+          <>
+            <h1 className="text-[22px] font-medium tracking-[-0.3px]">
+              {section === "organizations" ? t("platform.nav.organizations") : t("platform.nav.activity")}
+            </h1>
+            {section === "organizations" ? <OrganizationsPanel /> : <ActivityLog />}
+          </>
+        ) : (
+        <>
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
           <h1 className="text-[22px] font-medium tracking-[-0.3px]">{t("platform.overview")}</h1>
           {metrics ? (
@@ -245,11 +291,6 @@ export function PlatformDashboard({
             </p>
           ) : null}
         </div>
-        {notice ? (
-          <div role="status" className="rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
-            {notice}
-          </div>
-        ) : null}
         {error ? (
           <div role="alert" className="rounded border border-[#e66767]/40 bg-[#e66767]/10 px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
             {error}
@@ -394,6 +435,8 @@ export function PlatformDashboard({
               </dl>
             </Panel>
           </>
+        )}
+        </>
         )}
       </main>
     </div>
