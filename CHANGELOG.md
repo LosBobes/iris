@@ -2,6 +2,16 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 1.2.0 — 2026-10-17
+
+### Minor
+
+- Work-order processes: admins model each production process as an editable graph of steps with their inputs, products and byproducts (Settings → Procesi rada, and per organization in the Backoffice). Every work order carries its own copy with per-step status and actual quantities, applied automatically from the default process.
+- Process simulator and tester: play a process wave by wave for a chosen quantity (inputs used, products, byproducts, yield) and check the model for problems before using it. Smoother animations on the process screens and in the Backoffice.
+- Magacin: Iris now tracks warehouse stock for catalog articles (goods receipts, stock counts and opening balance, movement history, low-stock warnings). Process steps linked to articles move stock automatically when completed, and the simulator and tester flag material shortages.
+- Procesi rada and Magacin are now optional modules per organization, off by default (Procesi rada requires Magacin); superadmins switch them in Backoffice → Organizacije → Moduli.
+- A showcase organization with sample processes and warehouse stock can be created with irisctl seed-showcase, or automatically on the first server start with IRIS_SEED_SHOWCASE=1 (production requires its own passwords).
+
 ## 1.1.3 — 2026-10-17
 
 ### Patch
