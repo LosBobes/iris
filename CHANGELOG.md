@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 1.2.1 — 2026-10-17
+
+### Patch
+
+- Backoffice organization users dialog no longer squeezes names and buttons on phones.
+
 ## 1.2.0 — 2026-10-17
 
 ### Minor
