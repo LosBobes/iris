@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { KeyRound, LogOut, Menu, X } from "lucide-react";
 import { LanguageToggle } from "./LanguageToggle";
 
 /**
  * The Backoffice's hamburger menu: who is signed in, language, password and
- * sign-out, plus whatever the toolbar has no room for on a phone (`extra`).
+ * sign-out, plus whatever the toolbar has no room for on a phone (the section
+ * tabs as `sections`, other controls as `extra`).
  *
  * Self-contained rather than the app's Radix dropdown: Radix portals its
  * content to <body>, outside the Backoffice's dark-surface variables.
@@ -13,12 +15,14 @@ import { LanguageToggle } from "./LanguageToggle";
 export function BackofficeMenu({
   username,
   role,
+  sections,
   extra,
   onChangePassword,
   onLogout,
 }: {
   username: string;
   role?: string;
+  sections?: { to: string; label: string; current: boolean }[];
   extra?: ReactNode;
   onChangePassword: () => void;
   onLogout: () => void;
@@ -81,6 +85,25 @@ export function BackofficeMenu({
               </span>
             ) : null}
           </div>
+
+          {sections ? (
+            <>
+              <div className="my-1 border-t border-[color:var(--pf-border)]" />
+              <nav aria-label={t("platform.nav.label")}>
+                {sections.map((section) => (
+                  <Link
+                    key={section.to}
+                    to={section.to}
+                    aria-current={section.current ? "page" : undefined}
+                    onClick={() => setOpen(false)}
+                    className={`${item} font-medium ${section.current ? "bg-white/10" : ""}`}
+                  >
+                    {section.label}
+                  </Link>
+                ))}
+              </nav>
+            </>
+          ) : null}
 
           <div className="my-1 border-t border-[color:var(--pf-border)]" />
 
