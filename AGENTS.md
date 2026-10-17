@@ -69,8 +69,24 @@ npm install && npm run dev         # :5173
 npm run lint && npm test && npm run build
 ```
 
-There is **no automated CI** beyond a manual Copilot setup workflow — run the
+Apart from the PR changeset check (below), there is **no automated CI** — run the
 relevant per-surface checks yourself before declaring work done.
+
+## Versioning (every PR)
+
+The app version is the root `VERSION` file (semver, started at `1.0.0`) and is
+shown on the login screen. **Every PR must add a changeset** — a
+`.changeset/*.md` file with `bump: patch|minor|major` front matter and a
+plain-text description — or the `Changeset` PR check fails:
+
+```bash
+node scripts/changeset.mjs add minor "Work orders can now be duplicated."
+```
+
+On merge to `main`, `build.yml` applies pending changesets: bumps `VERSION` by
+the highest level, prepends them to `CHANGELOG.md`, commits and tags `vX.Y.Z`.
+Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
+[.changeset/README.md](.changeset/README.md).
 
 ## Known pitfalls
 

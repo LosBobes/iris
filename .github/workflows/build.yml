@@ -4,6 +4,12 @@ name: Build and push images
 # Each image gets :latest (which the server tracks) plus an immutable
 # version tag (git-<sha7>, and a semver tag when a v* git tag is pushed)
 # so a known-good build can always be pinned for rollback.
+#
+# On a push to main the release job first applies pending .changeset/ files
+# (see .changeset/README.md): it bumps VERSION, updates CHANGELOG.md, commits
+# and tags vX.Y.Z, and the images are built from that release commit and also
+# tagged :X.Y.Z. The release commit is pushed with GITHUB_TOKEN, which does
+# not trigger workflows, so it cannot loop back into this one.
 
 on:
   push:
@@ -14,8 +20,70 @@ permissions:
   contents: read
   packages: write
 
+# Serialize releases so two quick merges cannot both bump from the same VERSION.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  release:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.apply.outputs.version }}
+      ref: ${{ steps.push.outputs.ref }}
+    steps:
+      # The tip of main, not the triggering commit: with runs serialized, a run
+      # that waited behind another must release on top of that run's release
+      # commit, and picks up any changesets merged in the meantime.
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Apply changesets
+        id: apply
+        run: node scripts/changeset.mjs apply | tee -a "${GITHUB_OUTPUT}"
+
+      - name: Commit, tag and push release
+        id: push
+        env:
+          VERSION: ${{ steps.apply.outputs.version }}
+          CHANGED: ${{ steps.apply.outputs.changed }}
+        run: |
+          if [ "${CHANGED}" = "true" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A VERSION CHANGELOG.md .changeset
+            git commit -m "chore(release): v${VERSION} [skip ci]"
+            # A PR merged while this job ran makes the push non-fast-forward;
+            # replay the release commit on top of it. Its changeset stays
+            # pending and ships with the next release.
+            for attempt in 1 2 3; do
+              if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                break
+              fi
+              if [ "${attempt}" = "3" ]; then
+                exit 1
+              fi
+              git pull --rebase origin "${GITHUB_REF_NAME}"
+            done
+            git tag "v${VERSION}"
+            git push origin "v${VERSION}"
+          fi
+          echo "ref=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
   build:
+    needs: release
+    # Tag pushes skip the release job; build them as-is.
+    if: ${{ !cancelled() && needs.release.result != 'failure' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -27,9 +95,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.ref || github.sha }}
 
       - name: Compute image name and tags
         id: meta
+        env:
+          APP_VERSION: ${{ needs.release.outputs.version }}
         run: |
           owner_lc="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
           image="ghcr.io/${owner_lc}/iris-${{ matrix.image.name }}"
@@ -38,11 +110,13 @@ jobs:
           # Always publish :latest and an immutable :git-<sha7> tag.
           tags="${image}:latest"$'\n'"${image}:git-${sha7}"
 
-          # On a semver git tag (refs/tags/v1.4.2), also publish :1.4.2.
+          # Publish the app version (from VERSION, after the release job
+          # applied changesets) as :1.4.2. On a v* git tag use the tag name.
+          version="${APP_VERSION:-$(cat VERSION)}"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             version="${GITHUB_REF_NAME#v}"
-            tags="${tags}"$'\n'"${image}:${version}"
           fi
+          tags="${tags}"$'\n'"${image}:${version}"
 
           {
             echo "tags<<EOF"
