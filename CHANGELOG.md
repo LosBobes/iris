@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 1.1.3 — 2026-10-17
+
+### Patch
+
+- Backoffice: chart taps no longer leave an orange focus outline, and the overview now labels tenants as Clients and their customers as Downstream clients.
+
 ## 1.1.2 — 2026-10-17
 
 ### Patch
