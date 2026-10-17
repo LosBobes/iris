@@ -124,6 +124,8 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant gra
 # Optional per-organization modules (off by default; "processes" requires "stock"):
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl set-modules -tenant grafika-cobanovic -stock on -processes on
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup -out ./backups/iris.db
+# Showcase organization for trying "Procesi rada" and "Magacin" (non-production only):
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-showcase [-slug showcase] [-reset]
 # Warehouse opening balance / stock count from a CSV (code,quantity[,note]):
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-cobanovic --file ./stock.csv --dry-run
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-cobanovic --file ./stock.csv --apply
@@ -141,6 +143,17 @@ for new organizations, including the `seed-demo` tenant (the demo template and a
 seeded); with a module off its routes answer `403`, new orders get no auto-attached process and
 the catalog's `stockOnHand` is `null`. Work-order processes post/reserve stock only if they were
 created while stock was on, so enabling stock later never posts retroactively.
+
+`seed-showcase` creates the organization `showcase` ("Showcase Štamparija", both modules on; logins
+`admin` / `admin123` and `operater` / `operater123`, sign in at `/login/showcase`) and fills it through
+the real store methods: customers, services, 10 articles with minimum stock, an opening balance
+(stock count) and three goods receipts, four process templates (default "Offset štampa", "Digitalna
+štampa", "Brošura sa šivenjem" with an intermediate product and parallel steps, "Veliki format
+(baner)") and eight work orders (2 new, 2 in progress with one actual quantity above plan, 2 completed,
+1 whose planned paper exceeds stock, 1 cancelled), with step progress posted so consumption and
+production movements come from the normal posting logic. It is idempotent: an existing organization is
+left untouched (exit 0); `-reset` deletes it (all tenant tables cascade) and rebuilds it. It refuses to
+run with `IRIS_ENV=production`. The Backoffice default account is created on the first server start.
 
 Verification:
 

@@ -8,6 +8,7 @@ import {
   planProcessPosting,
   reservedAcrossGraphs,
   reservedByArticle,
+  shortageOf,
   shortages,
   stockContextFor,
   toLevelMap,
@@ -223,5 +224,17 @@ describe('stockContextFor', () => {
     const pending = stockContextFor(graph(), 'order', levels)
     expect(pending.items.a1.available).toBe(520 + 100)
     expect(stockContextFor(graph(), 'template', levels).items.a1.available).toBe(620)
+  })
+})
+
+describe('shortageOf', () => {
+  it('reports nothing once the inputs are consumed, even with negative availability', () => {
+    expect(shortageOf(0, -3500)).toBe(0)
+  })
+
+  it('never reports more than the order still needs', () => {
+    expect(shortageOf(100, -3500)).toBe(100)
+    expect(shortageOf(100, 40)).toBe(60)
+    expect(shortageOf(100, 400)).toBe(0)
   })
 })

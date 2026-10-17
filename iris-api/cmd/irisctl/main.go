@@ -48,6 +48,19 @@ func main() {
 		defer sqliteStore.Close()
 		must(cobanovic.Seed(ctx, sqliteStore, *dir))
 		fmt.Println("Čobanović podaci su upisani u SQLite bazu.")
+	case "seed-showcase":
+		cmd := flag.NewFlagSet("seed-showcase", flag.ExitOnError)
+		slug := cmd.String("slug", store.ShowcaseDefaultSlug, "oznaka showcase organizacije")
+		reset := cmd.Bool("reset", false, "obriši postojeću organizaciju i napravi je iznova")
+		_ = cmd.Parse(os.Args[2:])
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("IRIS_ENV")), "production") {
+			log.Fatal("seed-showcase upisuje demo naloge i nije dozvoljen kada je IRIS_ENV=production")
+		}
+		sqliteStore := mustOpen(ctx, dbPathFromEnv())
+		defer sqliteStore.Close()
+		result, err := store.SeedShowcase(ctx, sqliteStore, store.ShowcaseOptions{Slug: *slug, Reset: *reset})
+		must(err)
+		printShowcaseSummary(result)
 	case "create-tenant":
 		cmd := flag.NewFlagSet("create-tenant", flag.ExitOnError)
 		slug := cmd.String("slug", "", "oznaka organizacije (za prijavu)")
@@ -154,6 +167,37 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+}
+
+// printShowcaseSummary tells the operator how to sign in and what to look at.
+func printShowcaseSummary(result store.ShowcaseResult) {
+	if !result.Created {
+		fmt.Printf("Organizacija %q (%s) već postoji; ništa nije promenjeno. Koristite -reset da je napravite iznova.\n", result.Name, result.Slug)
+		return
+	}
+	fmt.Printf(`Showcase organizacija %q je spremna.
+
+Prijava:    /login/%s
+  admin     %s / %s
+  operater  %s / %s
+Moduli:     Magacin i Procesi rada uključeni (organizacija "demo" ima module isključene, za poređenje)
+Sadržaj:    %d šablona procesa, %d radnih naloga, magacin sa početnim stanjem i 3 prijema
+
+Šta pogledati
+  Magacin:         nizak lager (ispod minimuma): %s
+  Nedostatak:      nalog %s (Papir 80g A3 planirano 8.000, na stanju manje) - tabela Materijal i simulator
+  U toku:          nalog %s (stvarna količina papira veća od planirane); nalog %s je brošura sa dva paralelna koraka
+  Otkazan:         nalog %s ne rezerviše zalihe
+  Simulator:       šablon %q (međuproizvod "Štampani tabaci", dva koraka u istom talasu)
+Backoffice:  /backoffice, podrazumevani nalog admin / admin123321 se pravi pri prvom pokretanju servera
+             (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju.
+`,
+		result.Name, result.Slug,
+		store.ShowcaseAdminUsername, store.ShowcaseAdminPassword,
+		store.ShowcaseOperatorUsername, store.ShowcaseOperatorPassword,
+		result.Templates, result.Orders,
+		strings.Join(result.LowArticles, ", "),
+		result.ShortageOrder, result.InProgressOrder, result.BrochureOrder, result.CancelledOrder, result.BrochureTemplate)
 }
 
 func importCSV(ctx context.Context, sqliteStore *store.SQLiteStore, dir string, apply bool) (string, error) {
@@ -431,6 +475,7 @@ func usage() {
   irisctl migrate
   irisctl seed-demo [-fixtures testdata/fixtures]
   irisctl seed-cobanovic [-dir internal/seed/cobanovic/data]
+  irisctl seed-showcase [-slug showcase] [-reset]
   irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
   irisctl import-csv -tenant oznaka --dry-run --dir import/
@@ -447,6 +492,11 @@ a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
 set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin);
 izostavljen modul ostaje kakav jeste. Za razliku od Backoffice-a ne upisuje zapis u aktivnost.
 Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastali.
+
+seed-showcase pravi i popunjava organizaciju za isprobavanje modula Procesi rada i Magacin
+(šabloni procesa, artikli, početno stanje, prijemi, radni nalozi u raznim statusima). Ako
+organizacija već postoji, ništa se ne menja; -reset je briše i pravi iznova. Odbija da radi
+kada je IRIS_ENV=production.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }

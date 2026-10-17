@@ -1,7 +1,7 @@
 import i18n from '@/i18n'
 import type { ProcessGraph, ProcessNode, ProcessStepStatus } from '@/types/process'
 import type { StockContext } from '@/lib/stock/posting'
-import { STOCK_EPSILON } from '@/lib/stock/posting'
+import { STOCK_EPSILON, shortageOf } from '@/lib/stock/posting'
 import { hasCycle, validateGraph } from './graph'
 
 // Pure, client-side process "tester" and "simulator". Nothing here touches the
@@ -435,7 +435,7 @@ export function stockRequirements(graph: ProcessGraph, plan: SimPlan, stock: Sto
   }
   return [...rows.values()].map((row) => {
     const required = Math.round(row.required * 1000) / 1000
-    return { ...row, required, shortage: Math.round(Math.max(0, required - row.available) * 1000) / 1000 }
+    return { ...row, required, shortage: Math.round(shortageOf(required, row.available) * 1000) / 1000 }
   })
 }
 

@@ -277,8 +277,18 @@ export function materialRows(graph: ProcessGraph, mode: StockMode, levels: Stock
     planned: roundQuantity(row.planned),
     actual: row.actual === null ? null : roundQuantity(row.actual),
     required: roundQuantity(row.required),
-    shortage: roundQuantity(Math.max(0, row.required - row.available)),
+    shortage: roundQuantity(shortageOf(row.required, row.available)),
   }))
+}
+
+/**
+ * What this order still lacks: nothing when nothing is left to take (inputs
+ * already consumed), and never more than it needs, even when other orders'
+ * reservations push the available figure below zero.
+ */
+export function shortageOf(required: number, available: number): number {
+  if (required <= STOCK_EPSILON) return 0
+  return Math.max(0, required - Math.max(0, available))
 }
 
 /** Rows that cannot be covered. */
