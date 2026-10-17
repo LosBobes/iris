@@ -254,6 +254,7 @@ function AppContent(): React.JSX.Element {
   }, [checkBackendStatus]);
 
   const handleLogout = useCallback(() => {
+    const impersonating = Boolean(currentUser?.impersonatedBy);
     // A deliberate sign-out is not a session to resume, so the remembered page
     // goes with it — otherwise the next login would silently reopen it.
     clearReturnLocation();
@@ -267,6 +268,12 @@ function AppContent(): React.JSX.Element {
         reportUnexpectedError("App.logout", error);
       })
       .finally(() => {
+        if (impersonating) {
+          // Ending an impersonation goes back to the Backoffice it started
+          // from, with a full load so nothing of that organization lingers.
+          window.location.assign("/backoffice");
+          return;
+        }
         setCurrentUser(null);
         // Straight to this organization's sign-in page, so the page being
         // left is not mistaken for a deep link to return to.
@@ -275,7 +282,7 @@ function AppContent(): React.JSX.Element {
         // go with it: the next sign-in loads its own.
         applyOrganizationSettings(null);
       });
-  }, [applyOrganizationSettings, navigate]);
+  }, [applyOrganizationSettings, currentUser?.impersonatedBy, navigate]);
 
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser, orgSlug: string) => {

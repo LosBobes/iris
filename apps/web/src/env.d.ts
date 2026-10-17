@@ -36,6 +36,8 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantUsers,
+  PlatformImpersonationResponse,
 } from '@/types/platform'
 import type {
   CreateUserInput,
@@ -48,6 +50,8 @@ declare global {
     id: string
     username: string
     role: 'admin' | 'user'
+    /** Set only on a session a Backoffice superadmin opened as this user: their username. */
+    impersonatedBy?: string
   }
 
   interface LoginResponse {
@@ -112,6 +116,9 @@ declare global {
       platformLogout: () => Promise<void>
       changePlatformPassword: (change: PlatformPasswordChange) => Promise<PlatformLoginResponse>
       getPlatformMetrics: (days: PlatformRangeDays) => Promise<PlatformMetrics>
+      getPlatformTenantUsers: (slug: string) => Promise<PlatformTenantUsers>
+      /** Replaces this browser's organization session with one as the chosen user. */
+      platformImpersonate: (slug: string, userId: string) => Promise<PlatformImpersonationResponse>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

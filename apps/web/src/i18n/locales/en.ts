@@ -643,6 +643,19 @@ export const en: typeof sr = {
   },
   platform: {
     title: 'Backoffice',
+    impersonate: {
+      action: 'Sign in as…',
+      column: 'Access',
+      title: 'Sign in as a user',
+      description:
+        'Opens a session in {{name}} as the chosen user, for at most one hour. Every sign-in is logged, and signing out of the Backoffice ends it.',
+      admin: 'Administrator',
+      operator: 'Operator',
+      start: 'Sign in',
+      empty: 'This organization has no users.',
+      close: 'Close',
+      error: 'Could not sign in.',
+    },
     overview: 'Platform overview',
     menu: {
       open: 'Open menu',
@@ -743,6 +756,12 @@ export const en: typeof sr = {
       passwordRequired: 'Enter your password.',
       back: '← Back to sign-in',
     },
+  },
+  impersonation: {
+    label: 'Impersonating',
+    message: 'You are acting as {{username}} ({{role}}) in {{org}}',
+    by: 'Backoffice: {{admin}}',
+    stop: 'Stop impersonating',
   },
   auth: {
     eyebrow: 'Sign in',

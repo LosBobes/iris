@@ -1045,6 +1045,21 @@ export function createFixtureApi(): Window['api'] {
       return fixturePlatformMetrics(days)
     },
 
+    async getPlatformTenantUsers(slug) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (slug !== FIXTURE_ORGANIZATION.slug) throw new Error('Organizacija ne postoji.')
+      return {
+        tenant: { id: FIXTURE_ORGANIZATION.slug, ...FIXTURE_ORGANIZATION },
+        users: users.map((user) => ({ id: user.id, username: user.username, role: user.role })),
+      }
+    },
+
+    async platformImpersonate() {
+      // Fixture sessions do not survive the reload that starts the impersonated
+      // session, so there is nothing meaningful to open here.
+      throw new Error('Impersonacija nije dostupna u demo režimu.')
+    },
+
     async getWorkOrders(query) {
       return listFixtureWorkOrders(query)
     },

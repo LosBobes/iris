@@ -330,8 +330,9 @@ type PublicOrganization struct {
 	LogoVersion *string `json:"logoVersion"`
 }
 
-// PlatformAdmin is an Iris operator account. It belongs to no organization and
-// can only read the aggregate usage metrics below.
+// PlatformAdmin is an Iris operator account. It belongs to no organization; it
+// reads the aggregate usage metrics below and can open an audited session as
+// any organization user (impersonation).
 // PlatformRoleSuperadmin is the Backoffice role: the only one that opens the
 // Backoffice (/backoffice in the web app, /platform/* in the API).
 const PlatformRoleSuperadmin = "superadmin"
@@ -361,6 +362,28 @@ type PlatformLoginResponse struct {
 	Success bool           `json:"success"`
 	Admin   *PlatformAdmin `json:"admin,omitempty"`
 	Error   string         `json:"error,omitempty"`
+}
+
+// PlatformTenantUsers lists one organization's accounts (id, username, role
+// only) so a superadmin can pick whom to impersonate.
+type PlatformTenantUsers struct {
+	Tenant Tenant `json:"tenant"`
+	Users  []User `json:"users"`
+}
+
+// PlatformImpersonationRequest is the POST /platform/tenants/{slug}/impersonate
+// payload.
+type PlatformImpersonationRequest struct {
+	UserID string `json:"userId"`
+}
+
+// PlatformImpersonationResponse reports the organization session that was
+// opened (as the iris_session cookie) for the chosen user.
+type PlatformImpersonationResponse struct {
+	Success   bool   `json:"success"`
+	User      *User  `json:"user,omitempty"`
+	OrgSlug   string `json:"orgSlug,omitempty"`
+	ExpiresAt string `json:"expiresAt,omitempty"`
 }
 
 // PlatformMetrics is the operator dashboard payload: counts, dates and sizes
@@ -435,6 +458,9 @@ type User struct {
 	// session/authentication) and used to scope every data query; it is never
 	// exposed to clients.
 	TenantID string `json:"-"`
+	// ImpersonatedBy is set only on a session a Backoffice superadmin opened
+	// "as" this user: it names that superadmin, so the app can say so.
+	ImpersonatedBy *string `json:"impersonatedBy,omitempty"`
 }
 
 // Tenant is an organization (shop) whose data is isolated from every other

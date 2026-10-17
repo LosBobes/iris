@@ -1259,6 +1259,106 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/users:
+    get:
+      tags: [Platform]
+      summary: List an organization's accounts, to pick one to impersonate (operator only)
+      description: Id, username and role only.
+      operationId: getPlatformTenantUsers
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The organization and its accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenantUsers'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No organization with that slug
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/impersonate:
+    post:
+      tags: [Platform]
+      summary: Open an organization session as one of its users (operator only)
+      description: >
+        Sets an ordinary `iris_session` cookie for the chosen user (replacing any
+        organization session in this browser), valid for one hour. The session
+        reports `impersonatedBy` on `/auth/session`, is written to the
+        `impersonation_events` audit log, is not counted as a login, and ends on
+        `/auth/logout` or when the superadmin signs out of the Backoffice.
+      operationId: platformImpersonate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformImpersonationRequest'
+      responses:
+        '200':
+          description: Session opened
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: iris_session (HttpOnly)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformImpersonationResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization, or the user is not in it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: No user chosen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
@@ -1577,6 +1677,11 @@ components:
         role:
           type: string
           enum: [admin, user]
+        impersonatedBy:
+          type: string
+          description: >
+            Present only on a session a Backoffice superadmin opened as this
+            user; the superadmin's username.
     CreateUserInput:
       type: object
       required: [username, password, role]
@@ -2444,6 +2549,43 @@ components:
               description: True until the account replaces its initial password.
         error:
           type: string
+    PlatformTenantUsers:
+      type: object
+      required: [tenant, users]
+      properties:
+        tenant:
+          type: object
+          required: [id, slug, name]
+          properties:
+            id:
+              type: string
+            slug:
+              type: string
+            name:
+              type: string
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+    PlatformImpersonationRequest:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+    PlatformImpersonationResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/User'
+        orgSlug:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
     PlatformMetrics:
       type: object
       required: [generatedAt, rangeDays, rangeStart, totals, system, tenants, daily]

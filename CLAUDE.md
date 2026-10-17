@@ -97,9 +97,15 @@ edits, and blocks production/destructive commands the user did not ask for.
   organization `users` (own sessions, `iris_platform_session` cookie, 2 h; neither
   side's credentials or sessions work on the other). A database with none gets
   `admin` / `admin123321`, which must change its password before anything shows
-  (in-app "Lozinka"; `irisctl create-platform-admin` adds more). It only reads
-  aggregate counts from `GET /platform/metrics` — never customer/user/work-order
-  records. Tenant logins are recorded in `login_events` for those counts.
+  (in-app "Lozinka"; `irisctl create-platform-admin` adds more). The dashboard
+  reads aggregate counts from `GET /platform/metrics`; tenant logins are recorded
+  in `login_events` for those counts. **Impersonation** ("Uđi kao…" per
+  organization) is its only way into records: `POST /platform/tenants/{slug}/impersonate`
+  issues an ordinary `iris_session` (1 h) for the chosen user, marked
+  `sessions.impersonated_by` and audited in `impersonation_events`; `/auth/session`
+  reports `impersonatedBy`, which drives the app's top banner ("Prekini
+  impersonaciju" logs out back to `/backoffice`). It is not counted as a login,
+  and signing out of the Backoffice ends it.
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

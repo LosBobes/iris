@@ -201,14 +201,19 @@ func (s *SQLiteStore) CreateSession(
 func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*domain.User, error) {
 	var user domain.User
 	var expiresAtRaw string
+	var impersonatedBy sql.NullString
+	// An impersonation session (see CreateImpersonationSession) carries the
+	// superadmin who opened it; ordinary sign-ins leave impersonated_by NULL.
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at
+		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at,
+		        platform_admins.username
 		 FROM sessions
 		 JOIN users ON users.id = sessions.user_id
+		 LEFT JOIN platform_admins ON platform_admins.id = sessions.impersonated_by
 		 WHERE sessions.token = ?`,
 		token,
-	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw)
+	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw, &impersonatedBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -219,6 +224,9 @@ func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*do
 	if err != nil || time.Now().UTC().After(expiresAt) {
 		_ = s.DeleteSession(ctx, token)
 		return nil, nil
+	}
+	if impersonatedBy.Valid {
+		user.ImpersonatedBy = &impersonatedBy.String
 	}
 	return &user, nil
 }

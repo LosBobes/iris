@@ -21,8 +21,10 @@ import (
 // tenant-scoped code paths never see it, and only the SQLite store implements
 // it; the API enables the /platform routes only when it is available.
 //
-// The metrics are aggregates only (counts, dates, sizes). Nothing here returns
-// a customer, user, work order or any other personal or business record.
+// The metrics are aggregates only (counts, dates, sizes). The one door into an
+// organization's records is impersonation: a superadmin lists a tenant's
+// accounts and opens an ordinary, short, audited organization session as one
+// of them (see impersonation.go).
 type PlatformStore interface {
 	UpsertPlatformAdmin(ctx context.Context, username, password string) error
 	AuthenticatePlatformAdmin(ctx context.Context, username, password string) (*domain.PlatformAdmin, error)
@@ -35,6 +37,17 @@ type PlatformStore interface {
 	ChangePlatformAdminPassword(ctx context.Context, adminID, keepToken, currentPassword, newPassword string) error
 	RecordLogin(ctx context.Context, tenantID, userID string, at time.Time) error
 	PlatformMetrics(ctx context.Context, now time.Time, rangeDays int) (domain.PlatformMetrics, error)
+	// PlatformTenantUsers returns the organization with that slug and its
+	// accounts, or nil when no organization matches.
+	PlatformTenantUsers(ctx context.Context, slug string) (*domain.PlatformTenantUsers, error)
+	// CreateImpersonationSession opens an organization session for the user in
+	// the tenant on behalf of the superadmin and records it in
+	// impersonation_events. It returns a nil user when the account is not in
+	// that tenant.
+	CreateImpersonationSession(ctx context.Context, input ImpersonationInput) (string, *domain.User, error)
+	// EndImpersonationSessions deletes every organization session the
+	// superadmin opened by impersonation.
+	EndImpersonationSessions(ctx context.Context, adminID string) error
 }
 
 var _ PlatformStore = (*SQLiteStore)(nil)
@@ -386,7 +399,8 @@ func (s *SQLiteStore) PlatformMetrics(ctx context.Context, now time.Time, rangeD
 	if err := each(
 		`SELECT users.tenant_id, COUNT(*) FROM sessions
 		 JOIN users ON users.id = sessions.user_id
-		 WHERE sessions.expires_at > ? GROUP BY users.tenant_id`,
+		 WHERE sessions.expires_at > ? AND sessions.impersonated_by IS NULL
+		 GROUP BY users.tenant_id`,
 		[]any{nowRaw},
 		func(t *domain.PlatformTenantMetrics, r *sql.Rows) error { return r.Scan(&t.ID, &t.ActiveSessions) },
 	); err != nil {

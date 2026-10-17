@@ -1,6 +1,6 @@
 // Backoffice (the "platform" API). Contract-sync point with the Platform* schemas
-// in iris-api/openapi.yaml. Aggregates only: no customer, user or work-order
-// records ever appear here.
+// in iris-api/openapi.yaml. Aggregates only, except the account list used to
+// pick whom to impersonate (id, username and role).
 
 export type PlatformRangeDays = 7 | 30 | 90 | 365
 
@@ -16,6 +16,20 @@ export interface PlatformLoginResponse {
   success: boolean
   admin?: PlatformAdmin
   error?: string
+}
+
+/** GET /platform/tenants/{slug}/users: an organization and its accounts. */
+export interface PlatformTenantUsers {
+  tenant: { id: string; slug: string; name: string }
+  users: AuthenticatedUser[]
+}
+
+/** POST /platform/tenants/{slug}/impersonate: the organization session opened. */
+export interface PlatformImpersonationResponse {
+  success: boolean
+  user?: AuthenticatedUser
+  orgSlug?: string
+  expiresAt?: string
 }
 
 export interface PlatformPasswordChange {

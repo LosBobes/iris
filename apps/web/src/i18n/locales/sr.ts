@@ -642,6 +642,19 @@ export const sr = {
   },
   platform: {
     title: 'Backoffice',
+    impersonate: {
+      action: 'Uđi kao…',
+      column: 'Pristup',
+      title: 'Uđi kao korisnik',
+      description:
+        'Otvara sesiju organizacije {{name}} kao izabrani korisnik, na najviše sat vremena. Svaki ulazak se beleži, a odjava iz Backoffice-a ga prekida.',
+      admin: 'Administrator',
+      operator: 'Operater',
+      start: 'Uđi',
+      empty: 'Ova organizacija nema korisnika.',
+      close: 'Zatvori',
+      error: 'Ulazak nije uspeo.',
+    },
     overview: 'Pregled platforme',
     menu: {
       open: 'Otvori meni',
@@ -742,6 +755,12 @@ export const sr = {
       passwordRequired: 'Unesite lozinku.',
       back: '← Nazad na prijavu',
     },
+  },
+  impersonation: {
+    label: 'Impersonacija',
+    message: 'Radite kao {{username}} ({{role}}) u organizaciji {{org}}',
+    by: 'Backoffice: {{admin}}',
+    stop: 'Prekini impersonaciju',
   },
   auth: {
     eyebrow: 'Prijava',

@@ -34,6 +34,8 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantUsers,
+  PlatformImpersonationResponse,
 } from '@/types/platform'
 import type {
   CreateUserInput,
@@ -700,6 +702,22 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlatformMetrics(days: PlatformRangeDays) {
       const response = await fetchImpl(url(`/platform/metrics?days=${days}`), credentialedRequest())
       return readJSON<PlatformMetrics>(response)
+    },
+
+    async getPlatformTenantUsers(slug: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/users`),
+        credentialedRequest(),
+      )
+      return readJSON<PlatformTenantUsers>(response)
+    },
+
+    async platformImpersonate(slug: string, userId: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/impersonate`),
+        jsonRequest('POST', { userId }),
+      )
+      return readJSON<PlatformImpersonationResponse>(response)
     },
 
     async listUsers() {

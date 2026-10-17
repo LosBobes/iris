@@ -47,6 +47,9 @@ type Config struct {
 	// short because it can read usage across every organization.
 	PlatformSessionCookieName string
 	PlatformSessionDuration   time.Duration
+	// ImpersonationDuration caps an organization session a superadmin opens
+	// as one of its users (see impersonation.go).
+	ImpersonationDuration time.Duration
 	// Release is shown on the operator dashboard (IRIS_RELEASE).
 	Release string
 }
@@ -74,6 +77,9 @@ func NewServer(store store.Store, configs ...Config) *Server {
 	}
 	if config.PlatformSessionDuration == 0 {
 		config.PlatformSessionDuration = 2 * time.Hour
+	}
+	if config.ImpersonationDuration == 0 {
+		config.ImpersonationDuration = time.Hour
 	}
 	return &Server{
 		store:     store,
@@ -121,6 +127,8 @@ func (s *Server) Routes() http.Handler {
 	r.Post("/platform/auth/logout", s.handlePlatformLogout)
 	r.Post("/platform/auth/password", s.handlePlatformChangePassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/users", s.handlePlatformTenantUsers)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/impersonate", s.handlePlatformImpersonate)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
