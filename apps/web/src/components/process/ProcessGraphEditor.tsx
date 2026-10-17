@@ -21,6 +21,8 @@ import { cn } from '@/lib/utils'
 import {
   canConnect,
   edgeHandles,
+  edgeStream,
+  type EdgeStream,
   generateEdgeId,
   generateNodeId,
   readySteps,
@@ -40,6 +42,15 @@ import {
 import { KIND_META } from './kind-meta'
 import { ProcessNodeCard, type ProcessFlowNode } from './ProcessNodes'
 import { ProcessInspector, type ProcessSelection } from './ProcessInspector'
+
+// Arrowheads take the colour of the stream they end (CSS variables, so they
+// follow light and dark themes). Strokes are styled in main.css (.iris-edge-*).
+const EDGE_COLORS: Record<EdgeStream, string> = {
+  input: 'var(--iris-proc-input)',
+  product: 'var(--iris-proc-product)',
+  byproduct: 'var(--iris-proc-byproduct)',
+  flow: 'var(--iris-ink-soft)',
+}
 
 const nodeTypes = {
   step: ProcessNodeCard,
@@ -172,22 +183,31 @@ function ProcessGraphEditorInner({
   const kindById = useMemo(() => new Map(value.nodes.map((node) => [node.id, node.kind])), [value.nodes])
   const edges = useMemo<Edge[]>(
     () =>
-      value.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        ...edgeHandles(kindById.get(edge.source), kindById.get(edge.target)),
-        // Orthogonal routing keeps the main flow and the vertical side streams
-        // on straight, aligned lines; offsets turn into clean right angles.
-        type: 'smoothstep',
-        pathOptions: { borderRadius: 6 },
-        label: edge.label,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        animated: activeTargets.has(edge.target),
-        selected: selection?.type === 'edge' && selection.id === edge.id,
-        deletable: canEditStructure,
-        reconnectable: false,
-      })),
+      value.edges.map((edge) => {
+        const stream = edgeStream(kindById.get(edge.source), kindById.get(edge.target))
+        return {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          ...edgeHandles(kindById.get(edge.source), kindById.get(edge.target)),
+          // Orthogonal routing keeps the main flow and the vertical side streams
+          // on straight, aligned lines; offsets turn into clean right angles.
+          type: 'smoothstep',
+          pathOptions: { borderRadius: 6 },
+          label: edge.label,
+          className: `iris-edge-${stream}`,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 18,
+            height: 18,
+            color: EDGE_COLORS[stream],
+          },
+          animated: activeTargets.has(edge.target),
+          selected: selection?.type === 'edge' && selection.id === edge.id,
+          deletable: canEditStructure,
+          reconnectable: false,
+        }
+      }),
     [value.edges, selection, canEditStructure, activeTargets, kindById],
   )
 

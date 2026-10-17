@@ -412,3 +412,16 @@ export function edgeHandles(
   if (sourceKind === 'step' && targetKind === 'byproduct') return { sourceHandle: 'bottom', targetHandle: 'top' }
   return { sourceHandle: 'out', targetHandle: 'in' }
 }
+
+/** Which stream an edge belongs to, for colouring: material in, product out, byproduct out, or the main step flow. */
+export type EdgeStream = 'input' | 'product' | 'byproduct' | 'flow'
+
+export function edgeStream(
+  sourceKind: ProcessNodeKind | undefined,
+  targetKind: ProcessNodeKind | undefined,
+): EdgeStream {
+  if (sourceKind === 'input') return 'input'
+  if (sourceKind === 'byproduct' || targetKind === 'byproduct') return 'byproduct'
+  if (sourceKind === 'product' || targetKind === 'product') return 'product'
+  return 'flow'
+}

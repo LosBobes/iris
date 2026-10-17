@@ -1044,6 +1044,31 @@
   fill: currentColor;
 }
 
+/* Edge streams: inputs (green), products (orange) and byproducts (dashed)
+   stand apart from the neutral step-to-step flow. */
+.iris-flow .react-flow__edge .react-flow__edge-path {
+  stroke-width: 1.75;
+}
+.iris-flow .react-flow__edge.iris-edge-flow .react-flow__edge-path {
+  stroke: var(--iris-ink-soft);
+}
+.iris-flow .react-flow__edge.iris-edge-input .react-flow__edge-path {
+  stroke: var(--iris-proc-input);
+  stroke-width: 2.25;
+}
+.iris-flow .react-flow__edge.iris-edge-product .react-flow__edge-path {
+  stroke: var(--iris-proc-product);
+  stroke-width: 2.25;
+}
+.iris-flow .react-flow__edge.iris-edge-byproduct .react-flow__edge-path {
+  stroke: var(--iris-proc-byproduct);
+  stroke-width: 2.25;
+  stroke-dasharray: 6 4;
+}
+.iris-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--iris-accent);
+}
+
 .iris-flow .react-flow__handle {
   width: 8px;
   height: 8px;

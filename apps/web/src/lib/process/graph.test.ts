@@ -3,6 +3,7 @@ import type { ProcessGraph, ProcessNode } from '@/types/process'
 import {
   canConnect,
   edgeHandles,
+  edgeStream,
   checkConnection,
   copyTemplateToOrder,
   generateId,
@@ -249,5 +250,16 @@ describe('edgeHandles', () => {
     expect(edgeHandles('step', 'product')).toEqual({ sourceHandle: 'out', targetHandle: 'in' })
     expect(edgeHandles('product', 'step')).toEqual({ sourceHandle: 'out', targetHandle: 'in' })
     expect(edgeHandles('byproduct', 'step')).toEqual({ sourceHandle: 'out', targetHandle: 'in' })
+  })
+})
+
+describe('edgeStream', () => {
+  it('classifies edges for colouring', () => {
+    expect(edgeStream('input', 'step')).toBe('input')
+    expect(edgeStream('step', 'byproduct')).toBe('byproduct')
+    expect(edgeStream('byproduct', 'step')).toBe('byproduct')
+    expect(edgeStream('step', 'product')).toBe('product')
+    expect(edgeStream('product', 'step')).toBe('product')
+    expect(edgeStream('step', 'step')).toBe('flow')
   })
 })
