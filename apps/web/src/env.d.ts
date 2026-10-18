@@ -177,6 +177,20 @@ declare global {
       getPlatformBackups: () => Promise<PlatformBackups>
       /** Takes a SQLite backup copy now (audited); refused on PostgreSQL. */
       createPlatformBackup: () => Promise<PlatformBackup>
+      /** Platform announcements: the session organization's active ones, and the sign-in page's. */
+      getAnnouncements: () => Promise<import('@/types/announcement').Announcement[]>
+      getPublicAnnouncements: (slug: string) => Promise<import('@/types/announcement').Announcement[]>
+      /** Backoffice announcement management (every change is audited). */
+      getPlatformAnnouncements: () => Promise<import('@/types/announcement').PlatformAnnouncement[]>
+      createPlatformAnnouncement: (
+        input: import('@/types/announcement').PlatformAnnouncementInput,
+      ) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      updatePlatformAnnouncement: (
+        id: string,
+        input: import('@/types/announcement').PlatformAnnouncementInput,
+      ) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      endPlatformAnnouncement: (id: string) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      deletePlatformAnnouncement: (id: string) => Promise<void>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

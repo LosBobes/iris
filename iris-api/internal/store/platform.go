@@ -90,6 +90,14 @@ type PlatformStore interface {
 	PlatformAdmins(ctx context.Context) ([]domain.PlatformAdminSummary, error)
 	PlatformCreateAdmin(ctx context.Context, actor AuditActor, input domain.PlatformCreateAdminInput) (*domain.PlatformAdminSummary, error)
 	PlatformSetAdminDisabled(ctx context.Context, actor AuditActor, id string, disabled bool) (*domain.PlatformAdminSummary, error)
+
+	// Announcements (announcements.go). Mutations write a
+	// platform_audit_events row; ErrAnnouncementNotFound means an unknown id.
+	PlatformAnnouncements(ctx context.Context, now time.Time) ([]domain.PlatformAnnouncement, error)
+	PlatformCreateAnnouncement(ctx context.Context, actor AuditActor, input domain.PlatformAnnouncementInput, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformUpdateAnnouncement(ctx context.Context, actor AuditActor, id string, input domain.PlatformAnnouncementInput, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformEndAnnouncement(ctx context.Context, actor AuditActor, id string, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformDeleteAnnouncement(ctx context.Context, actor AuditActor, id string, now time.Time) error
 }
 
 var _ PlatformStore = (*SQLiteStore)(nil)

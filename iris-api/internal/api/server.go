@@ -157,6 +157,7 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/public/work-orders/{token}", s.handlePublicWorkOrderStatus)
 	r.Get("/public/organizations/{slug}", s.handlePublicOrganization)
 	r.Get("/public/organizations/{slug}/logo", s.handlePublicOrganizationLogo)
+	r.Get("/public/organizations/{slug}/announcements", s.handlePublicAnnouncements)
 
 	r.Post("/platform/auth/login", s.handlePlatformLogin)
 	r.Get("/platform/auth/session", s.handlePlatformSession)
@@ -188,6 +189,11 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/process-templates", s.handlePlatformCreateProcessTemplate)
 	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformUpdateProcessTemplate)
 	r.With(s.requirePlatformAdmin).Delete("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformDeleteProcessTemplate)
+	r.With(s.requirePlatformAdmin).Get("/platform/announcements", s.handlePlatformAnnouncements)
+	r.With(s.requirePlatformAdmin).Post("/platform/announcements", s.handlePlatformCreateAnnouncement)
+	r.With(s.requirePlatformAdmin).Put("/platform/announcements/{id}", s.handlePlatformUpdateAnnouncement)
+	r.With(s.requirePlatformAdmin).Post("/platform/announcements/{id}/end", s.handlePlatformEndAnnouncement)
+	r.With(s.requirePlatformAdmin).Delete("/platform/announcements/{id}", s.handlePlatformDeleteAnnouncement)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -250,6 +256,7 @@ func (s *Server) Routes() http.Handler {
 		stock.Get("/stock/movements", s.handleStockMovements)
 		stock.Post("/stock/receipts", s.handlePostStockReceipt)
 		stock.Post("/stock/counts", s.requireAdmin(s.handlePostStockCount))
+		protected.Get("/announcements", s.handleAnnouncements)
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
 		protected.Get("/settings/login-logo", s.handleLoginLogo)

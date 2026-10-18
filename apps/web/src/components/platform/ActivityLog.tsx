@@ -29,6 +29,10 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "admin.login_failed": "platform.activity.kinds.adminLoginFailed",
   "admin.recovery_login": "platform.activity.kinds.adminRecoveryLogin",
   "backup.create": "platform.activity.kinds.backupCreate",
+  "announcement.create": "platform.activity.kinds.announcementCreate",
+  "announcement.update": "platform.activity.kinds.announcementUpdate",
+  "announcement.end": "platform.activity.kinds.announcementEnd",
+  "announcement.delete": "platform.activity.kinds.announcementDelete",
 };
 
 type Trail =
@@ -64,6 +68,14 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
   }
   if (event.action === "backup.create" && event.detail?.name) {
     lines.push(t("platform.activity.backupFile", { name: event.detail.name }));
+  }
+  if (event.action.startsWith("announcement.") && event.detail?.message) {
+    lines.push(t("platform.activity.announcement", { message: event.detail.message }));
+    lines.push(
+      t("platform.activity.announcementTarget", {
+        target: event.detail.target === "all" ? t("platform.activity.announcementAll") : event.detail.target,
+      }),
+    );
   }
   if (event.detail?.toName) {
     lines.push(t("platform.activity.renamed", { from: event.detail.fromName, to: event.detail.toName }));

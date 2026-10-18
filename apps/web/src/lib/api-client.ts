@@ -52,6 +52,7 @@ import type {
   PlatformAdminSummary,
   PlatformCreateAdminInput,
 } from '@/types/platform'
+import type { Announcement, PlatformAnnouncement, PlatformAnnouncementInput } from '@/types/announcement'
 import type {
   ProcessGraph,
   ProcessTemplate,
@@ -1169,6 +1170,53 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async deletePlatformProcessTemplate(slug: string, id: string) {
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async getAnnouncements() {
+      const response = await fetchImpl(url('/announcements'), credentialedRequest())
+      return readArray(await readJSON<Announcement[]>(response))
+    },
+
+    async getPublicAnnouncements(slug: string) {
+      const response = await fetchImpl(
+        url(`/public/organizations/${encodeURIComponent(slug)}/announcements`),
+        credentialedRequest(),
+      )
+      return readArray(await readJSON<Announcement[]>(response))
+    },
+
+    async getPlatformAnnouncements() {
+      const response = await fetchImpl(url('/platform/announcements'), credentialedRequest())
+      return readArray(await readJSON<PlatformAnnouncement[]>(response))
+    },
+
+    async createPlatformAnnouncement(input: PlatformAnnouncementInput) {
+      const response = await fetchImpl(url('/platform/announcements'), jsonRequest('POST', input))
+      return readJSON<PlatformAnnouncement>(response)
+    },
+
+    async updatePlatformAnnouncement(id: string, input: PlatformAnnouncementInput) {
+      const response = await fetchImpl(
+        url(`/platform/announcements/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<PlatformAnnouncement>(response)
+    },
+
+    async endPlatformAnnouncement(id: string) {
+      const response = await fetchImpl(
+        url(`/platform/announcements/${encodeURIComponent(id)}/end`),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<PlatformAnnouncement>(response)
+    },
+
+    async deletePlatformAnnouncement(id: string) {
+      const response = await fetchImpl(
+        url(`/platform/announcements/${encodeURIComponent(id)}`),
         credentialedRequest({ method: 'DELETE' }),
       )
       await readNoContent(response)

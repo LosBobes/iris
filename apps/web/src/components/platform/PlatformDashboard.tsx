@@ -13,6 +13,7 @@ import { ActivityLog } from "./ActivityLog";
 import { PlatformAdminsPanel } from "./PlatformAdminsPanel";
 import { PlatformTwoFactorDialog } from "./PlatformTwoFactorDialog";
 import { BackupWarning, SystemPanel } from "./SystemPanel";
+import { AnnouncementsPanel } from "./AnnouncementsPanel";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -117,15 +118,19 @@ export function PlatformDashboard({
   // Sections: the metrics overview at /backoffice, organization management
   // and the activity log below it.
   const pathname = useLocation().pathname;
-  const section: "overview" | "organizations" | "admins" | "activity" | "system" = pathname.startsWith("/backoffice/organizations")
+  const section: "overview" | "organizations" | "announcements" | "admins" | "activity" | "system" = pathname.startsWith(
+    "/backoffice/organizations",
+  )
     ? "organizations"
-    : pathname.startsWith("/backoffice/admins")
-      ? "admins"
-      : pathname.startsWith("/backoffice/activity")
-        ? "activity"
-        : pathname.startsWith("/backoffice/system")
-          ? "system"
-          : "overview";
+    : pathname.startsWith("/backoffice/announcements")
+      ? "announcements"
+      : pathname.startsWith("/backoffice/admins")
+        ? "admins"
+        : pathname.startsWith("/backoffice/activity")
+          ? "activity"
+          : pathname.startsWith("/backoffice/system")
+            ? "system"
+            : "overview";
   const showLog = section !== "overview";
 
   const load = useCallback(async (): Promise<void> => {
@@ -240,6 +245,7 @@ export function PlatformDashboard({
   const sections = [
     { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
     { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
+    { to: "/backoffice/announcements", label: t("platform.nav.announcements"), current: section === "announcements" },
     { to: "/backoffice/admins", label: t("platform.nav.admins"), current: section === "admins" },
     { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
     { to: "/backoffice/system", label: t("platform.nav.system"), current: section === "system" },
@@ -314,16 +320,12 @@ export function PlatformDashboard({
         {showLog ? (
           <>
             <h1 className="text-[22px] font-medium tracking-[-0.3px]">
-              {section === "organizations"
-                ? t("platform.nav.organizations")
-                : section === "admins"
-                  ? t("platform.nav.admins")
-                  : section === "system"
-                    ? t("platform.nav.system")
-                    : t("platform.nav.activity")}
+              {t(`platform.nav.${section}`)}
             </h1>
             {section === "organizations" ? (
               <OrganizationsPanel />
+            ) : section === "announcements" ? (
+              <AnnouncementsPanel />
             ) : section === "admins" ? (
               <PlatformAdminsPanel currentUsername={username} />
             ) : section === "system" ? (

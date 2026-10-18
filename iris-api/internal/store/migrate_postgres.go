@@ -48,6 +48,8 @@ var migrationTables = []string{
 	"work_order_processes",
 	"stock_movements",
 	"tenant_notes",
+	"platform_announcements",
+	"platform_announcement_tenants",
 }
 
 // identitySequenceTables lists tables whose primary key is a Postgres identity

@@ -153,6 +153,10 @@ export type PlatformAuditAction =
   | 'admin.login_failed'
   | 'admin.recovery_login'
   | 'backup.create'
+  | 'announcement.create'
+  | 'announcement.update'
+  | 'announcement.end'
+  | 'announcement.delete'
 
 /** One superadmin action in the Backoffice activity log (GET /platform/audit). */
 export interface PlatformAuditEvent {

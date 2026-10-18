@@ -58,6 +58,7 @@ import type {
   PlatformTenantHealth,
   PlatformTenantNotes,
 } from '@/types/platform'
+import { createAnnouncementFixtureStore } from '@/lib/announcements-fixture'
 import { PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
 import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
@@ -798,9 +799,15 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       ? { ...item, stockOnHand: stockStore.onHand(item.id), minStock: item.minStock ?? null }
       : { ...item, stockOnHand: null, minStock: item.kind === 'article' ? (item.minStock ?? null) : null }
 
+  const announcementStore = createAnnouncementFixtureStore({
+    platformSignedIn: () => platformSignedIn,
+    tenant: FIXTURE_ORGANIZATION,
+  })
+
   return {
     ...processStore.api,
     ...stockStore.api,
+    ...announcementStore.api,
     async getAppVersion() {
       return APP_VERSION
     },
