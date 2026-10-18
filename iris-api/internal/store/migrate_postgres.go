@@ -79,6 +79,17 @@ func MigrateToPostgres(ctx context.Context, source *SQLStore, target *SQLStore) 
 	if source.dialect != dialectSQLite {
 		return nil, fmt.Errorf("migration source must be a sqlite store, got %s", source.dialect)
 	}
+	// Orphaned child rows (SQLite enforces foreign keys only on connections
+	// that enabled them) would make Postgres abort the copy halfway with
+	// SQLSTATE 23503. Refuse up front, naming every violation and its fix,
+	// before touching the target.
+	violations, err := ForeignKeyViolations(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if len(violations) > 0 {
+		return nil, &ForeignKeyViolationsError{Violations: violations}
+	}
 	if target.dialect != dialectPostgres {
 		return nil, fmt.Errorf("migration target must be a postgres store, got %s", target.dialect)
 	}

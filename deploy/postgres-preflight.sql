@@ -50,6 +50,21 @@ UNION ALL SELECT 'stock_movements.quantity', COUNT(*) FROM stock_movements
   WHERE quantity IS NOT NULL AND (abs(quantity) >= 1e10 OR abs(quantity * 10000 - round(quantity * 10000)) > 1e-6);
 
 .print
+.print == rows whose foreign key points at a missing parent (expect: 0 rows)
+-- SQLite enforces foreign keys only on connections that switched them on, so a
+-- parent deleted on one that had not (an old build, a manual sqlite3 session)
+-- leaves its children behind; PostgreSQL rejects them and the copy aborts with
+-- SQLSTATE 23503. `-check` prints the fix for each line. For orphaned price
+-- history (the October 2026 cutover) it is what ON DELETE CASCADE would have done:
+--   DELETE FROM catalog_item_price_history WHERE catalog_item_id NOT IN (SELECT id FROM catalog_items);
+-- Never delete orphaned stock_movements (append-only ledger): restore the
+-- missing catalog_items from a backup instead.
+SELECT fk."table" AS child_table, fk.parent AS parent_table, COUNT(*) AS orphaned_rows
+FROM pragma_foreign_key_check AS fk
+GROUP BY fk."table", fk.parent
+ORDER BY fk."table", fk.parent;
+
+.print
 .print == tables migrate-to-postgres does NOT copy (expect: 0 rows; schema_migrations is excluded on purpose)
 -- Keep in sync with migrationTables / migrationExcludedTables in
 -- iris-api/internal/store/; `-check` computes this from the code and is the
