@@ -12,8 +12,8 @@ import (
 // catalog, settings, process templates, work-order processes, stock movements,
 // login/impersonation events); platform audit rows keep their history with the
 // tenant reference nulled. It reports whether an organization was deleted. A
-// store-level helper for operator tooling and the cascade test, not exposed over
-// HTTP.
+// bare store-level helper (cascade test); the Backoffice and irisctl use the
+// guarded, audited PlatformDeleteTenant (tenant_offboarding.go) instead.
 func (s *SQLiteStore) DeleteTenant(ctx context.Context, slug string) (bool, error) {
 	slug = strings.ToLower(strings.TrimSpace(slug))
 	if slug == "" {

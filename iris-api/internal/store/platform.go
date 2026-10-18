@@ -64,6 +64,10 @@ type PlatformStore interface {
 	PlatformSetTenantModules(ctx context.Context, actor AuditActor, slug string, modules domain.OrganizationModules) (*domain.PlatformTenant, error)
 	PlatformResetUserPassword(ctx context.Context, actor AuditActor, slug, userID, password string) (*domain.User, error)
 	PlatformAuditLog(ctx context.Context, limit, offset int) (domain.PlatformAuditLog, error)
+	// Offboarding (tenant_offboarding.go): an audited full export, and the
+	// deletion of a suspended organization once confirmSlug matches its slug.
+	PlatformExportTenant(ctx context.Context, actor AuditActor, slug string) (*domain.PlatformTenantExport, error)
+	PlatformDeleteTenant(ctx context.Context, actor AuditActor, slug, confirmSlug string) (*domain.PlatformTenantDeletion, error)
 
 	// Process templates of any organization (platform_processes.go). Mutations
 	// write a platform_audit_events row. ErrTenantNotFound means no organization

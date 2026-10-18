@@ -2173,6 +2173,109 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Platform]
+      summary: Permanently delete a suspended organization and all its data (operator only)
+      description: >
+        Two-phase: the organization must be suspended first, and the body must
+        repeat its slug exactly. Deletes every row the organization owns in one
+        transaction (users, sessions, customers, work orders, catalog, stock,
+        processes, settings, login and impersonation history). Recorded as
+        `tenant.delete` with the name, slug and row counts; the activity log
+        keeps all earlier events of the organization. Cannot be undone —
+        export first.
+      operationId: deletePlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteTenantInput'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenantDeletion'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The organization is not suspended, or confirmSlug does not match its slug
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/export:
+    get:
+      tags: [Platform]
+      summary: Download a full export of one organization's data (operator only)
+      description: >
+        A single JSON document (attachment, `iris-<slug>-<YYYYMMDD-HHMMSS>.json`)
+        with every row the organization owns, without password hashes or
+        sessions. A sensitive read, so it is recorded as `tenant.export`.
+      operationId: exportPlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The export file
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenantExport'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /platform/tenants/{slug}/suspend:
     post:
       tags: [Platform]
@@ -4353,6 +4456,80 @@ components:
           pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
           minLength: 2
           maxLength: 64
+    PlatformTenantExport:
+      type: object
+      description: >
+        Every row the organization owns, table by table (column -> value).
+        users carry no password_hash and sessions are not exported. JSON
+        columns (work_orders.payload, process_templates.graph,
+        work_order_processes.graph) are embedded as JSON.
+      required: [format, formatVersion, exportedAt, schemaVersion, tenant, totalRows, counts, tables]
+      properties:
+        format:
+          type: string
+          enum: [iris-tenant-export]
+        formatVersion:
+          type: integer
+          description: Bumped when the layout changes incompatibly (currently 1).
+        exportedAt:
+          type: string
+          format: date-time
+        schemaVersion:
+          type: integer
+          description: Highest applied database migration.
+        tenant:
+          type: object
+          required: [id, slug, name, createdAt, suspendedAt]
+          properties:
+            id:
+              type: string
+            slug:
+              type: string
+            name:
+              type: string
+            createdAt:
+              type: string
+            suspendedAt:
+              type: string
+              nullable: true
+        totalRows:
+          type: integer
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+        tables:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              additionalProperties: true
+    PlatformDeleteTenantInput:
+      type: object
+      required: [confirmSlug]
+      properties:
+        confirmSlug:
+          type: string
+          description: The organization's slug, typed again exactly.
+    PlatformTenantDeletion:
+      type: object
+      required: [slug, name, deletedAt, totalRows, rows]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        deletedAt:
+          type: string
+          format: date-time
+        totalRows:
+          type: integer
+        rows:
+          type: object
+          description: Deleted rows per table.
+          additionalProperties:
+            type: integer
     PlatformPasswordReset:
       type: object
       required: [password]
@@ -4374,7 +4551,7 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete, tenant.export, tenant.delete]
         tenantSlug:
           type: string
           description: As it was at the time.
@@ -4387,7 +4564,10 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: For tenant.update, fromName/toName and fromSlug/toSlug of what changed.
+          description: >
+            For tenant.update, fromName/toName and fromSlug/toSlug of what changed.
+            For tenant.export, totalRows; for tenant.delete, totalRows, users,
+            customers and workOrders (deleted row counts).
         ip:
           type: string
         impersonation:

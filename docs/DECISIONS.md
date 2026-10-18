@@ -211,4 +211,19 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
+## D-0xx (tbd): Organization offboarding — audited export, two-phase deletion
+- **Status**: `accepted`
+- **Context**: An organization leaving Iris needs its data handed over and then removed. Deletion existed only as a bare store helper (cascade test); there was no export at all.
+- **Decision**: Backoffice superadmins get `GET /platform/tenants/{slug}/export` and `DELETE /platform/tenants/{slug}` (also `irisctl export-tenant` / `delete-tenant`, audited as admin `irisctl`).
+  - **Export** is one JSON document (`format: iris-tenant-export`, `formatVersion: 1`, `exportedAt`, `schemaVersion`, per-table `counts` and `tables` of column → value rows), downloaded as `iris-<slug>-<timestamp>.json`. It is a raw, table-level copy rather than domain objects, so nothing is lost and no field needs mapping; JSON columns (work-order payloads, process graphs) are embedded as JSON. Secrets are left out: no `users.password_hash`, no `sessions`. It is read in one transaction together with its `tenant.export` audit row (a sensitive read is never unaudited), then written out; the document is built in memory because the single SQLite connection must not be held while a slow client downloads.
+  - **Deletion** is two-phase: the organization must be suspended first (which already ends its sessions), and the body must repeat its slug exactly (`confirmSlug`, case-sensitive). Every tenant-owned table is deleted explicitly, children first, in one transaction with the per-table row counts, instead of relying on `ON DELETE CASCADE` alone. A `tenant.delete` audit row (name, slug, totals) is written in the same transaction.
+  - `tenantDataTables` (`internal/store/tenant_offboarding.go`) is the single list both use; a test fails when the schema has a table that is neither in it nor in `platformOnlyTables`, so a new tenant table cannot be silently missed.
+  - **Activity log survives**: `platform_audit_events` already keeps the tenant slug/name denormalized and its `tenant_id` is `ON DELETE SET NULL`, so every earlier event (including each `impersonate` start with superadmin, target user, time and IP) stays. **Impersonation detail goes with the organization**: `impersonation_events` and their per-request trail (`impersonation_actions`) are tenant rows (`ON DELETE CASCADE`) and are deleted; keeping them would need a table rebuild on both engines for a nullable FK. The trail is part of the export, which the UI tells the operator to download first. No migration.
+- **Consequences**:
+  - Deletion cannot be undone; the dialog says so, offers the export, and keeps the confirm button disabled until the slug is typed.
+  - A future restore/import can consume the export by `formatVersion` + `schemaVersion`; none exists yet.
+  - Values are exported as the driver returns them (on Postgres, `NUMERIC` money columns may appear as strings).
+
+---
+
 *Last verified against the checked-in repository state on 2026-10-17.*

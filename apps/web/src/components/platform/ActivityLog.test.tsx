@@ -55,6 +55,22 @@ describe("ActivityLog", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels organization exports and deletions with their row counts", async () => {
+    const items: PlatformAuditEvent[] = [
+      { ...base, id: 9, action: "tenant.delete", detail: { totalRows: "120", users: "3", customers: "10", workOrders: "40" } },
+      { ...base, id: 8, action: "tenant.export", detail: { totalRows: "120" } },
+    ];
+    vi.stubGlobal("api", { getPlatformAudit: vi.fn(async () => ({ items, total: 2 })) });
+
+    render(<ActivityLog />);
+    const rows = await screen.findAllByRole("row");
+    expect(within(rows[1]).getByText(strings.kinds.tenantDelete)).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Obrisano redova: 120")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Korisnika: 3 · Klijenata: 10 · Radnih naloga: 40")).toBeInTheDocument();
+    expect(within(rows[2]).getByText(strings.kinds.tenantExport)).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Izvezeno redova: 120")).toBeInTheDocument();
+  });
+
   it("opens an impersonation into the changes made during it", async () => {
     const getPlatformImpersonationActions = vi.fn(async () => [
       { at: "2026-10-17T06:05:00Z", method: "PATCH" as const, route: "/work-orders/{id}", path: "/work-orders/wo-7", status: 200 },

@@ -37,6 +37,8 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantDeletion,
+  PlatformTenantExportFile,
   PlatformTenantUsers,
   PlatformImpersonationResponse,
   PlatformImpersonationAction,
@@ -820,6 +822,26 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
         jsonRequest('PUT', { processes: modules.processes, stock: modules.stock }),
       )
       return readJSON<PlatformTenant>(response)
+    },
+
+    async platformExportTenant(slug: string): Promise<PlatformTenantExportFile> {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/export`),
+        credentialedRequest(),
+      )
+      if (!response.ok) await readJSON<never>(response)
+      const disposition = response.headers.get('Content-Disposition') ?? ''
+      const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)
+      const filename = match?.[1] ? decodeURIComponent(match[1]) : `iris-${slug}.json`
+      return { blob: await response.blob(), filename }
+    },
+
+    async platformDeleteTenant(slug: string, confirmSlug: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}`),
+        jsonRequest('DELETE', { confirmSlug }),
+      )
+      return readJSON<PlatformTenantDeletion>(response)
     },
 
     async resetPlatformUserPassword(slug: string, userId: string, password: string) {

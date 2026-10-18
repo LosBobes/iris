@@ -15,6 +15,8 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "tenant.suspend": "platform.activity.kinds.tenantSuspend",
   "tenant.reactivate": "platform.activity.kinds.tenantReactivate",
   "tenant.modules": "platform.activity.kinds.tenantModules",
+  "tenant.export": "platform.activity.kinds.tenantExport",
+  "tenant.delete": "platform.activity.kinds.tenantDelete",
   "user.password_reset": "platform.activity.kinds.passwordReset",
   impersonate: "platform.activity.kinds.impersonate",
   "process_template.create": "platform.activity.kinds.processTemplateCreate",
@@ -56,6 +58,21 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
         processes: state(event.detail.processes),
       }),
     );
+  }
+  if (event.action === "tenant.export" && event.detail?.totalRows) {
+    lines.push(t("platform.activity.exportedRows", { total: event.detail.totalRows }));
+  }
+  if (event.action === "tenant.delete" && event.detail?.totalRows) {
+    lines.push(t("platform.activity.deletedRows", { total: event.detail.totalRows }));
+    if (event.detail.users !== undefined) {
+      lines.push(
+        t("platform.activity.deletedBreakdown", {
+          users: event.detail.users,
+          customers: event.detail.customers ?? "0",
+          workOrders: event.detail.workOrders ?? "0",
+        }),
+      );
+    }
   }
   const session = event.impersonation;
   if (session) {

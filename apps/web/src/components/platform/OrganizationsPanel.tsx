@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Ban, Blocks, Pencil, Plus, RotateCcw, Users, Workflow } from "lucide-react";
+import { Ban, Blocks, Download, Pencil, Plus, RotateCcw, Trash2, Users, Workflow } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { staggerStyle } from "@/lib/motion";
 import type { PlatformTenant } from "@/types/platform";
@@ -12,6 +12,8 @@ import {
   backofficeSecondaryButtonClass,
   backofficeSmallButtonClass,
 } from "./BackofficeDialog";
+import { OrganizationDeleteDialog } from "./OrganizationDeleteDialog";
+import { downloadTenantExport } from "./tenant-export";
 import { OrganizationFormDialog } from "./OrganizationFormDialog";
 import { OrganizationModulesDialog } from "./OrganizationModulesDialog";
 import { OrganizationProcessesDialog } from "./OrganizationProcessesDialog";
@@ -26,7 +28,8 @@ type OpenDialog =
   | { kind: "users"; tenant: PlatformTenant }
   | { kind: "processes"; tenant: PlatformTenant }
   | { kind: "modules"; tenant: PlatformTenant }
-  | { kind: "suspend"; tenant: PlatformTenant };
+  | { kind: "suspend"; tenant: PlatformTenant }
+  | { kind: "delete"; tenant: PlatformTenant };
 
 /**
  * The Backoffice's organization management: create, edit, suspend or
@@ -70,6 +73,19 @@ export function OrganizationsPanel(): React.JSX.Element {
     } catch (cause) {
       setError(backofficeError(cause, t("platform.orgs.failed")));
       setDialog(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportTenant = async (tenant: PlatformTenant): Promise<void> => {
+    setBusy(true);
+    try {
+      await downloadTenantExport(tenant.slug);
+      setError(null);
+      setNotice(t("platform.orgs.exportedNotice", { name: tenant.name }));
+    } catch (cause) {
+      setError(backofficeError(cause, t("platform.orgs.exportFailed")));
     } finally {
       setBusy(false);
     }
@@ -139,6 +155,27 @@ export function OrganizationsPanel(): React.JSX.Element {
     </button>
   );
 
+  const exportButton = (tenant: PlatformTenant): React.JSX.Element => (
+    <button type="button" disabled={busy} onClick={() => void exportTenant(tenant)} className={`${ghostButtonClass} disabled:opacity-60`}>
+      <Download className="h-3.5 w-3.5" />
+      {t("platform.orgs.exportData")}
+    </button>
+  );
+
+  // Deleting is only offered once the organization is suspended.
+  const deleteButton = (tenant: PlatformTenant): React.JSX.Element => (
+    <button
+      type="button"
+      disabled={!tenant.suspendedAt}
+      title={tenant.suspendedAt ? undefined : t("platform.orgs.deleteNeedsSuspend")}
+      onClick={() => setDialog({ kind: "delete", tenant })}
+      className={`${ghostButtonBase} text-[#e66767] disabled:opacity-40 disabled:hover:bg-transparent`}
+    >
+      <Trash2 className="h-3.5 w-3.5" />
+      {t("platform.orgs.deleteOrg")}
+    </button>
+  );
+
   return (
     <section className="min-w-0 rounded-lg border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)]">
       <header className="flex items-center justify-between gap-3 border-b border-[color:var(--pf-border)] px-4 py-3">
@@ -199,9 +236,11 @@ export function OrganizationsPanel(): React.JSX.Element {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-y-1">
                 {editButton(tenant)}
+                {exportButton(tenant)}
                 {suspendButton(tenant)}
+                {deleteButton(tenant)}
               </div>
             </li>
           ))}
@@ -258,8 +297,10 @@ export function OrganizationsPanel(): React.JSX.Element {
                         ))}
                       </div>
                       {editButton(tenant)}
+                      {exportButton(tenant)}
                       <span aria-hidden className="h-5 w-px bg-[color:var(--pf-border)]" />
                       {suspendButton(tenant)}
+                      {deleteButton(tenant)}
                     </div>
                   </td>
                 </tr>
@@ -293,6 +334,18 @@ export function OrganizationsPanel(): React.JSX.Element {
         />
       ) : null}
       {dialog?.kind === "processes" ? <OrganizationProcessesDialog tenant={dialog.tenant} onClose={close} /> : null}
+      {dialog?.kind === "delete" ? (
+        <OrganizationDeleteDialog
+          tenant={dialog.tenant}
+          onClose={close}
+          onDeleted={(result) => {
+            setError(null);
+            setNotice(t("platform.orgs.deletedNotice", { name: result.name, total: formatCount(result.totalRows) }));
+            setDialog(null);
+            void load();
+          }}
+        />
+      ) : null}
       {dialog?.kind === "suspend" ? (
         <BackofficeDialog
           title={t(dialog.tenant.suspendedAt ? "platform.orgs.reactivateTitle" : "platform.orgs.suspendTitle", { name: dialog.tenant.name })}
