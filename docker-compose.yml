@@ -9,10 +9,6 @@ services:
       IRIS_ENV: "${IRIS_ENV:-development}"
       IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:-docker-dev-secret-change-me}"
       DATABASE_PATH: "/data/iris.db"
-      # IRIS_SEED_SHOWCASE=1 creates the showcase organization on first start.
-      IRIS_SEED_SHOWCASE: "${IRIS_SEED_SHOWCASE:-}"
-      IRIS_SHOWCASE_ADMIN_PASSWORD: "${IRIS_SHOWCASE_ADMIN_PASSWORD:-}"
-      IRIS_SHOWCASE_OPERATOR_PASSWORD: "${IRIS_SHOWCASE_OPERATOR_PASSWORD:-}"
     ports:
       - "${IRIS_API_PORT:-8080}:8080"
     volumes:

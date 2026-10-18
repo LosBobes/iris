@@ -72,7 +72,6 @@ func main() {
 			log.Fatal("refusing production startup with demo admin credentials")
 		}
 	}
-	seedShowcaseOnStart(ctx, sqliteStore, env)
 	persistence = sqliteStore
 
 	server := api.NewServer(persistence, api.Config{

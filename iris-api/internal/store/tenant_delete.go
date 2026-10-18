@@ -11,8 +11,9 @@ import (
 // their sessions, customers, locations, work orders and their children,
 // catalog, settings, process templates, work-order processes, stock movements,
 // login/impersonation events); platform audit rows keep their history with the
-// tenant reference nulled. It reports whether an organization was deleted. Used
-// by operator tooling (irisctl seed-showcase -reset), not exposed over HTTP.
+// tenant reference nulled. It reports whether an organization was deleted. A
+// store-level helper for operator tooling and the cascade test, not exposed over
+// HTTP.
 func (s *SQLiteStore) DeleteTenant(ctx context.Context, slug string) (bool, error) {
 	slug = strings.ToLower(strings.TrimSpace(slug))
 	if slug == "" {

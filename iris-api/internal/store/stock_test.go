@@ -545,38 +545,6 @@ func TestFixtureStoreCleanupSkipsArticlesWithMovements(t *testing.T) {
 	runStockCleanupContract(t, NewFixtureStore(testutil.FixtureDir(t)), testTenantContext())
 }
 
-func TestSeedDemoStockIsIdempotentAndLinked(t *testing.T) {
-	ctx := context.Background()
-	s := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
-	t.Cleanup(func() { _ = s.Close() })
-	demo := testTenantContext()
-	if err := SeedDemoFromFixtures(ctx, s, testutil.FixtureDir(t)); err != nil {
-		t.Fatal(err)
-	}
-	if got := onHandOf(t, demo, s, demoPaperID); got != 5000 {
-		t.Fatalf("paper opening = %v", got)
-	}
-	// Stock moved after seeding must survive a re-seed.
-	if _, err := s.PostStockReceipt(demo, domain.StockReceiptInput{Lines: []domain.StockReceiptLine{{CatalogItemID: demoPaperID, Quantity: 10}}}, "ana"); err != nil {
-		t.Fatal(err)
-	}
-	if err := SeedDemoFromFixtures(ctx, s, testutil.FixtureDir(t)); err != nil {
-		t.Fatal(err)
-	}
-	if got := onHandOf(t, demo, s, demoPaperID); got != 5010 {
-		t.Fatalf("paper after re-seed = %v", got)
-	}
-	if moves, _ := s.StockMovements(demo, StockMovementQuery{CatalogItemID: demoPaperID}); moves.Total != 2 {
-		t.Fatalf("paper movements = %d", moves.Total)
-	}
-	templates, _ := s.ProcessTemplates(demo)
-	linked := map[string]string{}
-	for _, node := range templates[0].Graph.Nodes {
-		if node.CatalogItemID != "" {
-			linked[node.ID] = node.CatalogItemID + "/" + node.Unit
-		}
-	}
-	if len(linked) != 5 || linked["papir"] != demoPaperID+"/tabak" || linked["boja"] != demoInkID+"/kg" || linked["otpad"] != demoWasteID+"/tabak" {
-		t.Fatalf("linked nodes = %v", linked)
-	}
-}
+// The demo organization's stock and process-template content, including its
+// idempotency and article links, is covered by TestSeedDemoFromFixtures in
+// seed_demo_test.go.
