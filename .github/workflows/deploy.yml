@@ -104,7 +104,21 @@ jobs:
             done
 
             echo "▶ Pruning old images..."
+            # A plain `docker image prune -f` only removes *dangling* (untagged)
+            # layers, but every release is a tagged git-<sha> image (~1.1GB for
+            # the backend). They used to accumulate indefinitely and eventually
+            # filled the shared host's disk, which took the site down with a
+            # SQLite "disk I/O error" on the next deploy. So also drop the
+            # superseded iris tags, keeping the release just deployed and
+            # `latest`; an older build can always be re-pulled from GHCR for a
+            # rollback (the pull step above does exactly that). Other apps'
+            # images on this shared box are left untouched.
             docker image prune -f
+            for repo in ghcr.io/losbobes/iris-backend ghcr.io/losbobes/iris-frontend; do
+              docker images "$repo" --format '{{.Repository}}:{{.Tag}}' \
+                | grep -vE ":(${IRIS_IMAGE_TAG}|latest|<none>)$" \
+                | xargs -r docker image rm >/dev/null 2>&1 || true
+            done
 
             echo "▶ Running containers:"
             docker compose -f docker-compose.prod.yml ps

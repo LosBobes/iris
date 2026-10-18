@@ -18,8 +18,13 @@ COPY iris-api/go.mod iris-api/go.sum ./
 RUN go mod download
 
 COPY iris-api/ ./
+# The server is the entrypoint; irisctl ships alongside it so operators can run
+# migrations, seeding and backups inside the container (docker compose run
+# --entrypoint irisctl …) without a separately built or hand-copied binary.
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
-    -o /out/iris-api ./cmd/server
+        -o /out/iris-api ./cmd/server \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+        -o /out/irisctl ./cmd/irisctl
 
 # --- Final stage ------------------------------------------------------------
 # alpine (not distroless) so the compose healthcheck can use the bundled
@@ -54,8 +59,10 @@ RUN chrome="$(command -v chromium-browser || command -v chromium)" \
     && test -x "$chrome" \
     && ln -sf "$chrome" /usr/local/bin/iris-chrome
 
-# Copy only the compiled binary from the build stage.
+# Copy the compiled binaries from the build stage: the server (entrypoint) and
+# the irisctl operations CLI (run on demand via a one-off container).
 COPY --from=build /out/iris-api /usr/local/bin/iris-api
+COPY --from=build /out/irisctl /usr/local/bin/irisctl
 
 # Sentry DSN baked in at build time from the SENTRY_DSN GitHub Actions secret
 # (see .github/workflows/build.yml). A DSN is an ingestion key, not a secret,
