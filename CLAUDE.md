@@ -174,6 +174,13 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   `app_settings` key `modules`; read-only `modules` in `GET /settings`). Disabled
   module routes return 403; gate every new process/stock UI surface on
   `useOrganization().modules` and never call a disabled module's endpoints.
+- **Planiranje** (D-026): third module `planning` (requires `processes`; off by default,
+  Backoffice-only). Machine types/units, worker qualifications, attendance overrides
+  (migration v31) and working hours (`app_settings` `working_hours`); step nodes carry
+  `machineTypeId`/`crewSize`/`setupMinutes`/`minutesPerUnit` (structural). The pure planner
+  (`internal/planner`, deterministic, no clock reads) proposes a draft day plan; admins edit
+  and publish (`/planning/plan…`), operators follow `GET /planning/my-queue` ("Moj red").
+  Forecast and drift are computed on read. Gate every planning UI on `modules.planning`.
 - **Org sessions** (D-020): login takes optional `remember`; tokens are stored
   only as SHA-256 (`sessions.token_hash`, migration v25). Idle expiry slides on
   use (written at most hourly) under an absolute cap — 12 h / 24 h with a
