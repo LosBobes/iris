@@ -43,6 +43,9 @@ func storeScenarios() []storeScenario {
 		{name: "ConcurrentCreatesKeepEveryWorkOrder", run: scenarioConcurrentCreatesKeepEveryWorkOrder},
 		{name: "EnumValuesRoundTrip", run: scenarioEnumValuesRoundTrip},
 		{name: "OrganizationSettingsRoundTrip", run: scenarioOrganizationSettingsRoundTrip},
+		{name: "SessionsSlideUnderAbsoluteCap", run: scenarioSessionsSlideUnderAbsoluteCap},
+		{name: "WorkOrderSearchEscapesWildcards", run: scenarioWorkOrderSearchEscapesWildcards},
+		{name: "IDCounterSurvivesNonNumericAndLargeIDs", run: scenarioIDCounterSurvivesNonNumericAndLargeIDs},
 	}
 }
 
@@ -668,5 +671,148 @@ func scenarioOrganizationSettingsRoundTrip(t *testing.T, ctx context.Context, st
 	}
 	if reread.ShowShippingOptions {
 		t.Fatalf("ShowShippingOptions = true, want false")
+	}
+}
+
+// Sessions (v25): hashed token column, an INTEGER remember flag and the CASE
+// expression that slides the idle expiry without passing the absolute cap.
+func scenarioSessionsSlideUnderAbsoluteCap(t *testing.T, ctx context.Context, store *SQLStore) {
+	user, err := store.CreateUserAccount(ctx, domain.CreateUserInput{
+		Username: "klizac", Password: "lozinka123", Role: domain.RoleAdmin,
+	})
+	if err != nil {
+		t.Fatalf("CreateUserAccount() returned error: %v", err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	idle := now.Add(time.Hour)
+	absolute := now.Add(3 * time.Hour)
+	token, err := store.StartSession(ctx, NewSession{
+		UserID: user.ID, ExpiresAt: idle, AbsoluteExpiresAt: absolute, Remember: true,
+	})
+	if err != nil {
+		t.Fatalf("StartSession() returned error: %v", err)
+	}
+	var stored string
+	if err := store.db.QueryRowContext(ctx, `SELECT token_hash FROM sessions`).Scan(&stored); err != nil {
+		t.Fatalf("read token_hash: %v", err)
+	}
+	if stored == token || stored != hashSessionToken(token) {
+		t.Fatalf("session row holds %q, want the hash of the token and not the token", stored)
+	}
+	session, err := store.SessionByToken(ctx, token)
+	if err != nil || session == nil {
+		t.Fatalf("SessionByToken() = %#v, %v", session, err)
+	}
+	if !session.Remember || !session.ExpiresAt.Equal(idle) || !session.AbsoluteExpiresAt.Equal(absolute) {
+		t.Fatalf("session = %+v, want remember with idle %s and cap %s", session, idle, absolute)
+	}
+
+	// Extending inside the cap moves the idle expiry; past it, it stops at the cap.
+	if err := store.ExtendSession(ctx, token, now.Add(2*time.Hour)); err != nil {
+		t.Fatalf("ExtendSession() returned error: %v", err)
+	}
+	session, _ = store.SessionByToken(ctx, token)
+	if !session.ExpiresAt.Equal(now.Add(2 * time.Hour)) {
+		t.Fatalf("idle expiry = %s, want %s", session.ExpiresAt, now.Add(2*time.Hour))
+	}
+	if err := store.ExtendSession(ctx, token, now.Add(10*time.Hour)); err != nil {
+		t.Fatalf("ExtendSession() past the cap returned error: %v", err)
+	}
+	session, _ = store.SessionByToken(ctx, token)
+	if !session.ExpiresAt.Equal(absolute) {
+		t.Fatalf("idle expiry = %s, want it capped at %s", session.ExpiresAt, absolute)
+	}
+	// Never backwards.
+	if err := store.ExtendSession(ctx, token, now.Add(30*time.Minute)); err != nil {
+		t.Fatalf("ExtendSession() backwards returned error: %v", err)
+	}
+	session, _ = store.SessionByToken(ctx, token)
+	if !session.ExpiresAt.Equal(absolute) {
+		t.Fatalf("idle expiry moved backwards to %s", session.ExpiresAt)
+	}
+
+	plain, err := store.StartSession(ctx, NewSession{UserID: user.ID, ExpiresAt: idle})
+	if err != nil {
+		t.Fatalf("StartSession() without remember returned error: %v", err)
+	}
+	if got, _ := store.SessionByToken(ctx, plain); got == nil || got.Remember {
+		t.Fatalf("plain session = %+v, want one that is not remembered", got)
+	}
+	if err := store.EndUserSessions(ctx, user.ID, token); err != nil {
+		t.Fatalf("EndUserSessions() returned error: %v", err)
+	}
+	if got, _ := store.SessionByToken(ctx, plain); got != nil {
+		t.Fatalf("other session survived EndUserSessions: %+v", got)
+	}
+	if got, _ := store.SessionByToken(ctx, token); got == nil {
+		t.Fatal("the excepted session was ended")
+	}
+}
+
+// Work-order search (v24) matches a lowered, diacritic-folded search_text with
+// LIKE ? with a backslash ESCAPE, which the translator turns into ILIKE ... ESCAPE.
+func scenarioWorkOrderSearchEscapesWildcards(t *testing.T, ctx context.Context, store *SQLStore) {
+	issueDate := time.Now().UTC().Format("2006-01-02")
+	for _, client := range []string{"Knjižara 100% Beograd", "Knjizara_X", "Knjizara back\\slash", "Druga firma"} {
+		if _, err := store.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+			ClientName: client, JobDescription: "posao", IssuedBy: "admin", IssueDate: issueDate,
+		}); err != nil {
+			t.Fatalf("CreateWorkOrder(%q) returned error: %v", client, err)
+		}
+	}
+	for search, want := range map[string]int{
+		"knjizara": 3, "KNJIŽARA": 3, "100%": 1, "%": 1, "_x": 1, "\\": 1, "firma": 1, "nepostoji": 0,
+	} {
+		found, err := store.WorkOrders(ctx, WorkOrderListQuery{Search: search})
+		if err != nil {
+			t.Fatalf("WorkOrders(search=%q) returned error: %v", search, err)
+		}
+		if found.Total != want {
+			t.Fatalf("WorkOrders(search=%q) total = %d, want %d", search, found.Total, want)
+		}
+	}
+	// Sorting uses the *_sort columns (COLLATE NOCASE / lowered text).
+	sorted, err := store.WorkOrders(ctx, WorkOrderListQuery{Sort: "clientName"})
+	if err != nil {
+		t.Fatalf("WorkOrders(sort) returned error: %v", err)
+	}
+	if len(sorted.Items) != 4 || sorted.Items[0].ClientName != "Druga firma" {
+		t.Fatalf("sort by client = %+v, want Druga firma first", sorted.Items)
+	}
+	for _, key := range []string{"orderNumber", "-orderNumber", "-clientName", "jobDescription", "status", "assignedTo",
+		"-priority", "billingDocumentType", "deliveryMethod", "dueDate", "-dueDate", "price", "-price", "-issueDate"} {
+		if _, err := store.WorkOrders(ctx, WorkOrderListQuery{Sort: key, Summary: true}); err != nil {
+			t.Fatalf("WorkOrders(sort=%q) returned error: %v", key, err)
+		}
+	}
+}
+
+// The id counter must cope with ids that are not numbers and with numbers that
+// do not fit the 32-bit counter column (they are not sequence numbers).
+func scenarioIDCounterSurvivesNonNumericAndLargeIDs(t *testing.T, ctx context.Context, store *SQLStore) {
+	issueDate := time.Now().UTC().Format("2006-01-02")
+	for i, id := range []string{"demo-1", "12abc", "123456789", "1234567890"} {
+		if err := store.PutWorkOrder(ctx, domain.WorkOrder{
+			ID: id, OrderNumber: formatOrderNumber(2026, i+1), ClientName: "Uvoz", IssuedBy: "admin",
+			IssueDate: issueDate, Status: domain.WorkOrderStatusNew,
+		}); err != nil {
+			t.Fatalf("PutWorkOrder(%q) returned error: %v", id, err)
+		}
+	}
+	// Lose the counter, then let the resync rebuild it from the stored ids.
+	if _, err := store.db.ExecContext(ctx, `UPDATE work_order_id_counter SET value = 0`); err != nil {
+		t.Fatalf("reset counter: %v", err)
+	}
+	if err := resyncSequence(ctx, store.db); err != nil {
+		t.Fatalf("resyncSequence() returned error: %v", err)
+	}
+	created, err := store.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName: "Novi", JobDescription: "posao", IssuedBy: "admin", IssueDate: issueDate,
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() returned error: %v", err)
+	}
+	if created.ID != "123456790" {
+		t.Fatalf("created id = %q, want 12345678902", created.ID)
 	}
 }

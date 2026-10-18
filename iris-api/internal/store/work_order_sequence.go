@@ -21,11 +21,16 @@ import (
 // and draws again; its insert has no ON CONFLICT clause, so a clash it did not
 // see fails instead of overwriting another order.
 
+// maxSequenceDigits bounds which ids count as sequence numbers. The counter is
+// an INTEGER column, which is 32-bit on PostgreSQL, so a longer all-digit id
+// (an imported external number, say) must neither be cast nor raise the counter.
+const maxSequenceDigits = 9
+
 // maxNumericIDSQL is the highest all-digit work-order id. Only all-digit ids
 // are cast: CAST('demo-1' AS INTEGER) is an error on PostgreSQL, and SQLite
-// would read '12abc' as 12.
+// would read '12abc' as 12. The length bound keeps the cast inside 32 bits.
 const maxNumericIDSQL = `SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) FROM work_orders
-	WHERE id <> '' AND id NOT GLOB '*[^0-9]*'`
+	WHERE id <> '' AND length(id) <= 9 AND id NOT GLOB '*[^0-9]*'`
 
 const workOrderIDCounterSQL = `
 CREATE TABLE IF NOT EXISTS work_order_id_counter (
@@ -47,7 +52,7 @@ func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
 		// Counter row missing (should not happen after migration v23): seed it.
 		if _, err := db.ExecContext(ctx, `INSERT INTO work_order_id_counter(id, value) `+
 			`SELECT 1, COALESCE(MAX(CAST(id AS INTEGER)), 0) FROM work_orders
-			WHERE id <> '' AND id NOT GLOB '*[^0-9]*'`); err != nil {
+			WHERE id <> '' AND length(id) <= 9 AND id NOT GLOB '*[^0-9]*'`); err != nil {
 			return 0, fmt.Errorf("seed work-order sequence: %w", err)
 		}
 		err = db.QueryRowContext(
@@ -111,7 +116,7 @@ func nextFreeSequence(ctx context.Context, db sqlExecutor) (int, error) {
 // bumpWorkOrderSequence raises the counter to at least id when id is a plain
 // decimal number. Non-numeric ids (e.g. "wo-cob-1") never affect the sequence.
 func bumpWorkOrderSequence(ctx context.Context, db sqlExecutor, id string) error {
-	if id == "" || len(id) > 18 {
+	if id == "" || len(id) > maxSequenceDigits {
 		return nil
 	}
 	for _, r := range id {
