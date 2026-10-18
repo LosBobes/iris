@@ -71,6 +71,24 @@ import type {
   StockReceiptInput,
 } from '@/types/stock'
 import type {
+  AttendanceEntry,
+  AttendanceInput,
+  Machine,
+  MachineInput,
+  MachineType,
+  MachineTypeInput,
+  MyQueue,
+  OrderForecast,
+  PlanDay,
+  PlanDraftInput,
+  PlanGenerateInput,
+  PlanPublishInput,
+  ProductionPlan,
+  WorkerQualifications,
+  WorkerQualificationsInput,
+  WorkingHours,
+} from '@/types/planning'
+import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
@@ -245,6 +263,36 @@ declare global {
       createPlatformProcessTemplate: (slug: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
       updatePlatformProcessTemplate: (slug: string, id: string, input: ProcessTemplateInput) => Promise<ProcessTemplate>
       deletePlatformProcessTemplate: (slug: string, id: string) => Promise<void>
+      /**
+       * Planiranje (module `planning`; 403 PlanningModuleDisabled when off).
+       * Reads: any user unless noted; writes: admin.
+       */
+      listMachineTypes: () => Promise<MachineType[]>
+      createMachineType: (input: MachineTypeInput) => Promise<MachineType>
+      updateMachineType: (id: string, input: MachineTypeInput) => Promise<MachineType>
+      /** 409 while machines of this type exist. */
+      deleteMachineType: (id: string) => Promise<void>
+      listMachines: () => Promise<Machine[]>
+      createMachine: (input: MachineInput) => Promise<Machine>
+      updateMachine: (id: string, input: MachineInput) => Promise<Machine>
+      deleteMachine: (id: string) => Promise<void>
+      listQualifications: () => Promise<WorkerQualifications[]>
+      setQualifications: (userId: string, input: WorkerQualificationsInput) => Promise<WorkerQualifications>
+      /** Presence of every user on a local date "YYYY-MM-DD". */
+      listAttendance: (date: string) => Promise<AttendanceEntry[]>
+      setAttendance: (userId: string, input: AttendanceInput) => Promise<AttendanceEntry>
+      getWorkingHours: () => Promise<WorkingHours>
+      setWorkingHours: (input: WorkingHours) => Promise<WorkingHours>
+      /** Draft (admins only), published plan and drift of a date. */
+      getPlanDay: (date: string) => Promise<PlanDay>
+      /** Replaces the date's draft with a freshly planned one. */
+      generatePlan: (input: PlanGenerateInput) => Promise<ProductionPlan>
+      updatePlanDraft: (input: PlanDraftInput) => Promise<ProductionPlan>
+      deletePlanDraft: (date: string) => Promise<void>
+      publishPlan: (input: PlanPublishInput) => Promise<ProductionPlan>
+      /** The signed-in user's blocks of the published plan (date defaults to today). */
+      getMyQueue: (date?: string) => Promise<MyQueue>
+      getPlanningForecast: () => Promise<OrderForecast[]>
     }
   }
 }

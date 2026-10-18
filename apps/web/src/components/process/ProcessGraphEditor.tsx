@@ -81,6 +81,8 @@ export interface ProcessGraphEditorProps {
   articleLinking?: boolean
   /** Hides every article/stock detail in the inspector (the organization's Magacin module is off). */
   articlesHidden?: boolean
+  /** Shows the planning fields of steps in the inspector (Planiranje module on, in-app editor only). */
+  planningEnabled?: boolean
 }
 
 function ProcessGraphEditorInner({
@@ -95,6 +97,7 @@ function ProcessGraphEditorInner({
   stock,
   articleLinking = false,
   articlesHidden = false,
+  planningEnabled = false,
 }: ProcessGraphEditorProps): React.JSX.Element {
   const canEditStructure = canEditStructureProp && !readOnly
   const highlighted = useMemo(() => new Set(highlightIds ?? []), [highlightIds])
@@ -434,6 +437,7 @@ function ProcessGraphEditorInner({
             stock={stock}
             articleLinking={articleLinking}
             articlesHidden={articlesHidden}
+            planningEnabled={planningEnabled}
             onNodeChange={patchNode}
             onKindChange={changeKind}
             onEdgeChange={patchEdge}

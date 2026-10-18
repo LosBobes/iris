@@ -328,3 +328,48 @@ describe('start and final markers', () => {
     expect(byproduct.final).toBe(true)
   })
 })
+
+describe('planning step fields (D-026)', () => {
+  const step = (extra: Partial<ProcessNode> = {}): ProcessGraph => ({
+    nodes: [{ id: 's', kind: 'step', label: 'Štampa', x: 0, y: 0, ...extra }],
+    edges: [],
+  })
+
+  it.each([
+    ['machineTypeId', { machineTypeId: 'mt-1' }],
+    ['crewSize', { crewSize: 2 }],
+    ['setupMinutes', { setupMinutes: 10 }],
+    ['minutesPerUnit', { minutesPerUnit: 0.5 }],
+  ] as const)('treats a changed %s as a structural change', (_name, patch) => {
+    expect(hasStructuralChange(step(), step(patch))).toBe(true)
+    expect(hasStructuralChange(step(patch), step(patch))).toBe(false)
+  })
+
+  it('treats a missing and an undefined value alike', () => {
+    expect(hasStructuralChange(step(), step({ crewSize: undefined, machineTypeId: undefined }))).toBe(false)
+  })
+
+  it('drops the four fields from item nodes but keeps them on steps', () => {
+    const planning = { machineTypeId: 'mt-1', crewSize: 2, setupMinutes: 5, minutesPerUnit: 1 }
+    const result = normalizeGraphForKinds({
+      nodes: [
+        { id: 's', kind: 'step', label: 'A', x: 0, y: 0, ...planning },
+        { id: 'i', kind: 'input', label: 'B', x: 0, y: 0, ...planning },
+      ],
+      edges: [],
+    })
+    expect(result.nodes[0]).toMatchObject(planning)
+    for (const key of Object.keys(planning)) expect(result.nodes[1]).not.toHaveProperty(key)
+  })
+
+  it('validates crew size and minute ranges', () => {
+    const base = (extra: Partial<ProcessNode>): string[] =>
+      validateGraph({ nodes: [{ id: 's', kind: 'step', label: 'A', x: 0, y: 0, ...extra }], edges: [] })
+    expect(base({ crewSize: 2, setupMinutes: 0, minutesPerUnit: 100000 })).toEqual([])
+    expect(base({ crewSize: 0 })).toHaveLength(1)
+    expect(base({ crewSize: 51 })).toHaveLength(1)
+    expect(base({ crewSize: 1.5 })).toHaveLength(1)
+    expect(base({ setupMinutes: -1 })).toHaveLength(1)
+    expect(base({ minutesPerUnit: 100001 })).toHaveLength(1)
+  })
+})

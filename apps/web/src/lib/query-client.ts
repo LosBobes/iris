@@ -1,4 +1,5 @@
 import { QueryClient, type QueryKey } from '@tanstack/react-query'
+import { planningKeys } from '@/lib/planning/query-keys'
 import { broadcastAuthChange, type AuthChange } from '@/lib/auth-broadcast'
 
 /** Lists (work orders, catalog) refetch after 30 s; reference data after 5 min. */
@@ -68,6 +69,25 @@ const INVALIDATIONS: Partial<Record<keyof Window['api'], readonly QueryKey[]>> =
   cleanupCatalogItems: [queryKeys.catalogItems],
   postStockReceipt: [queryKeys.catalogItems],
   postStockCount: [queryKeys.catalogItems],
+  // Planiranje: resources feed plans and forecasts; publishing feeds queues.
+  createMachineType: [planningKeys.machineTypes, planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
+  updateMachineType: [planningKeys.machineTypes, planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
+  deleteMachineType: [planningKeys.machineTypes, planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
+  createMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
+  updateMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
+  deleteMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
+  setQualifications: [planningKeys.qualifications, planningKeys.planRoot, planningKeys.forecast],
+  setAttendance: [planningKeys.attendanceRoot, planningKeys.planRoot, planningKeys.forecast],
+  setWorkingHours: [
+    planningKeys.workingHours,
+    planningKeys.planRoot,
+    planningKeys.myQueueRoot,
+    planningKeys.forecast,
+  ],
+  generatePlan: [planningKeys.planRoot],
+  updatePlanDraft: [planningKeys.planRoot],
+  deletePlanDraft: [planningKeys.planRoot],
+  publishPlan: [planningKeys.planRoot, planningKeys.myQueueRoot, planningKeys.forecast],
   updateSettings: [queryKeys.settings],
   updateLoginLogo: [queryKeys.settings],
   deleteLoginLogo: [queryKeys.settings],

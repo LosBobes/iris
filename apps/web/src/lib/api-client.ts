@@ -72,6 +72,24 @@ import type {
   StockReceiptInput,
 } from '@/types/stock'
 import type {
+  AttendanceEntry,
+  AttendanceInput,
+  Machine,
+  MachineInput,
+  MachineType,
+  MachineTypeInput,
+  MyQueue,
+  OrderForecast,
+  PlanDay,
+  PlanDraftInput,
+  PlanGenerateInput,
+  PlanPublishInput,
+  ProductionPlan,
+  WorkerQualifications,
+  WorkerQualificationsInput,
+  WorkingHours,
+} from '@/types/planning'
+import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
@@ -88,6 +106,26 @@ import {
 import { notifySessionExpired } from '@/lib/session'
 
 type FetchLike = typeof fetch
+
+function normalizeAssignment<T extends { userIds: string[] }>(a: T): T {
+  return { ...a, userIds: readArray(a.userIds) }
+}
+
+function normalizePlan(plan: ProductionPlan): ProductionPlan {
+  return {
+    ...plan,
+    assignments: readArray(plan.assignments).map(normalizeAssignment),
+    issues: readArray(plan.issues),
+    lateOrders: readArray(plan.lateOrders),
+  }
+}
+
+function normalizeWorkingHours(hours: WorkingHours): WorkingHours {
+  return {
+    ...hours,
+    days: readArray(hours?.days).map((day) => ({ ...day, breaks: readArray(day.breaks) })),
+  }
+}
 
 /** Settings from an older server may lack `modules`: treat that as both off. */
 function withModules(settings: OrganizationSettings): OrganizationSettings {
@@ -860,7 +898,11 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async setPlatformTenantModules(slug: string, modules: OrganizationModules) {
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/modules`),
-        jsonRequest('PUT', { processes: modules.processes, stock: modules.stock }),
+        jsonRequest('PUT', {
+          processes: modules.processes,
+          stock: modules.stock,
+          planning: modules.planning,
+        }),
       )
       return readJSON<PlatformTenant>(response)
     },
@@ -1195,6 +1237,150 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
         credentialedRequest({ method: 'DELETE' }),
       )
       await readNoContent(response)
+    },
+
+    async listMachineTypes() {
+      const response = await fetchImpl(url('/machine-types'), credentialedRequest())
+      return readArray(await readJSON<MachineType[]>(response))
+    },
+
+    async createMachineType(input: MachineTypeInput) {
+      const response = await fetchImpl(url('/machine-types'), jsonRequest('POST', input))
+      return readJSON<MachineType>(response)
+    },
+
+    async updateMachineType(id: string, input: MachineTypeInput) {
+      const response = await fetchImpl(
+        url(`/machine-types/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<MachineType>(response)
+    },
+
+    async deleteMachineType(id: string) {
+      const response = await fetchImpl(
+        url(`/machine-types/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async listMachines() {
+      const response = await fetchImpl(url('/machines'), credentialedRequest())
+      return readArray(await readJSON<Machine[]>(response))
+    },
+
+    async createMachine(input: MachineInput) {
+      const response = await fetchImpl(url('/machines'), jsonRequest('POST', input))
+      return readJSON<Machine>(response)
+    },
+
+    async updateMachine(id: string, input: MachineInput) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<Machine>(response)
+    },
+
+    async deleteMachine(id: string) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async listQualifications() {
+      const response = await fetchImpl(url('/planning/qualifications'), credentialedRequest())
+      return readArray(await readJSON<WorkerQualifications[]>(response)).map((entry) => ({
+        ...entry,
+        machineTypeIds: readArray(entry.machineTypeIds),
+      }))
+    },
+
+    async setQualifications(userId: string, input: WorkerQualificationsInput) {
+      const response = await fetchImpl(
+        url(`/planning/qualifications/${encodeURIComponent(userId)}`),
+        jsonRequest('PUT', input),
+      )
+      const result = await readJSON<WorkerQualifications>(response)
+      return { ...result, machineTypeIds: readArray(result?.machineTypeIds) }
+    },
+
+    async listAttendance(date: string) {
+      const response = await fetchImpl(
+        url(`/planning/attendance?${new URLSearchParams({ date })}`),
+        credentialedRequest(),
+      )
+      return readArray(await readJSON<AttendanceEntry[]>(response))
+    },
+
+    async setAttendance(userId: string, input: AttendanceInput) {
+      const response = await fetchImpl(
+        url(`/planning/attendance/${encodeURIComponent(userId)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<AttendanceEntry>(response)
+    },
+
+    async getWorkingHours() {
+      const response = await fetchImpl(url('/planning/working-hours'), credentialedRequest())
+      return normalizeWorkingHours(await readJSON<WorkingHours>(response))
+    },
+
+    async setWorkingHours(input: WorkingHours) {
+      const response = await fetchImpl(url('/planning/working-hours'), jsonRequest('PUT', input))
+      return normalizeWorkingHours(await readJSON<WorkingHours>(response))
+    },
+
+    async getPlanDay(date: string) {
+      const response = await fetchImpl(
+        url(`/planning/plan?${new URLSearchParams({ date })}`),
+        credentialedRequest(),
+      )
+      const day = await readJSON<PlanDay>(response)
+      return {
+        ...day,
+        draft: day.draft ? normalizePlan(day.draft) : null,
+        published: day.published ? normalizePlan(day.published) : null,
+        drift: day.drift ? { ...day.drift, reasons: readArray(day.drift.reasons) } : null,
+      }
+    },
+
+    async generatePlan(input: PlanGenerateInput) {
+      const response = await fetchImpl(url('/planning/plan/generate'), jsonRequest('POST', input))
+      return normalizePlan(await readJSON<ProductionPlan>(response))
+    },
+
+    async updatePlanDraft(input: PlanDraftInput) {
+      const response = await fetchImpl(url('/planning/plan/draft'), jsonRequest('PUT', input))
+      return normalizePlan(await readJSON<ProductionPlan>(response))
+    },
+
+    async deletePlanDraft(date: string) {
+      const response = await fetchImpl(
+        url(`/planning/plan/draft?${new URLSearchParams({ date })}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async publishPlan(input: PlanPublishInput) {
+      const response = await fetchImpl(url('/planning/plan/publish'), jsonRequest('POST', input))
+      return normalizePlan(await readJSON<ProductionPlan>(response))
+    },
+
+    async getMyQueue(date?: string) {
+      const search = date ? `?${new URLSearchParams({ date })}` : ''
+      const response = await fetchImpl(url(`/planning/my-queue${search}`), credentialedRequest())
+      const queue = await readJSON<MyQueue>(response)
+      return { ...queue, items: readArray(queue?.items).map(normalizeAssignment) }
+    },
+
+    async getPlanningForecast() {
+      const response = await fetchImpl(url('/planning/forecast'), credentialedRequest())
+      return readArray(await readJSON<OrderForecast[]>(response))
     },
 
     async getAnnouncements() {

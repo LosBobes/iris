@@ -174,6 +174,7 @@ export function ProcessTemplateForm({
         stock={stockEnabled ? levels : undefined}
         articleLinking={stockEnabled}
         articlesHidden={variant === 'app' && !modules.stock}
+        planningEnabled={variant === 'app' && modules.planning}
       />
 
       <div className="flex flex-wrap items-center gap-2">

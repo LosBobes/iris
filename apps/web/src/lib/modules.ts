@@ -5,3 +5,5 @@
 export const PROCESSES_DISABLED_MESSAGE = 'Modul „Procesi rada“ nije uključen za ovu organizaciju.'
 export const STOCK_DISABLED_MESSAGE = 'Modul „Magacin“ nije uključen za ovu organizaciju.'
 export const PROCESSES_REQUIRE_STOCK_MESSAGE = 'Modul „Procesi rada“ zahteva uključen modul „Magacin“.'
+export const PLANNING_DISABLED_MESSAGE = 'Modul „Planiranje“ nije uključen za ovu organizaciju.'
+export const PLANNING_REQUIRES_PROCESSES_MESSAGE = 'Modul „Planiranje“ zahteva uključen modul „Procesi rada“.'

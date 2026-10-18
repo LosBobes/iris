@@ -53,8 +53,9 @@ function ModuleSwitch({
 
 /**
  * Switches an organization's optional modules (Backoffice superadmins only).
- * "Procesi rada" requires "Magacin": its switch is disabled while Magacin is
- * off, and turning Magacin off turns it off too.
+ * "Procesi rada" requires "Magacin" and "Planiranje" requires "Procesi rada":
+ * a dependent switch is disabled while its requirement is off, and turning the
+ * requirement off turns the dependent module off too.
  */
 export function OrganizationModulesDialog({
   tenant,
@@ -69,6 +70,7 @@ export function OrganizationModulesDialog({
   const [modules, setModules] = useState<OrganizationModules>({
     stock: tenant.modules.stock,
     processes: tenant.modules.stock && tenant.modules.processes,
+    planning: tenant.modules.stock && tenant.modules.processes && tenant.modules.planning,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +101,12 @@ export function OrganizationModulesDialog({
           checked={modules.stock}
           label={t("platform.orgs.modules.stock")}
           description={t("platform.orgs.modules.stockHint")}
-          onChange={(stock) => setModules((current) => ({ stock, processes: stock && current.processes }))}
+          onChange={(stock) => setModules((current) => ({
+              stock,
+              processes: stock && current.processes,
+              planning: stock && current.processes && current.planning,
+            }))
+          }
         />
         <ModuleSwitch
           checked={modules.processes}
@@ -107,7 +114,15 @@ export function OrganizationModulesDialog({
           label={t("platform.orgs.modules.processes")}
           description={t("platform.orgs.modules.processesHint")}
           helper={t("platform.orgs.modules.requiresStock")}
-          onChange={(processes) => setModules((current) => ({ ...current, processes }))}
+          onChange={(processes) => setModules((current) => ({ ...current, processes, planning: processes && current.planning }))}
+        />
+        <ModuleSwitch
+          checked={modules.planning}
+          disabled={!modules.processes}
+          label={t("platform.orgs.modules.planning")}
+          description={t("platform.orgs.modules.planningHint")}
+          helper={t("platform.orgs.modules.requiresProcesses")}
+          onChange={(planning) => setModules((current) => ({ ...current, planning }))}
         />
         <p className="text-[12px] text-[color:var(--pf-muted)]">{t("platform.orgs.modules.defaultOff")}</p>
         {error ? (
