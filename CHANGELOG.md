@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.1.1 — 2026-10-18
+
+### Patch
+
+- The backend Docker image now ships the irisctl operations CLI alongside the server, so migrations, seeding and backups can run inside the container (docker compose -f docker-compose.prod.yml run --rm --entrypoint irisctl backend …) without a separately built binary.
+
 ## 2.1.0 — 2026-10-18
 
 ### Minor
