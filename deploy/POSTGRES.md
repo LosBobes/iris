@@ -110,7 +110,7 @@ docker run --rm -v "$PWD:/w" -w /w alpine:3.21 sh -c "apk add -q sqlite && sqlit
 
 Each section prints its own "expect" line. In short:
 
-- schema version is the newest migration (22 at time of writing);
+- schema version is the newest migration (25 at time of writing);
 - no order numbers with a non-digit suffix (such as `RN-2026-12/A`);
 - every money/quantity `bad` is 0 (more than 4 decimals or >= 1e10 would be
   rounded or rejected by `NUMERIC(14,4)`);
@@ -127,7 +127,7 @@ $C run --rm --entrypoint irisctl backend migrate-to-postgres -check -from /data/
 Expected tail:
 
 ```
-Izvor: /data/iris.db (verzija šeme 22)
+Izvor: /data/iris.db (verzija šeme 25)
   tenants                               2
   ...
 Provera izvora je prošla: 3912 redova, nema upozorenja.
@@ -209,7 +209,7 @@ $C run --rm --entrypoint irisctl backend migrate-to-postgres -from /data/iris.db
 Expected output (counts differ; the schema version matches step 1):
 
 ```
-Izvor: /data/iris.db (verzija šeme 22)
+Izvor: /data/iris.db (verzija šeme 25)
   tenants                               2
   platform_admins                       1
   ...

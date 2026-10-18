@@ -26,6 +26,7 @@ var migrationTables = []string{
 	"customer_emails",
 	"customer_contacts",
 	"work_orders",
+	"work_order_id_counter",
 	"work_order_status_history",
 	"work_order_materials",
 	"work_order_notes",
@@ -95,8 +96,9 @@ func MigrateToPostgres(ctx context.Context, source *SQLStore, target *SQLStore) 
 	// The schema seeds a production tenant, its default firm name, and (via
 	// migration 17) the default Backoffice account. The source carries its own
 	// copies of those rows (possibly edited), so the seeds are cleared first and
-	// the source's values win.
-	for _, table := range []string{"app_settings", "tenants", "platform_admins"} {
+	// the source's values win. The work-order id counter (migration 23) is a
+	// one-row seeded table too; the source's value is copied verbatim.
+	for _, table := range []string{"app_settings", "tenants", "platform_admins", "work_order_id_counter"} {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table); err != nil {
 			return nil, fmt.Errorf("clear seeded %s: %w", table, err)
 		}
@@ -157,7 +159,7 @@ func MigrateToPostgres(ctx context.Context, source *SQLStore, target *SQLStore) 
 // evidence that the target holds real data. The migration clears and replaces
 // them from the source, which is why they are exempt from the emptiness check
 // rather than merely allowed a row or two.
-var seedOwnedTables = map[string]bool{"tenants": true, "app_settings": true, "platform_admins": true}
+var seedOwnedTables = map[string]bool{"tenants": true, "app_settings": true, "platform_admins": true, "work_order_id_counter": true}
 
 // verifyTargetIsEmpty refuses to copy into a database that already holds data.
 // Without this a re-run would silently double every table, or fail halfway

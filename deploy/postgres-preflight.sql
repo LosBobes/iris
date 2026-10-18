@@ -13,7 +13,7 @@
 .mode column
 
 .print
-.print == schema version (expect the newest migration number; 22 at time of writing)
+.print == schema version (expect the newest migration number; 25 at time of writing)
 SELECT MAX(version) AS schema_version FROM schema_migrations;
 
 .print
@@ -58,7 +58,7 @@ SELECT name FROM sqlite_master
 WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN (
   'schema_migrations', 'tenants', 'platform_admins', 'platform_sessions', 'impersonation_events',
   'users', 'sessions', 'customers', 'locations', 'customer_emails', 'customer_contacts',
-  'work_orders', 'work_order_status_history', 'work_order_materials', 'work_order_notes',
+  'work_orders', 'work_order_id_counter', 'work_order_status_history', 'work_order_materials', 'work_order_notes',
   'work_order_events', 'work_order_attachments', 'work_order_time_entries', 'invoice_line_items',
   'work_order_number_reservations', 'work_order_edit_locks', 'enum_values', 'catalog_items',
   'catalog_item_price_history', 'app_settings', 'login_events', 'impersonation_actions',

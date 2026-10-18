@@ -3,10 +3,12 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/testutil"
 )
 
@@ -60,6 +62,22 @@ func TestMigrateToPostgresCopiesASeededDatabase(t *testing.T) {
 		t.Fatalf("RecordLogin() after migration returned error (identity sequence not resynced?): %v", err)
 	}
 
+	// The id counter is copied verbatim and must not trail the highest numeric
+	// work-order id, or the next create would draw a taken id.
+	var sqliteCounter, postgresCounter, highestID int64
+	if err := sqliteStore.db.QueryRowContext(ctx, `SELECT value FROM work_order_id_counter WHERE id = 1`).Scan(&sqliteCounter); err != nil {
+		t.Fatalf("read sqlite id counter: %v", err)
+	}
+	if err := postgresStore.db.QueryRowContext(ctx, `SELECT value FROM work_order_id_counter WHERE id = 1`).Scan(&postgresCounter); err != nil {
+		t.Fatalf("read postgres id counter: %v", err)
+	}
+	if err := postgresStore.db.QueryRowContext(ctx, maxNumericIDSQL).Scan(&highestID); err != nil {
+		t.Fatalf("read highest numeric id on postgres: %v", err)
+	}
+	if postgresCounter != sqliteCounter || postgresCounter < highestID {
+		t.Fatalf("postgres id counter = %d, sqlite = %d, highest numeric id = %d; want a verbatim copy that is >= the highest id",
+			postgresCounter, sqliteCounter, highestID)
+	}
 	// The work-order list must come back identically, payload JSON included.
 	sqliteOrders, err := sqliteStore.WorkOrders(ctx, WorkOrderListQuery{})
 	if err != nil {
@@ -123,6 +141,16 @@ func TestMigrateToPostgresCopiesASeededDatabase(t *testing.T) {
 		if !equalOptionalPrice(got.PurchasePrice, want.PurchasePrice) {
 			t.Fatalf("migrated item %q purchase price = %v, want %v", want.ID, got.PurchasePrice, want.PurchasePrice)
 		}
+	}
+
+	created, err := postgresStore.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName: "Posle migracije", JobDescription: "Štampa", IssuedBy: "admin", IssueDate: "2026-06-21",
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder() after migration returned error: %v", err)
+	}
+	if want := strconv.FormatInt(postgresCounter+1, 10); created.ID != want {
+		t.Fatalf("first id after migration = %q, want %q", created.ID, want)
 	}
 }
 
