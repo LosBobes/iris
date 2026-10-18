@@ -260,6 +260,23 @@ func main() {
 		report, err := importStock(mustTenantContext(ctx, dataStore, *tenantSlug), dataStore, *file, *apply)
 		must(err)
 		fmt.Print(report)
+	case "set-modules":
+		cmd := flag.NewFlagSet("set-modules", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		processes := cmd.String("processes", "", "modul Procesi rada: on ili off")
+		stock := cmd.String("stock", "", "modul Magacin: on ili off")
+		planning := cmd.String("planning", "", "modul Planiranje: on ili off")
+		_ = cmd.Parse(os.Args[2:])
+		update := domain.OrganizationModulesUpdate{
+			Processes: parseOnOff("processes", *processes),
+			Stock:     parseOnOff("stock", *stock),
+			Planning:  parseOnOff("planning", *planning),
+		}
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		report, err := setModules(ctx, dataStore, *tenantSlug, update)
+		must(err)
+		fmt.Print(report)
 	case "export-tenant":
 		cmd := flag.NewFlagSet("export-tenant", flag.ExitOnError)
 		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
@@ -614,7 +631,7 @@ func usage() {
   irisctl import-csv -tenant oznaka --apply --dir import/
   irisctl import-stock -tenant oznaka --file stanje.csv --dry-run
   irisctl import-stock -tenant oznaka --file stanje.csv --apply
-  irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
+  irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off] [-planning on|off]
   irisctl create-platform-admin -username ime -password lozinka
   irisctl reset-platform-2fa -username ime
   irisctl backup [-out backups/iris.db]   (bez -out: IRIS_BACKUP_DIR, podrazumevano backups/ pored baze)
@@ -629,8 +646,9 @@ suspenduje); Backoffice aktivnost zadržava zapis. Oba se beleže u aktivnost ka
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
 a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
 
-set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin);
+set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin, Planiranje);
 izostavljen modul ostaje kakav jeste. Za razliku od Backoffice-a ne upisuje zapis u aktivnost.
+Planiranje zahteva Procesi rada, a Procesi rada zahtevaju Magacin.
 Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastali.
 
 seed-demo pravi jednu "demo" organizaciju sa uključenim modulima Procesi rada i Magacin:
@@ -647,4 +665,19 @@ sopstvene id-jeve.
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.
 DATABASE_URL bira Postgres umesto SQLite za sve komande osim migrate-to-postgres,
 koja uvek čita iz SQLite fajla i upisuje u Postgres.`)
+}
+
+// setModules applies a partial module switch (nil fields stay as they are) and
+// reports the resulting state. Switching "planning" on needs "processes", and
+// "processes" needs "stock"; the store rejects anything else.
+func setModules(ctx context.Context, dataStore *store.SQLStore, slug string, update domain.OrganizationModulesUpdate) (string, error) {
+	modules, err := dataStore.SetTenantModules(ctx, strings.TrimSpace(slug), update)
+	if err != nil {
+		return "", err
+	}
+	if modules == nil {
+		return "", fmt.Errorf("organizacija %q ne postoji", slug)
+	}
+	return fmt.Sprintf("Moduli organizacije %s: Procesi rada %s, Magacin %s, Planiranje %s.\n",
+		slug, onOff(modules.Processes), onOff(modules.Stock), onOff(modules.Planning)), nil
 }

@@ -208,6 +208,7 @@ func (s *Server) Routes() http.Handler {
 		// Backoffice has not switched its module on for the organization.
 		processes := protected.With(s.requireModule(moduleProcesses))
 		stock := protected.With(s.requireModule(moduleStock))
+		planning := protected.With(s.requireModule(modulePlanning))
 		protected.Get("/customers", s.handleCustomers)
 		protected.Get("/customers/{id}", s.handleCustomerByID)
 		protected.Post("/customers", s.handleUpsertCustomer)
@@ -263,6 +264,27 @@ func (s *Server) Routes() http.Handler {
 		stock.Get("/stock/movements", s.handleStockMovements)
 		stock.Post("/stock/receipts", s.handlePostStockReceipt)
 		stock.Post("/stock/counts", s.requireAdmin(s.handlePostStockCount))
+		planning.Get("/machine-types", s.planningHandler(s.handleMachineTypes))
+		planning.Post("/machine-types", s.requireAdmin(s.planningHandler(s.handleCreateMachineType)))
+		planning.Put("/machine-types/{id}", s.requireAdmin(s.planningHandler(s.handleUpdateMachineType)))
+		planning.Delete("/machine-types/{id}", s.requireAdmin(s.planningHandler(s.handleDeleteMachineType)))
+		planning.Get("/machines", s.planningHandler(s.handleMachines))
+		planning.Post("/machines", s.requireAdmin(s.planningHandler(s.handleCreateMachine)))
+		planning.Put("/machines/{id}", s.requireAdmin(s.planningHandler(s.handleUpdateMachine)))
+		planning.Delete("/machines/{id}", s.requireAdmin(s.planningHandler(s.handleDeleteMachine)))
+		planning.Get("/planning/qualifications", s.planningHandler(s.handleQualifications))
+		planning.Put("/planning/qualifications/{userId}", s.requireAdmin(s.planningHandler(s.handleSetQualifications)))
+		planning.Get("/planning/attendance", s.planningHandler(s.handleAttendance))
+		planning.Put("/planning/attendance/{userId}", s.requireAdmin(s.planningHandler(s.handleSetAttendance)))
+		planning.Get("/planning/working-hours", s.planningHandler(s.handleWorkingHours))
+		planning.Put("/planning/working-hours", s.requireAdmin(s.planningHandler(s.handleSetWorkingHours)))
+		planning.Get("/planning/plan", s.planningHandler(s.handlePlanDay))
+		planning.Post("/planning/plan/generate", s.requireAdmin(s.planningHandler(s.handleGeneratePlan)))
+		planning.Put("/planning/plan/draft", s.requireAdmin(s.planningHandler(s.handleSavePlanDraft)))
+		planning.Delete("/planning/plan/draft", s.requireAdmin(s.planningHandler(s.handleDiscardPlanDraft)))
+		planning.Post("/planning/plan/publish", s.requireAdmin(s.planningHandler(s.handlePublishPlan)))
+		planning.Get("/planning/my-queue", s.planningHandler(s.handleMyQueue))
+		planning.Get("/planning/forecast", s.planningHandler(s.handlePlanningForecast))
 		protected.Get("/announcements", s.handleAnnouncements)
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
@@ -356,9 +378,11 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 const (
 	moduleProcesses = "processes"
 	moduleStock     = "stock"
+	modulePlanning  = "planning"
 
 	moduleProcessesDisabledMessage = "Modul „Procesi rada“ nije uključen za ovu organizaciju."
 	moduleStockDisabledMessage     = "Modul „Magacin“ nije uključen za ovu organizaciju."
+	modulePlanningDisabledMessage  = "Modul „Planiranje“ nije uključen za ovu organizaciju."
 )
 
 // requireModule rejects the request with 403 unless the signed-in user's
@@ -383,6 +407,8 @@ func (s *Server) requireModule(module string) func(http.Handler) http.Handler {
 				writeAPIError(w, r, http.StatusForbidden, moduleProcessesDisabledMessage, nil)
 			case module == moduleStock && !modules.Stock:
 				writeAPIError(w, r, http.StatusForbidden, moduleStockDisabledMessage, nil)
+			case module == modulePlanning && !modules.Planning:
+				writeAPIError(w, r, http.StatusForbidden, modulePlanningDisabledMessage, nil)
 			default:
 				next.ServeHTTP(w, r)
 			}
@@ -1076,7 +1102,12 @@ const maxJSONBodyBytes = 1 << 20
 // decodeJSONBody centralizes request decoding: it enforces the body size cap
 // and writes the 400 response itself, so handlers only continue on success.
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	return decodeJSONBodyLimit(w, r, target, maxJSONBodyBytes)
+}
+
+// decodeJSONBodyLimit is decodeJSONBody with a route-specific size cap.
+func decodeJSONBodyLimit(w http.ResponseWriter, r *http.Request, target any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
 		// The decode error itself (offending field, byte offset) never reaches the
 		// client, but it is the whole diagnosis, so it is logged and reported.
