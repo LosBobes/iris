@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.4.0 — 2026-10-18
+
+### Minor
+
+- The app version is shown in the sidebar and in the Backoffice Sistem panel together with the API version, commit and database engine (with a warning when the web app and API versions differ); sign-in screens now scroll on small phones and with the keyboard open; and irisctl migrate-to-postgres -check reports foreign-key violations, which the migration now refuses up front with the cleanup statement instead of failing mid-copy.
+
 ## 2.3.0 — 2026-10-18
 
 ### Minor
