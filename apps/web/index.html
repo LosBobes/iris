@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget: the on-screen keyboard shrinks the layout viewport
+         (Chromium), so the fixed full-screen views (sign-in, app shell) shrink
+         with it and can scroll the focused field into view. iOS ignores it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Iris</title>
     <meta name="description" content="Radni nalozi, klijenti i praćenje porudžbina." />
 

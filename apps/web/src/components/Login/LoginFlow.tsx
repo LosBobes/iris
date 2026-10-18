@@ -121,32 +121,36 @@ function OrganizationSignIn({ sessionExpired, onLoginSuccess }: LoginFlowProps):
 
   if (state.kind === "loading") {
     return (
-      <div className="iris-screen flex items-center justify-center bg-background">
-        <span
-          role="status"
-          aria-label={t("common.loading")}
-          className="h-5 w-5 animate-spin rounded-full border-2 border-[color:var(--iris-ink-faint)] border-t-foreground"
-        />
+      <div className="iris-screen bg-background">
+        <div className="flex min-h-full items-center justify-center">
+          <span
+            role="status"
+            aria-label={t("common.loading")}
+            className="h-5 w-5 animate-spin rounded-full border-2 border-[color:var(--iris-ink-faint)] border-t-foreground"
+          />
+        </div>
       </div>
     );
   }
 
   if (state.kind === "error") {
     return (
-      <div className="iris-screen flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-        <p role="alert" className="max-w-sm text-[13px] text-[color:var(--iris-status-cancelled)]">
-          {state.message}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setState({ kind: "loading" });
-            setAttempt((n) => n + 1);
-          }}
-          className="iris-focusable iris-press bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
-        >
-          {t("auth.retry")}
-        </button>
+      <div className="iris-screen bg-background">
+        <div className="flex min-h-full flex-col items-center justify-center gap-4 px-6 py-8 text-center">
+          <p role="alert" className="max-w-sm text-[13px] text-[color:var(--iris-status-cancelled)]">
+            {state.message}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setState({ kind: "loading" });
+              setAttempt((n) => n + 1);
+            }}
+            className="iris-focusable iris-press bg-foreground px-4 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
+          >
+            {t("auth.retry")}
+          </button>
+        </div>
       </div>
     );
   }

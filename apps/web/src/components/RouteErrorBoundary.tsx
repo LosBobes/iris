@@ -97,38 +97,42 @@ class RouteErrorBoundaryBase extends Component<
       return (
         <main
           role="status"
-          className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground"
+          className="iris-screen bg-background text-foreground"
         >
-          <div className="text-sm text-[color:var(--iris-ink-soft)]">
-            {t("app.loading")}
+          <div className="flex min-h-full items-center justify-center px-6 py-8">
+            <div className="text-sm text-[color:var(--iris-ink-soft)]">
+              {t("app.loading")}
+            </div>
           </div>
         </main>
       );
     }
 
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-        <div
-          role="alert"
-          className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
-          <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            {t("app.errorEyebrow")}
+      <main className="iris-screen bg-background text-foreground">
+        <div className="flex min-h-full items-center justify-center px-6 py-8">
+          <div
+            role="alert"
+            className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
+            <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+              {t("app.errorEyebrow")}
+            </div>
+            <h1 className="mt-2 text-[26px] font-normal tracking-[-0.6px] text-foreground">
+              {t("app.errorTitle")}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-[color:var(--iris-ink-soft)]">
+              {isStaleChunkError(error)
+                ? t("app.errorStaleVersionMessage")
+                : t("app.errorMessage")}
+            </p>
+            <button
+              type="button"
+              onClick={this.handleReload}
+              className="iris-focusable iris-press mt-6 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+            >
+              {t("app.reload")}
+            </button>
           </div>
-          <h1 className="mt-2 text-[26px] font-normal tracking-[-0.6px] text-foreground">
-            {t("app.errorTitle")}
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-[color:var(--iris-ink-soft)]">
-            {isStaleChunkError(error)
-              ? t("app.errorStaleVersionMessage")
-              : t("app.errorMessage")}
-          </p>
-          <button
-            type="button"
-            onClick={this.handleReload}
-            className="iris-focusable iris-press mt-6 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
-          >
-            {t("app.reload")}
-          </button>
         </div>
       </main>
     );

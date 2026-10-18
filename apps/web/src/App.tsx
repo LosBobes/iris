@@ -81,12 +81,14 @@ type AppBootstrapState =
 function StartupLoadingScreen(): React.JSX.Element {
   return (
     <main
-      className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground"
+      className="iris-screen bg-background text-foreground"
       style={{ animation: "iris-fade-in 280ms var(--iris-ease-out) both 200ms" }}
     >
-      <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Povezivanje sa backend servisom...</span>
+      <div className="flex min-h-full items-center justify-center px-6 py-8">
+        <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Povezivanje sa backend servisom...</span>
+        </div>
       </div>
     </main>
   );
@@ -109,10 +111,12 @@ function AppShellLayout(): React.JSX.Element {
 function RouteLoadingScreen(): React.JSX.Element {
   const { t } = useTranslation();
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-      <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span>{t("app.loading")}</span>
+    <main className="iris-screen bg-background text-foreground">
+      <div className="flex min-h-full items-center justify-center px-6 py-8">
+        <div className="flex items-center gap-3 text-sm text-[color:var(--iris-ink-soft)]">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>{t("app.loading")}</span>
+        </div>
       </div>
     </main>
   );
@@ -127,24 +131,26 @@ function BackendUnavailableScreen({
 }): React.JSX.Element {
   const { t } = useTranslation();
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-      <div className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
-        <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-          {t("app.backendEyebrow")}
+    <main className="iris-screen bg-background text-foreground">
+      <div className="flex min-h-full items-center justify-center px-6 py-8">
+        <div className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
+          <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+            {t("app.backendEyebrow")}
+          </div>
+          <h1 className="mt-2 text-[26px] font-normal tracking-[-0.6px] text-foreground">
+            {t("app.backendUnavailable")}
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-[color:var(--iris-ink-soft)]">
+            {message}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="iris-focusable iris-press mt-6 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+          >
+            {t("app.retry")}
+          </button>
         </div>
-        <h1 className="mt-2 text-[26px] font-normal tracking-[-0.6px] text-foreground">
-          {t("app.backendUnavailable")}
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-[color:var(--iris-ink-soft)]">
-          {message}
-        </p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="iris-focusable iris-press mt-6 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
-        >
-          {t("app.retry")}
-        </button>
       </div>
     </main>
   );
