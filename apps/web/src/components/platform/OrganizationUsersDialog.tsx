@@ -13,12 +13,15 @@ import {
 
 // Mirrors the API's minimum for organization user passwords.
 const MIN_USER_PASSWORD_LENGTH = 6;
+// Mirrors domain.MaxImpersonationReasonLength.
+export const MAX_IMPERSONATION_REASON_LENGTH = 200;
 
 /**
  * An organization's accounts, each with two Backoffice operations:
- * - "Uđi" opens an organization session as that user. The API replaces this
- *   browser's iris_session cookie, so the app reloads at "/" to boot into it
- *   (with the impersonation banner).
+ * - "Uđi" asks for a reason (required, kept in the activity log), then opens an
+ *   organization session as that user. The API replaces this browser's
+ *   iris_session cookie, so the app reloads at "/" to boot into it (with the
+ *   impersonation banner).
  * - "Nova lozinka" sets a new password and signs the user out everywhere.
  */
 export function OrganizationUsersDialog({
@@ -34,6 +37,7 @@ export function OrganizationUsersDialog({
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [resetting, setResetting] = useState<{ id: string; password: string; error: string | null } | null>(null);
+  const [entering, setEntering] = useState<{ id: string; reason: string; error: string | null } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -50,11 +54,24 @@ export function OrganizationUsersDialog({
     };
   }, [tenant.slug, t]);
 
-  const impersonate = async (userId: string): Promise<void> => {
+  const impersonate = async (userId: string, rawReason: string): Promise<void> => {
+    const reason = rawReason.trim();
+    if (!reason) {
+      setEntering({ id: userId, reason: rawReason, error: t("platform.impersonate.reasonRequired") });
+      return;
+    }
+    if ([...reason].length > MAX_IMPERSONATION_REASON_LENGTH) {
+      setEntering({
+        id: userId,
+        reason: rawReason,
+        error: t("platform.impersonate.reasonTooLong", { max: MAX_IMPERSONATION_REASON_LENGTH }),
+      });
+      return;
+    }
     setPendingId(userId);
     setError(null);
     try {
-      const result = await window.api.platformImpersonate(tenant.slug, userId);
+      const result = await window.api.platformImpersonate(tenant.slug, userId, reason);
       if (!result.success) throw new Error(t("platform.impersonate.error"));
       rememberOrganizationSlug(result.orgSlug ?? tenant.slug);
       window.location.assign("/");
@@ -113,6 +130,7 @@ export function OrganizationUsersDialog({
           <ul>
             {data.users.map((user) => {
               const editing = resetting?.id === user.id ? resetting : null;
+              const reasonForm = entering?.id === user.id ? entering : null;
               return (
                 <li key={user.id} className="rounded-md px-2 py-2 hover:bg-white/[0.03] sm:py-1.5">
                   {/* Phones: name on its own line, both actions side by side below it. */}
@@ -129,6 +147,7 @@ export function OrganizationUsersDialog({
                       aria-expanded={Boolean(editing)}
                       onClick={() => {
                         setNotice(null);
+                        setEntering(null);
                         setResetting(editing ? null : { id: user.id, password: "", error: null });
                       }}
                       className={`${backofficeSmallButtonClass} flex-1 justify-center sm:flex-none`}
@@ -139,13 +158,53 @@ export function OrganizationUsersDialog({
                     <button
                       type="button"
                       disabled={pendingId !== null}
-                      onClick={() => void impersonate(user.id)}
+                      aria-expanded={Boolean(reasonForm)}
+                      onClick={() => {
+                        setNotice(null);
+                        setResetting(null);
+                        setEntering(reasonForm ? null : { id: user.id, reason: "", error: null });
+                      }}
                       className={`${backofficeSmallButtonClass} flex-1 justify-center sm:flex-none`}
                     >
                       <LogIn className="h-4 w-4" />
                       {t("platform.impersonate.start")}
                     </button>
                   </div>
+                  {reasonForm ? (
+                    <form
+                      noValidate
+                      className="mt-2 pb-1"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void impersonate(user.id, reasonForm.reason);
+                      }}
+                    >
+                      <label htmlFor={`reason-${user.id}`} className="mb-1.5 block text-[12px] text-[color:var(--pf-text-2)]">
+                        {t("platform.impersonate.reasonLabel", { username: user.username })}
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          id={`reason-${user.id}`}
+                          autoFocus
+                          maxLength={MAX_IMPERSONATION_REASON_LENGTH}
+                          placeholder={t("platform.impersonate.reasonPlaceholder")}
+                          value={reasonForm.reason}
+                          onChange={(event) => setEntering({ ...reasonForm, reason: event.target.value, error: null })}
+                          className={backofficeInputClass}
+                        />
+                        <button type="submit" disabled={pendingId !== null} className={`${backofficeSmallButtonClass} h-11`}>
+                          {t("platform.impersonate.confirmStart")}
+                        </button>
+                      </div>
+                      {reasonForm.error ? (
+                        <p className="mt-1.5 text-[12px] text-[#e66767]">{reasonForm.error}</p>
+                      ) : (
+                        <p className="mt-1.5 text-[11px] text-[color:var(--pf-muted)]">
+                          {t("platform.impersonate.reasonHint", { max: MAX_IMPERSONATION_REASON_LENGTH })}
+                        </p>
+                      )}
+                    </form>
+                  ) : null}
                   {editing ? (
                     <form
                       noValidate

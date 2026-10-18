@@ -45,6 +45,10 @@ import type {
   PlatformTenant,
   PlatformCreateTenantInput,
   PlatformUpdateTenantInput,
+  PlatformTwoFactorSetup,
+  PlatformTwoFactorEnabled,
+  PlatformAdminSummary,
+  PlatformCreateAdminInput,
 } from '@/types/platform'
 import type {
   ProcessTemplate,
@@ -137,13 +141,24 @@ declare global {
       deleteLoginLogo: () => Promise<void>
       /** Backoffice (superadmin accounts and cookie, separate from organization users; see iris-api platform.go). */
       platformLogin: (credentials: { username: string; password: string }) => Promise<PlatformLoginResponse>
+      /** Second sign-in step for an account with two-factor sign-in: a TOTP or recovery code. */
+      platformLoginVerify: (input: { challenge: string; code: string }) => Promise<PlatformLoginResponse>
       getPlatformSession: () => Promise<PlatformLoginResponse>
+      /** Starts (or restarts) the signed-in superadmin's TOTP enrollment. */
+      setupPlatformTwoFactor: () => Promise<PlatformTwoFactorSetup>
+      /** Confirms the enrollment with a code; returns the one-time recovery codes. */
+      confirmPlatformTwoFactor: (code: string) => Promise<PlatformTwoFactorEnabled>
+      getPlatformAdmins: () => Promise<PlatformAdminSummary[]>
+      /** Adds a superadmin with a temporary password (changed at first sign-in). */
+      createPlatformAdmin: (input: PlatformCreateAdminInput) => Promise<PlatformAdminSummary>
+      /** Disables (true) or re-enables (false) a superadmin. */
+      setPlatformAdminDisabled: (id: string, disabled: boolean) => Promise<PlatformAdminSummary>
       platformLogout: () => Promise<void>
       changePlatformPassword: (change: PlatformPasswordChange) => Promise<PlatformLoginResponse>
       getPlatformMetrics: (days: PlatformRangeDays) => Promise<PlatformMetrics>
       getPlatformTenantUsers: (slug: string) => Promise<PlatformTenantUsers>
       /** Replaces this browser's organization session with one as the chosen user. */
-      platformImpersonate: (slug: string, userId: string) => Promise<PlatformImpersonationResponse>
+      platformImpersonate: (slug: string, userId: string, reason: string) => Promise<PlatformImpersonationResponse>
       getPlatformAudit: (query: { limit: number; offset: number }) => Promise<PlatformAuditLog>
       getPlatformTenants: () => Promise<PlatformTenant[]>
       createPlatformTenant: (input: PlatformCreateTenantInput) => Promise<PlatformTenant>

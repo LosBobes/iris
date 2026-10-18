@@ -18,6 +18,7 @@ var migrationTables = []string{
 	"tenants",
 	"platform_admins",
 	"platform_sessions",
+	"platform_recovery_codes",
 	"impersonation_events",
 	"users",
 	"sessions",

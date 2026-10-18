@@ -20,6 +20,13 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "process_template.create": "platform.activity.kinds.processTemplateCreate",
   "process_template.update": "platform.activity.kinds.processTemplateUpdate",
   "process_template.delete": "platform.activity.kinds.processTemplateDelete",
+  "admin.create": "platform.activity.kinds.adminCreate",
+  "admin.disable": "platform.activity.kinds.adminDisable",
+  "admin.enable": "platform.activity.kinds.adminEnable",
+  "admin.2fa_enable": "platform.activity.kinds.adminTwoFactorOn",
+  "admin.2fa_reset": "platform.activity.kinds.adminTwoFactorReset",
+  "admin.login_failed": "platform.activity.kinds.adminLoginFailed",
+  "admin.recovery_login": "platform.activity.kinds.adminRecoveryLogin",
 };
 
 type Trail =
@@ -31,11 +38,23 @@ type Trail =
 function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }): React.JSX.Element {
   const { t } = useTranslation();
   const lines: React.ReactNode[] = [];
-  if (event.targetUsername) {
+  const adminEvent = event.action.startsWith("admin.");
+  // On the admin's own two-factor enrollment the target is the actor.
+  if (event.targetUsername && !(event.action === "admin.2fa_enable" && event.targetUsername === event.adminUsername)) {
     lines.push(
-      t(event.action === "tenant.create" ? "platform.activity.firstAdmin" : "platform.activity.targetUser", {
-        username: event.targetUsername,
-      }),
+      t(
+        event.action === "tenant.create"
+          ? "platform.activity.firstAdmin"
+          : adminEvent
+            ? "platform.activity.targetAdmin"
+            : "platform.activity.targetUser",
+        { username: event.targetUsername },
+      ),
+    );
+  }
+  if (event.action === "admin.login_failed") {
+    lines.push(
+      t(event.detail?.stage === "2fa" ? "platform.activity.stageTwoFactor" : "platform.activity.stagePassword"),
     );
   }
   if (event.action.startsWith("process_template.") && event.detail?.name) {
@@ -58,6 +77,11 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
     );
   }
   const session = event.impersonation;
+  if (session?.reason) {
+    lines.push(
+      <span className="text-[color:var(--pf-text)]">{t("platform.activity.reason", { reason: session.reason })}</span>,
+    );
+  }
   if (session) {
     const state = session.endedAt ? (
       t("platform.activity.sessionEnded", { time: formatDateTime(session.endedAt) })

@@ -54,6 +54,11 @@ func (s *Server) handlePlatformImpersonate(w http.ResponseWriter, r *http.Reques
 		writeValidationError(w, r, "Izaberite korisnika.")
 		return
 	}
+	reason, problem := normalizeImpersonationReason(req.Reason)
+	if problem != "" {
+		writeValidationError(w, r, problem)
+		return
+	}
 	tenant, err := s.store.TenantBySlug(r.Context(), chi.URLParam(r, "slug"))
 	if err != nil {
 		writeServerError(w, r, err)
@@ -71,6 +76,7 @@ func (s *Server) handlePlatformImpersonate(w http.ResponseWriter, r *http.Reques
 		UserID:        req.UserID,
 		IP:            clientIP(r),
 		ExpiresAt:     expiresAt,
+		Reason:        reason,
 	})
 	if err != nil {
 		writeServerError(w, r, err)

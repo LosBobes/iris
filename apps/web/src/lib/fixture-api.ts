@@ -50,7 +50,7 @@ import {
   type PublicOrganization,
   normalizeOrganizationModules,
 } from '@/types/settings'
-import type { PlatformMetrics, PlatformRangeDays, PlatformTenant } from '@/types/platform'
+import type { PlatformAdminSummary, PlatformMetrics, PlatformRangeDays, PlatformTenant } from '@/types/platform'
 import { PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
 import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
@@ -1148,6 +1148,42 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       return platformSignedIn
         ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
         : { success: false, error: 'Neispravno korisničko ime ili lozinka.' }
+    },
+
+    async platformLoginVerify() {
+      // Fixture superadmins have no two-factor sign-in, so there is never a challenge.
+      return { success: false, error: 'Prijava je istekla. Prijavite se ponovo.' }
+    },
+
+    async setupPlatformTwoFactor() {
+      throw new Error('Dvofaktorska prijava nije dostupna u demo režimu.')
+    },
+
+    async confirmPlatformTwoFactor() {
+      throw new Error('Dvofaktorska prijava nije dostupna u demo režimu.')
+    },
+
+    async getPlatformAdmins(): Promise<PlatformAdminSummary[]> {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return [
+        {
+          id: `platform-${FIXTURE_PLATFORM_ADMIN.username}`,
+          username: FIXTURE_PLATFORM_ADMIN.username,
+          createdAt: '2026-01-01 00:00:00',
+          lastLoginAt: new Date().toISOString(),
+          twoFactorEnabled: false,
+          mustChangePassword: false,
+          disabledAt: null,
+        },
+      ]
+    },
+
+    async createPlatformAdmin() {
+      throw new Error('Upravljanje superadminima nije dostupno u demo režimu.')
+    },
+
+    async setPlatformAdminDisabled() {
+      throw new Error('Upravljanje superadminima nije dostupno u demo režimu.')
     },
 
     async getPlatformSession() {

@@ -116,10 +116,18 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   organization `users` (own sessions, `iris_platform_session` cookie, 2 h; neither
   side's credentials or sessions work on the other). A database with none gets
   `admin` / `admin123321`, which must change its password before anything shows
-  (in-app "Lozinka"; `irisctl create-platform-admin` adds more). The dashboard
+  (in-app "Lozinka"; `irisctl create-platform-admin` or the "Superadmini" tab adds
+  more, the tab with a temporary password changed at first sign-in). **Hardening**
+  (D-021, migration v26): optional TOTP two-factor sign-in, required once enrolled
+  (menu → "Dvofaktorska prijava"; password step returns a 5-min `challenge`, then
+  `POST /platform/auth/login/verify` with a TOTP or one-time recovery code;
+  `irisctl reset-platform-2fa` turns it off); password and code steps are rate
+  limited and failures audited (`admin.login_failed`); superadmins can be disabled
+  (not yourself, not the last one), which ends their sessions and impersonations. The dashboard
   reads aggregate counts from `GET /platform/metrics`; tenant logins are recorded
   in `login_events` for those counts. **Impersonation** ("Uđi kao…" per
   organization) is its only way into records: `POST /platform/tenants/{slug}/impersonate`
+  (with a required `reason`, kept on `impersonation_events` and shown in "Aktivnost")
   issues an ordinary `iris_session` (1 h) for the chosen user, marked
   `sessions.impersonated_by` and audited in `impersonation_events`; `/auth/session`
   reports `impersonatedBy`, which drives the app's top banner ("Prekini

@@ -1771,7 +1771,12 @@ paths:
         gets `admin` / `admin123321`, which must change its password first;
         `irisctl create-platform-admin` adds more. Sets the `iris_platform_session` cookie
         (HttpOnly, SameSite=Strict, 2 h). Failed attempts are rate limited per
-        IP, per username and globally.
+        IP, per username and globally, and recorded in the activity log as
+        `admin.login_failed` (with the username as typed; never the password).
+        Disabled accounts cannot sign in (same generic error). For an account
+        with two-factor sign-in, a correct password returns `success: false`,
+        `twoFactorRequired: true` and a `challenge` (valid 5 min) instead of a
+        session: finish with `POST /platform/auth/login/verify`.
       operationId: platformLogin
       security: []
       requestBody:
@@ -1789,6 +1794,288 @@ paths:
                 $ref: '#/components/schemas/PlatformLoginResponse'
         '429':
           description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/login/verify:
+    post:
+      tags: [Platform]
+      summary: Second sign-in step for an account with two-factor sign-in
+      description: |
+        Takes the `challenge` from the password step and either a 6-digit TOTP
+        code from the authenticator app (each code is accepted once) or an
+        unused recovery code (then spent; recorded as `admin.recovery_login`).
+        On success sets the `iris_platform_session` cookie like a password-only
+        sign-in. A wrong code returns `success: false`, `twoFactorRequired: true`
+        and the same challenge to retry, and is recorded as `admin.login_failed`
+        (stage `2fa`); an unknown or expired challenge returns `success: false`
+        without `twoFactorRequired` (sign in again). Wrong codes are rate limited
+        per account and per IP (429).
+      operationId: platformLoginVerify
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformLoginVerifyRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/2fa/setup:
+    post:
+      tags: [Platform]
+      summary: Start two-factor (TOTP) enrollment for the signed-in superadmin
+      description: |
+        Generates a new secret, kept as pending until confirmed (calling it again
+        replaces it). Returns the secret, the `otpauth://` URI and the URI as a
+        QR code PNG data URL. 422 when two-factor sign-in is already on (only
+        `irisctl reset-platform-2fa` turns it off).
+      operationId: setupPlatformTwoFactor
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Pending enrollment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTwoFactorSetup'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Two-factor sign-in is already on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/2fa/confirm:
+    post:
+      tags: [Platform]
+      summary: Confirm two-factor enrollment with a code from the app
+      description: |
+        Turns two-factor sign-in on and returns 10 one-time recovery codes, shown
+        only this once (stored hashed). Recorded as `admin.2fa_enable`. Wrong
+        codes return 422 and are rate limited (429).
+      operationId: confirmPlatformTwoFactor
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  example: '123456'
+      responses:
+        '200':
+          description: Two-factor sign-in is on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTwoFactorEnabled'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Wrong code, no enrollment started, or already on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/admins:
+    get:
+      tags: [Platform]
+      summary: List superadmin accounts (operator only)
+      operationId: getPlatformAdmins
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Every superadmin, by username
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Add a superadmin with a temporary password (operator only)
+      description: |
+        The new account must change its password at first sign-in
+        (`mustChangePassword`). Passwords need at least 12 characters. Recorded
+        as `admin.create`.
+      operationId: createPlatformAdmin
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformCreateAdminInput'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Missing or taken username, or password too short/long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/admins/{id}/disable:
+    post:
+      tags: [Platform]
+      summary: Disable a superadmin (operator only)
+      description: |
+        Ends the account's Backoffice sessions and every organization session it
+        opened by impersonation; it can no longer sign in. You cannot disable
+        your own account or the last enabled one (422). Recorded as
+        `admin.disable`; repeating it changes nothing.
+      operationId: disablePlatformAdmin
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such superadmin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Your own account, or the last enabled one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/admins/{id}/enable:
+    post:
+      tags: [Platform]
+      summary: Re-enable a disabled superadmin (operator only)
+      description: Recorded as `admin.enable`; repeating it changes nothing.
+      operationId: enablePlatformAdmin
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such superadmin
           content:
             application/json:
               schema:
@@ -1955,9 +2242,10 @@ paths:
         organization session in this browser), valid for one hour and never
         extended (it does not slide like a signed-in session). The session
         reports `impersonatedBy` on `/auth/session`, is written to the
-        `impersonation_events` audit log (every change request made with it is
-        traced, see `/platform/audit`), is not counted as a login, and ends on
-        `/auth/logout` or when the superadmin signs out of the Backoffice.
+        `impersonation_events` audit log with the required `reason` (every
+        change request made with it is traced, see `/platform/audit`), is not
+        counted as a login, and ends on `/auth/logout`, when the superadmin
+        signs out of the Backoffice, or when the superadmin is disabled.
       operationId: platformImpersonate
       security:
         - PlatformSession: []
@@ -2004,7 +2292,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
-          description: No user chosen
+          description: No user chosen, or the reason is missing or over 200 characters
           content:
             application/json:
               schema:
@@ -4264,8 +4552,82 @@ components:
             mustChangePassword:
               type: boolean
               description: True until the account replaces its initial password.
+            twoFactorEnabled:
+              type: boolean
+              description: True once the account has enrolled an authenticator app.
         error:
           type: string
+        twoFactorRequired:
+          type: boolean
+          description: The password was right; send a code with `challenge` to `/platform/auth/login/verify`.
+        challenge:
+          type: string
+          description: Opaque, single-use, valid 5 minutes.
+    PlatformLoginVerifyRequest:
+      type: object
+      required: [challenge, code]
+      properties:
+        challenge:
+          type: string
+        code:
+          type: string
+          description: A 6-digit TOTP code, or a recovery code (case, spaces and dashes ignored).
+    PlatformTwoFactorSetup:
+      type: object
+      required: [secret, otpauthUri, qrCode]
+      properties:
+        secret:
+          type: string
+          description: Base32 secret, for typing into the app by hand.
+        otpauthUri:
+          type: string
+          example: otpauth://totp/Iris%20Backoffice:ops?algorithm=SHA1&digits=6&issuer=Iris%20Backoffice&period=30&secret=...
+        qrCode:
+          type: string
+          description: The URI as a QR code, a `data:image/png;base64,` URL.
+    PlatformTwoFactorEnabled:
+      type: object
+      required: [recoveryCodes]
+      properties:
+        recoveryCodes:
+          type: array
+          items:
+            type: string
+            example: abcde-fgh23
+    PlatformAdminSummary:
+      type: object
+      required: [id, username, createdAt, lastLoginAt, twoFactorEnabled, mustChangePassword, disabledAt]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        createdAt:
+          type: string
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        twoFactorEnabled:
+          type: boolean
+        mustChangePassword:
+          type: boolean
+          description: Still on a temporary password.
+        disabledAt:
+          type: string
+          format: date-time
+          nullable: true
+    PlatformCreateAdminInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+        password:
+          type: string
+          minLength: 12
+          description: Temporary; the new superadmin must change it at first sign-in.
     PlatformTenantUsers:
       type: object
       required: [tenant, users]
@@ -4286,10 +4648,15 @@ components:
             $ref: '#/components/schemas/User'
     PlatformImpersonationRequest:
       type: object
-      required: [userId]
+      required: [userId, reason]
       properties:
         userId:
           type: string
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Why the superadmin goes in; shown in the activity log.
     PlatformImpersonationResponse:
       type: object
       required: [success]
@@ -4374,7 +4741,13 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete, admin.create, admin.disable, admin.enable, admin.2fa_enable, admin.2fa_reset, admin.login_failed, admin.recovery_login]
+          description: >
+            `admin.*` events concern superadmin accounts and have no organization
+            (empty tenantSlug/tenantName); targetUsername is the account acted
+            on. On `admin.login_failed` adminUsername is the username as typed
+            and detail.stage is `password` or `2fa`. `admin.2fa_reset` done from
+            the server has adminUsername `irisctl`.
         tenantSlug:
           type: string
           description: As it was at the time.
@@ -4392,8 +4765,11 @@ components:
           type: string
         impersonation:
           type: object
-          required: [id, expiresAt, endedAt, actionCount]
+          required: [id, expiresAt, endedAt, actionCount, reason]
           properties:
+            reason:
+              type: string
+              description: Given when it was started (empty for impersonations from before it was required).
             id:
               type: integer
               format: int64

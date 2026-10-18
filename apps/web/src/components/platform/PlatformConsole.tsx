@@ -75,6 +75,7 @@ export function PlatformConsole(): React.JSX.Element {
         <PlatformDashboard
           username={state.admin.username}
           role={state.admin.role}
+          twoFactorEnabled={state.admin.twoFactorEnabled}
           onLogout={() => {
             void window.api
               .platformLogout()

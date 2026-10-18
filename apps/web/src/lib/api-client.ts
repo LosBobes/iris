@@ -44,6 +44,10 @@ import type {
   PlatformTenant,
   PlatformCreateTenantInput,
   PlatformUpdateTenantInput,
+  PlatformTwoFactorSetup,
+  PlatformTwoFactorEnabled,
+  PlatformAdminSummary,
+  PlatformCreateAdminInput,
 } from '@/types/platform'
 import type {
   ProcessGraph,
@@ -744,6 +748,39 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       return readJSON<PlatformLoginResponse>(response)
     },
 
+    async platformLoginVerify(input: { challenge: string; code: string }) {
+      const response = await fetchImpl(url('/platform/auth/login/verify'), jsonRequest('POST', input))
+      return readJSON<PlatformLoginResponse>(response)
+    },
+
+    async setupPlatformTwoFactor() {
+      const response = await fetchImpl(url('/platform/auth/2fa/setup'), credentialedRequest({ method: 'POST' }))
+      return readJSON<PlatformTwoFactorSetup>(response)
+    },
+
+    async confirmPlatformTwoFactor(code: string) {
+      const response = await fetchImpl(url('/platform/auth/2fa/confirm'), jsonRequest('POST', { code }))
+      return readJSON<PlatformTwoFactorEnabled>(response)
+    },
+
+    async getPlatformAdmins() {
+      const response = await fetchImpl(url('/platform/admins'), credentialedRequest())
+      return readJSON<PlatformAdminSummary[]>(response)
+    },
+
+    async createPlatformAdmin(input: PlatformCreateAdminInput) {
+      const response = await fetchImpl(url('/platform/admins'), jsonRequest('POST', input))
+      return readJSON<PlatformAdminSummary>(response)
+    },
+
+    async setPlatformAdminDisabled(id: string, disabled: boolean) {
+      const response = await fetchImpl(
+        url(`/platform/admins/${encodeURIComponent(id)}/${disabled ? 'disable' : 'enable'}`),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<PlatformAdminSummary>(response)
+    },
+
     async getPlatformSession() {
       const response = await fetchImpl(url('/platform/auth/session'), credentialedRequest())
       return readJSON<PlatformLoginResponse>(response)
@@ -775,10 +812,10 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       return readJSON<PlatformTenantUsers>(response)
     },
 
-    async platformImpersonate(slug: string, userId: string) {
+    async platformImpersonate(slug: string, userId: string, reason: string) {
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/impersonate`),
-        jsonRequest('POST', { userId }),
+        jsonRequest('POST', { userId, reason }),
       )
       return readJSON<PlatformImpersonationResponse>(response)
     },

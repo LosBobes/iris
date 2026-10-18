@@ -12,12 +12,50 @@ export interface PlatformAdmin {
   role?: 'superadmin'
   /** True until the account replaces its initial password (e.g. the seeded default). */
   mustChangePassword?: boolean
+  /** True once the account has enrolled an authenticator app (TOTP). */
+  twoFactorEnabled?: boolean
 }
 
 export interface PlatformLoginResponse {
   success: boolean
   admin?: PlatformAdmin
   error?: string
+  /** The password was right; finish with `platformLoginVerify(challenge, code)`. */
+  twoFactorRequired?: boolean
+  /** Single-use, valid 5 minutes. */
+  challenge?: string
+}
+
+/** POST /platform/auth/2fa/setup: a pending TOTP enrollment. */
+export interface PlatformTwoFactorSetup {
+  /** Base32 secret, for typing into the app by hand. */
+  secret: string
+  otpauthUri: string
+  /** The URI as a QR code, a `data:image/png;base64,` URL. */
+  qrCode: string
+}
+
+/** POST /platform/auth/2fa/confirm: shown once, stored hashed. */
+export interface PlatformTwoFactorEnabled {
+  recoveryCodes: string[]
+}
+
+/** A superadmin account (GET /platform/admins). */
+export interface PlatformAdminSummary {
+  id: string
+  username: string
+  createdAt: string
+  lastLoginAt: string | null
+  twoFactorEnabled: boolean
+  /** Still on a temporary password. */
+  mustChangePassword: boolean
+  disabledAt: string | null
+}
+
+export interface PlatformCreateAdminInput {
+  username: string
+  /** Temporary: the new superadmin must change it at first sign-in. */
+  password: string
 }
 
 /** GET /platform/tenants/{slug}/users: an organization and its accounts. */
@@ -71,6 +109,13 @@ export type PlatformAuditAction =
   | 'process_template.create'
   | 'process_template.update'
   | 'process_template.delete'
+  | 'admin.create'
+  | 'admin.disable'
+  | 'admin.enable'
+  | 'admin.2fa_enable'
+  | 'admin.2fa_reset'
+  | 'admin.login_failed'
+  | 'admin.recovery_login'
 
 /** One superadmin action in the Backoffice activity log (GET /platform/audit). */
 export interface PlatformAuditEvent {
@@ -78,14 +123,15 @@ export interface PlatformAuditEvent {
   at: string
   adminUsername: string
   action: PlatformAuditAction
-  /** Organization slug and name as they were at the time. */
+  /** Organization slug and name as they were at the time (empty on admin.* events). */
   tenantSlug: string
   tenantName: string
   targetUsername?: string
   /**
    * For tenant.update: fromName/toName, fromSlug/toSlug of what changed. For
    * tenant.modules: processes/stock = "on"|"off" (new values) and changed =
-   * comma-joined names of the modules that changed.
+   * comma-joined names of the modules that changed. For admin.login_failed:
+   * stage = "password" | "2fa" (adminUsername is the username as typed).
    */
   detail?: Record<string, string>
   ip: string
@@ -96,6 +142,8 @@ export interface PlatformAuditEvent {
     /** Set once signed out (or found expired); null while it may be active. */
     endedAt: string | null
     actionCount: number
+    /** Why it was started (empty for impersonations from before it was required). */
+    reason: string
   }
 }
 

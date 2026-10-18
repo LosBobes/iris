@@ -24,6 +24,8 @@ type ImpersonationInput struct {
 	UserID        string
 	IP            string
 	ExpiresAt     time.Time
+	// Reason is the superadmin's note on why (required by the API).
+	Reason string
 }
 
 func (s *SQLiteStore) PlatformTenantUsers(ctx context.Context, slug string) (*domain.PlatformTenantUsers, error) {
@@ -63,10 +65,10 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 	var impersonationID int64
 	err = tx.QueryRowContext(
 		ctx,
-		`INSERT INTO impersonation_events(admin_id, admin_username, tenant_id, user_id, username, ip, at, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		`INSERT INTO impersonation_events(admin_id, admin_username, tenant_id, user_id, username, ip, at, expires_at, reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		input.AdminID, input.AdminUsername, input.TenantID, user.ID, user.Username, input.IP,
-		now.Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339),
+		now.Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339), input.Reason,
 	).Scan(&impersonationID)
 	if err != nil {
 		return "", nil, fmt.Errorf("record impersonation: %w", err)

@@ -128,8 +128,13 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user -tenant grafika-co
 # first login. Superadmins can also impersonate any organization user from the
 # Backoffice (1 h session, audited in impersonation_events, every change traced in
 # impersonation_actions) and create, edit, suspend organizations and reset user
-# passwords from its "Organizacije" tab; all of it is logged under "Aktivnost". More accounts:
+# passwords from its "Organizacije" tab; all of it is logged under "Aktivnost". Impersonation
+# needs a short reason. Superadmins are listed, added (temporary password) and disabled in
+# the "Superadmini" tab, and can turn on TOTP two-factor sign-in from the menu. More accounts:
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-platform-admin -username ops -password '<long secret>'
+# Lost authenticator and recovery codes: turn two-factor sign-in off for that superadmin
+# (signs it out; it can enroll again). Recorded in "Aktivnost" as irisctl.
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl reset-platform-2fa -username ops
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports
 # Optional per-organization modules (off by default; "processes" requires "stock"):

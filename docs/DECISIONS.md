@@ -211,4 +211,22 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-*Last verified against the checked-in repository state on 2026-10-17.*
+## D-021: Harden superadmin access: TOTP, throttling, account management, impersonation reasons
+- **Status**: `accepted`
+- **Context**: A Backoffice superadmin can open any organization's records (impersonation) and change its configuration, yet sign-in was a password only, superadmins could be added only from the server and never disabled, and an impersonation recorded who and when but not why.
+- **Decision**:
+  - **Two-factor sign-in (TOTP, RFC 6238)** via `github.com/pquerna/otp` (secret generation, codes, and the QR code PNG, so the web app needs no QR library). Optional per account, **required once enrolled**; there is no self-service off switch: `irisctl reset-platform-2fa -username …` (audited as `admin.2fa_reset` by `irisctl`) is the recovery path. Enrollment is two-step (pending secret, then a confirming code) and returns 10 one-time recovery codes shown once. A correct password on an enrolled account returns a 5-minute single-use `challenge` instead of a session; `POST /platform/auth/login/verify` takes the challenge plus a TOTP code (±1 step for drift, each step accepted once via `totp_last_step`) or a recovery code (spent).
+  - **Storage**: recovery codes and challenge tokens are stored only as SHA-256 (high-entropy random values, so a fast hash is enough). TOTP secrets are stored as-is: the server must compute codes and Iris has no key to encrypt them with (`IRIS_SESSION_SECRET` is unused). A stolen database therefore yields TOTP secrets but still not passwords (bcrypt) or sessions (hashed).
+  - **Throttling** reuses the existing `platformLimiter` (the `loginLimiter` behind D-020): the password step already had per-IP, per-username and global limits; the code step adds per-account (`2fa:<id>`) and per-IP keys, and enrollment confirmation `2fa-setup:<id>`. Failed sign-ins at either step are written to `platform_audit_events` as `admin.login_failed` (username as typed, `detail.stage`), bounded by the limiter. Successful sign-ins only set `platform_admins.last_login_at` (auditing each would bury the log); a sign-in with a recovery code is audited (`admin.recovery_login`).
+  - **Superadmin management** in the Backoffice ("Superadmini" tab, `/platform/admins`): list, add with a temporary password (`must_change_password`, as the seeded default), disable / enable (`disabled_at`). You cannot disable yourself or the last enabled account. Disabling ends the account's Backoffice sessions, pending challenges and every impersonation session it opened. All audited (`admin.create`, `admin.disable`, `admin.enable`, `admin.2fa_enable`).
+  - **Impersonation reason**: `POST /platform/tenants/{slug}/impersonate` requires `reason` (1–200 characters), stored on `impersonation_events.reason` and shown in "Aktivnost".
+  - All schema changes are one migration, **v26** (`platformSecurityMigration`), shared by SQLite and Postgres. `platform_recovery_codes` is copied by `migrate-to-postgres`; `platform_login_challenges` is deliberately not (five-minute state).
+- **Consequences**:
+  - A leaked superadmin password alone no longer opens the Backoffice for an enrolled account. 2FA is not forced on every superadmin; making it mandatory would be a later, separate switch.
+  - Losing both the authenticator and the recovery codes needs server access (`irisctl`), by design.
+  - Superadmin audit rows have no organization (`tenant_*` empty); the activity log shows "—" there.
+  - Older impersonations show no reason (`reason` defaults to empty).
+
+---
+
+*Last verified against the checked-in repository state on 2026-10-18.*

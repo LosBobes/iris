@@ -373,6 +373,53 @@ type PlatformAdmin struct {
 	// whose password was not chosen by its owner): the console then allows
 	// nothing but a password change.
 	MustChangePassword bool `json:"mustChangePassword"`
+	// TwoFactorEnabled is set once the account has enrolled an authenticator
+	// app (TOTP); sign-in then needs a code as a second step.
+	TwoFactorEnabled bool `json:"twoFactorEnabled"`
+}
+
+// PlatformLoginVerifyRequest is the POST /platform/auth/login/verify payload:
+// the challenge from the password step and a TOTP or recovery code.
+type PlatformLoginVerifyRequest struct {
+	Challenge string `json:"challenge"`
+	Code      string `json:"code"`
+}
+
+// PlatformTwoFactorSetup is a pending TOTP enrollment: the secret to type in
+// (or scan) and the otpauth URI, also as a QR code PNG data URL.
+type PlatformTwoFactorSetup struct {
+	Secret     string `json:"secret"`
+	OtpauthURI string `json:"otpauthUri"`
+	QRCode     string `json:"qrCode"`
+}
+
+// PlatformTwoFactorConfirm confirms an enrollment with a code from the app.
+type PlatformTwoFactorConfirm struct {
+	Code string `json:"code"`
+}
+
+// PlatformTwoFactorEnabled reports a finished enrollment with its one-time
+// recovery codes, shown this once (only their hashes are stored).
+type PlatformTwoFactorEnabled struct {
+	RecoveryCodes []string `json:"recoveryCodes"`
+}
+
+// PlatformAdminSummary is a superadmin account as the Backoffice lists it.
+type PlatformAdminSummary struct {
+	ID                 string  `json:"id"`
+	Username           string  `json:"username"`
+	CreatedAt          string  `json:"createdAt"`
+	LastLoginAt        *string `json:"lastLoginAt"`
+	TwoFactorEnabled   bool    `json:"twoFactorEnabled"`
+	MustChangePassword bool    `json:"mustChangePassword"`
+	DisabledAt         *string `json:"disabledAt"`
+}
+
+// PlatformCreateAdminInput adds a superadmin with a temporary password that
+// must be changed at first sign-in.
+type PlatformCreateAdminInput struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // PlatformPasswordChange is the POST /platform/auth/password payload.
@@ -390,6 +437,11 @@ type PlatformLoginResponse struct {
 	Success bool           `json:"success"`
 	Admin   *PlatformAdmin `json:"admin,omitempty"`
 	Error   string         `json:"error,omitempty"`
+	// TwoFactorRequired (with Challenge) answers a correct password on an
+	// account with two-factor sign-in: send a code with the challenge to
+	// /platform/auth/login/verify.
+	TwoFactorRequired bool   `json:"twoFactorRequired,omitempty"`
+	Challenge         string `json:"challenge,omitempty"`
 }
 
 // PlatformTenantUsers lists one organization's accounts (id, username, role
@@ -403,7 +455,13 @@ type PlatformTenantUsers struct {
 // payload.
 type PlatformImpersonationRequest struct {
 	UserID string `json:"userId"`
+	// Reason is required: a short note on why the superadmin goes in, kept
+	// with the impersonation and shown in the activity log.
+	Reason string `json:"reason"`
 }
+
+// MaxImpersonationReasonLength bounds the impersonation reason (in characters).
+const MaxImpersonationReasonLength = 200
 
 // PlatformImpersonationResponse reports the organization session that was
 // opened (as the iris_session cookie) for the chosen user.
@@ -456,6 +514,15 @@ const (
 	AuditTenantModules      = "tenant.modules"
 	AuditUserPasswordReset  = "user.password_reset"
 	AuditImpersonationStart = "impersonate"
+
+	// Superadmin accounts and sign-in (no organization).
+	AuditAdminRecoveryLogin  = "admin.recovery_login"
+	AuditAdminLoginFailed    = "admin.login_failed"
+	AuditAdminTwoFactorOn    = "admin.2fa_enable"
+	AuditAdminTwoFactorReset = "admin.2fa_reset"
+	AuditAdminCreate         = "admin.create"
+	AuditAdminDisable        = "admin.disable"
+	AuditAdminEnable         = "admin.enable"
 )
 
 // PlatformAuditEvent is one superadmin action in the Backoffice activity log.
@@ -481,6 +548,9 @@ type PlatformImpersonationStatus struct {
 	ExpiresAt   string  `json:"expiresAt"`
 	EndedAt     *string `json:"endedAt"`
 	ActionCount int     `json:"actionCount"`
+	// Reason is what the superadmin gave when starting it (empty for
+	// impersonations recorded before it was required).
+	Reason string `json:"reason"`
 }
 
 // PlatformAuditLog is a page of the activity log, newest first.

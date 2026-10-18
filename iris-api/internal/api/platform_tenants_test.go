@@ -155,7 +155,7 @@ func TestPlatformSuspendTenant(t *testing.T) {
 		t.Fatal("suspension revealed to wrong credentials")
 	}
 	// The Backoffice can still look inside.
-	rec = platformRequest(t, server, cookie, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"admin-1"}`)
+	rec = platformRequest(t, server, cookie, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"admin-1","reason":"Podrška: prijava greške"}`)
 	impersonation := platformCookie(rec, server.config.SessionCookieName)
 	if impersonation == nil {
 		t.Fatalf("impersonate suspended = %d %s", rec.Code, rec.Body.String())

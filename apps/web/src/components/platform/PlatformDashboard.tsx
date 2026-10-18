@@ -10,6 +10,8 @@ import { staggerStyle } from "@/lib/motion";
 import { PlatformChangePassword } from "./PlatformChangePassword";
 import { OrganizationsPanel } from "./OrganizationsPanel";
 import { ActivityLog } from "./ActivityLog";
+import { PlatformAdminsPanel } from "./PlatformAdminsPanel";
+import { PlatformTwoFactorDialog } from "./PlatformTwoFactorDialog";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -87,10 +89,13 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 export function PlatformDashboard({
   username,
   role,
+  twoFactorEnabled = false,
   onLogout,
 }: {
   username: string;
   role?: string;
+  /** Whether the signed-in superadmin has two-factor sign-in on. */
+  twoFactorEnabled?: boolean;
   onLogout: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -102,6 +107,8 @@ export function PlatformDashboard({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
+  const [twoFactorOn, setTwoFactorOn] = useState(twoFactorEnabled);
   const [notice, setNotice] = useState<string | null>(null);
   // Range and refresh sit in the header from tablet width up; on a phone the
   // range gets its own row and refresh moves into the menu.
@@ -109,11 +116,13 @@ export function PlatformDashboard({
   // Sections: the metrics overview at /backoffice, organization management
   // and the activity log below it.
   const pathname = useLocation().pathname;
-  const section: "overview" | "organizations" | "activity" = pathname.startsWith("/backoffice/organizations")
+  const section: "overview" | "organizations" | "admins" | "activity" = pathname.startsWith("/backoffice/organizations")
     ? "organizations"
-    : pathname.startsWith("/backoffice/activity")
-      ? "activity"
-      : "overview";
+    : pathname.startsWith("/backoffice/admins")
+      ? "admins"
+      : pathname.startsWith("/backoffice/activity")
+        ? "activity"
+        : "overview";
   const showLog = section !== "overview";
 
   const load = useCallback(async (): Promise<void> => {
@@ -228,6 +237,7 @@ export function PlatformDashboard({
   const sections = [
     { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
     { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
+    { to: "/backoffice/admins", label: t("platform.nav.admins"), current: section === "admins" },
     { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
   ];
   const navTabs = <SectionTabs tabs={sections} label={t("platform.nav.label")} />;
@@ -257,6 +267,8 @@ export function PlatformDashboard({
             sections={isWide ? undefined : sections}
             extra={isWide || showLog ? undefined : refreshControls}
             onChangePassword={() => setChangingPassword(true)}
+            twoFactorEnabled={twoFactorOn}
+            onTwoFactor={() => setTwoFactorOpen(true)}
             onLogout={onLogout}
           />
         </div>
@@ -280,6 +292,14 @@ export function PlatformDashboard({
         </div>
       ) : null}
 
+      {twoFactorOpen ? (
+        <PlatformTwoFactorDialog
+          enabled={twoFactorOn}
+          onEnabled={() => setTwoFactorOn(true)}
+          onClose={() => setTwoFactorOpen(false)}
+        />
+      ) : null}
+
       <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-5 sm:px-6">
         {notice ? (
           <div role="status" className="rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
@@ -290,9 +310,19 @@ export function PlatformDashboard({
         {showLog ? (
           <>
             <h1 className="text-[22px] font-medium tracking-[-0.3px]">
-              {section === "organizations" ? t("platform.nav.organizations") : t("platform.nav.activity")}
+              {section === "organizations"
+                ? t("platform.nav.organizations")
+                : section === "admins"
+                  ? t("platform.nav.admins")
+                  : t("platform.nav.activity")}
             </h1>
-            {section === "organizations" ? <OrganizationsPanel /> : <ActivityLog />}
+            {section === "organizations" ? (
+              <OrganizationsPanel />
+            ) : section === "admins" ? (
+              <PlatformAdminsPanel currentUsername={username} />
+            ) : (
+              <ActivityLog />
+            )}
           </>
         ) : (
         <>

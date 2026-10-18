@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -112,6 +113,26 @@ func main() {
 		defer dataStore.Close()
 		must(dataStore.UpsertPlatformAdmin(ctx, *username, *password))
 		fmt.Printf("Superadmin %s je sačuvan.\n", strings.TrimSpace(*username))
+	case "reset-platform-2fa":
+		// For a superadmin who lost the authenticator app and recovery codes:
+		// turns two-factor sign-in off (they can enroll again) and signs the
+		// account out. Recorded in the Backoffice activity log as "irisctl".
+		cmd := flag.NewFlagSet("reset-platform-2fa", flag.ExitOnError)
+		username := cmd.String("username", "", "korisničko ime superadmina")
+		_ = cmd.Parse(os.Args[2:])
+		if strings.TrimSpace(*username) == "" {
+			fmt.Fprintln(os.Stderr, "-username je obavezan")
+			os.Exit(2)
+		}
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		err := dataStore.ResetPlatformAdminTOTP(ctx, store.AuditActor{AdminUsername: "irisctl"}, *username)
+		if errors.Is(err, store.ErrPlatformAdminNotFound) {
+			fmt.Fprintf(os.Stderr, "Superadmin %s ne postoji.\n", strings.TrimSpace(*username))
+			os.Exit(1)
+		}
+		must(err)
+		fmt.Printf("Dvofaktorska prijava za %s je isključena; nalog je odjavljen.\n", strings.TrimSpace(*username))
 	case "backup":
 		cmd := flag.NewFlagSet("backup", flag.ExitOnError)
 		out := cmd.String("out", "", "putanja izlazne .db kopije")
@@ -566,6 +587,7 @@ func usage() {
   irisctl import-stock -tenant oznaka --file stanje.csv --apply
   irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
   irisctl create-platform-admin -username ime -password lozinka
+  irisctl reset-platform-2fa -username ime
   irisctl backup [-out backups/iris.db]
   irisctl migrate-to-postgres [-check] [-from ./data/iris.db] [-to postgres://...]
 

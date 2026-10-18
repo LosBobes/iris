@@ -355,7 +355,7 @@ func (s *SQLiteStore) PlatformAuditLog(ctx context.Context, limit, offset int) (
 		ctx,
 		`SELECT a.id, a.at, a.admin_username, a.action, a.tenant_slug, a.tenant_name,
 		        COALESCE(a.target_username, ''), a.detail, COALESCE(a.ip, ''),
-		        e.id, e.expires_at, e.ended_at,
+		        e.id, e.expires_at, e.ended_at, COALESCE(e.reason, ''),
 		        (SELECT COUNT(*) FROM impersonation_actions x WHERE x.impersonation_id = e.id)
 		 FROM platform_audit_events a
 		 LEFT JOIN impersonation_events e ON e.id = a.impersonation_id
@@ -370,10 +370,11 @@ func (s *SQLiteStore) PlatformAuditLog(ctx context.Context, limit, offset int) (
 		var event domain.PlatformAuditEvent
 		var detail, expiresAt, endedAt sql.NullString
 		var impersonationID sql.NullInt64
+		var reason string
 		var actionCount int
 		if err := rows.Scan(
 			&event.ID, &event.At, &event.AdminUsername, &event.Action, &event.TenantSlug, &event.TenantName,
-			&event.TargetUsername, &detail, &event.IP, &impersonationID, &expiresAt, &endedAt, &actionCount,
+			&event.TargetUsername, &detail, &event.IP, &impersonationID, &expiresAt, &endedAt, &reason, &actionCount,
 		); err != nil {
 			return log, fmt.Errorf("scan audit event: %w", err)
 		}
@@ -387,6 +388,7 @@ func (s *SQLiteStore) PlatformAuditLog(ctx context.Context, limit, offset int) (
 				ID:          impersonationID.Int64,
 				ExpiresAt:   expiresAt.String,
 				ActionCount: actionCount,
+				Reason:      reason,
 			}
 			if endedAt.Valid {
 				status.EndedAt = &endedAt.String

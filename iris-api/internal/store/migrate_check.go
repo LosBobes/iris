@@ -13,6 +13,7 @@ import (
 // fails on it, so a table added by a later migration cannot be silently dropped.
 var migrationExcludedTables = map[string]string{
 	"schema_migrations": "Postgres stamps its own baseline; copying SQLite's rows would claim SQLite-only migrations ran",
+	"platform_login_challenges": "five-minute sign-in challenges between the password and two-factor steps; a pending sign-in simply starts over",
 }
 
 // numericColumns are the columns that become NUMERIC(14, 4) in Postgres. Values

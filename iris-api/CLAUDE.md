@@ -28,7 +28,7 @@ does not cover, add a rule plus a case in `postgres_sql_test.go`. New migrations
 | Path | Role |
 | --- | --- |
 | `cmd/server/` | HTTP server wiring |
-| `cmd/irisctl/` | CLI: migrate, seed-demo, seed-cobanovic, create-tenant, import-csv, import-stock, create-user, set-modules, create-platform-admin, backup, migrate-to-postgres |
+| `cmd/irisctl/` | CLI: migrate, seed-demo, seed-cobanovic, create-tenant, import-csv, import-stock, create-user, set-modules, create-platform-admin, reset-platform-2fa, backup, migrate-to-postgres |
 | `internal/api/` | chi router, auth middleware, handlers (thin) |
 | `internal/domain/` | Go structs — contract with OpenAPI |
 | `internal/store/` | SQL store (SQLite + Postgres), migrations, seed; fixture store for tests |
@@ -63,6 +63,15 @@ out required web follow-up rather than leaving drift.
   org+username from one IP, 20 per IP, 50 per org+username overall (429;
   `orgLoginKeys` in `sessions.go`, atomic `loginLimiter.reserve`). Protected routes use `requireAuth`; admin-only
   routes use `requireAdmin`.
+- **Backoffice sign-in** (`internal/api/platform.go`, `platform_security.go`,
+  D-021): `POST /platform/auth/login` is throttled by `platformLimiter` (5 per
+  IP / username, 50 overall per 15 min); for an account with TOTP it answers
+  `twoFactorRequired` + a 5-min `challenge` (stored hashed in
+  `platform_login_challenges`) and `POST /platform/auth/login/verify` finishes it
+  (TOTP step used once via `totp_last_step`, or a SHA-256-hashed recovery code),
+  throttled per account. Failures go to `platform_audit_events`
+  (`admin.login_failed`); never log secrets, codes or challenges. Disabled
+  superadmins (`disabled_at`) cannot authenticate and lose their sessions.
 - **Sessions** (`internal/api/sessions.go`, `internal/store/sessions.go`, D-020):
   tokens are stored only as SHA-256 (`sessions.token_hash`). The idle expiry
   slides on use (rewritten at most once per `SessionRefreshInterval`, 1 h) under

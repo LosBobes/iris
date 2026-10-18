@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe("OrganizationUsersDialog", () => {
-  it("lists the organization's accounts and opens a session as the chosen one", async () => {
+  it("lists the organization's accounts and opens a session as the chosen one, with a reason", async () => {
     const platformImpersonate = vi.fn(async () => ({
       success: true,
       orgSlug: "demo",
@@ -42,8 +42,17 @@ describe("OrganizationUsersDialog", () => {
     const buttons = screen.getAllByRole("button", { name: new RegExp(strings.start + "$") });
     await userEvent.click(buttons[1]);
 
+    // A reason is required before anything is sent.
+    const reason = screen.getByLabelText("Razlog ulaska kao operater");
+    await userEvent.click(screen.getByRole("button", { name: strings.confirmStart }));
+    expect(screen.getByText(strings.reasonRequired)).toBeInTheDocument();
+    expect(platformImpersonate).not.toHaveBeenCalled();
+
+    await userEvent.type(reason, "  Prijava greške na nalogu 1042 ");
+    await userEvent.click(screen.getByRole("button", { name: strings.confirmStart }));
+
     await waitFor(() => expect(assign).toHaveBeenCalledWith("/"));
-    expect(platformImpersonate).toHaveBeenCalledWith("demo", "user-1");
+    expect(platformImpersonate).toHaveBeenCalledWith("demo", "user-1", "Prijava greške na nalogu 1042");
     expect(activeOrganizationSlug()).toBe("demo");
   });
 
@@ -60,6 +69,8 @@ describe("OrganizationUsersDialog", () => {
 
     render(<OrganizationUsersDialog tenant={{ slug: "demo", name: "Demo" }} onClose={() => undefined} />);
     await userEvent.click(await screen.findByRole("button", { name: new RegExp(strings.start + "$") }));
+    await userEvent.type(screen.getByLabelText("Razlog ulaska kao operater"), "Podrška");
+    await userEvent.click(screen.getByRole("button", { name: strings.confirmStart }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Korisnik ne postoji u ovoj organizaciji.");
     expect(screen.getByRole("button", { name: new RegExp(strings.start + "$") })).toBeEnabled();
