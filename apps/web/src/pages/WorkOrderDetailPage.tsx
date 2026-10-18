@@ -9,6 +9,7 @@ import {
   Eye,
   Files,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Printer,
   Trash2,
@@ -16,17 +17,30 @@ import {
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { CancelWorkOrderDialog } from "@/components/WorkOrders/CancelWorkOrderDialog";
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkOrderVatBreakdown } from "@/hooks/useWorkOrderVatBreakdown";
+import { splitLineVat } from "@/shared/utils/vat";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { WorkOrderProcessPanel } from "@/components/process/WorkOrderProcessPanel";
+import { WorkOrderDescription } from "@/components/WorkOrders/WorkOrderDescription";
 import { WorkOrderPreviewPane } from "@/components/WorkOrders/WorkOrderPdfPreview";
 import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet";
 import type { Customer, Location, WorkOrder } from "@/types/work-order";
+import { formatActionError, reportUnexpectedError } from "@/lib/errors";
+import { lineMargin, workOrderMargin } from "@/lib/work-orders/margin";
 import {
   buildWorkOrderCustomerNotice,
+  countsTowardWorkQueue,
   getWorkOrderBillingDocumentLabel,
   getWorkOrderDeliveryLabel,
   getWorkOrderStatusLabel,
@@ -129,14 +143,29 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [completeOpen, setCompleteOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
   // Deleting is admin-only on the API; gate the button to match.
   const { currentUser } = useAuth();
   const isAdmin = currentUser.role === "admin";
   const canCancelOrder = order
     ? getAllowedWorkOrderTransitions(order.status).includes("cancelled")
     : false;
+  const primaryTransition = order
+    ? getPrimaryWorkOrderTransition(order.status)
+    : null;
+
+  const copyPublicLink = async (target: WorkOrder): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(
+        window.api.getPublicTrackingUrl(target.communication.publicToken),
+      );
+      toast.success(t("workOrders.detail.publicLinkCopied"));
+    } catch (error) {
+      reportUnexpectedError("WorkOrderDetailPage.copyPublicLink", error);
+      toast.error(t("workOrders.detail.publicLinkCopyError"));
+    }
+  };
 
   const advanceStatus = async (): Promise<void> => {
     if (!order) return;
@@ -162,8 +191,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
           status: getWorkOrderStatusLabel(newStatus),
         }),
       );
-    } catch {
-      toast.error(t("workOrders.toast.statusError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrderDetailPage.advanceStatus", error);
+      toast.error(formatActionError(t("workOrders.toast.statusError"), error));
     }
   };
 
@@ -198,8 +228,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
       toast.success(
         t("workOrders.toast.cancelled", { order: updated.orderNumber }),
       );
-    } catch {
-      toast.error(t("workOrders.toast.cancelError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrderDetailPage.cancel", error);
+      toast.error(formatActionError(t("workOrders.toast.cancelError"), error));
     }
   };
 
@@ -216,8 +247,9 @@ function WorkOrderDetailPage(): React.JSX.Element {
         t("workOrders.toast.deleted", { order: order.orderNumber }),
       );
       navigate("/work-orders");
-    } catch {
-      toast.error(t("workOrders.toast.deleteUnexpected"));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrderDetailPage.delete", error);
+      toast.error(formatActionError(t("workOrders.toast.deleteUnexpected"), error));
     }
   };
 
@@ -245,10 +277,11 @@ function WorkOrderDetailPage(): React.JSX.Element {
           return;
         }
         setOrder(data);
-      } catch {
+      } catch (error: unknown) {
+        reportUnexpectedError("WorkOrderDetailPage.load", error);
         if (!cancelled) {
           setOrder(null);
-          setError(t("workOrders.detail.loadError"));
+          setError(formatActionError(t("workOrders.detail.loadError"), error));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -261,8 +294,26 @@ function WorkOrderDetailPage(): React.JSX.Element {
     };
   }, [id, t]);
 
+  // Locations only enrich the printout's delivery address, so failing to load
+  // them costs a line on the page rather than the page itself. Before this had
+  // a catch, an expired session turned that rejection into an unhandled promise
+  // rejection — the operator saw a generic load error with no mention of the
+  // login that had actually lapsed.
   useEffect(() => {
-    void window.api.getLocations().then(setLocations);
+    let active = true;
+    window.api
+      .getLocations()
+      .then((next) => {
+        if (active) setLocations(next);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLocations([]);
+        reportUnexpectedError("WorkOrderDetailPage.loadLocations", error);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -289,7 +340,6 @@ function WorkOrderDetailPage(): React.JSX.Element {
   return (
     <>
       <div className="work-order-screen-root">
-        <AppShell>
           <div className="flex items-stretch">
           <div className="min-w-0 flex-1">
         <div className="animate-iris-enter border-b border-border px-10 pt-5 pb-6">
@@ -309,8 +359,8 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
 
           {order && (
-            <div className="flex flex-wrap items-start justify-between gap-y-3">
-              <div>
+            <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+              <div className="min-w-0 flex-1 basis-80">
                 <div className="flex flex-wrap items-baseline gap-3.5">
                   <div className="tnum text-[28px] font-normal tracking-[-0.5px] text-foreground">
                     {order.orderNumber}
@@ -323,121 +373,101 @@ function WorkOrderDetailPage(): React.JSX.Element {
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-[14px] text-[color:var(--iris-ink-soft)]">
-                  {order.jobDescription} ·{" "}
-                  <span className="text-foreground">{order.clientName}</span>
+                {/* Client first, so it is never cut off; the opis posla
+                    below renders a typed product list as a list and keeps
+                    long text collapsed, instead of pushing the actions down. */}
+                <div className="mt-1 text-[14px] text-foreground">
+                  {order.clientName}
+                </div>
+                <div className="mt-2">
+                  <WorkOrderDescription description={order.jobDescription} />
                 </div>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                {getPrimaryWorkOrderTransition(order.status) && (
+              {/* Actions: the status move and the everyday Izmeni / Štampaj
+                  stay visible; everything used less often (PDF download,
+                  public link, duplicate) and the destructive actions live in
+                  one "more" menu. On phones the status move spans the full
+                  width and the rest share one row of large touch targets. */}
+              <div className="grid w-full grid-cols-[1fr_1fr_auto] gap-2 max-sm:[&_button]:min-h-11 sm:flex sm:w-auto sm:items-center">
+                {primaryTransition && (
                   <button
                     type="button"
                     onClick={handleAdvanceStatus}
-                    className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-accent)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/10"
+                    className="iris-focusable iris-press col-span-3 flex items-center justify-center gap-1.5 border border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 px-3.5 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-accent)] hover:bg-[color:var(--iris-accent)]/20"
                   >
                     {t("workOrders.detail.moveTo")}{" "}
-                    {getWorkOrderStatusLabel(
-                      getPrimaryWorkOrderTransition(order.status)!,
-                    )}
+                    {getWorkOrderStatusLabel(primaryTransition)}
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => void printWorkOrder(order)}
-                  title={t("workOrders.detail.print")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Printer className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.print")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openWorkOrderPdf(order.id)}
-                  title={t("workOrders.detail.pdf")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.pdf")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewOpen((open) => !open)}
-                  aria-pressed={previewOpen}
-                  title={t("workOrders.detail.preview")}
-                  className={`iris-focusable iris-press flex items-center gap-1.5 border px-3 py-2 text-[12px] font-medium tracking-[0.3px] ${
-                    previewOpen
-                      ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
-                      : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                  }`}
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.preview")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(
-                      window.api.getPublicTrackingUrl(
-                        order.communication.publicToken,
-                      ),
-                    );
-                  }}
-                  title={t("workOrders.detail.publicLink")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.publicLink")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate("/work-orders/new", {
-                      state: { duplicateFrom: order },
-                    })
-                  }
-                  title={t("workOrders.detail.duplicate")}
-                  className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
-                >
-                  <Files className="h-3.5 w-3.5" />
-                  {t("workOrders.detail.duplicate")}
-                </button>
-                <button
-                  type="button"
                   onClick={() => navigate(`/work-orders/${order.id}/edit`)}
-                  className="iris-focusable iris-press flex items-center gap-1.5 bg-foreground px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+                  className="iris-focusable iris-press flex items-center justify-center gap-1.5 bg-foreground px-3.5 py-2 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                   {t("common.edit")}
                 </button>
-                {/* Destructive actions grouped together behind a divider so
-                    cancel + delete read as one "danger" cluster, not scattered. */}
-                {(canCancelOrder || isAdmin) && (
-                  <div className="flex items-center gap-1.5 sm:ml-1 sm:border-l sm:border-border sm:pl-2.5">
+                <button
+                  type="button"
+                  onClick={() => void printWorkOrder(order)}
+                  className="iris-focusable iris-press flex items-center justify-center gap-1.5 border border-border bg-card px-3.5 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  {t("workOrders.detail.print")}
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={t("workOrders.detail.moreActions")}
+                      title={t("workOrders.detail.moreActions")}
+                      className="iris-focusable iris-press flex items-center justify-center border border-border bg-card px-3 py-2 text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground data-[state=open]:border-foreground data-[state=open]:text-foreground max-sm:min-w-11"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => openWorkOrderPdf(order.id)}>
+                      <Download />
+                      {t("workOrders.detail.downloadPdf")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => void copyPublicLink(order)}
+                    >
+                      <Copy />
+                      {t("workOrders.detail.copyPublicLink")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        navigate("/work-orders/new", {
+                          state: { duplicateFrom: order },
+                        })
+                      }
+                    >
+                      <Files />
+                      {t("workOrders.detail.duplicate")}
+                    </DropdownMenuItem>
+                    {(canCancelOrder || isAdmin) && <DropdownMenuSeparator />}
                     {canCancelOrder && (
-                      <button
-                        type="button"
-                        onClick={() => setCancelOpen(true)}
-                        title={t("workOrders.detail.cancelOrder")}
-                        className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => setCancelOpen(true)}
                       >
-                        <Ban className="h-3.5 w-3.5" />
-                        {t("workOrders.detail.cancelOrder")}
-                      </button>
+                        <Ban />
+                        {t("workOrders.detail.cancelOrderAction")}
+                      </DropdownMenuItem>
                     )}
                     {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteOpen(true)}
-                        aria-label={t("common.delete")}
-                        title={t("common.delete")}
-                        className="iris-focusable iris-press flex items-center gap-1.5 border border-[color:var(--iris-status-cancelled)] bg-transparent px-3 py-2 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-status-cancelled)] hover:bg-[color:var(--iris-status-cancelled)]/10"
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => setDeleteOpen(true)}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 />
                         {t("common.delete")}
-                      </button>
+                      </DropdownMenuItem>
                     )}
-                  </div>
-                )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           )}
@@ -467,26 +497,44 @@ function WorkOrderDetailPage(): React.JSX.Element {
           </div>
         )}
           </div>
-          {previewOpen && order && (
-            <aside className="animate-iris-enter sticky top-0 hidden h-screen w-[380px] shrink-0 self-start overflow-auto border-l border-border bg-card p-6 lg:block">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-                  {t("workOrders.detail.pdfPreview")}
+          {/* PDF preview sidebar (desktop only: it needs the room beside the
+              detail). Collapsed it is a slim vertical "Pregled" tab on the
+              right edge, so it never competes with the action buttons. */}
+          {order &&
+            (previewOpen ? (
+              <aside className="animate-iris-enter sticky top-0 hidden h-screen w-[380px] shrink-0 self-start overflow-auto border-l border-border bg-card p-6 lg:block">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+                    {t("workOrders.detail.pdfPreview")}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewOpen(false)}
+                    aria-label={t("workOrders.detail.closePreview")}
+                    className="iris-focusable iris-press flex items-center justify-center bg-transparent p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
+                <WorkOrderPreviewPane order={order} />
+              </aside>
+            ) : (
+              <aside className="sticky top-0 hidden h-screen w-11 shrink-0 self-start border-l border-border bg-card lg:block">
                 <button
                   type="button"
-                  onClick={() => setPreviewOpen(false)}
-                  aria-label={t("workOrders.detail.closePreview")}
-                  className="iris-focusable iris-press flex items-center justify-center bg-transparent p-1 text-[color:var(--iris-ink-mute)] hover:text-foreground"
+                  onClick={() => setPreviewOpen(true)}
+                  aria-label={t("workOrders.detail.openPreview")}
+                  title={t("workOrders.detail.openPreview")}
+                  className="iris-focusable iris-press flex w-full flex-col items-center gap-2 px-0 py-5 text-[11px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)] hover:bg-black/[0.02] hover:text-foreground"
                 >
-                  <X className="h-4 w-4" />
+                  <Eye className="h-4 w-4" />
+                  <span className="[writing-mode:vertical-rl]">
+                    {t("workOrders.detail.preview")}
+                  </span>
                 </button>
-              </div>
-              <WorkOrderPreviewPane order={order} />
-            </aside>
-          )}
+              </aside>
+            ))}
           </div>
-        </AppShell>
       </div>
       {order && (
         <WorkOrderPrintSheet order={order} locations={locations} customer={customer} />
@@ -555,9 +603,21 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     ],
   ];
 
-  const total = order.price ?? 0;
-  const base = total / 1.2;
-  const pdv = total - base;
+  const {
+    breakdown: vatBreakdown,
+    rateFor: vatRateFor,
+    pricesIncludeVat,
+  } = useWorkOrderVatBreakdown(order);
+  const formatAmount = (value: number): string =>
+    new Intl.NumberFormat("sr-Latn-RS", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+
+  // Razlika u ceni: admin-only. The API nulls out unitCost/profit for operators,
+  // so this breakdown is empty for them anyway — the isAdmin gate keeps the
+  // columns and the summary out of their view entirely.
+  const margin = workOrderMargin(order);
 
   const timeline: Array<{
     time: string;
@@ -608,8 +668,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
         ))}
       </div>
 
-      <div className="grid grid-cols-[1fr_1.6fr]">
-        <div className="border-r border-border p-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.6fr]">
+        <div className="min-w-0 border-b border-border p-5 sm:p-8 lg:border-r lg:border-b-0">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             {t("workOrders.detail.workflow")}
           </div>
@@ -706,11 +766,12 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
           )}
         </div>
 
-        <div className="p-8">
+        <div className="min-w-0 p-5 sm:p-8">
           <div className="mb-4 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             {t("workOrders.detail.items")}
           </div>
-          <table className="w-full border-collapse text-[12px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[500px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="py-2 text-left text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
@@ -720,8 +781,29 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   {t("workOrders.detail.quantity")}
                 </th>
                 <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.unitPrice")}
+                </th>
+                <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
                   {t("workOrders.detail.amount")}
                 </th>
+                <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.lineVat")}
+                </th>
+                <th className="w-28 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                  {t("workOrders.detail.lineTotal")}
+                </th>
+                {/* Cost and margin per line are admin-only; operators see only the
+                    selling columns. */}
+                {isAdmin && (
+                  <>
+                    <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.detail.lineCost")}
+                    </th>
+                    <th className="w-24 py-2 text-right text-[10px] font-medium uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.detail.lineMargin")}
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -737,24 +819,79 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                       unitPrice: order.price ?? 0,
                     },
                   ]
-              ).map((line) => (
-                <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
-                  <td className="py-3 text-foreground">
-                    <div>{line.description}</div>
-                    <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
-                      {t(`workOrders.lineKind.${line.kind}`)}
-                    </div>
-                  </td>
-                  <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
-                    {line.quantity} {line.unit}
-                  </td>
-                  <td className="tnum py-3 text-right font-medium text-foreground">
-                    {formatWorkOrderPrice(line.quantity * line.unitPrice)}
-                  </td>
-                </tr>
-              ))}
+              ).map((line) => {
+                const lineTotals = lineMargin(line);
+                const lineRate =
+                  "catalogItemId" in line
+                    ? vatRateFor(line.catalogItemId, line.kind)
+                    : vatRateFor(null);
+                // Services on an otkup order carry no PDV: leave the cell empty.
+                const lineHasNoVat = pricesIncludeVat && lineRate === 0 && line.kind === "service";
+                // Every row reads Iznos (osnovica) + PDV = Ukupno, whether the
+                // entered price was net (faktura) or gross (otkup).
+                const lineVat = splitLineVat(lineTotals.revenue, lineRate, pricesIncludeVat);
+                // Cena is the per-unit net price, so Cena x Količina = Iznos on
+                // every row (otkup prices are entered gross, so PDV comes out).
+                const unitBase = splitLineVat(line.unitPrice, lineRate, pricesIncludeVat).base;
+                return (
+                  <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
+                    <td className="py-3 text-foreground">
+                      <div>{line.description}</div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
+                        {t(`workOrders.lineKind.${line.kind}`)}
+                      </div>
+                    </td>
+                    <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                      {line.quantity} {line.unit}
+                    </td>
+                    <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                      {formatWorkOrderPrice(unitBase)}
+                    </td>
+                    <td className="tnum py-3 text-right font-medium text-foreground">
+                      {formatWorkOrderPrice(lineVat.base)}
+                    </td>
+                    <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                      {lineHasNoVat ? (
+                        "—"
+                      ) : (
+                        <>
+                          <div>
+                            {formatWorkOrderPrice(lineVat.vat)}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-[color:var(--iris-ink-mute)]">
+                            {Math.round(lineRate * 100)}%
+                          </div>
+                        </>
+                      )}
+                    </td>
+                    <td className="tnum py-3 text-right font-medium text-foreground">
+                      {formatWorkOrderPrice(lineVat.total)}
+                    </td>
+                    {isAdmin && (
+                      <>
+                        <td className="tnum py-3 text-right text-[color:var(--iris-ink-soft)]">
+                          {/* An uncaptured cost renders as "—", never as 0 — a
+                              zero here would read as pure profit. */}
+                          {lineTotals.cost === null
+                            ? "—"
+                            : formatWorkOrderPrice(lineTotals.cost)}
+                        </td>
+                        <td
+                          className="tnum py-3 text-right font-medium"
+                          style={{ color: marginColor(lineTotals.margin) }}
+                        >
+                          {lineTotals.margin === null
+                            ? "—"
+                            : formatWorkOrderPrice(lineTotals.margin)}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          </div>
 
           {/* Material usage, time entries, and attachments are not captured by
               the order form, so those (always-empty) sections were dropped. The
@@ -773,49 +910,134 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
             </div>
           )}
 
-          {/* Osnovica / PDV / za naplatu: the selling total every role needs to
-              know what to charge. Cost and margin are not part of this block. */}
+          {/* Osnovica / PDV / ukupno: the selling total every role needs to
+              know what to charge. Otkup article prices already include PDV, so it
+              is taken out (otkup services carry none); faktura/predračun prices are net, so it is added on
+              top. Cost and margin are not part of this block. */}
           {order.price !== null && (
             <div className="mt-4 flex justify-end">
-              <div className="w-64 text-[12px]">
+              <div className="w-72 text-[12px]" data-testid="vat-breakdown">
+                {pricesIncludeVat && (
+                  <div className="pb-1.5 text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+                    {t("workOrders.detail.pricesIncludeVat")}
+                  </div>
+                )}
                 <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
                   <span>{t("workOrders.detail.base")}</span>
-                  <span className="tnum">
-                    {new Intl.NumberFormat("sr-Latn-RS", {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    }).format(base)}
-                  </span>
+                  <span className="tnum">{formatAmount(vatBreakdown.base)}</span>
                 </div>
-                <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
-                  <span>{t("workOrders.detail.vat")}</span>
-                  <span className="tnum">
-                    {new Intl.NumberFormat("sr-Latn-RS", {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    }).format(pdv)}
-                  </span>
-                </div>
+                {vatBreakdown.vatByRate.map(({ rate, amount }) => (
+                  <div
+                    key={rate}
+                    className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]"
+                  >
+                    <span>{t("workOrders.detail.vatAtRate", { rate: Math.round(rate * 100) })}</span>
+                    <span className="tnum">{formatAmount(amount)}</span>
+                  </div>
+                ))}
+                {vatBreakdown.vatByRate.length !== 1 && (
+                  <div className="flex justify-between py-1.5 text-[color:var(--iris-ink-soft)]">
+                    <span>{t("workOrders.detail.vatTotal")}</span>
+                    <span className="tnum">{formatAmount(vatBreakdown.vat)}</span>
+                  </div>
+                )}
                 <div className="mt-1.5 flex justify-between border-t border-foreground py-2.5 text-foreground">
-                  <span className="font-medium">{t("workOrders.detail.toPay")}</span>
+                  <span className="font-medium">{t("workOrders.detail.totalWithVat")}</span>
                   <span className="tnum text-[14px] font-medium">
-                    {formatWorkOrderPrice(total)}
+                    {formatAmount(vatBreakdown.total)}
                   </span>
                 </div>
               </div>
             </div>
           )}
+
+          {/* Razlika u ceni (prodajna - nabavna). Admin-only and shown on every
+              order, not just finished ones, so the margin is on screen whenever
+              an admin opens the nalog. */}
+          {isAdmin && (
+            <div className="mt-6 flex justify-end">
+              <div className="w-64 border border-[color:var(--iris-border-soft)] px-3.5 py-3 text-[12px]">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[1.2px] text-[color:var(--iris-ink-mute)]">
+                  <Coins className="h-3 w-3" />
+                  {t("workOrders.detail.marginTitle")}
+                </div>
+
+                {margin.hasCostedLines ? (
+                  <>
+                    <div className="mt-2.5 flex justify-between py-1 text-[color:var(--iris-ink-soft)]">
+                      <span>{t("workOrders.detail.marginRevenue")}</span>
+                      <span className="tnum">
+                        {formatWorkOrderPrice(margin.costedRevenue)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 text-[color:var(--iris-ink-soft)]">
+                      <span>{t("workOrders.detail.marginCost")}</span>
+                      <span className="tnum">{formatWorkOrderPrice(margin.cost)}</span>
+                    </div>
+                    <div className="mt-1 flex items-baseline justify-between border-t border-[color:var(--iris-border-soft)] pt-2">
+                      <span className="font-medium text-foreground">
+                        {t("workOrders.detail.marginProfit")}
+                      </span>
+                      <span
+                        className="tnum text-[14px] font-medium"
+                        style={{ color: marginColor(margin.profit) }}
+                      >
+                        {formatWorkOrderPrice(margin.profit)}
+                      </span>
+                    </div>
+                    {margin.marginRatio !== null && (
+                      <div className="tnum mt-0.5 text-right text-[11px] text-[color:var(--iris-ink-mute)]">
+                        {t("workOrders.detail.marginPct", {
+                          pct: Math.round(margin.marginRatio * 100),
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="mt-2.5 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)]">
+                    {t("workOrders.detail.marginEmpty")}
+                  </div>
+                )}
+
+                {/* Lines still awaiting a cost are left out of the totals, so
+                    say the figure is provisional rather than quietly
+                    understating the cost. */}
+                {margin.uncostedLineCount > 0 && (
+                  <div className="mt-2.5 border-t border-[color:var(--iris-border-soft)] pt-2 text-[11px] leading-[1.5] text-[color:var(--iris-accent)]">
+                    {t("workOrders.detail.marginProvisional", {
+                      count: margin.uncostedLineCount,
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Renders nothing (and requests nothing) while the processes module is off. */}
+      <WorkOrderProcessPanel workOrderId={order.id} canEditStructure={isAdmin} />
     </>
   );
+}
+
+/**
+ * Color for a margin figure: green when the order earns, red when the cost
+ * outruns the sale price, muted when the cost has not been captured yet.
+ */
+function marginColor(value: number | null): string {
+  if (value === null) return "var(--iris-ink-mute)";
+  return value < 0 ? "var(--iris-status-cancelled)" : "var(--iris-status-done)";
 }
 
 function CustomerSummaryPanel({ order }: { order: WorkOrder }): React.JSX.Element {
   const { t } = useTranslation();
   const customerDueDate = order.dueDate;
   const isOverdue = Boolean(
-    customerDueDate && customerDueDate < getLocalIsoDate() && !order.isCompleted,
+    customerDueDate &&
+      customerDueDate < getLocalIsoDate() &&
+      !order.isCompleted &&
+      countsTowardWorkQueue(order),
   );
   const customerNotice = buildWorkOrderCustomerNotice(order);
 

@@ -28,7 +28,7 @@ does not cover, add a rule plus a case in `postgres_sql_test.go`. New migrations
 | Path | Role |
 | --- | --- |
 | `cmd/server/` | HTTP server wiring |
-| `cmd/irisctl/` | CLI: migrate, seed-demo, create-tenant, import-csv, create-user, backup, migrate-to-postgres |
+| `cmd/irisctl/` | CLI: migrate, seed-demo, seed-cobanovic, create-tenant, import-csv, import-stock, create-user, set-modules, create-platform-admin, backup, migrate-to-postgres |
 | `internal/api/` | chi router, auth middleware, handlers (thin) |
 | `internal/domain/` | Go structs — contract with OpenAPI |
 | `internal/store/` | SQL store (SQLite + Postgres), migrations, seed; fixture store for tests |

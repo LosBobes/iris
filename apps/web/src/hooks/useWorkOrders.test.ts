@@ -207,6 +207,52 @@ describe("work order filter query params", () => {
     ).toEqual(["RN-a"]);
   });
 
+  it("keeps cancelled orders out of the queue buckets", () => {
+    const orders = [
+      makeOrder({
+        id: "open",
+        orderNumber: "RN-open",
+        dueDate: "2026-06-01",
+        status: "inProgress",
+      }),
+      makeOrder({
+        id: "cancelled",
+        orderNumber: "RN-cancelled",
+        dueDate: "2026-06-01",
+        status: "cancelled",
+      }),
+    ];
+
+    const base = {
+      search: "",
+      customerId: "",
+      assignedTo: "",
+      status: "all" as const,
+      billingDocumentType: "all" as const,
+      deliveryMethod: "all" as const,
+      queue: "all" as const,
+      dateFrom: "",
+      dateTo: "",
+      needsCostReview: false,
+    };
+    const today = "2026-06-03";
+
+    expect(
+      filterWorkOrdersForList(orders, { ...base, queue: "overdue" }, today).map(
+        (order) => order.orderNumber,
+      ),
+    ).toEqual(["RN-open"]);
+
+    // The cancelled nalog is still reachable through the status filter.
+    expect(
+      filterWorkOrdersForList(
+        orders,
+        { ...base, status: "cancelled" },
+        today,
+      ).map((order) => order.orderNumber),
+    ).toEqual(["RN-cancelled"]);
+  });
+
   it("filters to orders needing cost review when the flag is set", () => {
     const orders = [
       makeOrder({ id: "needs", orderNumber: "RN-needs", needsCostReview: true }),

@@ -129,6 +129,41 @@ describe('createHttpApi', () => {
     )
   })
 
+  it('requests dashboard aggregates with filters and normalizes null lists', async () => {
+    const fetchMock = vi.fn(async () =>
+      response({
+        hasOrders: true,
+        summary: { totalOrders: 0, statusCounts: {}, totalRevenue: 0 },
+        monthlyBuckets: null,
+        deliveryDistribution: null,
+        topClients: null,
+        finance: null,
+        signalCounts: { overdue: 0, dueToday: 0, dueThisWeek: 0, unassigned: 0 },
+        clientAttentionRows: [{ groupKey: 'c1', orders: null }],
+        internalAttentionRows: null,
+        queueSummary: { today: 0, overdue: 0, unassigned: 0 },
+        operatorQueue: { assignedToMe: 0, dueToday: 0, overdue: 0, inProgress: 0, available: 0 },
+      }),
+    )
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const data = await api.getDashboard({
+      dateFrom: '2026-01-01',
+      dateTo: null,
+      issuedBy: 'ana',
+      companyKey: null,
+      today: '2026-06-10',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:8080/dashboard?dateFrom=2026-01-01&issuedBy=ana&today=2026-06-10',
+      expect.objectContaining({ credentials: 'include' }),
+    )
+    expect(data.monthlyBuckets).toEqual([])
+    expect(data.internalAttentionRows).toEqual([])
+    expect(data.clientAttentionRows[0].orders).toEqual([])
+    expect(data.finance).toBeNull()
+  })
+
   it('posts the expanded work-order input to the API', async () => {
     const fetchMock = vi.fn(async () =>
       response({
@@ -268,10 +303,23 @@ describe('createHttpApi', () => {
   })
 })
 
+// The api-client reaches for several Sentry entry points now (exceptions,
+// breadcrumbs, identity), so the mock has to stand in for all of them —
+// a missing export surfaces as an unrelated assertion failure.
+function mockSentry(captureException = vi.fn()) {
+  vi.doMock('@sentry/react', () => ({
+    captureException,
+    addBreadcrumb: vi.fn(),
+    setUser: vi.fn(),
+    setTag: vi.fn(),
+    init: vi.fn(),
+  }))
+  return captureException
+}
+
 describe('failed requests', () => {
   it('carries the API message and request reference, and reports them', async () => {
-    const captureException = vi.fn()
-    vi.doMock('@sentry/react', () => ({ captureException }))
+    const captureException = mockSentry()
     vi.resetModules()
     const { createHttpApi: createApi } = await import('./api-client')
     const { ApiError, formatActionError } = await import('./errors')
@@ -304,9 +352,43 @@ describe('failed requests', () => {
     vi.resetModules()
   })
 
+  it('names the failing call in the Sentry title and fingerprint', async () => {
+    const captureException = mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Interna greška.' }, { status: 500 }),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getWorkOrderById('179').catch((thrown) => thrown)
+
+    // The issue title is the error name, so it has to identify the failure on
+    // its own: production bundles are minified and carry no source maps.
+    expect(error.name).toBe(
+      'ApiError 500 GET /work-orders/:id (getWorkOrderById)',
+    )
+    expect(error.operation).toBe('getWorkOrderById')
+    expect(error.route).toBe('/work-orders/:id')
+    // The operator still reads exactly what the server said.
+    expect(error.message).toBe('Interna greška.')
+    expect(captureException).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({
+        level: 'error',
+        // Grouping by route pattern keeps one broken endpoint as one issue
+        // rather than one issue per work order.
+        fingerprint: ['api', 'getWorkOrderById', '/work-orders/:id', '500'],
+      }),
+    )
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
   it('does not report an expired session', async () => {
-    const captureException = vi.fn()
-    vi.doMock('@sentry/react', () => ({ captureException }))
+    const captureException = mockSentry()
     vi.resetModules()
     const { createHttpApi: createApi } = await import('./api-client')
 
@@ -320,5 +402,226 @@ describe('failed requests', () => {
 
     vi.doUnmock('@sentry/react')
     vi.resetModules()
+  })
+
+  it('announces an expired session so the app can force a re-login', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { subscribeSessionExpired } = await import('./session')
+
+    const expired = vi.fn()
+    const unsubscribe = subscribeSessionExpired(expired)
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Potrebna je prijava.' }, { status: 401 }),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getLocations()).rejects.toThrow('Potrebna je prijava.')
+    expect(expired).toHaveBeenCalledTimes(1)
+
+    unsubscribe()
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('does not announce an expired session for a rejected login', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { subscribeSessionExpired } = await import('./session')
+
+    const expired = vi.fn()
+    const unsubscribe = subscribeSessionExpired(expired)
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Neispravna lozinka.' }, { status: 401 }),
+    )
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(
+      api.login({ orgSlug: 'demo', username: 'admin', password: 'wrong' }),
+    ).rejects.toThrow('Neispravna lozinka.')
+    // Bouncing someone off the login form they are already looking at helps
+    // nobody.
+    expect(expired).not.toHaveBeenCalled()
+
+    unsubscribe()
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('keeps the organization session when the Backoffice answers 401', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { subscribeSessionExpired } = await import('./session')
+
+    const expired = vi.fn()
+    const unsubscribe = subscribeSessionExpired(expired)
+
+    const fetchMock = vi.fn(async () =>
+      response({ error: 'Prijava je obavezna.' }, { status: 401 }),
+    )
+    // Production builds sit behind nginx's /api prefix.
+    const api = createApi('https://iris.example/api', fetchMock)
+
+    await expect(api.getPlatformMetrics(30)).rejects.toThrow('Prijava je obavezna.')
+    // The Backoffice has its own session; an expired one must not sign
+    // the shop user out of the app.
+    expect(expired).not.toHaveBeenCalled()
+
+    unsubscribe()
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('turns an unreachable server into an error that names the call', async () => {
+    const captureException = mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const { ApiNetworkError } = await import('./errors')
+
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getCustomers().catch((thrown) => thrown)
+    expect(error).toBeInstanceOf(ApiNetworkError)
+    // `TypeError: Failed to fetch` says nothing about what the app was doing.
+    expect(error.name).toBe('ApiNetworkError GET /customers (getCustomers)')
+    expect(captureException).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({
+        fingerprint: ['api-network', 'getCustomers', '/customers'],
+      }),
+    )
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('reports a repeated network failure once per operation', async () => {
+    const captureException = mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const api = createApi('http://127.0.0.1:8080', fetchMock)
+
+    await api.getCustomers().catch(() => undefined)
+    await api.getCustomers().catch(() => undefined)
+    await api.getCustomers().catch(() => undefined)
+
+    // An operator whose connection drops fails every request on the page; one
+    // event per operation keeps a real outage visible without a flood.
+    expect(captureException).toHaveBeenCalledTimes(1)
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+
+  it('keeps the synchronous URL builders synchronous', async () => {
+    mockSentry()
+    vi.resetModules()
+    const { createHttpApi: createApi } = await import('./api-client')
+    const api = createApi('http://127.0.0.1:8080', vi.fn())
+
+    expect(api.getWorkOrderReportUrl('179')).toBe(
+      'http://127.0.0.1:8080/work-orders/179/report',
+    )
+
+    vi.doUnmock('@sentry/react')
+    vi.resetModules()
+  })
+})
+
+// A 200 whose body stream breaks partway: the status line and headers arrive,
+// then the connection drops (Sentry IRIS-FE-8/9/A).
+function brokenBodyResponse(): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"items":[{"id":"1"'))
+      controller.error(new TypeError('network error'))
+    },
+  })
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+describe('response bodies that fail to arrive', () => {
+  it('retries a GET once when the body breaks off, and returns the second answer', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(brokenBodyResponse())
+      .mockResolvedValueOnce(response({ items: [], total: 0 }))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getWorkOrders({ view: 'summary' })).resolves.toEqual({
+      items: [],
+      total: 0,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('gives up after the second attempt and says why the body was unusable', async () => {
+    const fetchMock = vi.fn(async () => brokenBodyResponse())
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getWorkOrders().catch((thrown) => thrown)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(error.name).toBe('ApiError 200 GET /work-orders (getWorkOrders)')
+    expect(error.status).toBe(200)
+    expect(error.message).toBe('Neispravan odgovor servera.')
+    expect(error.bodyFailure).toMatchObject({
+      stage: 'read',
+      reason: expect.stringContaining('network error'),
+      contentType: 'application/json',
+      attempts: 2,
+    })
+  })
+
+  it('records a body that arrived but is not JSON, without retrying it', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('<!doctype html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+    )
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    const error = await api.getLocations().catch((thrown) => thrown)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(error.bodyFailure).toMatchObject({
+      stage: 'parse',
+      contentType: 'text/html',
+      receivedChars: '<!doctype html>'.length,
+      attempts: 1,
+    })
+  })
+
+  it('never repeats a write', async () => {
+    const fetchMock = vi.fn(async () => brokenBodyResponse())
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.createWorkOrder(baseInput)).rejects.toThrow(
+      'Neispravan odgovor servera.',
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry a failed status', async () => {
+    const fetchMock = vi.fn(async () => response({ error: 'Greška' }, { status: 500 }))
+    const api = createHttpApi('http://127.0.0.1:8080', fetchMock)
+
+    await expect(api.getWorkOrders()).rejects.toThrow('Greška')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

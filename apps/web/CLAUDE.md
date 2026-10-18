@@ -37,9 +37,25 @@ vars and must not be committed.
 - The work-order form takes a per-order **edit lock** via `useWorkOrderEditLock`
   (heartbeat every 30 s, fails open; form goes read-only only when another operator
   holds it). Login requires an **organization slug** alongside username + password.
-- Dashboard analytics: clients fetch raw work orders and aggregate client-side in
-  `src/lib/dashboard/aggregations.ts` (pure, unit-tested) — not computed on the
-  server.
+- Dashboard analytics are computed server-side by `GET /dashboard`
+  (`iris-api/internal/dashboard`); `useDashboardData` calls
+  `window.api.getDashboard`. `src/lib/dashboard/` (`aggregations.ts`, `profit.ts`,
+  `build.ts`) is the TypeScript reference implementation that fixture mode serves —
+  keep it behaviorally identical to the Go port when changing either. Shapes live in
+  `src/types/dashboard.ts` (contract-sync with the `Dashboard*` OpenAPI schemas).
+- **Magacin (warehouse stock)**: `src/types/stock.ts` (contract-sync with the `Stock*`
+  schemas), pages `StockPage` (`/stock`) and `StockHistoryPage` (`/stock/:catalogItemId`).
+  Posting math lives in pure `src/lib/stock/posting.ts`; fixture mode keeps a real ledger
+  (`src/lib/stock/fixture-store.ts`) that posts automatically when a work-order process is
+  saved. Process item nodes link to catalog articles (`catalogItemId`); backoffice template
+  editing (platform session) skips linking and live stock.
+- **Optional modules** (`OrganizationModules`, both off by default, switched only by Backoffice
+  superadmins via `setPlatformTenantModules`; "Procesi rada" requires "Magacin"):
+  read `modules.processes` / `modules.stock` from `useOrganization()` (effective values, defaults
+  off). Disabled routes render `ModuleGate` ("Modul nije uključen"); never fire requests to a
+  disabled module's endpoints (the API answers 403). Fixture mode: `createFixtureApi({ modules })`
+  or Backoffice (`/backoffice`, operater / operater-demo) → Organizacije → Moduli. Tests use
+  `src/test/modules.tsx` (`WithModules`).
 - Forms: `react-hook-form` + `zod` (`src/lib/work-orders/validation.ts`).
 - Visible UI text and messages in Serbian (`sr-Latn`); code/tests in English.
 - Dates: `YYYY-MM-DD` stored, `DD.MM.YYYY` displayed (`src/lib/i18n-date.ts`).

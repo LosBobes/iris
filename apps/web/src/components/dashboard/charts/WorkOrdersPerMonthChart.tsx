@@ -8,7 +8,7 @@ import {
   YAxis,
 } from 'recharts'
 import { useTranslation } from 'react-i18next'
-import { formatMonthLabel, resolveChartMonths } from './utils'
+import { describeSeries, formatMonthLabel, resolveChartMonths } from './utils'
 
 interface WorkOrdersPerMonthChartProps {
   monthlyOrders: { month: string; count: number }[]
@@ -56,8 +56,15 @@ export function WorkOrdersPerMonthChart({
       <h2 className="mb-5 text-sm font-medium text-card-foreground">
         {t('dashboard.charts.ordersPerMonth')}
       </h2>
+      <div
+        role="img"
+        aria-label={t('dashboard.charts.aria', {
+          title: t('dashboard.charts.ordersPerMonth'),
+          data: describeSeries(data.map((d) => ({ label: d.label, value: d.count }))),
+        })}
+      >
       <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>
+        <BarChart accessibilityLayer={false} data={data} margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis
             dataKey="label"
@@ -82,6 +89,7 @@ export function WorkOrdersPerMonthChart({
           <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }

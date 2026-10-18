@@ -130,9 +130,20 @@ type CatalogItem struct {
 	TaxGroup      *string         `json:"taxGroup"`
 	Description   *string         `json:"description"`
 	IsActive      bool            `json:"isActive"`
-	CreatedAt     string          `json:"createdAt,omitempty"`
-	UpdatedAt     string          `json:"updatedAt,omitempty"`
+	// StockOnHand is the warehouse balance (sum of the article's stock
+	// movements). Read-only and computed; nil for services.
+	StockOnHand *float64 `json:"stockOnHand"`
+	// MinStock is the reorder threshold (>= 0) for articles; nil when unset and
+	// for services. Editable through CatalogItemInput.
+	MinStock  *float64 `json:"minStock"`
+	CreatedAt string   `json:"createdAt,omitempty"`
+	UpdatedAt string   `json:"updatedAt,omitempty"`
 }
+
+// DefaultTaxGroup is the PDV type a catalog item gets when none is set: the
+// label for the general 20% rate (opšta stopa; "Đ" on fiscal receipts). The other
+// labels the web UI offers are "E" (special 10% rate) and "A" (exempt).
+const DefaultTaxGroup = "DJ"
 
 // CatalogItemCost is one effective-dated cost record in a catalog item's price
 // history (1-N to CatalogItem). The store appends a new record whenever an admin
@@ -167,6 +178,7 @@ type CatalogItemInput struct {
 	TaxGroup      *string         `json:"taxGroup"`
 	Description   *string         `json:"description"`
 	IsActive      bool            `json:"isActive"`
+	MinStock      *float64        `json:"minStock"`
 	EffectiveFrom *string         `json:"effectiveFrom,omitempty"`
 }
 
@@ -280,6 +292,27 @@ type OrganizationSettings struct {
 	// fields (drives-out, wait-for-payment, packaging, labeling, fragile,
 	// signature, insurance). Off by default so the form stays compact.
 	ShowShippingOptions bool `json:"showShippingOptions"`
+	// Modules reports which optional modules the organization has. Read-only
+	// here: only Backoffice superadmins switch them (PUT /platform/tenants/{slug}/modules),
+	// and PUT /settings ignores it.
+	Modules OrganizationModules `json:"modules"`
+}
+
+// OrganizationModules are the optional per-organization feature modules. Both
+// are off by default and independent of each other: "processes" enables process
+// templates, per-order processes and the simulator; "stock" enables the
+// warehouse (magacin). With both on, process item nodes link to articles and
+// steps post stock movements.
+type OrganizationModules struct {
+	Processes bool `json:"processes"`
+	Stock     bool `json:"stock"`
+}
+
+// OrganizationModulesUpdate is a partial module switch used by irisctl
+// set-modules; a nil field is left unchanged.
+type OrganizationModulesUpdate struct {
+	Processes *bool
+	Stock     *bool
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
@@ -294,6 +327,242 @@ type OrganizationSettingsUpdate struct {
 	ShowShippingOptions *bool              `json:"showShippingOptions"`
 }
 
+// LoginLogo is the image an organization shows on its sign-in screen. Admins
+// upload it from Settings; the public organization endpoints serve it before
+// anyone is signed in.
+type LoginLogo struct {
+	ContentType string
+	Data        []byte
+}
+
+// LoginLogoUpload is the PUT /settings/login-logo payload: the raw image bytes,
+// base64-encoded, with the content type the client believes it has. The server
+// sniffs the bytes and rejects anything that is not PNG, JPEG or WebP.
+type LoginLogoUpload struct {
+	ContentType string `json:"contentType"`
+	Data        string `json:"data"`
+}
+
+// LoginLogoInfo is returned after an upload. LogoVersion changes whenever the
+// image does, so clients can use it to bust caches.
+type LoginLogoInfo struct {
+	LogoVersion string `json:"logoVersion"`
+}
+
+// PublicOrganization is what the sign-in screen may learn about an
+// organization before authentication: that it exists, its display name, and
+// whether (and which version of) a login logo it has.
+type PublicOrganization struct {
+	Slug        string  `json:"slug"`
+	Name        string  `json:"name"`
+	LogoVersion *string `json:"logoVersion"`
+}
+
+// PlatformAdmin is an Iris operator account. It belongs to no organization; it
+// reads the aggregate usage metrics below and can open an audited session as
+// any organization user (impersonation).
+// PlatformRoleSuperadmin is the Backoffice role: the only one that opens the
+// Backoffice (/backoffice in the web app, /platform/* in the API).
+const PlatformRoleSuperadmin = "superadmin"
+
+type PlatformAdmin struct {
+	ID       string `json:"-"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	// MustChangePassword is set on the seeded default account (and any account
+	// whose password was not chosen by its owner): the console then allows
+	// nothing but a password change.
+	MustChangePassword bool `json:"mustChangePassword"`
+}
+
+// PlatformPasswordChange is the POST /platform/auth/password payload.
+type PlatformPasswordChange struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+type PlatformLoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type PlatformLoginResponse struct {
+	Success bool           `json:"success"`
+	Admin   *PlatformAdmin `json:"admin,omitempty"`
+	Error   string         `json:"error,omitempty"`
+}
+
+// PlatformTenantUsers lists one organization's accounts (id, username, role
+// only) so a superadmin can pick whom to impersonate.
+type PlatformTenantUsers struct {
+	Tenant Tenant `json:"tenant"`
+	Users  []User `json:"users"`
+}
+
+// PlatformImpersonationRequest is the POST /platform/tenants/{slug}/impersonate
+// payload.
+type PlatformImpersonationRequest struct {
+	UserID string `json:"userId"`
+}
+
+// PlatformImpersonationResponse reports the organization session that was
+// opened (as the iris_session cookie) for the chosen user.
+type PlatformImpersonationResponse struct {
+	Success   bool   `json:"success"`
+	User      *User  `json:"user,omitempty"`
+	OrgSlug   string `json:"orgSlug,omitempty"`
+	ExpiresAt string `json:"expiresAt,omitempty"`
+}
+
+// PlatformTenant is an organization as the Backoffice manages it.
+type PlatformTenant struct {
+	ID          string  `json:"id"`
+	Slug        string  `json:"slug"`
+	Name        string  `json:"name"`
+	CreatedAt   string  `json:"createdAt"`
+	SuspendedAt *string `json:"suspendedAt"`
+	Users       int     `json:"users"`
+	Admins      int     `json:"admins"`
+	// Modules are the organization's optional feature modules (both off by default).
+	Modules OrganizationModules `json:"modules"`
+}
+
+// PlatformCreateTenantInput creates an organization with its first admin.
+type PlatformCreateTenantInput struct {
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	AdminUsername string `json:"adminUsername"`
+	AdminPassword string `json:"adminPassword"`
+}
+
+// PlatformUpdateTenantInput renames an organization and/or changes its
+// sign-in slug; a nil field is left unchanged.
+type PlatformUpdateTenantInput struct {
+	Name *string `json:"name"`
+	Slug *string `json:"slug"`
+}
+
+// PlatformPasswordReset sets a new password for an organization user.
+type PlatformPasswordReset struct {
+	Password string `json:"password"`
+}
+
+// Backoffice audit actions (PlatformAuditEvent.Action).
+const (
+	AuditTenantCreate       = "tenant.create"
+	AuditTenantUpdate       = "tenant.update"
+	AuditTenantSuspend      = "tenant.suspend"
+	AuditTenantReactivate   = "tenant.reactivate"
+	AuditTenantModules      = "tenant.modules"
+	AuditUserPasswordReset  = "user.password_reset"
+	AuditImpersonationStart = "impersonate"
+)
+
+// PlatformAuditEvent is one superadmin action in the Backoffice activity log.
+// Organization name and slug are as they were at the time.
+type PlatformAuditEvent struct {
+	ID             int64             `json:"id"`
+	At             string            `json:"at"`
+	AdminUsername  string            `json:"adminUsername"`
+	Action         string            `json:"action"`
+	TenantSlug     string            `json:"tenantSlug"`
+	TenantName     string            `json:"tenantName"`
+	TargetUsername string            `json:"targetUsername,omitempty"`
+	Detail         map[string]string `json:"detail,omitempty"`
+	IP             string            `json:"ip"`
+	// Impersonation is set on an "impersonate" event: its session state and
+	// how many changes it made (see /platform/impersonations/{id}/actions).
+	Impersonation *PlatformImpersonationStatus `json:"impersonation,omitempty"`
+}
+
+// PlatformImpersonationStatus is the session side of an impersonation.
+type PlatformImpersonationStatus struct {
+	ID          int64   `json:"id"`
+	ExpiresAt   string  `json:"expiresAt"`
+	EndedAt     *string `json:"endedAt"`
+	ActionCount int     `json:"actionCount"`
+}
+
+// PlatformAuditLog is a page of the activity log, newest first.
+type PlatformAuditLog struct {
+	Items []PlatformAuditEvent `json:"items"`
+	Total int                  `json:"total"`
+}
+
+// PlatformImpersonationAction is one change request made during an
+// impersonation. Request bodies are never kept (they can hold passwords).
+type PlatformImpersonationAction struct {
+	At     string `json:"at"`
+	Method string `json:"method"`
+	Route  string `json:"route"`
+	Path   string `json:"path"`
+	Status int    `json:"status"`
+}
+
+// PlatformMetrics is the operator dashboard payload: counts, dates and sizes
+// only. It never carries a customer, user or work-order record.
+type PlatformMetrics struct {
+	GeneratedAt string                  `json:"generatedAt"`
+	RangeDays   int                     `json:"rangeDays"`
+	RangeStart  string                  `json:"rangeStart"`
+	Totals      PlatformTotals          `json:"totals"`
+	System      PlatformSystem          `json:"system"`
+	Tenants     []PlatformTenantMetrics `json:"tenants"`
+	Daily       []PlatformDailyPoint    `json:"daily"`
+}
+
+type PlatformTotals struct {
+	Tenants            int   `json:"tenants"`
+	Users              int   `json:"users"`
+	Customers          int   `json:"customers"`
+	CatalogItems       int   `json:"catalogItems"`
+	WorkOrders         int   `json:"workOrders"`
+	WorkOrdersInRange  int   `json:"workOrdersInRange"`
+	OpenWorkOrders     int   `json:"openWorkOrders"`
+	LoginsInRange      int   `json:"loginsInRange"`
+	ActiveUsersInRange int   `json:"activeUsersInRange"`
+	ActiveSessions     int   `json:"activeSessions"`
+	DatabaseBytes      int64 `json:"databaseBytes"`
+}
+
+type PlatformSystem struct {
+	Release       string `json:"release"`
+	GoVersion     string `json:"goVersion"`
+	StartedAt     string `json:"startedAt"`
+	UptimeSeconds int64  `json:"uptimeSeconds"`
+	Goroutines    int    `json:"goroutines"`
+	HeapBytes     uint64 `json:"heapBytes"`
+}
+
+type PlatformTenantMetrics struct {
+	ID                 string         `json:"id"`
+	Slug               string         `json:"slug"`
+	Name               string         `json:"name"`
+	CreatedAt          string         `json:"createdAt"`
+	Users              int            `json:"users"`
+	Admins             int            `json:"admins"`
+	Customers          int            `json:"customers"`
+	CatalogItems       int            `json:"catalogItems"`
+	WorkOrders         int            `json:"workOrders"`
+	WorkOrdersInRange  int            `json:"workOrdersInRange"`
+	OpenWorkOrders     int            `json:"openWorkOrders"`
+	StatusCounts       map[string]int `json:"statusCounts"`
+	LoginsInRange      int            `json:"loginsInRange"`
+	ActiveUsersInRange int            `json:"activeUsersInRange"`
+	ActiveSessions     int            `json:"activeSessions"`
+	LastWorkOrderAt    *string        `json:"lastWorkOrderAt"`
+	LastLoginAt        *string        `json:"lastLoginAt"`
+	HasLoginLogo       bool           `json:"hasLoginLogo"`
+}
+
+// PlatformDailyPoint is one day of the dashboard's time series, keyed by
+// organization slug.
+type PlatformDailyPoint struct {
+	Date       string         `json:"date"`
+	WorkOrders map[string]int `json:"workOrders"`
+	Logins     map[string]int `json:"logins"`
+}
+
 type User struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`
@@ -302,6 +571,15 @@ type User struct {
 	// session/authentication) and used to scope every data query; it is never
 	// exposed to clients.
 	TenantID string `json:"-"`
+	// ImpersonatedBy is set only on a session a Backoffice superadmin opened
+	// "as" this user: it names that superadmin, so the app can say so.
+	ImpersonatedBy *string `json:"impersonatedBy,omitempty"`
+	// ImpersonationID links an impersonated session to its audit row, so every
+	// change made in it is traced back (server-side only; 0 otherwise).
+	ImpersonationID int64 `json:"-"`
+	// TenantSuspended blocks every ordinary session of a suspended
+	// organization; impersonation still works (server-side only).
+	TenantSuspended bool `json:"-"`
 }
 
 // Tenant is an organization (shop) whose data is isolated from every other
@@ -310,6 +588,8 @@ type Tenant struct {
 	ID   string `json:"id"`
 	Slug string `json:"slug"`
 	Name string `json:"name"`
+	// Suspended organizations cannot sign in (server-side only).
+	Suspended bool `json:"-"`
 }
 
 // CreateUserInput is the payload an admin submits to add a user account.
@@ -622,3 +902,236 @@ type PublicWorkOrderStatus struct {
 	SignedBy          *string         `json:"signedBy"`
 	SignedAt          *string         `json:"signedAt"`
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard (GET /dashboard) — server-side aggregation. Field names mirror the
+// web client's dashboard shapes so the client can consume them unchanged.
+// ---------------------------------------------------------------------------
+
+// DashboardSummary is the filtered-order headline: count per status and the
+// summed order price.
+type DashboardSummary struct {
+	TotalOrders int `json:"totalOrders"`
+	// StatusCounts carries every canonical status key, 0 by default.
+	StatusCounts map[WorkOrderStatus]int `json:"statusCounts"`
+	TotalRevenue float64                 `json:"totalRevenue"`
+}
+
+type DashboardMonthlyBucket struct {
+	Month   string  `json:"month"`
+	Count   int     `json:"count"`
+	Revenue float64 `json:"revenue"`
+}
+
+type DashboardDeliveryCount struct {
+	Method DeliveryMethod `json:"method"`
+	Count  int            `json:"count"`
+}
+
+type DashboardClientCount struct {
+	ClientName string `json:"clientName"`
+	Count      int    `json:"count"`
+}
+
+type DashboardProfitTotals struct {
+	Service float64 `json:"service"`
+	Article float64 `json:"article"`
+	Total   float64 `json:"total"`
+}
+
+type DashboardMonthlyProfit struct {
+	Month   string  `json:"month"`
+	Service float64 `json:"service"`
+	Article float64 `json:"article"`
+	Total   float64 `json:"total"`
+}
+
+type DashboardCompanyProfit struct {
+	GroupKey      string  `json:"groupKey"`
+	CustomerID    *string `json:"customerId"`
+	Name          string  `json:"name"`
+	Profit        float64 `json:"profit"`
+	ServiceProfit float64 `json:"serviceProfit"`
+	ArticleProfit float64 `json:"articleProfit"`
+	Revenue       float64 `json:"revenue"`
+	OrderCount    int     `json:"orderCount"`
+}
+
+type DashboardItemProfit struct {
+	GroupKey      string              `json:"groupKey"`
+	CatalogItemID *string             `json:"catalogItemId"`
+	Name          string              `json:"name"`
+	Kind          InvoiceLineItemKind `json:"kind"`
+	Profit        float64             `json:"profit"`
+	Revenue       float64             `json:"revenue"`
+	Quantity      float64             `json:"quantity"`
+}
+
+type DashboardItemProfitBreakdown struct {
+	Services []DashboardItemProfit `json:"services"`
+	Articles []DashboardItemProfit `json:"articles"`
+}
+
+// DashboardFinance is cost-derived and therefore admin-only; it is null for
+// every other role.
+type DashboardFinance struct {
+	ProfitTotals  DashboardProfitTotals        `json:"profitTotals"`
+	Revenue       float64                      `json:"revenue"`
+	MonthlyProfit []DashboardMonthlyProfit     `json:"monthlyProfit"`
+	CompanyProfit []DashboardCompanyProfit     `json:"companyProfit"`
+	ItemProfit    DashboardItemProfitBreakdown `json:"itemProfit"`
+}
+
+type DashboardSignalCounts struct {
+	Overdue     int `json:"overdue"`
+	DueToday    int `json:"dueToday"`
+	DueThisWeek int `json:"dueThisWeek"`
+	Unassigned  int `json:"unassigned"`
+}
+
+// DashboardAttentionOrder is the slim order projection shown in attention lists.
+type DashboardAttentionOrder struct {
+	ID             string          `json:"id"`
+	OrderNumber    string          `json:"orderNumber"`
+	JobDescription string          `json:"jobDescription"`
+	Status         WorkOrderStatus `json:"status"`
+	DueDate        *string         `json:"dueDate"`
+}
+
+type DashboardAttentionRow struct {
+	GroupKey    string                    `json:"groupKey"`
+	CustomerID  *string                   `json:"customerId"`
+	DisplayName string                    `json:"displayName"`
+	Counts      DashboardSignalCounts     `json:"counts"`
+	Severity    float64                   `json:"severity"`
+	Orders      []DashboardAttentionOrder `json:"orders"`
+}
+
+type DashboardQueueSummary struct {
+	Today      int `json:"today"`
+	Overdue    int `json:"overdue"`
+	Unassigned int `json:"unassigned"`
+}
+
+type DashboardOperatorQueue struct {
+	AssignedToMe int `json:"assignedToMe"`
+	DueToday     int `json:"dueToday"`
+	Overdue      int `json:"overdue"`
+	InProgress   int `json:"inProgress"`
+	Available    int `json:"available"`
+}
+
+// DashboardData is the GET /dashboard response.
+type DashboardData struct {
+	// HasOrders reports whether the tenant has any work order at all,
+	// independent of the filters, so clients can tell "no data yet" from
+	// "nothing matches the filters".
+	HasOrders             bool                     `json:"hasOrders"`
+	Summary               DashboardSummary         `json:"summary"`
+	MonthlyBuckets        []DashboardMonthlyBucket `json:"monthlyBuckets"`
+	DeliveryDistribution  []DashboardDeliveryCount `json:"deliveryDistribution"`
+	TopClients            []DashboardClientCount   `json:"topClients"`
+	Finance               *DashboardFinance        `json:"finance"`
+	SignalCounts          DashboardSignalCounts    `json:"signalCounts"`
+	ClientAttentionRows   []DashboardAttentionRow  `json:"clientAttentionRows"`
+	InternalAttentionRows []DashboardAttentionRow  `json:"internalAttentionRows"`
+	QueueSummary          DashboardQueueSummary    `json:"queueSummary"`
+	OperatorQueue         DashboardOperatorQueue   `json:"operatorQueue"`
+}
+
+// ProcessNodeKind is the role a node plays in a process graph.
+type ProcessNodeKind string
+
+const (
+	ProcessNodeStep      ProcessNodeKind = "step"
+	ProcessNodeInput     ProcessNodeKind = "input"
+	ProcessNodeProduct   ProcessNodeKind = "product"
+	ProcessNodeByproduct ProcessNodeKind = "byproduct"
+)
+
+// ProcessStepStatus is the per-work-order progress of a step node.
+type ProcessStepStatus string
+
+const (
+	ProcessStepPending    ProcessStepStatus = "pending"
+	ProcessStepInProgress ProcessStepStatus = "in_progress"
+	ProcessStepDone       ProcessStepStatus = "done"
+	ProcessStepSkipped    ProcessStepStatus = "skipped"
+)
+
+// ProcessNode is one vertex of a process graph. Step nodes carry Status; item
+// nodes (input, product, byproduct) carry the quantity fields.
+type ProcessNode struct {
+	ID             string            `json:"id"`
+	Kind           ProcessNodeKind   `json:"kind"`
+	Label          string            `json:"label"`
+	X              float64           `json:"x"`
+	Y              float64           `json:"y"`
+	Quantity       *float64          `json:"quantity,omitempty"`
+	Unit           string            `json:"unit,omitempty"`
+	CatalogItemID  string            `json:"catalogItemId,omitempty"`
+	Note           string            `json:"note,omitempty"`
+	Status         ProcessStepStatus `json:"status,omitempty"`
+	ActualQuantity *float64          `json:"actualQuantity,omitempty"`
+}
+
+// ProcessEdge is a directed connection between two process nodes.
+type ProcessEdge struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Label  string `json:"label,omitempty"`
+}
+
+// ProcessGraph is the directed acyclic graph of a process.
+type ProcessGraph struct {
+	Nodes []ProcessNode `json:"nodes"`
+	Edges []ProcessEdge `json:"edges"`
+}
+
+// ProcessTemplate is a tenant-defined reusable process graph.
+type ProcessTemplate struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	IsDefault   bool         `json:"isDefault"`
+	Graph       ProcessGraph `json:"graph"`
+	CreatedAt   string       `json:"createdAt"`
+	UpdatedAt   string       `json:"updatedAt"`
+}
+
+// ProcessTemplateInput is the create/update payload for a process template.
+type ProcessTemplateInput struct {
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	IsDefault   bool         `json:"isDefault"`
+	Graph       ProcessGraph `json:"graph"`
+}
+
+// WorkOrderProcess is a work order's own copy of a process graph plus its
+// per-order state. TemplateID is nil once the source template is deleted.
+type WorkOrderProcess struct {
+	WorkOrderID  string       `json:"workOrderId"`
+	TemplateID   *string      `json:"templateId"`
+	TemplateName string       `json:"templateName"`
+	Graph        ProcessGraph `json:"graph"`
+	UpdatedAt    string       `json:"updatedAt"`
+	UpdatedBy    string       `json:"updatedBy"`
+}
+
+// ApplyProcessTemplateInput attaches a template to a work order.
+type ApplyProcessTemplateInput struct {
+	TemplateID string `json:"templateId"`
+}
+
+// WorkOrderProcessInput replaces a work order's process graph.
+type WorkOrderProcessInput struct {
+	Graph ProcessGraph `json:"graph"`
+}
+
+// Backoffice audit actions for process templates.
+const (
+	AuditProcessTemplateCreate = "process_template.create"
+	AuditProcessTemplateUpdate = "process_template.update"
+	AuditProcessTemplateDelete = "process_template.delete"
+)

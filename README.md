@@ -117,7 +117,8 @@ cd iris-api
 # 1. Create the schema
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 
-# 2. (Optional) Seed with representative demo data
+# 2. (Optional) Seed the demo organization: fixture work orders plus the
+#    "Procesi rada" and "Magacin" content (both modules on). Idempotent.
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
 
 # 3. Start the API server (listens on :8080)
@@ -133,7 +134,7 @@ curl http://localhost:8080/healthz
 # → {"status":"ok"}
 ```
 
-Default demo credentials — organization **`demo`**, username **`admin`**, password **`admin123`** (`seed-demo` creates the `demo` tenant and this account).
+Default demo credentials — organization **`demo`**, username **`admin`**, password **`admin123`**. `seed-demo` creates the single `demo` tenant with this account plus an **`operater`** / **`operater123`** operator login, turns on both optional modules (Procesi rada and Magacin), and fills it with the fixture work orders alongside process- and stock-driven sample orders, four process templates and warehouse stock. In production the public passwords are rejected (the server won't start on `admin` / `admin123`), so `seed-demo` there requires `IRIS_DEMO_ADMIN_PASSWORD` and `IRIS_DEMO_OPERATOR_PASSWORD` (12+ chars) — see [iris-api/README.md](iris-api/README.md).
 
 ---
 

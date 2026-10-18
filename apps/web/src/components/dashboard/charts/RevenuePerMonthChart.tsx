@@ -8,7 +8,7 @@ import {
   YAxis,
 } from 'recharts'
 import { useTranslation } from 'react-i18next'
-import { formatMonthLabel, formatRSD, formatRevenueAxisTick, resolveChartMonths } from './utils'
+import { describeSeries, formatMonthLabel, formatRSD, formatRevenueAxisTick, resolveChartMonths } from './utils'
 
 interface RevenuePerMonthChartProps {
   monthlyRevenue: { month: string; revenue: number }[]
@@ -34,8 +34,17 @@ export function RevenuePerMonthChart({
   return (
     <div className="rounded-lg border border-border bg-card p-6">
       <h2 className="mb-5 text-sm font-medium text-card-foreground">{t('dashboard.charts.revenuePerMonth')}</h2>
+      <div
+        role="img"
+        aria-label={t('dashboard.charts.aria', {
+          title: t('dashboard.charts.revenuePerMonth'),
+          data: describeSeries(
+            data.map((d) => ({ label: d.label, value: formatRSD(d.revenue) })),
+          ),
+        })}
+      >
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>
+        <LineChart accessibilityLayer={false} data={data} margin={{ top: 4, right: 8, left: 0, bottom: 24 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
           <XAxis
             dataKey="label"
@@ -71,6 +80,7 @@ export function RevenuePerMonthChart({
           />
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }

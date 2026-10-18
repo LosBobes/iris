@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { WorkOrderStatus } from "@/types/work-order";
 import { getWorkOrderStatusLabel } from "@/shared/utils/work-orders";
 
@@ -15,6 +16,8 @@ interface IrisBadgeProps {
 }
 
 export function IrisBadge({ status }: IrisBadgeProps): React.JSX.Element {
+  // Subscribes to language changes so the label re-renders when it switches.
+  useTranslation();
   const color = STATUS_CSS_VAR[status];
   return (
     <span

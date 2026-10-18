@@ -23,6 +23,14 @@ strings stay Serbian (sr-Latn). See CLAUDE.md and REPO_MAP.md.
 
 -
 
+## Changeset
+
+<!-- Required: add .changeset/<name>.md with `bump: patch|minor|major` and a
+     plain-text description (node scripts/changeset.mjs add <level> "text").
+     It is applied to VERSION and CHANGELOG.md on merge. -->
+
+- [ ] Added a changeset (level: patch / minor / major)
+
 ## Contract-sync
 
 <!-- A shared domain/shape change must land across all surfaces or they drift.

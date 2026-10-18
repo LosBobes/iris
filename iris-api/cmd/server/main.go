@@ -80,6 +80,7 @@ func main() {
 		SessionCookieName: "iris_session",
 		SecureCookies:     env == "production",
 		WebDir:            os.Getenv("IRIS_WEB_DIR"),
+		Release:           os.Getenv("IRIS_RELEASE"),
 	})
 
 	addr := os.Getenv("IRIS_API_ADDR")

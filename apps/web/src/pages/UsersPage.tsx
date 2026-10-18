@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { MAX_PASSWORD_BYTES, isPasswordTooLong } from "@/lib/password";
 import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Plus, Save, Shield, Trash2, User as UserIcon, X } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,13 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
 import type { ManagedUser, UserRole } from "@/types/user";
-
-function formatActionError(prefix: string, error: unknown): string {
-  if (error instanceof Error && error.message.trim() !== "") {
-    return `${prefix}: ${error.message}`;
-  }
-  return `${prefix}.`;
-}
+import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 
 function UsersPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -35,8 +29,9 @@ function UsersPage(): React.JSX.Element {
     setLoading(true);
     try {
       setUsers(await window.api.listUsers());
-    } catch {
-      toast.error(t("users.loadError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("UsersPage.load", error);
+      toast.error(formatActionError(t("users.loadError"), error));
     } finally {
       setLoading(false);
     }
@@ -60,7 +55,7 @@ function UsersPage(): React.JSX.Element {
   }, [deleteTarget, load, t]);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
@@ -178,7 +173,7 @@ function UsersPage(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppShell>
+    </>
   );
 }
 
@@ -196,6 +191,10 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }): Reac
     }
     if (password.trim().length < 6) {
       toast.error(t("users.passwordMin"));
+      return;
+    }
+    if (isPasswordTooLong(password)) {
+      toast.error(t("users.passwordMax", { max: MAX_PASSWORD_BYTES }));
       return;
     }
     setSaving(true);
@@ -268,6 +267,10 @@ function EditUserRow({
   const submit = async (): Promise<void> => {
     if (password.trim() !== "" && password.trim().length < 6) {
       toast.error(t("users.passwordMin"));
+      return;
+    }
+    if (isPasswordTooLong(password)) {
+      toast.error(t("users.passwordMax", { max: MAX_PASSWORD_BYTES }));
       return;
     }
     setSaving(true);

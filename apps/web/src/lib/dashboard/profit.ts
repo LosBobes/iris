@@ -1,9 +1,23 @@
 import type {
   InvoiceLineItem,
-  InvoiceLineItemKind,
   WorkOrder,
 } from '@/types/work-order'
+import type {
+  CompanyProfit,
+  ItemProfit,
+  ItemProfitBreakdown,
+  MonthlyProfit,
+  ProfitTotals,
+} from '@/types/dashboard'
 import { normalizeClientGroupName } from '@/lib/dashboard/aggregations'
+
+export type {
+  CompanyProfit,
+  ItemProfit,
+  ItemProfitBreakdown,
+  MonthlyProfit,
+  ProfitTotals,
+} from '@/types/dashboard'
 
 // ---------------------------------------------------------------------------
 // Profit aggregations
@@ -15,33 +29,6 @@ import { normalizeClientGroupName } from '@/lib/dashboard/aggregations'
 // unitCost 0 to non-admins). Services and goods/articles are reported separately
 // so the dashboard can break profit down by kind.
 // ---------------------------------------------------------------------------
-
-export interface ProfitTotals {
-  /** Margin from service lines (invoice kind 'service'). */
-  service: number
-  /** Margin from article lines (invoice kind 'goods'). */
-  article: number
-  /** service + article. */
-  total: number
-}
-
-export interface MonthlyProfit extends ProfitTotals {
-  /** 'YYYY-MM' */
-  month: string
-}
-
-export interface CompanyProfit {
-  groupKey: string
-  customerId: string | null
-  name: string
-  profit: number
-  /** Profit contributed by service lines (invoice kind 'service'). */
-  serviceProfit: number
-  /** Profit contributed by article/goods lines (invoice kind 'goods'). */
-  articleProfit: number
-  revenue: number
-  orderCount: number
-}
 
 /**
  * The company grouping key for an order: its `customerId`, falling back to a
@@ -182,25 +169,6 @@ export function topCompaniesByProfit(
 }
 
 /** A single catalog item / ad-hoc line aggregated across the period. */
-export interface ItemProfit {
-  groupKey: string
-  /** Set when the lines share a catalog item; null for ad-hoc lines. */
-  catalogItemId: string | null
-  name: string
-  kind: InvoiceLineItemKind
-  profit: number
-  revenue: number
-  /** Total billed quantity across the grouped lines. */
-  quantity: number
-}
-
-export interface ItemProfitBreakdown {
-  /** Service lines grouped by item, sorted by profit descending. */
-  services: ItemProfit[]
-  /** Article/goods lines grouped by item, sorted by profit descending. */
-  articles: ItemProfit[]
-}
-
 /**
  * Breaks the by-kind usluge/artikli totals down into their individual line
  * items: lines are grouped by catalog item (falling back to a normalized

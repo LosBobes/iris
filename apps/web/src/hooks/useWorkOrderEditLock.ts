@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { reportUnexpectedError } from "@/lib/errors";
 
 // How often the editing client refreshes its lock. Must stay well under the
 // server's lock TTL so an actively-open form never lets its lock lapse, while a
@@ -55,8 +56,9 @@ export function useWorkOrderEditLock(id: string | undefined): WorkOrderEditLock 
           setLockedBy(result.lock.lockedBy);
           stopHeartbeat();
         }
-      } catch {
+      } catch (error: unknown) {
         // Fail open: never block editing just because the lock call failed.
+        reportUnexpectedError("useWorkOrderEditLock.acquire", error);
         if (active && !heldRef.current) setStatus("error");
       }
     };
@@ -71,7 +73,12 @@ export function useWorkOrderEditLock(id: string | undefined): WorkOrderEditLock 
       stopHeartbeat();
       if (heldRef.current) {
         heldRef.current = false;
-        void window.api.releaseWorkOrderEditLock(id);
+        void window.api.releaseWorkOrderEditLock(id).catch(() => {
+          // Best effort on unmount: the lock carries its own expiry, so a
+          // failed release costs the next operator a short wait rather than
+          // anything permanent. Swallowing it keeps a lapsed session from
+          // surfacing as an unhandled rejection while the page is unmounting.
+        });
       }
     };
   }, [id]);

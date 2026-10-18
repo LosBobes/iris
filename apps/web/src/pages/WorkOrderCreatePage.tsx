@@ -3,9 +3,10 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useAuth } from "@/hooks/useAuth";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getLocalIsoDate } from "@/shared/utils/work-orders";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
 import { formatActionError } from "@/lib/errors";
@@ -76,6 +77,9 @@ function WorkOrderCreatePage(): React.JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
+  const [dirty, setDirty] = useState(false);
+  const guard = useUnsavedChangesGuard(dirty);
+  const { allowNavigation } = guard;
 
   // Duplicate pre-fill and the read-only tutorial mode are passed via router
   // state. Tutorial mode deliberately avoids number reservations, drafts, and
@@ -161,7 +165,11 @@ function WorkOrderCreatePage(): React.JSX.Element {
     if (isInteractiveTour) return;
     return () => {
       if (reservedRef.current && !consumedRef.current) {
-        void window.api.releaseWorkOrderNumber(reservedRef.current);
+        void window.api.releaseWorkOrderNumber(reservedRef.current).catch(() => {
+          // The reservation expires on its own, so a failed release only means
+          // one order number is skipped. The page is already unmounting; an
+          // unhandled rejection here would be reported as a crash instead.
+        });
         clearWorkOrderDraft();
       }
     };
@@ -215,6 +223,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
         consumedRef.current = true;
         clearWorkOrderDraft();
         toast.success(t("workOrders.toast.created", { order: result.orderNumber }));
+        allowNavigation();
         navigate(`/work-orders/${result.id}`);
       } catch (error) {
         // Surface what the API rejected (and its request reference) instead of a
@@ -223,7 +232,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
         toast.error(formatActionError(t("workOrders.toast.createError"), error));
       }
     },
-    [currentUser.username, isInteractiveTour, navigate, reservedOrderNumber, t],
+    [allowNavigation, currentUser.username, isInteractiveTour, navigate, reservedOrderNumber, t],
   );
 
   const handleCancel = useCallback(() => {
@@ -231,9 +240,9 @@ function WorkOrderCreatePage(): React.JSX.Element {
   }, [navigate]);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
-        <header className="animate-iris-enter border-b border-border px-10 pt-8 pb-7">
+        <header className="animate-iris-enter border-b border-border px-4 pt-6 pb-6 sm:px-10 sm:pt-8 sm:pb-7">
           <button
             type="button"
             onClick={() => navigate("/work-orders")}
@@ -261,7 +270,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
                     : t("workOrders.create.orderNumberPending"))}
             </span>
           </div>
-          <h1 className="mt-2.5 text-[32px] font-normal leading-[1.08] tracking-[-0.5px] text-foreground">
+          <h1 className="mt-2.5 text-[24px] font-normal leading-[1.1] tracking-[-0.5px] text-foreground sm:text-[32px] sm:leading-[1.08]">
             {t("workOrders.create.title")}
           </h1>
           <p className="mt-2 text-[13px] text-[color:var(--iris-ink-soft)]">
@@ -269,12 +278,13 @@ function WorkOrderCreatePage(): React.JSX.Element {
           </p>
         </header>
 
-        <div className="animate-iris-enter pl-10 pr-0" style={{ animationDelay: "80ms" }}>
+        <div className="animate-iris-enter px-4 sm:pl-10 sm:pr-0" style={{ animationDelay: "80ms" }}>
           <WorkOrderForm
             initialValues={initialValues}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             onValuesChange={isInteractiveTour ? undefined : handleValuesChange}
+            onDirtyChange={setDirty}
             readOnly={isInteractiveTour}
             previewOrderNumber={
               isInteractiveTour
@@ -284,7 +294,8 @@ function WorkOrderCreatePage(): React.JSX.Element {
           />
         </div>
       </div>
-    </AppShell>
+      <UnsavedChangesDialog {...guard} />
+    </>
   );
 }
 

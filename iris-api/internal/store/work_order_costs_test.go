@@ -542,3 +542,58 @@ func TestCatalogLineWithCostIgnoresLineOverride(t *testing.T) {
 		t.Fatalf("unitCost = %v, want 100 (catalog authoritative)", got)
 	}
 }
+
+// A catalog item whose purchase price is 0 (never really entered, e.g. an
+// import default) must not lock the line at 0: the zero is captured as a soft
+// default, and an admin-entered line cost replaces it and survives later edits.
+func TestCatalogLineZeroCostAdminOverride(t *testing.T) {
+	ctx := testTenantContext()
+	s := costTestStore(t, ctx)
+	catID := mustUpsertCatalog(t, ctx, s, "cat-zero", 0, 1600)
+
+	today := time.Now().UTC().Format("2006-01-02")
+	created, err := s.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+		ClientName:     "Klijent",
+		JobDescription: "PVC štampa",
+		IssuedBy:       "admin",
+		IssueDate:      today,
+		InvoiceDraft: domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{catalogLine("li-1", catID, 2, 1600)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateWorkOrder: %v", err)
+	}
+	if got := lineCost(created.InvoiceDraft.LineItems[0]); got == nil || *got != 0 {
+		t.Fatalf("created unitCost = %v, want 0 (catalog default)", got)
+	}
+
+	overrideLine := catalogLine("li-1", catID, 2, 1600)
+	overrideLine.UnitCost = fptr(700)
+	updated, err := s.UpdateWorkOrder(ctx, created.ID, rawUpdate(t, map[string]any{
+		"invoiceDraft": domain.InvoiceDraft{
+			Status:    domain.InvoiceDraftStatusDraft,
+			LineItems: []domain.InvoiceLineItem{overrideLine},
+		},
+	}))
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder (override): %v", err)
+	}
+	if got := lineCost(updated.InvoiceDraft.LineItems[0]); got == nil || *got != 700 {
+		t.Fatalf("unitCost = %v, want 700 (admin override of zero catalog cost)", got)
+	}
+	if updated.Profit == nil || *updated.Profit != 1800 { // (1600-700)*2
+		t.Fatalf("profit = %v, want 1800", updated.Profit)
+	}
+
+	edited, err := s.UpdateWorkOrder(ctx, created.ID, rawUpdate(t, map[string]any{
+		"clientName": "Klijent (izmenjen)",
+	}))
+	if err != nil {
+		t.Fatalf("UpdateWorkOrder (later edit): %v", err)
+	}
+	if got := lineCost(edited.InvoiceDraft.LineItems[0]); got == nil || *got != 700 {
+		t.Fatalf("preserved unitCost = %v, want 700", got)
+	}
+}

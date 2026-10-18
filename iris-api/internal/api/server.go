@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,8 +31,10 @@ import (
 // 3. Handlers delegate data access to the store package.
 // 4. writeJSON and writeServerError are small shared response helpers.
 type Server struct {
-	store  store.Store
-	config Config
+	store           store.Store
+	config          Config
+	startedAt       time.Time
+	platformLimiter *loginLimiter
 }
 
 type Config struct {
@@ -40,6 +43,15 @@ type Config struct {
 	SessionDuration   time.Duration
 	SecureCookies     bool
 	WebDir            string
+	// Operator console session (see platform.go): a separate cookie, kept
+	// short because it can read usage across every organization.
+	PlatformSessionCookieName string
+	PlatformSessionDuration   time.Duration
+	// ImpersonationDuration caps an organization session a superadmin opens
+	// as one of its users (see impersonation.go).
+	ImpersonationDuration time.Duration
+	// Release is shown on the operator dashboard (IRIS_RELEASE).
+	Release string
 }
 
 func DefaultConfig() Config {
@@ -60,7 +72,22 @@ func NewServer(store store.Store, configs ...Config) *Server {
 	if config.SessionDuration == 0 {
 		config.SessionDuration = 12 * time.Hour
 	}
-	return &Server{store: store, config: config}
+	if config.PlatformSessionCookieName == "" {
+		config.PlatformSessionCookieName = "iris_platform_session"
+	}
+	if config.PlatformSessionDuration == 0 {
+		config.PlatformSessionDuration = 2 * time.Hour
+	}
+	if config.ImpersonationDuration == 0 {
+		config.ImpersonationDuration = time.Hour
+	}
+	return &Server{
+		store:     store,
+		config:    config,
+		startedAt: time.Now(),
+		// 5 failures per IP or username, 50 overall, per 15 minutes.
+		platformLimiter: newLoginLimiter(15*time.Minute, 5, 50),
+	}
 }
 
 // Routes builds the router once and returns it as an http.Handler.
@@ -73,6 +100,10 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// gzip/deflate compresses only chi's default content-type list (text/*,
+	// application/json, javascript, etc.) — application/pdf is not in that
+	// list, so PDF report/preview responses pass through unmodified.
+	r.Use(middleware.Compress(5))
 	// Report panics to Sentry, then re-panic so chi's Recoverer still writes
 	// the 500. This is a no-op when Sentry was not initialized (no DSN), so it
 	// is always safe to register. Must sit inside Recoverer so it sees the
@@ -88,9 +119,36 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/auth/session", s.handleSession)
 	r.Post("/auth/logout", s.handleLogout)
 	r.Get("/public/work-orders/{token}", s.handlePublicWorkOrderStatus)
+	r.Get("/public/organizations/{slug}", s.handlePublicOrganization)
+	r.Get("/public/organizations/{slug}/logo", s.handlePublicOrganizationLogo)
+
+	r.Post("/platform/auth/login", s.handlePlatformLogin)
+	r.Get("/platform/auth/session", s.handlePlatformSession)
+	r.Post("/platform/auth/logout", s.handlePlatformLogout)
+	r.Post("/platform/auth/password", s.handlePlatformChangePassword)
+	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/users", s.handlePlatformTenantUsers)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/impersonate", s.handlePlatformImpersonate)
+	r.With(s.requirePlatformAdmin).Get("/platform/audit", s.handlePlatformAudit)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants", s.handlePlatformTenants)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants", s.handlePlatformCreateTenant)
+	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/suspend", s.handlePlatformSuspendTenant(true))
+	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/modules", s.handlePlatformSetTenantModules)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/reactivate", s.handlePlatformSuspendTenant(false))
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/users/{id}/password", s.handlePlatformResetPassword)
+	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/process-templates", s.handlePlatformProcessTemplates)
+	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/process-templates", s.handlePlatformCreateProcessTemplate)
+	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformUpdateProcessTemplate)
+	r.With(s.requirePlatformAdmin).Delete("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformDeleteProcessTemplate)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
+		// Optional per-organization modules: each group answers 403 while the
+		// Backoffice has not switched its module on for the organization.
+		processes := protected.With(s.requireModule(moduleProcesses))
+		stock := protected.With(s.requireModule(moduleStock))
 		protected.Get("/customers", s.handleCustomers)
 		protected.Get("/customers/{id}", s.handleCustomerByID)
 		protected.Post("/customers", s.handleUpsertCustomer)
@@ -100,6 +158,7 @@ func (s *Server) Routes() http.Handler {
 		protected.Post("/locations", s.handleUpsertLocation)
 		protected.Put("/locations/{id}", s.handleUpsertLocation)
 		protected.Delete("/locations/{id}", s.requireAdmin(s.handleDeleteLocation))
+		protected.Get("/dashboard", s.handleDashboard)
 		protected.Get("/work-orders", s.handleWorkOrders)
 		protected.Get("/work-orders/operators", s.handleOperators)
 		protected.Get("/work-orders/{id}", s.handleWorkOrderByID)
@@ -112,6 +171,17 @@ func (s *Server) Routes() http.Handler {
 		protected.Delete("/work-orders/{id}/edit-lock", s.handleReleaseEditLock)
 		protected.Patch("/work-orders/{id}", s.handleUpdateWorkOrder)
 		protected.Delete("/work-orders/{id}", s.requireAdmin(s.handleDeleteWorkOrder))
+		processes.Get("/work-orders/{id}/process", s.handleWorkOrderProcess)
+		processes.Post("/work-orders/{id}/process", s.handleApplyProcessTemplate)
+		// Operators may change a process's per-order state and layout only; the
+		// store rejects structural changes unless the caller is an admin.
+		processes.Put("/work-orders/{id}/process", s.handleUpdateWorkOrderProcess)
+		processes.Delete("/work-orders/{id}/process", s.requireAdmin(s.handleDeleteWorkOrderProcess))
+		processes.Get("/process-templates", s.handleProcessTemplates)
+		processes.Get("/process-templates/{id}", s.handleProcessTemplateByID)
+		processes.Post("/process-templates", s.requireAdmin(s.handleCreateProcessTemplate))
+		processes.Put("/process-templates/{id}", s.requireAdmin(s.handleUpdateProcessTemplate))
+		processes.Delete("/process-templates/{id}", s.requireAdmin(s.handleDeleteProcessTemplate))
 		protected.Get("/enum-values", s.handleEnumValues)
 		protected.Post("/enum-values", s.requireAdmin(s.handleCreateEnumValue))
 		protected.Put("/enum-values/{id}", s.requireAdmin(s.handleUpdateEnumValue))
@@ -129,8 +199,15 @@ func (s *Server) Routes() http.Handler {
 		// full upsert.
 		protected.Put("/catalog-items/{id}", s.handleUpsertCatalogItem)
 		protected.Delete("/catalog-items/{id}", s.requireAdmin(s.handleDeleteCatalogItem))
+		stock.Get("/stock", s.handleStockLevels)
+		stock.Get("/stock/movements", s.handleStockMovements)
+		stock.Post("/stock/receipts", s.handlePostStockReceipt)
+		stock.Post("/stock/counts", s.requireAdmin(s.handlePostStockCount))
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
+		protected.Get("/settings/login-logo", s.handleLoginLogo)
+		protected.Put("/settings/login-logo", s.requireAdmin(s.handleUpdateLoginLogo))
+		protected.Delete("/settings/login-logo", s.requireAdmin(s.handleDeleteLoginLogo))
 		protected.Get("/users", s.requireAdmin(s.handleListUsers))
 		protected.Post("/users", s.requireAdmin(s.handleCreateUser))
 		protected.Put("/users/{id}", s.requireAdmin(s.handleUpdateUser))
@@ -204,8 +281,50 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		// store query) to the request context.
 		ctx := context.WithValue(r.Context(), currentUserContextKey, user)
 		ctx = store.ContextWithTenant(ctx, user.TenantID)
+		if user.ImpersonationID != 0 {
+			s.serveTraced(w, r.WithContext(ctx), next, user.ImpersonationID)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// Optional organization modules gated by requireModule.
+const (
+	moduleProcesses = "processes"
+	moduleStock     = "stock"
+
+	moduleProcessesDisabledMessage = "Modul „Procesi rada“ nije uključen za ovu organizaciju."
+	moduleStockDisabledMessage     = "Modul „Magacin“ nije uključen za ovu organizaciju."
+)
+
+// requireModule rejects the request with 403 unless the signed-in user's
+// organization has the module switched on. It must run after requireAuth (it
+// reads the tenant from the context). The flag is one indexed key read, so it
+// is not cached: a Backoffice switch takes effect on the next request.
+func (s *Server) requireModule(module string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// A browser navigation to an SPA path that shares the API route (for
+			// example /stock) gets the app shell, which has no data to protect.
+			if s.serveWebIfHTML(w, r) {
+				return
+			}
+			modules, err := s.store.OrganizationModules(r.Context())
+			if err != nil {
+				writeServerError(w, r, err)
+				return
+			}
+			switch {
+			case module == moduleProcesses && !modules.Processes:
+				writeAPIError(w, r, http.StatusForbidden, moduleProcessesDisabledMessage, nil)
+			case module == moduleStock && !modules.Stock:
+				writeAPIError(w, r, http.StatusForbidden, moduleStockDisabledMessage, nil)
+			default:
+				next.ServeHTTP(w, r)
+			}
+		})
+	}
 }
 
 func (s *Server) requireAdmin(handler http.HandlerFunc) http.HandlerFunc {
@@ -233,6 +352,13 @@ func (s *Server) userFromRequest(w http.ResponseWriter, r *http.Request) (*domai
 	if user == nil {
 		clearSessionCookie(w, s.config)
 		writeAPIError(w, r, http.StatusUnauthorized, "Sesija je istekla.", nil)
+		return nil, false
+	}
+	// A suspended organization keeps no ordinary sessions; a Backoffice
+	// impersonation still gets in.
+	if user.TenantSuspended && user.ImpersonationID == 0 {
+		clearSessionCookie(w, s.config)
+		writeAPIError(w, r, http.StatusUnauthorized, tenantSuspendedMessage, nil)
 		return nil, false
 	}
 	return user, true
@@ -300,6 +426,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Said only after the credentials check out, so it reveals nothing to
+	// someone guessing.
+	if tenant.Suspended {
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: tenantSuspendedMessage})
+		return
+	}
+
+	s.recordLogin(r, user)
 
 	expiresAt := time.Now().UTC().Add(s.config.SessionDuration)
 	token, err := s.store.CreateSession(r.Context(), user.ID, expiresAt)
@@ -328,6 +462,11 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		clearSessionCookie(w, s.config)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false})
+		return
+	}
+	if user.TenantSuspended && user.ImpersonationID == 0 {
+		clearSessionCookie(w, s.config)
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: tenantSuspendedMessage})
 		return
 	}
 	writeJSON(w, http.StatusOK, domain.LoginResponse{Success: true, User: user})
@@ -746,7 +885,11 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 
 	var locationAddress *string
 	if workOrder.LocationID != nil {
-		locations, locErr := s.store.Locations(r.Context(), "")
+		customerID := ""
+		if workOrder.CustomerID != nil {
+			customerID = *workOrder.CustomerID
+		}
+		locations, locErr := s.store.Locations(r.Context(), customerID)
 		if locErr != nil {
 			writeServerError(w, r, locErr)
 			return
@@ -809,7 +952,11 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 
 	var locationAddress *string
 	if order.LocationID != nil {
-		locations, err := s.store.Locations(r.Context(), "")
+		customerID := ""
+		if order.CustomerID != nil {
+			customerID = *order.CustomerID
+		}
+		locations, err := s.store.Locations(r.Context(), customerID)
 		if err != nil {
 			writeServerError(w, r, err)
 			return
@@ -887,6 +1034,14 @@ func (s *Server) serveWebIfHTML(w http.ResponseWriter, r *http.Request) bool {
 
 func wantsHTML(r *http.Request) bool {
 	return r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html")
+}
+
+// The PWA manifest the web build ships (apps/web/public/manifest.webmanifest)
+// has an extension Go's built-in MIME table does not know, and the slim
+// runtime image has no /etc/mime.types, so without this it would be served as
+// text/plain when WebDir hosts the SPA.
+func init() {
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 }
 
 func (s *Server) handleWebFallback(w http.ResponseWriter, r *http.Request) {

@@ -84,6 +84,21 @@ export function validateCustomerIdentifiers(
   const mb = (customer.mb ?? "").trim();
   if (isNew && pib === "") return i18n.t("customerDetail.pibRequired");
   if (isNew && mb === "") return i18n.t("customerDetail.mbRequired");
+  return validateIdentifierFormat(pib, mb);
+}
+
+/**
+ * Checks only that a PIB or MB, when given, is well-formed — the same rule the
+ * API enforces on every customer save. For the quick add/edit dialogs on the
+ * work-order form, where both fields stay optional. Returns a Serbian error
+ * message or null.
+ */
+export function validateIdentifierFormat(
+  pibValue: string,
+  mbValue: string,
+): string | null {
+  const pib = pibValue.trim();
+  const mb = mbValue.trim();
   if (pib !== "" && !isValidPib(pib)) return i18n.t("customerDetail.pibError");
   if (mb !== "" && !isValidMb(mb)) return i18n.t("customerDetail.mbError");
   return null;

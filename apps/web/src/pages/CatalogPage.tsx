@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ChevronRight, Loader2, Plus, Search, Trash2 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import { Pager } from "@/components/Pager";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
 import { CatalogCleanupDialog } from "@/components/Catalog/CatalogCleanupDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
 import { useCatalogItems } from "@/hooks/useCatalogItems";
 import { formatCatalogPrice, kindLabel } from "@/lib/catalog";
+import { formatStockQuantity } from "@/lib/stock/format";
 import type { CatalogItemKind } from "@/types/catalog";
 
 type KindFilter = "all" | CatalogItemKind;
@@ -20,6 +21,7 @@ function CatalogPage(): React.JSX.Element {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { modules } = useOrganization();
   const isAdmin = currentUser.role === "admin";
 
   const kindTabs: TabItem<KindFilter>[] = [
@@ -68,7 +70,7 @@ function CatalogPage(): React.JSX.Element {
   }, []);
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="animate-iris-enter flex flex-wrap items-end justify-between gap-4 border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div>
@@ -180,6 +182,21 @@ function CatalogPage(): React.JSX.Element {
                             .filter(Boolean)
                             .join(" · ")}
                         </span>
+                        {/* Warehouse stock is tracked for articles only. */}
+                        {modules.stock && item.kind === "article" && typeof item.stockOnHand === "number" && (
+                          <span
+                            data-testid="catalog-stock"
+                            className={
+                              item.stockOnHand < 0
+                                ? "block truncate text-[11px] text-destructive"
+                                : "block truncate text-[11px] text-[color:var(--iris-ink-soft)]"
+                            }
+                          >
+                            {t("catalog.onStock", {
+                              qty: formatStockQuantity(item.stockOnHand, item.unit),
+                            })}
+                          </span>
+                        )}
                       </span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)]" />
                     </button>
@@ -207,7 +224,7 @@ function CatalogPage(): React.JSX.Element {
         onDeleted={(deleted) => void handleCleanupDone(deleted)}
         onError={(message) => toast.error(message)}
       />
-    </AppShell>
+    </>
   );
 }
 

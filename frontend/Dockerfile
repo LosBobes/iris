@@ -11,7 +11,8 @@
 # --- Build stage ------------------------------------------------------------
 FROM node:24-alpine AS build
 
-WORKDIR /app
+# Mirror the repo layout so vite.config.ts finds ../../VERSION (the app version).
+WORKDIR /src/apps/web
 
 # In the browser the API is reached at the same origin under /api, which nginx
 # proxies to the backend. Baking this into the Vite build makes the client send
@@ -33,6 +34,7 @@ ENV VITE_SENTRY_DSN="${VITE_SENTRY_DSN}" \
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 
+COPY VERSION /src/VERSION
 COPY apps/web/ ./
 RUN npm run build
 
@@ -40,7 +42,7 @@ RUN npm run build
 FROM nginx:1.27-alpine
 
 # Vite emits the production build into dist/.
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /src/apps/web/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

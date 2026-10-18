@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "sentry@anthropic-plugin-directory": true
+  }
+}

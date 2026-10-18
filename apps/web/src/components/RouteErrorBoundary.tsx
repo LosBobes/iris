@@ -95,7 +95,10 @@ class RouteErrorBoundaryBase extends Component<
 
     if (reloading) {
       return (
-        <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+        <main
+          role="status"
+          className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground"
+        >
           <div className="text-sm text-[color:var(--iris-ink-soft)]">
             {t("app.loading")}
           </div>
@@ -105,7 +108,9 @@ class RouteErrorBoundaryBase extends Component<
 
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
-        <div className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
+        <div
+          role="alert"
+          className="animate-iris-enter w-full max-w-xl border border-border bg-card px-8 py-7">
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
             {t("app.errorEyebrow")}
           </div>

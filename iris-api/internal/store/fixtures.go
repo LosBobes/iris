@@ -59,7 +59,15 @@ type FixtureStore struct {
 	priorityDefaults    *domain.PriorityDefaults
 	printItemColumns    *[]domain.PrintItemColumn
 	showShippingOptions *bool
+	loginLogo           *domain.LoginLogo
 	sessions            map[string]fixtureSession
+	processTemplates    []domain.ProcessTemplate
+	nextProcessSequence int
+	workOrderProcesses  map[string]domain.WorkOrderProcess
+	stockMovements      []domain.StockMovement
+	modules             domain.OrganizationModules
+	stockTracked        map[string]bool // work-order id -> process is stock tracked
+	nextStockSequence   int
 }
 
 type fixtureSession struct {
@@ -519,6 +527,7 @@ func (s *FixtureStore) CreateWorkOrder(
 	}
 
 	s.workOrders = append(s.workOrders, newOrder)
+	s.attachDefaultProcessLocked(newOrder.ID, input.IssuedBy, createdAt)
 	return cloneWorkOrder(newOrder), nil
 }
 
@@ -584,6 +593,14 @@ func (s *FixtureStore) DeleteWorkOrder(_ context.Context, id string) (domain.Del
 		}
 
 		s.workOrders = append(s.workOrders[:index], s.workOrders[index+1:]...)
+		delete(s.workOrderProcesses, id)
+		delete(s.stockTracked, id)
+		// Movements outlive the order (the material was used); they just detach.
+		for i := range s.stockMovements {
+			if s.stockMovements[i].WorkOrderID != nil && *s.stockMovements[i].WorkOrderID == id {
+				s.stockMovements[i].WorkOrderID = nil
+			}
+		}
 		return domain.DeleteWorkOrderResponse{Success: true}, nil
 	}
 

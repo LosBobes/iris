@@ -15,6 +15,10 @@ import {
   type PrintItemColumn,
 } from "@/types/settings";
 import { formatWorkOrderDate } from "@/shared/utils/work-orders";
+import {
+  printDescriptionColumns,
+  splitDescriptionEntries,
+} from "@/shared/utils/description-items";
 import { useOrganization } from "@/hooks/useOrganization";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { cn } from "@/lib/utils";
@@ -195,8 +199,10 @@ function jobDetailsHasContent(
 }
 
 // The "opis posla" (job description) lines only: the structured job details when
-// present, otherwise the free-text description. Line items (stavke) are rendered
-// separately by buildPrintItemLines so the two occupy distinct panels.
+// present, otherwise the free-text description. A description typed as a product
+// list ("MANGO 20 KOM - KOKOS 10 KOM - ...") or across several lines prints one
+// entry per line instead of as one dense paragraph. Line items (stavke) are
+// rendered separately by buildPrintItemLines so the two occupy distinct panels.
 export function buildPrintDescriptionLines(order: WorkOrder): string[] {
   const details = order.jobDetails;
   const detailLines = jobDetailsHasContent(details)
@@ -215,9 +221,9 @@ export function buildPrintDescriptionLines(order: WorkOrder): string[] {
 
   return detailLines.length > 0
     ? detailLines
-    : [uppercaseLine(order.jobDescription)].filter((line): line is string =>
-        Boolean(line),
-      );
+    : splitDescriptionEntries(order.jobDescription)
+        .map(uppercaseLine)
+        .filter((line): line is string => Boolean(line));
 }
 
 // A single "stavka" (line item) rendered as a table row: name plus the selling
@@ -358,6 +364,7 @@ export function WorkOrderPrintSheet({
   const { pdfSections, billingDefaults, printItemColumns } = useOrganization();
   const { values: enumValues } = useEnumValues();
   const descriptionLines = buildPrintDescriptionLines(order);
+  const descriptionColumns = printDescriptionColumns(descriptionLines.length);
   const itemRows = buildPrintItemRows(order);
   // Guard the shop's configured order so a stale/partial value can never drop a
   // column from the printed nalog.
@@ -456,9 +463,16 @@ export function WorkOrderPrintSheet({
             {t("workOrders.print.jobDescription")}
           </span>
         </div>
-        <div className="work-order-print-description-lines" ref={descLinesRef}>
+        <div
+          className={cn(
+            "work-order-print-description-lines",
+            descriptionColumns > 1 && "work-order-print-description-columns",
+          )}
+          style={descriptionColumns > 1 ? { columnCount: descriptionColumns } : undefined}
+          ref={descLinesRef}
+        >
           {descriptionLines.length > 0
-            ? descriptionLines.map((line) => <div key={line}>{line}</div>)
+            ? descriptionLines.map((line, index) => <div key={index}>{line}</div>)
             : <div>{t("workOrders.print.noDescription")}</div>}
         </div>
       </div>

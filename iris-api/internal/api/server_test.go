@@ -1060,6 +1060,29 @@ func TestWebFallbackRejectsPathTraversal(t *testing.T) {
 	}
 }
 
+func TestWebFallbackServesPWAManifestType(t *testing.T) {
+	webDir := t.TempDir()
+	for name, body := range map[string]string{
+		"index.html":           "<html>app</html>",
+		"manifest.webmanifest": `{"name":"Iris"}`,
+	} {
+		if err := os.WriteFile(filepath.Join(webDir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	server := NewServer(store.NewFixtureStore(testutil.FixtureDir(t)), Config{WebDir: webDir})
+	recorder := httptest.NewRecorder()
+	server.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/manifest.webmanifest", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if got := recorder.Header().Get("Content-Type"); got != "application/manifest+json" {
+		t.Fatalf("Content-Type = %q, want application/manifest+json", got)
+	}
+}
+
 // TestCreateWorkOrderAcceptsCatalogUnit covers the shop's everyday billing flow
 // end to end: a service billed by the hour is added to the catalog with the unit
 // the legacy catalog carries ("sat"), then picked onto a work order. The line

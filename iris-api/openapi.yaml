@@ -13,6 +13,16 @@ tags:
   - name: Auth
   - name: Customers
   - name: Work Orders
+  - name: Dashboard
+  - name: Processes
+    description: Process templates (steps with inputs, products and byproducts) and each work order's own editable copy.
+  - name: Stock
+    description: >-
+      Warehouse stock (magacin). Stock is an append-only movement ledger per catalog article (on-hand is the sum of
+      its movements; services never carry stock). Goods receipts and counts post movements here; work-order
+      processes post consumption/production automatically. A single warehouse per organization; negative stock is allowed.
+  - name: Platform
+    description: Backoffice (/backoffice in the web app). Superadmin accounts stored apart from organization users (own table, sessions and cookie); aggregate metrics only.
 paths:
   /healthz:
     get:
@@ -381,6 +391,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The article has stock movements and cannot be deleted; deactivate it instead (`Artikal ima promet u magacinu i ne može se obrisati.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /catalog-items/{id}/cost-history:
     get:
       tags: [Catalog]
@@ -451,6 +467,70 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Invalid settings input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /settings/login-logo:
+    get:
+      tags: [Settings]
+      summary: Return the signed-in organization's sign-in logo image
+      operationId: getLoginLogo
+      responses:
+        '200':
+          description: The logo image bytes (PNG, JPEG or WebP)
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            image/png: {}
+            image/jpeg: {}
+            image/webp: {}
+        '404':
+          description: No logo is set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Settings]
+      summary: Replace the organization's sign-in logo (admin only)
+      operationId: updateLoginLogo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginLogoUpload'
+      responses:
+        '200':
+          description: Logo stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginLogoInfo'
+        '403':
+          description: Caller is not an administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Not a PNG, JPEG or WebP image, or larger than 512 KB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Settings]
+      summary: Remove the organization's sign-in logo (admin only)
+      operationId: deleteLoginLogo
+      responses:
+        '204':
+          description: Logo removed (or none was set)
+        '403':
+          description: Caller is not an administrator
           content:
             application/json:
               schema:
@@ -556,6 +636,70 @@ paths:
                     type: boolean
         '422':
           description: Cannot delete yourself or the last administrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      summary: Return server-side aggregated dashboard data for the session tenant
+      description: >-
+        Aggregates every work order of the caller's organization so the client
+        does not have to download them all. `dateFrom`, `dateTo` and `issuedBy`
+        filter the summary, monthly buckets, delivery distribution, top clients
+        and finance. Signals, attention rows and queues always cover all orders.
+        `finance` is cost-derived and returned only to administrators (`null`
+        for operators).
+      operationId: getDashboard
+      parameters:
+        - name: dateFrom
+          in: query
+          description: Inclusive lower bound on issueDate (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          description: Inclusive upper bound on issueDate (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+        - name: issuedBy
+          in: query
+          description: Exact match on the issuing user.
+          schema:
+            type: string
+        - name: companyKey
+          in: query
+          description: >-
+            Scopes only `finance.itemProfit` to orders whose company group key
+            (customerId, else the normalized client name) equals this value.
+          schema:
+            type: string
+        - name: today
+          in: query
+          description: >-
+            Client-local date (YYYY-MM-DD) used for attention signals and
+            queues. Defaults to the server's local date.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Aggregated dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardData'
+        '400':
+          description: A date parameter is not a valid YYYY-MM-DD date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or expired session
           content:
             application/json:
               schema:
@@ -898,6 +1042,549 @@ paths:
       responses:
         '204':
           description: The lock was released (or the caller did not hold it).
+  /stock:
+    get:
+      tags: [Stock]
+      summary: List articles with their stock position
+      description: >-
+        Articles only, active first then by name. Inactive articles are listed only while they hold non-zero stock.
+        `reserved` is the planned quantity of linked `input` nodes in the process graphs of open work orders (status
+        not completed, cancelled or invoiced) whose consuming steps are not yet done; `available = onHand - reserved`.
+        `low` is true when `onHand` is negative or `available` is below `minStock`. Only processes that are stock
+        tracked (created while the "Magacin" module was on) reserve stock. Requires the "Magacin" module (403 otherwise).
+      operationId: listStockLevels
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Case- and diacritic-insensitive match on article name or code.
+        - name: lowOnly
+          in: query
+          schema:
+            type: boolean
+          description: Only levels with `low = true`.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '403':
+          $ref: '#/components/responses/StockModuleDisabled'
+        '200':
+          description: A page of stock levels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockLevelList'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/movements:
+    get:
+      tags: [Stock]
+      summary: List stock movements, newest first
+      operationId: listStockMovements
+      parameters:
+        - name: catalogItemId
+          in: query
+          schema:
+            type: string
+        - name: workOrderId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '403':
+          $ref: '#/components/responses/StockModuleDisabled'
+        '200':
+          description: A page of movements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMovementList'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/receipts:
+    post:
+      tags: [Stock]
+      summary: Receive goods (prijem robe)
+      description: Any signed-in user. Posts one `receipt` movement per line, atomically.
+      operationId: postStockReceipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockReceiptInput'
+      responses:
+        '403':
+          $ref: '#/components/responses/StockModuleDisabled'
+        '201':
+          description: The movements that were posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPostingResult'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown article or service item (`Artikal nije pronađen u katalogu.`), quantity not above zero (`Količina mora biti veća od nule.`), duplicate article (`Artikal se ponavlja.`), or a line count outside 1-200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stock/counts:
+    post:
+      tags: [Stock]
+      summary: Post a stock count (popis / opening balance, admin only)
+      description: >-
+        For each line posts `countedQuantity - onHand` as an `adjustment` movement (zero differences post nothing).
+        An article that has no movements yet gets an `opening` movement instead. The whole count is atomic.
+      operationId: postStockCount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockCountInput'
+      responses:
+        '201':
+          description: The movements that were posted (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPostingResult'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned (`Modul „Magacin“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown article or service item (`Artikal nije pronađen u katalogu.`), negative counted quantity, duplicate article (`Artikal se ponavlja.`), or a line count outside 1-1000
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /process-templates:
+    get:
+      tags: [Processes]
+      summary: List the organization's process templates
+      description: >-
+        Every `/process-templates*` and `/work-orders/{id}/process*` route requires the "Procesi rada" module, which
+        needs "Magacin" too (Backoffice-controlled, off by default) and answers 403 otherwise. While it is off,
+        POST /work-orders does not auto-attach the default template. Backoffice template routes
+        (`/platform/tenants/{slug}/process-templates*`) work regardless of the flag.
+      operationId: listProcessTemplates
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '200':
+          description: Templates, default first then by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Processes]
+      summary: Create a process template (admin only)
+      description: >-
+        Per-order state (status, actualQuantity) in the graph is stripped. `isDefault: true` clears the flag on the organization's other templates; new work orders get a copy of the default.
+      operationId: createProcessTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '201':
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /process-templates/{id}:
+    get:
+      tags: [Processes]
+      summary: Get a process template
+      operationId: getProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '200':
+          description: The template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Processes]
+      summary: Replace a process template (admin only)
+      operationId: updateProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Processes]
+      summary: Delete a process template (admin only)
+      description: >-
+        Work-order processes already copied from the template are kept; their `templateId` becomes null.
+      operationId: deleteProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /work-orders/{id}/process:
+    get:
+      tags: [Processes]
+      summary: Get a work order's process
+      operationId: getWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '200':
+          description: The work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order not found, or it has no process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Processes]
+      summary: Attach a copy of a process template to a work order
+      description: >-
+        Copies the template graph with every step set to `pending`. Any signed-in user may do this once per work order. Stock is reconciled as for the PUT (a no-op for a fresh copy, since nothing is done yet). The copy is marked stock tracked only when the "Magacin" module is on. POST /work-orders auto-attaches the default template under the same rule, and only while the "Procesi rada" module is on.
+      operationId: applyProcessTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyProcessTemplateInput'
+      responses:
+        '403':
+          $ref: '#/components/responses/ProcessesModuleDisabled'
+        '201':
+          description: The new work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order or template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The work order already has a process (`Radni nalog već ima proces.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: templateId missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Processes]
+      summary: Replace a work order's process graph
+      description: >-
+        Admins may change anything. Other users may change only per-order state (status, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
+
+
+        **Automatic stock posting.** In the same transaction the server reconciles the warehouse ledger with the graph (only item nodes whose `catalogItemId` links an article). The desired net per node is `+qty` when a step that outputs a product/byproduct node is `done`, plus `-qty` when any step the node feeds (input, or a product/byproduct consumed as input) is `done`; an intermediate product produced and consumed nets out. `qty` is `actualQuantity`, else `quantity`, else 0; `pending`, `in_progress` and `skipped` count as not done. The difference to the net already posted for that work order and node is inserted as one `consumption` (negative) or `production` (positive) movement, so repeating a request posts nothing, un-doing a step reverses it and a changed `actualQuantity` posts only the delta. If a node's article changes (or the node is removed), the old article's net is reversed and the new one posted. Deleting a process or a work order does not reverse movements.
+
+        **Module gating.** Posting happens only while the "Magacin" module is on AND the process is stock tracked (created while "Magacin" was on - by apply or auto-attach; processes created while it was off never post, not even after it is switched on). While "Magacin" is off nothing is posted and article links are neither validated nor unit-filled (kept as-is). Turning it off and on again resumes tracked processes: the next save posts the difference (material really used meanwhile). Reserved quantities in GET /stock count tracked processes only. All routes here answer 403 while "Procesi rada" is off.
+
+
+        **Article links.** `catalogItemId` must reference an existing article of the organization (`Artikal nije pronađen u katalogu.`, 422). An empty `unit` is filled from the article; a differing non-empty unit (case-insensitive) is rejected (`Jedinica mora odgovarati jedinici artikla „{name}“.`, 422). Links already stored on the same node are not re-validated.
+      operationId: updateWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkOrderProcessInput'
+      responses:
+        '200':
+          description: Updated work-order process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderProcess'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Structural change by a non-admin (`Samo administrator može menjati strukturu procesa.`). Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order not found, or it has no process yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, unknown article link or unit mismatch with the linked article
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Processes]
+      summary: Remove a work order's process (admin only)
+      operationId: deleteWorkOrderProcess
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Removed
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin role required. Also returned (`Modul „Procesi rada“ nije uključen za ovu organizaciju.`) when the module is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Work order has no process
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /public/work-orders/{token}:
     parameters:
       - name: token
@@ -922,12 +1609,947 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /public/organizations/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        description: Organization login slug (case-insensitive)
+        schema:
+          type: string
+    get:
+      tags: [Auth]
+      summary: Validate an organization slug for the first sign-in step
+      description: |
+        Unauthenticated. Lets the sign-in screen confirm the organization exists
+        and show its name and logo before asking for credentials.
+      operationId: getPublicOrganization
+      security: []
+      responses:
+        '200':
+          description: The organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicOrganization'
+        '404':
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /public/organizations/{slug}/logo:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Auth]
+      summary: Return an organization's sign-in logo image
+      description: |
+        Unauthenticated. Served with `Cache-Control: no-cache` and an ETag equal
+        to the quoted `logoVersion`, plus `X-Content-Type-Options: nosniff`.
+      operationId: getPublicOrganizationLogo
+      security: []
+      responses:
+        '200':
+          description: The logo image bytes
+          content:
+            image/png: {}
+            image/jpeg: {}
+            image/webp: {}
+        '304':
+          description: Not modified (If-None-Match matched)
+        '404':
+          description: Unknown organization or no logo set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/login:
+    post:
+      tags: [Platform]
+      summary: Sign in to the Backoffice (superadmin accounts only)
+      description: |
+        Superadmins live in `platform_admins`, separate from every organization's
+        users: organization credentials never work here and Backoffice
+        credentials never work on `/auth/login`. A database with no superadmin
+        gets `admin` / `admin123321`, which must change its password first;
+        `irisctl create-platform-admin` adds more. Sets the `iris_platform_session` cookie
+        (HttpOnly, SameSite=Strict, 2 h). Failed attempts are rate limited per
+        IP, per username and globally.
+      operationId: platformLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformLoginRequest'
+      responses:
+        '200':
+          description: Login result (success false on bad credentials)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/session:
+    get:
+      tags: [Platform]
+      summary: Return the current operator session, if any
+      operationId: getPlatformSession
+      security: []
+      responses:
+        '200':
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+  /platform/auth/logout:
+    post:
+      tags: [Platform]
+      summary: End the operator session
+      operationId: platformLogout
+      security: []
+      responses:
+        '200':
+          description: Signed out
+  /platform/auth/password:
+    post:
+      tags: [Platform]
+      summary: Change the signed-in operator's password
+      description: |
+        The only action open to an account with `mustChangePassword` (such as the
+        default `admin` seeded on a database with no operators). New passwords
+        need at least 12 characters and must differ from the current one; every
+        other session of the account is signed out. Wrong current passwords are
+        rate limited like logins.
+      operationId: changePlatformPassword
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 12
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Wrong current password, or new password too weak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/metrics:
+    get:
+      tags: [Platform]
+      summary: Aggregate usage metrics across organizations (operator only)
+      description: Counts, dates and sizes only; never customer, user or work-order records.
+      operationId: getPlatformMetrics
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [7, 30, 90, 365]
+            default: 30
+      responses:
+        '200':
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformMetrics'
+        '400':
+          description: Unsupported range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session (an organization session is never accepted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/users:
+    get:
+      tags: [Platform]
+      summary: List an organization's accounts, to pick one to impersonate (operator only)
+      description: Id, username and role only.
+      operationId: getPlatformTenantUsers
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The organization and its accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenantUsers'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No organization with that slug
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/impersonate:
+    post:
+      tags: [Platform]
+      summary: Open an organization session as one of its users (operator only)
+      description: >
+        Sets an ordinary `iris_session` cookie for the chosen user (replacing any
+        organization session in this browser), valid for one hour. The session
+        reports `impersonatedBy` on `/auth/session`, is written to the
+        `impersonation_events` audit log (every change request made with it is
+        traced, see `/platform/audit`), is not counted as a login, and ends on
+        `/auth/logout` or when the superadmin signs out of the Backoffice.
+      operationId: platformImpersonate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformImpersonationRequest'
+      responses:
+        '200':
+          description: Session opened
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: iris_session (HttpOnly)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformImpersonationResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization, or the user is not in it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: No user chosen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/impersonations/{id}/actions:
+    get:
+      tags: [Platform]
+      summary: Change requests made during one impersonation, oldest first (operator only)
+      description: >
+        Every POST/PUT/PATCH/DELETE made with the impersonated session: method,
+        route pattern, path, response status and time. Request bodies are never
+        recorded; reads are not traced.
+      operationId: getPlatformImpersonationActions
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The trail
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformImpersonationAction'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such impersonation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants:
+    get:
+      tags: [Platform]
+      summary: List organizations with status and account counts (operator only)
+      operationId: getPlatformTenants
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Create an organization and its first admin (operator only)
+      description: Recorded in the activity log as `tenant.create`.
+      operationId: createPlatformTenant
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformCreateTenantInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid name, slug, username or password, or the slug is taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}:
+    patch:
+      tags: [Platform]
+      summary: Rename an organization and/or change its sign-in slug (operator only)
+      description: >
+        Recorded as `tenant.update` with the old and new values. A new slug
+        changes the `/login/<slug>` address; devices that remembered the old
+        one have to choose the organization again.
+      operationId: updatePlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformUpdateTenantInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid name or slug, or the slug is taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/suspend:
+    post:
+      tags: [Platform]
+      summary: Suspend an organization (operator only)
+      description: >
+        Ends every ordinary session of its users and refuses new sign-ins
+        (after a correct password, with a "suspended" message). Data is kept and
+        Backoffice impersonation still works. Recorded as `tenant.suspend`; a
+        repeat is a no-op.
+      operationId: suspendPlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/modules:
+    put:
+      tags: [Platform]
+      summary: Switch an organization's optional modules (operator only)
+      description: >-
+        Sets both modules ("Procesi rada" and "Magacin") of the organization. `processes: true` requires
+        `stock: true` (422 `Modul „Procesi rada“ zahteva uključen modul „Magacin“.`, nothing written). Recorded as
+        `tenant.modules` in the activity log, in the same transaction, with detail
+        `{"processes":"on|off","stock":"on|off","changed":"processes,stock"}` (new values; `changed` lists the
+        names that differ). Setting the current state is a no-op: 200 and no audit row.
+      operationId: setPlatformTenantModules
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationModules'
+      responses:
+        '200':
+          description: The organization with its modules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: '`processes` without `stock`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/reactivate:
+    post:
+      tags: [Platform]
+      summary: Reactivate a suspended organization (operator only)
+      description: Recorded as `tenant.reactivate`; a repeat is a no-op.
+      operationId: reactivatePlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/users/{id}/password:
+    post:
+      tags: [Platform]
+      summary: Set a new password for an organization user (operator only)
+      description: >
+        Signs that user out everywhere (impersonation sessions aside). Recorded
+        as `user.password_reset`; the password itself is never logged.
+      operationId: resetPlatformUserPassword
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformPasswordReset'
+      responses:
+        '200':
+          description: Password set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Password too short or too long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/audit:
+    get:
+      tags: [Platform]
+      summary: Backoffice activity log, newest first (operator only)
+      description: >
+        Every superadmin operation: organizations created, edited, suspended and
+        reactivated, passwords reset, and impersonations (with their session
+        state and change count; the changes themselves are at
+        `/platform/impersonations/{id}/actions`).
+      operationId: getPlatformAudit
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of the log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAuditLog'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/process-templates:
+    get:
+      tags: [Platform]
+      summary: List an organization's process templates (operator only)
+      operationId: listPlatformProcessTemplates
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Templates, default first then by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessTemplate'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Create a process template for an organization (operator only)
+      description: >-
+        Same validation as the organization's own route. Recorded as `process_template.create` with detail `{name}`.
+      operationId: createPlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '201':
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/process-templates/{id}:
+    put:
+      tags: [Platform]
+      summary: Replace an organization's process template (operator only)
+      description: >-
+        Recorded as `process_template.update` with detail `{name}`.
+      operationId: updatePlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessTemplateInput'
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessTemplate'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid graph, name missing or already used (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Platform]
+      summary: Delete an organization's process template (operator only)
+      description: >-
+        Recorded as `process_template.delete` with detail `{name}`. Existing work-order processes are kept.
+      operationId: deletePlatformProcessTemplate
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
       type: apiKey
       in: cookie
       name: iris_session
+    PlatformSession:
+      type: apiKey
+      in: cookie
+      name: iris_platform_session
+  responses:
+    ProcessesModuleDisabled:
+      description: >-
+        The organization has not enabled the "Procesi rada" module (Backoffice-controlled, off by default; it also
+        counts as off while "Magacin" is off). Body: `{"error":"Modul „Procesi rada“ nije uključen za ovu organizaciju."}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    StockModuleDisabled:
+      description: >-
+        The organization has not enabled the "Magacin" module (Backoffice-controlled, off by default).
+        Body: `{"error":"Modul „Magacin“ nije uključen za ovu organizaciju."}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   parameters:
     CatalogCleanupKind:
       name: kind
@@ -957,6 +2579,393 @@ components:
         type: string
         enum: [purchase, sale, both]
   schemas:
+    ProcessNode:
+      type: object
+      required: [id, kind, label, x, y]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Client-generated, unique within the graph.
+        kind:
+          type: string
+          enum: [step, input, product, byproduct]
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        x:
+          type: number
+          description: Canvas position.
+        y:
+          type: number
+        quantity:
+          type: number
+          minimum: 0
+          description: Planned quantity. Item nodes only; dropped on steps.
+        unit:
+          type: string
+          maxLength: 20
+          description: Item nodes only; dropped on steps.
+        catalogItemId:
+          type: string
+          description: >-
+            Optional link to a catalog article. Item nodes only; dropped on steps. Must reference an existing
+            article of the organization (services are rejected) on templates and work-order processes; an empty
+            `unit` is filled from the article and a differing one is rejected (422). Linked nodes move warehouse
+            stock automatically (see PUT /work-orders/{id}/process).
+        note:
+          type: string
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/ProcessStepStatus'
+        actualQuantity:
+          type: number
+          minimum: 0
+          description: Per-order state. Item nodes only; stripped from templates.
+    ProcessStepStatus:
+      type: string
+      enum: [pending, in_progress, done, skipped]
+      description: Per-order state of a step node; dropped on item nodes and stripped from templates.
+    ProcessEdge:
+      type: object
+      required: [id, source, target]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        source:
+          type: string
+          description: Id of an existing node.
+        target:
+          type: string
+          description: Id of an existing node.
+        label:
+          type: string
+          maxLength: 60
+    ProcessGraph:
+      type: object
+      description: >-
+        Directed acyclic graph of 1-200 nodes (at least one `step`) and 0-400
+        edges. Allowed connections are input to step, step to step, step to
+        product, step to byproduct, product to step and byproduct to step; edges
+        may not be self-loops or duplicate a (source, target) pair.
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ProcessNode'
+        edges:
+          type: array
+          maxItems: 400
+          items:
+            $ref: '#/components/schemas/ProcessEdge'
+    ProcessTemplate:
+      type: object
+      required: [id, name, description, isDefault, graph, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        isDefault:
+          type: boolean
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProcessTemplateInput:
+      type: object
+      required: [name, graph]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Unique per organization (case-sensitive).
+        description:
+          type: string
+        isDefault:
+          type: boolean
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+    WorkOrderProcess:
+      type: object
+      required: [workOrderId, templateId, templateName, graph, updatedAt, updatedBy]
+      properties:
+        workOrderId:
+          type: string
+        templateId:
+          type: [string, 'null']
+          description: Null once the template it was copied from is deleted.
+        templateName:
+          type: string
+          description: Template name at the time it was applied.
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+          description: Username of the last editor.
+    WorkOrderProcessInput:
+      type: object
+      required: [graph]
+      properties:
+        graph:
+          $ref: '#/components/schemas/ProcessGraph'
+    ApplyProcessTemplateInput:
+      type: object
+      required: [templateId]
+      properties:
+        templateId:
+          type: string
+    DashboardData:
+      type: object
+      required:
+        - hasOrders
+        - summary
+        - monthlyBuckets
+        - deliveryDistribution
+        - topClients
+        - finance
+        - signalCounts
+        - clientAttentionRows
+        - internalAttentionRows
+        - queueSummary
+        - operatorQueue
+      properties:
+        hasOrders:
+          type: boolean
+          description: Whether the tenant has any work order at all, ignoring filters.
+        summary:
+          $ref: '#/components/schemas/DashboardSummary'
+        monthlyBuckets:
+          type: array
+          description: Per issueDate month, chronological (filtered orders).
+          items:
+            $ref: '#/components/schemas/DashboardMonthlyBucket'
+        deliveryDistribution:
+          type: array
+          description: Per delivery method, count descending (filtered orders).
+          items:
+            $ref: '#/components/schemas/DashboardDeliveryCount'
+        topClients:
+          type: array
+          description: Top 10 clients by order count (filtered orders).
+          items:
+            $ref: '#/components/schemas/DashboardClientCount'
+        finance:
+          description: Admin-only; null for every other role.
+          oneOf:
+            - $ref: '#/components/schemas/DashboardFinance'
+            - type: 'null'
+        signalCounts:
+          $ref: '#/components/schemas/DashboardSignalCounts'
+        clientAttentionRows:
+          type: array
+          description: Rows for overdue / dueToday / dueThisWeek signals (all orders).
+          items:
+            $ref: '#/components/schemas/DashboardAttentionRow'
+        internalAttentionRows:
+          type: array
+          description: Rows for the unassigned signal (all orders).
+          items:
+            $ref: '#/components/schemas/DashboardAttentionRow'
+        queueSummary:
+          $ref: '#/components/schemas/DashboardQueueSummary'
+        operatorQueue:
+          $ref: '#/components/schemas/DashboardOperatorQueue'
+    DashboardSummary:
+      type: object
+      required: [totalOrders, statusCounts, totalRevenue]
+      properties:
+        totalOrders:
+          type: integer
+        statusCounts:
+          type: object
+          description: Every canonical status key is present (0 by default).
+          required: [new, assigned, inProgress, completed, invoiced, cancelled]
+          properties:
+            new: {type: integer}
+            assigned: {type: integer}
+            inProgress: {type: integer}
+            completed: {type: integer}
+            invoiced: {type: integer}
+            cancelled: {type: integer}
+        totalRevenue:
+          type: number
+          format: double
+          description: Sum of order `price` where it is set.
+    DashboardMonthlyBucket:
+      type: object
+      required: [month, count, revenue]
+      properties:
+        month:
+          type: string
+          example: 2026-05
+        count:
+          type: integer
+        revenue:
+          type: number
+          format: double
+    DashboardDeliveryCount:
+      type: object
+      required: [method, count]
+      properties:
+        method:
+          type: string
+          example: postExpress
+        count:
+          type: integer
+    DashboardClientCount:
+      type: object
+      required: [clientName, count]
+      properties:
+        clientName:
+          type: string
+        count:
+          type: integer
+    DashboardFinance:
+      type: object
+      required: [profitTotals, revenue, monthlyProfit, companyProfit, itemProfit]
+      properties:
+        profitTotals:
+          $ref: '#/components/schemas/DashboardProfitTotals'
+        revenue:
+          type: number
+          format: double
+          description: Line-item sale revenue (unitPrice * quantity) of filtered orders.
+        monthlyProfit:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardMonthlyProfit'
+        companyProfit:
+          type: array
+          description: All companies, profit descending.
+          items:
+            $ref: '#/components/schemas/DashboardCompanyProfit'
+        itemProfit:
+          $ref: '#/components/schemas/DashboardItemProfitBreakdown'
+    DashboardProfitTotals:
+      type: object
+      required: [service, article, total]
+      properties:
+        service: {type: number, format: double}
+        article: {type: number, format: double}
+        total: {type: number, format: double}
+    DashboardMonthlyProfit:
+      type: object
+      required: [month, service, article, total]
+      properties:
+        month: {type: string, example: 2026-05}
+        service: {type: number, format: double}
+        article: {type: number, format: double}
+        total: {type: number, format: double}
+    DashboardCompanyProfit:
+      type: object
+      required: [groupKey, customerId, name, profit, serviceProfit, articleProfit, revenue, orderCount]
+      properties:
+        groupKey: {type: string}
+        customerId: {type: [string, 'null']}
+        name: {type: string}
+        profit: {type: number, format: double}
+        serviceProfit: {type: number, format: double}
+        articleProfit: {type: number, format: double}
+        revenue: {type: number, format: double}
+        orderCount: {type: integer}
+    DashboardItemProfit:
+      type: object
+      required: [groupKey, catalogItemId, name, kind, profit, revenue, quantity]
+      properties:
+        groupKey: {type: string}
+        catalogItemId: {type: [string, 'null']}
+        name: {type: string}
+        kind:
+          type: string
+          enum: [service, goods]
+        profit: {type: number, format: double}
+        revenue: {type: number, format: double}
+        quantity: {type: number, format: double}
+    DashboardItemProfitBreakdown:
+      type: object
+      required: [services, articles]
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardItemProfit'
+        articles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardItemProfit'
+    DashboardSignalCounts:
+      type: object
+      required: [overdue, dueToday, dueThisWeek, unassigned]
+      properties:
+        overdue: {type: integer}
+        dueToday: {type: integer}
+        dueThisWeek: {type: integer}
+        unassigned: {type: integer}
+    DashboardAttentionOrder:
+      type: object
+      required: [id, orderNumber, jobDescription, status, dueDate]
+      properties:
+        id: {type: string}
+        orderNumber: {type: string}
+        jobDescription: {type: string}
+        status:
+          type: string
+          enum: [new, assigned, inProgress, completed, cancelled, invoiced]
+        dueDate:
+          type: [string, 'null']
+          format: date
+    DashboardAttentionRow:
+      type: object
+      required: [groupKey, customerId, displayName, counts, severity, orders]
+      properties:
+        groupKey: {type: string}
+        customerId: {type: [string, 'null']}
+        displayName: {type: string}
+        counts:
+          $ref: '#/components/schemas/DashboardSignalCounts'
+        severity:
+          type: number
+          format: double
+          description: Highest signal severity plus total signal count / 100.
+        orders:
+          type: array
+          description: Full list, most severe first then by order number.
+          items:
+            $ref: '#/components/schemas/DashboardAttentionOrder'
+    DashboardQueueSummary:
+      type: object
+      required: [today, overdue, unassigned]
+      properties:
+        today: {type: integer}
+        overdue: {type: integer}
+        unassigned: {type: integer}
+    DashboardOperatorQueue:
+      type: object
+      required: [assignedToMe, dueToday, overdue, inProgress, available]
+      properties:
+        assignedToMe: {type: integer}
+        dueToday: {type: integer}
+        overdue: {type: integer}
+        inProgress: {type: integer}
+        available: {type: integer}
     HealthResponse:
       type: object
       required: [status]
@@ -1002,6 +3011,11 @@ components:
         role:
           type: string
           enum: [admin, user]
+        impersonatedBy:
+          type: string
+          description: >
+            Present only on a session a Backoffice superadmin opened as this
+            user; the superadmin's username.
     CreateUserInput:
       type: object
       required: [username, password, role]
@@ -1296,10 +3310,25 @@ components:
           type: [string, 'null']
         taxGroup:
           type: [string, 'null']
+          description: >-
+            PDV type code: "DJ" (general 20% rate, fiscal label Đ; the
+            default), "E" (special 10% rate) or "A" (exempt). Empty input is
+            and "Đ" are stored as "DJ"; other legacy codes are kept and priced at 20%.
         description:
           type: [string, 'null']
         isActive:
           type: boolean
+        stockOnHand:
+          type: [number, 'null']
+          format: double
+          description: >-
+            Warehouse balance (sum of the article's stock movements). Read-only; null for services, and null for
+            every item while the organization's "Magacin" module is off.
+        minStock:
+          type: [number, 'null']
+          format: double
+          minimum: 0
+          description: Reorder threshold for articles; null when unset and for services.
         createdAt:
           type: string
           format: date-time
@@ -1399,8 +3428,13 @@ components:
       example: [quantity, unitPrice, total]
     OrganizationSettings:
       type: object
-      required: [firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions]
+      required: [firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules]
       properties:
+        modules:
+          readOnly: true
+          description: >-
+            Backoffice-controlled optional modules. Read-only: `PUT /settings` ignores it.
+          $ref: '#/components/schemas/OrganizationModules'
         firmName:
           type: string
           description: The shop's display name shown in the app branding.
@@ -1419,11 +3453,29 @@ components:
             Whether the work-order form exposes the extra shipping/handling
             fields (drives-out, wait-for-payment, packaging, labeling, fragile,
             signature, insurance). Off by default.
+    OrganizationModules:
+      type: object
+      required: [processes, stock]
+      description: >-
+        Optional per-organization modules, both off by default and switched only by Backoffice superadmins
+        (`PUT /platform/tenants/{slug}/modules`); organization admins cannot change them. `processes`
+        ("Procesi rada": process templates, work-order processes, simulator) requires `stock` ("Magacin":
+        stock ledger, receipts, counts, catalog stock). Valid combinations: both off, stock only, both on;
+        `processes` is treated as off while `stock` is off. Processes and work-order stock postings are linked:
+        a work-order process posts/validates stock only while `stock` is on AND the process was created while
+        `stock` was on (internal "stock tracked" marker, no retroactive posting). Switching stock off and on
+        again resumes tracked processes; their next save posts the difference.
+      properties:
+        processes:
+          type: boolean
+        stock:
+          type: boolean
     OrganizationSettingsUpdate:
       type: object
       description: >-
         Partial update for organization settings. Omitted fields are left
-        unchanged.
+        unchanged. A `modules` property, if sent, is ignored (only Backoffice
+        superadmins switch modules).
       properties:
         firmName:
           type: string
@@ -1465,10 +3517,21 @@ components:
           type: [string, 'null']
         taxGroup:
           type: [string, 'null']
+          description: >-
+            PDV type code: "DJ" (general 20% rate, fiscal label Đ; the
+            default), "E" (special 10% rate) or "A" (exempt). Empty input is
+            and "Đ" are stored as "DJ"; other legacy codes are kept and priced at 20%.
         description:
           type: [string, 'null']
         isActive:
           type: boolean
+        minStock:
+          type: [number, 'null']
+          format: double
+          minimum: 0
+          description: >-
+            Reorder threshold, 0 or more (admin only; operators cannot change it). Articles only: ignored for
+            services. Omitted or null clears it, like every other field of this full update.
         effectiveFrom:
           type: [string, 'null']
           format: date
@@ -1477,6 +3540,148 @@ components:
             today. Must be today or later — past dates are rejected. A future date
             schedules the new price without changing the item's displayed current
             price until that date arrives.
+    StockLevel:
+      type: object
+      required: [catalogItemId, code, name, unit, isActive, onHand, reserved, available, minStock, low, lastMovementAt]
+      properties:
+        catalogItemId:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        isActive:
+          type: boolean
+        onHand:
+          type: number
+          description: Sum of the article's movements; may be negative.
+        reserved:
+          type: number
+          description: Planned input quantity still to be consumed by open work orders.
+        available:
+          type: number
+          description: onHand minus reserved.
+        minStock:
+          type: [number, 'null']
+        low:
+          type: boolean
+          description: onHand is negative, or minStock is set and available is below it.
+        lastMovementAt:
+          type: [string, 'null']
+          format: date-time
+    StockLevelList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockLevel'
+        total:
+          type: integer
+          description: Number of matching levels before pagination.
+    StockMovementKind:
+      type: string
+      enum: [opening, receipt, consumption, production, adjustment]
+    StockMovement:
+      type: object
+      required: [id, catalogItemId, itemCode, itemName, unit, kind, quantity, workOrderId, workOrderNumber, processNodeId, documentRef, note, createdAt, createdBy]
+      properties:
+        id:
+          type: string
+        catalogItemId:
+          type: string
+        itemCode:
+          type: string
+        itemName:
+          type: string
+        unit:
+          type: string
+        kind:
+          $ref: '#/components/schemas/StockMovementKind'
+        quantity:
+          type: number
+          description: Signed; negative removes stock.
+        workOrderId:
+          type: [string, 'null']
+          description: Null for manual movements and after the work order was deleted.
+        workOrderNumber:
+          type: [string, 'null']
+        processNodeId:
+          type: [string, 'null']
+        documentRef:
+          type: [string, 'null']
+        note:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+    StockMovementList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+        total:
+          type: integer
+    StockReceiptInput:
+      type: object
+      required: [lines]
+      properties:
+        documentRef:
+          type: string
+          maxLength: 500
+          description: Supplier document number.
+        note:
+          type: string
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [catalogItemId, quantity]
+            properties:
+              catalogItemId:
+                type: string
+              quantity:
+                type: number
+                exclusiveMinimum: 0
+    StockCountInput:
+      type: object
+      required: [lines]
+      properties:
+        note:
+          type: string
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [catalogItemId, countedQuantity]
+            properties:
+              catalogItemId:
+                type: string
+              countedQuantity:
+                type: number
+                minimum: 0
+    StockPostingResult:
+      type: object
+      required: [movements]
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
     CustomerCommunication:
       type: object
       required: [publicToken, notificationEmail, emailNotificationsEnabled, signedBy, signedAt]
@@ -1833,6 +4038,348 @@ components:
           $ref: '#/components/schemas/InvoiceDraft'
         communication:
           $ref: '#/components/schemas/CustomerCommunication'
+    PlatformLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    PlatformLoginResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        admin:
+          type: object
+          properties:
+            username:
+              type: string
+            role:
+              type: string
+              enum: [superadmin]
+              description: The only Backoffice role.
+            mustChangePassword:
+              type: boolean
+              description: True until the account replaces its initial password.
+        error:
+          type: string
+    PlatformTenantUsers:
+      type: object
+      required: [tenant, users]
+      properties:
+        tenant:
+          type: object
+          required: [id, slug, name]
+          properties:
+            id:
+              type: string
+            slug:
+              type: string
+            name:
+              type: string
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+    PlatformImpersonationRequest:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+    PlatformImpersonationResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/User'
+        orgSlug:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    PlatformTenant:
+      type: object
+      required: [id, slug, name, createdAt, suspendedAt, users, admins, modules]
+      properties:
+        modules:
+          $ref: '#/components/schemas/OrganizationModules'
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+        suspendedAt:
+          type: string
+          format: date-time
+          nullable: true
+        users:
+          type: integer
+        admins:
+          type: integer
+    PlatformCreateTenantInput:
+      type: object
+      required: [name, slug, adminUsername, adminPassword]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          minLength: 2
+          maxLength: 64
+        adminUsername:
+          type: string
+        adminPassword:
+          type: string
+          minLength: 6
+    PlatformUpdateTenantInput:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          minLength: 2
+          maxLength: 64
+    PlatformPasswordReset:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 6
+    PlatformAuditEvent:
+      type: object
+      required: [id, at, adminUsername, action, tenantSlug, tenantName, ip]
+      properties:
+        id:
+          type: integer
+          format: int64
+        at:
+          type: string
+          format: date-time
+        adminUsername:
+          type: string
+        action:
+          type: string
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
+        tenantSlug:
+          type: string
+          description: As it was at the time.
+        tenantName:
+          type: string
+          description: As it was at the time.
+        targetUsername:
+          type: string
+        detail:
+          type: object
+          additionalProperties:
+            type: string
+          description: For tenant.update, fromName/toName and fromSlug/toSlug of what changed.
+        ip:
+          type: string
+        impersonation:
+          type: object
+          required: [id, expiresAt, endedAt, actionCount]
+          properties:
+            id:
+              type: integer
+              format: int64
+            expiresAt:
+              type: string
+              format: date-time
+            endedAt:
+              type: string
+              format: date-time
+              nullable: true
+            actionCount:
+              type: integer
+    PlatformAuditLog:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformAuditEvent'
+        total:
+          type: integer
+    PlatformImpersonationAction:
+      type: object
+      required: [at, method, route, path, status]
+      properties:
+        at:
+          type: string
+          format: date-time
+        method:
+          type: string
+          enum: [POST, PUT, PATCH, DELETE]
+        route:
+          type: string
+          example: /work-orders/{id}
+        path:
+          type: string
+          example: /work-orders/wo-123
+        status:
+          type: integer
+    PlatformMetrics:
+      type: object
+      required: [generatedAt, rangeDays, rangeStart, totals, system, tenants, daily]
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        rangeDays:
+          type: integer
+          enum: [7, 30, 90, 365]
+        rangeStart:
+          type: string
+          format: date
+        totals:
+          type: object
+          properties:
+            tenants:
+              type: integer
+            users:
+              type: integer
+            customers:
+              type: integer
+            catalogItems:
+              type: integer
+            workOrders:
+              type: integer
+            workOrdersInRange:
+              type: integer
+            openWorkOrders:
+              type: integer
+            loginsInRange:
+              type: integer
+            activeUsersInRange:
+              type: integer
+            activeSessions:
+              type: integer
+            databaseBytes:
+              type: integer
+        system:
+          type: object
+          properties:
+            release:
+              type: string
+            goVersion:
+              type: string
+            startedAt:
+              type: string
+              format: date-time
+            uptimeSeconds:
+              type: integer
+            goroutines:
+              type: integer
+            heapBytes:
+              type: integer
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformTenantMetrics'
+        daily:
+          type: array
+          description: One point per day of the range, zero-filled for every organization.
+          items:
+            type: object
+            required: [date, workOrders, logins]
+            properties:
+              date:
+                type: string
+                format: date
+              workOrders:
+                type: object
+                description: Work orders created that day, keyed by organization slug.
+                additionalProperties:
+                  type: integer
+              logins:
+                type: object
+                description: Sign-ins that day, keyed by organization slug.
+                additionalProperties:
+                  type: integer
+    PlatformTenantMetrics:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+        users:
+          type: integer
+        admins:
+          type: integer
+        customers:
+          type: integer
+        catalogItems:
+          type: integer
+        workOrders:
+          type: integer
+        workOrdersInRange:
+          type: integer
+        openWorkOrders:
+          type: integer
+        loginsInRange:
+          type: integer
+        activeUsersInRange:
+          type: integer
+        activeSessions:
+          type: integer
+        statusCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        lastWorkOrderAt:
+          type: [string, 'null']
+        lastLoginAt:
+          type: [string, 'null']
+        hasLoginLogo:
+          type: boolean
+    PublicOrganization:
+      type: object
+      required: [slug, name, logoVersion]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        logoVersion:
+          type: [string, 'null']
+          description: Content hash of the sign-in logo; null when none is set.
+    LoginLogoUpload:
+      type: object
+      required: [contentType, data]
+      properties:
+        contentType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        data:
+          type: string
+          description: Base64 image bytes (a full data URL is also accepted). Max 512 KB decoded; the server sniffs the actual type.
+    LoginLogoInfo:
+      type: object
+      required: [logoVersion]
+      properties:
+        logoVersion:
+          type: string
     PublicWorkOrderStatus:
       type: object
       required:

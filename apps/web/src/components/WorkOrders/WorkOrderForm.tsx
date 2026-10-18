@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useForm,
@@ -9,7 +9,7 @@ import {
   type UseFormWatch,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Eye, EyeOff, Loader2, MapPin, Package, Pencil, Plus, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Eye, EyeOff, ListPlus, Loader2, MapPin, Package, Pencil, Plus, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,9 +36,21 @@ import {
   type WorkOrderFormValues,
 } from "@/lib/work-orders/validation";
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
-import { formatActionError, slugId } from "@/lib/customers";
+import {
+  formatActionError,
+  slugId,
+  validateIdentifierFormat,
+} from "@/lib/customers";
 import { AsyncCombobox } from "@/components/WorkOrders/AsyncCombobox";
 import { CatalogPickerDialog } from "@/components/WorkOrders/CatalogPickerDialog";
+import {
+  TextImportDialog,
+  type TextImportLine,
+} from "@/components/WorkOrders/TextImportDialog";
+import {
+  looksLikeItemList,
+  parseLineItemsFromText,
+} from "@/shared/utils/description-items";
 import type { ComboboxItem } from "@/components/WorkOrders/SearchableCombobox";
 import {
   WORK_ORDER_SELECT_NONE_VALUE,
@@ -48,6 +60,12 @@ import {
   formatWorkOrderPrice,
   getLocalIsoDate,
 } from "@/shared/utils/work-orders";
+import {
+  addVat,
+  billingDocumentIncludesVat,
+  repriceForBillingDocument,
+  vatRateForTaxGroup,
+} from "@/shared/utils/vat";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -64,6 +82,11 @@ interface WorkOrderFormProps {
    * doesn't lose the work being entered. Omitted for the edit form.
    */
   onValuesChange?: (values: WorkOrderFormValues) => void;
+  /**
+   * Reports whether the operator has changed anything since the form opened.
+   * Pages feed this into the unsaved-changes guard. Always false when read-only.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
   /**
    * When true every field and button is disabled (via a disabled fieldset), for
    * showing a work order another operator is currently editing. Defaults to false.
@@ -94,11 +117,11 @@ function FormSection({
     >
       <div
         data-tour={tourId ? `${tourId}-heading` : undefined}
-        className="flex items-baseline gap-3 border-b border-[color:var(--iris-border-soft)] px-6 py-3.5"
+        className="flex items-baseline gap-3 border-b border-[color:var(--iris-border-soft)] px-4 py-3.5 sm:px-6"
       >
         <span className="text-[13px] font-medium text-foreground">{title}</span>
       </div>
-      <div className="px-6 py-6">{children}</div>
+      <div className="px-4 py-5 sm:px-6 sm:py-6">{children}</div>
     </section>
   );
 }
@@ -253,9 +276,12 @@ function createInvoiceLineItem(
 }
 
 /** Builds a work-order line item from a catalog selection, prefilling the
- * description, unit and price and remembering the catalog link. */
+ * description, unit and price and remembering the catalog link. Catalog sale
+ * prices are net; on an otkup order an article (roba) starts at the gross
+ * price, at the item's own PDV rate. Services keep their catalog price. */
 function createInvoiceLineItemFromCatalog(
   item: CatalogItem,
+  billingDocumentType: BillingDocumentType | null,
 ): InvoiceLineItemFormValue {
   const kind: InvoiceLineItemKind = item.kind === "article" ? "goods" : "service";
   return {
@@ -264,7 +290,9 @@ function createInvoiceLineItemFromCatalog(
     description: item.name,
     quantity: 1,
     unit: normalizeInvoiceUnit(kind, item.unit),
-    unitPrice: item.salePrice ?? 0,
+    unitPrice: kind === "goods" && billingDocumentIncludesVat(billingDocumentType)
+      ? addVat(item.salePrice ?? 0, vatRateForTaxGroup(item.taxGroup))
+      : (item.salePrice ?? 0),
     // Catalog cost is captured server-side at save time from the item's history.
     unitCost: null,
     catalogItemId: item.id,
@@ -425,6 +453,7 @@ export function WorkOrderForm({
   onSubmit,
   onCancel,
   onValuesChange,
+  onDirtyChange,
   readOnly = false,
   previewOrderNumber,
 }: WorkOrderFormProps): React.JSX.Element {
@@ -532,11 +561,18 @@ export function WorkOrderForm({
     watch,
     setValue,
     getValues,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<WorkOrderFormValues>({
     resolver: zodResolver(workOrderFormSchema),
     defaultValues,
   });
+
+  // Report dirtiness to the page. The programmatic syncs below (price total,
+  // default location) deliberately do not mark the form dirty, so a freshly
+  // loaded form stays clean until the operator actually edits something.
+  useEffect(() => {
+    onDirtyChange?.(isDirty && !readOnly);
+  }, [isDirty, readOnly, onDirtyChange]);
 
   // Mirror the live form values out to the caller so the create page can cache an
   // in-progress draft. Emit once on mount (so a draft exists before any edit) and
@@ -570,6 +606,7 @@ export function WorkOrderForm({
   const selectedCustomerId = watch("customerId");
   const selectedLocationId = watch("locationId");
   const shippingAddress = watch("shipping.shippingAddress");
+  const billingDocumentTypeValue = watch("billingDocumentType");
   // useWatch subscribes to the control store directly (not via a mounted input),
   // so the derived total stays correct even when a line's qty/price inputs are
   // unmounted because the row is collapsed to read-only.
@@ -602,7 +639,7 @@ export function WorkOrderForm({
     [invoiceLineItems],
   );
   useEffect(() => {
-    setValue("price", lineItemsTotal, { shouldValidate: true, shouldDirty: true });
+    setValue("price", lineItemsTotal, { shouldValidate: true });
   }, [lineItemsTotal, setValue]);
   // Locations are lazy-loaded for the selected customer only. The tenant can
   // have thousands of locations, so pulling the whole list up front made this
@@ -748,7 +785,7 @@ export function WorkOrderForm({
 
     const firstLocation = filteredLocations[0];
     if (firstLocation) {
-      setValue("locationId", firstLocation.id, { shouldDirty: true });
+      setValue("locationId", firstLocation.id);
     }
   }, [
     filteredLocations,
@@ -762,13 +799,14 @@ export function WorkOrderForm({
     if (!item) {
       // "Novi klijent" — detach from the registry, keep any typed client name.
       setSelectedCustomer(null);
-      setValue("customerId", null);
+      setValue("customerId", null, { shouldDirty: true });
       return;
     }
     const customer = item.data as Customer;
     setSelectedCustomer(customer);
-    setValue("customerId", customer.id);
-    setValue("clientName", customer.name);
+    // A user-driven pick, so it counts as an edit for the unsaved-changes guard.
+    setValue("customerId", customer.id, { shouldDirty: true });
+    setValue("clientName", customer.name, { shouldDirty: true });
     // Default the contact to the firm's first contact person (falling back to
     // the legacy single field), and the notification email to its first email.
     const firstContact = customer.contacts[0];
@@ -848,6 +886,13 @@ export function WorkOrderForm({
     if (!customerDraft) return;
     const name = customerDraft.name.trim();
     if (!name) return;
+    // The API rejects a malformed PIB/MB with a 422; catching it here keeps the
+    // operator in the dialog with the reason instead of a failed save.
+    const identifierError = validateIdentifierFormat(customerDraft.pib, customerDraft.mb);
+    if (identifierError) {
+      toast.error(identifierError);
+      return;
+    }
     setSavingCustomer(true);
     try {
       const contact = customerDraft.contact.trim();
@@ -890,6 +935,11 @@ export function WorkOrderForm({
     if (!customerEdit || !selectedCustomer) return;
     const name = customerEdit.name.trim();
     if (!name) return;
+    const identifierError = validateIdentifierFormat(customerEdit.pib, customerEdit.mb);
+    if (identifierError) {
+      toast.error(identifierError);
+      return;
+    }
     setSavingCustomerEdit(true);
     try {
       const contact = customerEdit.contact.trim();
@@ -941,8 +991,65 @@ export function WorkOrderForm({
     });
   };
 
+  // PDV rate per catalog item on this order, so switching to/from otkup can
+  // re-price each article line at its own rate (services are never re-priced). Filled when a line is picked; lines
+  // loaded from a saved order are looked up on first use.
+  const vatRateByCatalogItemId = useRef(new Map<string, number>());
+  const resolveVatRate = async (catalogItemId: string): Promise<number> => {
+    const known = vatRateByCatalogItemId.current.get(catalogItemId);
+    if (known !== undefined) return known;
+    let rate = vatRateForTaxGroup(null);
+    try {
+      const item = await window.api.getCatalogItemById(catalogItemId);
+      rate = vatRateForTaxGroup(item?.taxGroup);
+    } catch {
+      // Unreachable item: fall back to the general rate.
+    }
+    vatRateByCatalogItemId.current.set(catalogItemId, rate);
+    return rate;
+  };
+  const repriceCatalogLines = async (
+    from: BillingDocumentType | null,
+    to: BillingDocumentType | null,
+  ): Promise<void> => {
+    if (billingDocumentIncludesVat(from) === billingDocumentIncludesVat(to)) return;
+    const lines = getValues("invoiceDraft.lineItems") ?? [];
+    const rates = await Promise.all(
+      lines.map((line) =>
+        line?.catalogItemId && line.kind === "goods"
+          ? resolveVatRate(line.catalogItemId)
+          : null,
+      ),
+    );
+    // Re-read after the lookups: lines may have been edited in the meantime.
+    const current = getValues("invoiceDraft.lineItems") ?? [];
+    current.forEach((line, index) => {
+      const rate = rates[index];
+      if (rate === null || rate === undefined || line?.id !== lines[index]?.id) return;
+      const repriced = repriceForBillingDocument(
+        Number(line.unitPrice) || 0,
+        rate,
+        from,
+        to,
+      );
+      if (repriced !== line.unitPrice) {
+        setValue(`invoiceDraft.lineItems.${index}.unitPrice`, repriced, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+    });
+  };
+
   const handleAddCatalogLineItem = (catalogItem: CatalogItem): void => {
-    const line = createInvoiceLineItemFromCatalog(catalogItem);
+    vatRateByCatalogItemId.current.set(
+      catalogItem.id,
+      vatRateForTaxGroup(catalogItem.taxGroup),
+    );
+    const line = createInvoiceLineItemFromCatalog(
+      catalogItem,
+      getValues("billingDocumentType"),
+    );
     appendInvoiceLineItem(line);
     // Catalog lines render locked, but every copy of one item has to be told
     // apart on the printed nalog ("BANER 0,5 M2" vs "BANER 6 M2"), so a
@@ -1010,6 +1117,34 @@ export function WorkOrderForm({
     appendInvoiceLineItem(createInvoiceLineItem(kind));
   };
 
+  // Text the "import from text" dialog opens with; null keeps it closed.
+  const [textImportSource, setTextImportSource] = useState<string | null>(null);
+  const handleImportTextLines = (lines: TextImportLine[]): void => {
+    appendInvoiceLineItem(
+      lines.map((line) => ({
+        ...createInvoiceLineItem(line.kind),
+        description: line.description,
+        quantity: line.quantity,
+        unit: line.unit,
+        unitPrice: line.unitPrice,
+      })),
+    );
+  };
+  // Nudge operators who typed a product list into the opis posla to enter it
+  // as stavke instead, until the order has at least as many lines as the list.
+  const watchedJobDescription = watch("jobDescription");
+  const descriptionListLength = useMemo(
+    () =>
+      looksLikeItemList(watchedJobDescription)
+        ? parseLineItemsFromText(watchedJobDescription).length
+        : 0,
+    [watchedJobDescription],
+  );
+  const showDescriptionListHint =
+    !readOnly &&
+    descriptionListLength > 0 &&
+    invoiceLineItems.length < descriptionListLength;
+
   // Operator selects share this renderer. They pick from registered operators
   // but keep showing an off-registry value already stored on the order (e.g. a
   // legacy free-typed name) via a read-only "custom" fallback option.
@@ -1071,7 +1206,9 @@ export function WorkOrderForm({
   return (
     <form
       onSubmit={handleSubmit(handleFormSubmit, handleInvalidSubmit)}
-      className={`grid gap-0 ${
+      // grid-cols-[minmax(0,1fr)]: on phones the implicit column would size to
+      // its widest child and push every section past the screen edge.
+      className={`grid grid-cols-[minmax(0,1fr)] gap-0 ${
         showPreview
           ? isAdmin
             ? "xl:grid-cols-[minmax(0,1fr)_460px]"
@@ -1084,7 +1221,7 @@ export function WorkOrderForm({
       <fieldset disabled={readOnly} className="contents">
       <div className={showPreview ? (isAdmin ? "xl:pr-10" : "lg:pr-10") : ""}>
         {isEdit && initialData && (
-          <div className="mb-8 flex flex-wrap gap-x-10 gap-y-4 border border-[color:var(--iris-border-soft)] bg-card px-6 py-4 text-[12px]">
+          <div className="mb-6 flex flex-wrap gap-x-10 gap-y-4 border border-[color:var(--iris-border-soft)] bg-card px-4 py-4 text-[12px] sm:mb-8 sm:px-6">
             <div>
               <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
                 Broj naloga
@@ -1116,7 +1253,7 @@ export function WorkOrderForm({
           title={t("workOrders.form.sectionClient")}
           tourId="work-order-client"
         >
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <FieldShell
               id="customerId"
               label={t("workOrders.form.clientRegistry")}
@@ -1546,11 +1683,22 @@ export function WorkOrderForm({
                     <Plus className="h-3.5 w-3.5" />
                     {t("workOrders.form.specialGoods")}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextImportSource("")}
+                    className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+                  >
+                    <ListPlus className="h-3.5 w-3.5" />
+                    {t("workOrders.form.textImportButton")}
+                  </button>
                 </div>
               </div>
 
               <p className="mb-4 text-[11px] text-[color:var(--iris-ink-mute)]">
                 {t("workOrders.form.catalogHint")}
+                {billingDocumentIncludesVat(billingDocumentTypeValue) && (
+                  <> {t("workOrders.form.catalogVatHint")}</>
+                )}
               </p>
 
               <CatalogPickerDialog
@@ -1561,6 +1709,15 @@ export function WorkOrderForm({
                 }}
                 onSelect={handleAddCatalogLineItem}
                 usedIds={usedCatalogItemIds}
+              />
+
+              <TextImportDialog
+                open={textImportSource !== null}
+                onOpenChange={(next) => {
+                  if (!next) setTextImportSource(null);
+                }}
+                initialText={textImportSource ?? ""}
+                onImport={handleImportTextLines}
               />
 
               {invoiceLineItemFields.length === 0 ? (
@@ -1635,8 +1792,10 @@ export function WorkOrderForm({
                           style={{ backgroundColor: kindColor }}
                         />
                         <div className="flex flex-col gap-3 py-3 pr-3 pl-4">
-                          {/* Header row: kind pill/select · description · edit · remove. */}
-                          <div className="flex items-center gap-2.5">
+                          {/* Header row: kind pill/select · description · edit · remove.
+                              On phones the description drops to its own full-width
+                              row so the pills don't squeeze it to a few letters. */}
+                          <div className="flex flex-wrap items-center gap-2.5">
                             {isEditingLine ? (
                               <Controller
                                 name={`invoiceDraft.lineItems.${index}.kind` as const}
@@ -1712,13 +1871,13 @@ export function WorkOrderForm({
                                 id={`invoiceDraft.lineItems.${index}.description`}
                                 aria-label={t("workOrders.form.colDescription")}
                                 placeholder={t("workOrders.form.colDescription")}
-                                className="min-w-0 flex-1 border-0 border-b border-transparent bg-transparent py-1 text-[13px] font-medium text-foreground outline-none placeholder:font-normal placeholder:text-[color:var(--iris-ink-faint)] focus:border-border"
+                                className="min-w-0 flex-1 border-0 border-b border-transparent bg-transparent py-1 text-[13px] font-medium max-sm:order-last max-sm:basis-full text-foreground outline-none placeholder:font-normal placeholder:text-[color:var(--iris-ink-faint)] focus:border-border"
                                 {...register(
                                   `invoiceDraft.lineItems.${index}.description` as const,
                                 )}
                               />
                             ) : (
-                              <span className="min-w-0 flex-1 truncate py-1 text-[13px] font-medium text-foreground">
+                              <span className="min-w-0 flex-1 py-1 text-[13px] font-medium text-foreground max-sm:order-last max-sm:basis-full sm:truncate">
                                 {invoiceLineItems[index]?.description || (
                                   <span className="font-normal text-[color:var(--iris-ink-faint)]">
                                     {t("workOrders.form.colDescription")}
@@ -1726,6 +1885,7 @@ export function WorkOrderForm({
                                 )}
                               </span>
                             )}
+                            <span aria-hidden="true" className="flex-1 sm:hidden" />
                             {isCatalogLine && (
                               <button
                                 type="button"
@@ -1872,11 +2032,12 @@ export function WorkOrderForm({
 
                             {isAdmin &&
                               // A catalog line's cost is authoritative only when
-                              // the catalog has one on record (unitCost set); that
-                              // stays read-only. When it is missing (the "—" case)
-                              // the admin can fill it in, same as an ad-hoc line.
+                              // the catalog has a real (positive) one on record;
+                              // that stays read-only. When it is missing ("—") or
+                              // zero (never entered), the admin can fill it in,
+                              // same as an ad-hoc line.
                               (isCatalogLine &&
-                              invoiceLineItems[index]?.unitCost != null ? (
+                              (Number(invoiceLineItems[index]?.unitCost) || 0) > 0 ? (
                                 <LineField
                                   htmlFor={`invoiceDraft.lineItems.${index}.unitCost`}
                                   label={t("workOrders.form.colCost")}
@@ -1978,15 +2139,33 @@ export function WorkOrderForm({
               error={errors.jobDescription?.message}
               full
             >
+              {/* Grows with the text (field-sizing where supported, a
+                  line-count fallback elsewhere), so a typed list stays readable. */}
               <textarea
                 id="jobDescription"
-                rows={2}
-                className={`${underlineInput} resize-none`}
+                rows={Math.min(
+                  10,
+                  Math.max(2, (watchedJobDescription ?? "").split("\n").length),
+                )}
+                className={`${underlineInput} max-h-80 resize-none [field-sizing:content]`}
                 {...register("jobDescription")}
               />
+              {showDescriptionListHint && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-l-2 border-[color:var(--iris-accent)] pl-2 text-[11px] text-[color:var(--iris-ink-soft)]">
+                  <span>{t("workOrders.form.descriptionLooksLikeList")}</span>
+                  <button
+                    type="button"
+                    onClick={() => setTextImportSource(watchedJobDescription ?? "")}
+                    className="iris-focusable inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                  >
+                    <ListPlus className="h-3.5 w-3.5" />
+                    {t("workOrders.form.descriptionToItems")}
+                  </button>
+                </div>
+              )}
             </FieldShell>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               {/* Issuer and executor were consolidated into one operator field
                   (the shop treats them as the same person); its value is mirrored
                   onto issuedBy at submit time. */}
@@ -2061,7 +2240,7 @@ export function WorkOrderForm({
         )}
 
         <FormSection title={t("workOrders.form.sectionDocument")}>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {/* Tip dokumenta: faktura / otkup / profaktura out of the box, plus
                 any type the shop added to the `billingDocumentType` managed
                 enum. Always shown — every role fills it in, and it is the box
@@ -2078,6 +2257,10 @@ export function WorkOrderForm({
                         v === WORK_ORDER_SELECT_NONE_VALUE
                           ? null
                           : (v as BillingDocumentType);
+                      // Switching to/from otkup moves catalog lines between net
+                      // and gross (PDV) prices. Ad-hoc lines are priced by hand
+                      // and left as typed.
+                      void repriceCatalogLines(field.value, nextValue);
                       field.onChange(nextValue);
                     }}
                   >
@@ -2300,7 +2483,7 @@ export function WorkOrderForm({
             had a NAPOMENA box, so the shop needs somewhere to fill it in. The
             Interna beleška field stays removed. */}
         <FormSection title={t("workOrders.form.sectionFinanceNotes")}>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <FieldShell
               id="price"
               label={t("workOrders.form.price")}
@@ -2338,7 +2521,7 @@ export function WorkOrderForm({
         </FormSection>
       </div>
 
-      <aside className="bg-card p-8 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-border">
+      <aside className="bg-card p-4 sm:p-8 xl:sticky xl:top-0 xl:self-start xl:border-l xl:border-border">
         {/* The PDF preview is a wide document render, so it only shows from xl
             up; between lg and xl the narrower text summary stands in. Both roles
             get the preview — the API strips money from an operator's render.
@@ -2433,7 +2616,7 @@ function SummaryPanel({ watch, isEdit, isAdmin }: SummaryPanelProps): React.JSX.
   const issueDate = watch("issueDate");
   const dueDate = watch("dueDate");
 
-  // Operators see only the essentials; admins get the full back-office summary.
+  // Operators see only the essentials; admins get the full Backoffice summary.
   const rows: Array<[string, string]> = isAdmin
     ? [
         [t("workOrders.summary.client"), clientName || "-"],

@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { useTranslation } from "react-i18next";
 import type { DashboardSummary, WorkOrderStatus } from "@/types/work-order";
+import { describeSeries } from "./utils";
 import {
   getWorkOrderStatusLabel,
   WORK_ORDER_STATUS_ORDER,
@@ -45,11 +46,18 @@ export function StatusDistributionChart({
       </h2>
       {!hasData ? (
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          Nema podataka za prikaz.
+          {t("dashboard.charts.noData")}
         </p>
       ) : (
+        <div
+          role="img"
+          aria-label={t("dashboard.charts.aria", {
+            title: t("dashboard.charts.statusDistribution"),
+            data: describeSeries(data.map((d) => ({ label: d.name, value: d.value }))),
+          })}
+        >
         <ResponsiveContainer width="100%" height={220}>
-          <PieChart>
+          <PieChart accessibilityLayer={false}>
             <Pie
               data={data}
               cx="50%"
@@ -69,6 +77,7 @@ export function StatusDistributionChart({
             />
           </PieChart>
         </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

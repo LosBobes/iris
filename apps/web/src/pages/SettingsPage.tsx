@@ -1,16 +1,18 @@
 import { Check, Languages, Palette, Type } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppShell } from "@/components/layout/AppShell";
 import { cn } from "@/lib/utils";
-import { SUPPORTED_LANGUAGES } from "@/i18n";
+import { SUPPORTED_LANGUAGES, ensureLanguageBundle } from "@/i18n";
 import { useFontScale } from "@/hooks/useFontScale";
 import { FONT_SCALE_OPTIONS } from "@/lib/font-scale";
 import { useTheme } from "@/hooks/useTheme";
 import { THEME_OPTIONS } from "@/lib/theme";
 import { useAuth } from "@/hooks/useAuth";
+import { InstallAppSettings } from "@/components/settings/InstallAppSettings";
+import { LoginLogoSettings } from "@/components/settings/LoginLogoSettings";
 import { EnumValuesSettings } from "@/components/settings/EnumValuesSettings";
 import { ListDensitySettings } from "@/components/settings/ListDensitySettings";
 import { OrganizationNameSettings } from "@/components/settings/OrganizationNameSettings";
+import { ProcessTemplatesSettings } from "@/components/settings/ProcessTemplatesSettings";
 import { PdfSectionsSettings } from "@/components/settings/PdfSectionsSettings";
 import { PrintItemColumnsSettings } from "@/components/settings/PrintItemColumnsSettings";
 import { BillingDefaultsSettings } from "@/components/settings/BillingDefaultsSettings";
@@ -31,12 +33,12 @@ export function SettingsPage(): React.JSX.Element {
   const { scale, setScale } = useFontScale();
   const { theme, setTheme } = useTheme();
   const { currentUser } = useAuth();
-  const { firmName } = useOrganization();
+  const { firmName, modules } = useOrganization();
   const isAdmin = currentUser.role === "admin";
   const currentLanguage = i18n.resolvedLanguage === "en" ? "en" : "sr";
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
@@ -52,6 +54,8 @@ export function SettingsPage(): React.JSX.Element {
 
         <div className="space-y-8 px-5 pb-10 sm:px-8 lg:px-10">
           {isAdmin && <OrganizationNameSettings />}
+
+          {isAdmin && <LoginLogoSettings />}
 
           <section className="max-w-2xl border border-border bg-card">
             <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
@@ -79,7 +83,14 @@ export function SettingsPage(): React.JSX.Element {
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    onClick={() => void i18n.changeLanguage(lng)}
+                    onClick={() => {
+                      // Load the English bundle (code-split, see src/i18n)
+                      // before switching so the UI never flashes fallback
+                      // Serbian text while it loads.
+                      void ensureLanguageBundle(lng).then(() =>
+                        i18n.changeLanguage(lng),
+                      );
+                    }}
                     className={cn(
                       "iris-focusable iris-press flex items-center justify-between gap-3 rounded-sm border px-4 py-3 text-left transition-all duration-200",
                       selected
@@ -240,6 +251,8 @@ export function SettingsPage(): React.JSX.Element {
 
           <ListDensitySettings />
 
+          <InstallAppSettings />
+
           {isAdmin && <BillingDefaultsSettings />}
 
           {isAdmin && <PriorityDefaultsSettings />}
@@ -251,9 +264,11 @@ export function SettingsPage(): React.JSX.Element {
           {isAdmin && <PrintItemColumnsSettings />}
 
           {isAdmin && <EnumValuesSettings />}
+
+          {isAdmin && modules.processes && <ProcessTemplatesSettings />}
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 

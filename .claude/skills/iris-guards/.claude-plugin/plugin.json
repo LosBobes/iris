@@ -1,0 +1,8 @@
+{
+  "name": "iris-guards",
+  "version": "0.1.0",
+  "description": "Iris repo guards: contract-drift warnings, a pre-push check gate, and a production-command guard.",
+  "author": {
+    "name": "Iris maintainers"
+  }
+}

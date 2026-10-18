@@ -10,6 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import type { DeliveryMethod } from "@/types/work-order";
 import type { DeliveryCount } from "@/lib/dashboard/aggregations";
+import { describeSeries } from "./utils";
 import { getWorkOrderDeliveryLabel } from "@/shared/utils/work-orders";
 
 interface DeliveryMethodChartProps {
@@ -32,11 +33,19 @@ export function DeliveryMethodChart({
       </h2>
       {data.length === 0 ? (
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          Nema podataka za prikaz.
+          {t("dashboard.charts.noData")}
         </p>
       ) : (
+        <div
+          role="img"
+          aria-label={t("dashboard.charts.aria", {
+            title: t("dashboard.charts.deliveryMethod"),
+            data: describeSeries(data.map((d) => ({ label: d.label, value: d.count }))),
+          })}
+        >
         <ResponsiveContainer width="100%" height={220}>
           <BarChart
+            accessibilityLayer={false}
             data={data}
             layout="vertical"
             margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
@@ -72,6 +81,7 @@ export function DeliveryMethodChart({
             <Bar dataKey="count" fill="#f59e0b" radius={[0, 3, 3, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

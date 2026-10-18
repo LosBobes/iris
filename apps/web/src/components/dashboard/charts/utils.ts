@@ -1,17 +1,5 @@
-const SR_MONTH_NAMES = [
-  'jan',
-  'feb',
-  'mar',
-  'apr',
-  'maj',
-  'jun',
-  'jul',
-  'avg',
-  'sep',
-  'okt',
-  'nov',
-  'dec',
-] as const
+import i18n from '@/i18n'
+import { chartLocale } from '@/lib/dashboard/format'
 
 export function getLast12Months(): string[] {
   const months: string[] = []
@@ -56,11 +44,20 @@ export function formatRevenueAxisTick(value: number): string {
   return `${Math.round(value / 1000)}k`
 }
 
+/** Short month label in the active language, e.g. "jan '25" / "Jan '25". */
 export function formatMonthLabel(yyyyMM: string): string {
   const [year, month] = yyyyMM.split('-')
-  return `${SR_MONTH_NAMES[parseInt(month) - 1]} '${year.slice(2)}`
+  const key = `dashboard.charts.months.m${month.padStart(2, '0')}`
+  return `${i18n.t(key)} '${year.slice(2)}`
 }
 
 export function formatRSD(value: number): string {
-  return `${value.toLocaleString('sr-RS')} RSD`
+  return `${value.toLocaleString(chartLocale())} RSD`
+}
+
+/** Compact "label: value, ..." summary used for chart accessible names. */
+export function describeSeries(
+  points: { label: string; value: string | number }[],
+): string {
+  return points.map(({ label, value }) => `${label}: ${value}`).join(', ')
 }

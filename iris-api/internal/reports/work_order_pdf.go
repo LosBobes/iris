@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
@@ -93,10 +94,10 @@ func orderPrintItemColumns(
 }
 
 type WorkOrderPrintData struct {
-	FirmName         string
-	OrderNumber      string
-	ClientName       string
-	ClientAddress    string
+	FirmName      string
+	OrderNumber   string
+	ClientName    string
+	ClientAddress string
 	// ClientPib and ClientMb are the client's firm identifiers (PIB and matični
 	// broj), printed under the address in the KLIJENT box. Empty when the order
 	// has no registry client or the client has not filled them in.
@@ -104,6 +105,9 @@ type WorkOrderPrintData struct {
 	ClientMb         string
 	IssueDate        string
 	DescriptionLines []string
+	// DescriptionColumns is how many columns the opis posla is set in (1 for a
+	// short description, more for a long product list).
+	DescriptionColumns int
 	// ItemHeaders and ItemLines are the "stavke" table, already arranged in the
 	// shop's configured line-item column order.
 	ItemHeaders     []string
@@ -366,8 +370,9 @@ func jobDetailsHasContent(details *domain.JobDetails) bool {
 // buildPrintDescriptionLines returns the "opis posla" (job description) lines
 // only: the structured job details when present, otherwise the free-text
 // description. Line items (stavke) are produced separately by
-// buildPrintItemLines so the two render in distinct panels. Falls back to a
-// placeholder when there is nothing to show.
+// buildPrintItemLines so the two render in distinct panels. A description
+// typed as a product list or across several lines prints one entry per line.
+// Falls back to a placeholder when there is nothing to show.
 func buildPrintDescriptionLines(order domain.WorkOrder) []string {
 	var detailLines []string
 
@@ -395,8 +400,14 @@ func buildPrintDescriptionLines(order domain.WorkOrder) []string {
 	if len(detailLines) > 0 {
 		return detailLines
 	}
-	if desc := uppercaseString(order.JobDescription); desc != "" {
-		return []string{desc}
+	var descLines []string
+	for _, entry := range splitDescriptionEntries(order.JobDescription) {
+		if line := uppercaseString(entry); line != "" {
+			descLines = append(descLines, line)
+		}
+	}
+	if len(descLines) > 0 {
+		return descLines
 	}
 	return []string{"OPIS POSLA NIJE UNET"}
 }
@@ -660,6 +671,22 @@ const htmlTemplateStr = `<!DOCTYPE html>
       font-weight: 400;
       line-height: 1.22;
       overflow-wrap: anywhere;
+    }
+
+    /* A product list typed into the opis posla is set in columns (count set
+       inline) with a bullet per entry, so it fits the panel at a legible size. */
+    .work-order-print-description-columns {
+      column-gap: 6mm;
+    }
+
+    .work-order-print-description-columns > div {
+      break-inside: avoid;
+      padding-left: 0.9em;
+      text-indent: -0.9em;
+    }
+
+    .work-order-print-description-columns > div::before {
+      content: "• ";
     }
 
     .work-order-print-job-items {
@@ -944,7 +971,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
       <div class="work-order-print-panel-header work-order-print-panel-header-left">
         <span class="work-order-print-panel-label">OPIS POSLA</span>
       </div>
-      <div class="work-order-print-description-lines">
+      <div class="work-order-print-description-lines{{if gt .DescriptionColumns 1}} work-order-print-description-columns{{end}}"{{if gt .DescriptionColumns 1}} style="column-count: {{.DescriptionColumns}}"{{end}}>
         {{range .DescriptionLines}}
           <div>{{.}}</div>
         {{end}}
@@ -1118,27 +1145,29 @@ func RenderWorkOrderHTML(order domain.WorkOrder, printCtx PrintContext, settings
 		clientMb = strings.TrimSpace(derefString(printCtx.Customer.Mb))
 	}
 
+	descriptionLines := buildPrintDescriptionLines(order)
 	data := WorkOrderPrintData{
-		FirmName:         strings.TrimSpace(settings.FirmName),
-		OrderNumber:      order.OrderNumber,
-		ClientName:       uppercaseString(order.ClientName),
-		ClientAddress:    uppercaseLine(printCtx.LocationAddress),
-		ClientPib:        clientPib,
-		ClientMb:         clientMb,
-		IssueDate:        formatOptionalDate(&order.IssueDate),
-		DescriptionLines: buildPrintDescriptionLines(order),
-		ItemHeaders:      itemHeaders,
-		ItemLines:        itemLines,
-		TotalPrice:       formatPrintPrice(order.Price),
-		ContactPerson:    uppercaseLine(order.ContactPerson),
-		DeliveryRows:     getPrintDeliveryRows(order.Shipping, printCtx.EnumValues),
-		PlannedDate:      formatOptionalDate(plannedDate),
-		BillingRows:      getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues, order.IsPaid),
-		NoteLines:        buildPrintNoteLines(order),
-		ShippingAddress:  ResolvePrintShippingAddress(order),
-		Completed:        completed,
-		CompletionDate:   formatOptionalDate(order.CompletionDate),
-		ExecutedBy:       execBy,
+		FirmName:           strings.TrimSpace(settings.FirmName),
+		OrderNumber:        order.OrderNumber,
+		ClientName:         uppercaseString(order.ClientName),
+		ClientAddress:      uppercaseLine(printCtx.LocationAddress),
+		ClientPib:          clientPib,
+		ClientMb:           clientMb,
+		IssueDate:          formatOptionalDate(&order.IssueDate),
+		DescriptionLines:   descriptionLines,
+		DescriptionColumns: printDescriptionColumns(len(descriptionLines)),
+		ItemHeaders:        itemHeaders,
+		ItemLines:          itemLines,
+		TotalPrice:         formatPrintPrice(order.Price),
+		ContactPerson:      uppercaseLine(order.ContactPerson),
+		DeliveryRows:       getPrintDeliveryRows(order.Shipping, printCtx.EnumValues),
+		PlannedDate:        formatOptionalDate(plannedDate),
+		BillingRows:        getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues, order.IsPaid),
+		NoteLines:          buildPrintNoteLines(order),
+		ShippingAddress:    ResolvePrintShippingAddress(order),
+		Completed:          completed,
+		CompletionDate:     formatOptionalDate(order.CompletionDate),
+		ExecutedBy:         execBy,
 
 		ShowDelivery:        sections.Delivery,
 		ShowBilling:         sections.Billing,
@@ -1220,6 +1249,114 @@ func CheckBrowserAvailable() error {
 	return err
 }
 
+// Reusing one headless Chromium process across requests, instead of launching
+// (and tearing down) a fresh one for every PDF, avoids paying a full
+// process fork/exec on every print. The shared process is lazily started on
+// the first render and lives for the rest of the program; each request just
+// opens and closes its own lightweight tab in it.
+var (
+	browserMu sync.Mutex
+	// browserOnce is a pointer (rather than a plain sync.Once) so
+	// resetSharedBrowser can arm a fresh one after the browser dies, forcing
+	// the next call to relaunch it. All three of these plus browserOnce are
+	// only ever read/written while holding browserMu.
+	browserOnce   = &sync.Once{}
+	browserCtx    context.Context
+	browserCancel context.CancelFunc
+	browserErr    error
+
+	// renderSemaphore caps concurrent PDF renders (each opens its own tab in
+	// the shared browser) at two, so a burst of print requests cannot pile an
+	// unbounded number of tabs onto one Chromium process.
+	renderSemaphore = make(chan struct{}, 2)
+)
+
+// sharedBrowser returns the long-lived headless Chromium context used for PDF
+// rendering, launching it on first use. Later calls reuse the same browser
+// process until resetSharedBrowser runs (e.g. after the browser died), at
+// which point the next call relaunches it.
+func sharedBrowser(execPath string) (context.Context, error) {
+	for {
+		ctx, err, ok := launchSharedBrowser(execPath)
+		if ok {
+			return ctx, err
+		}
+		// resetSharedBrowser ran between our snapshot of browserOnce and the
+		// read below (a concurrent render saw the browser die). Retry against
+		// the fresh Once rather than returning a nil context.
+	}
+}
+
+// launchSharedBrowser runs the Once-guarded launch and reports the current
+// shared browser. ok is false when the state was reset underneath the caller
+// and the launch must be re-attempted.
+func launchSharedBrowser(execPath string) (context.Context, error, bool) {
+	browserMu.Lock()
+	once := browserOnce
+	browserMu.Unlock()
+
+	once.Do(func() {
+		opts := append(chromedp.DefaultExecAllocatorOptions[:],
+			chromedp.ExecPath(execPath),
+			chromedp.NoSandbox,
+			chromedp.DisableGPU,
+		)
+		// The allocator's parent is a background context, not the caller's
+		// request context: the browser process must outlive any single
+		// request that happens to trigger its launch.
+		allocCtx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
+		ctx, cancel := chromedp.NewContext(allocCtx)
+
+		// The first chromedp.Run on a context launches the browser process
+		// and opens its initial tab (see chromedp.Run's docs); every
+		// per-request render below opens its own separate tab via
+		// chromedp.NewContext(ctx) instead of reusing this one, so the only
+		// cost of this warm-up call is one idle tab for the process's
+		// lifetime.
+		launchErr := chromedp.Run(ctx)
+		if launchErr != nil {
+			cancel()
+			ctx, cancel = nil, nil
+		}
+
+		browserMu.Lock()
+		browserCtx, browserCancel, browserErr = ctx, cancel, launchErr
+		if launchErr != nil {
+			// Do not pin a failed launch for the life of the process: arm a
+			// fresh Once so the next render retries (the error is still
+			// returned to this caller below).
+			browserOnce = &sync.Once{}
+		}
+		browserMu.Unlock()
+	})
+
+	browserMu.Lock()
+	defer browserMu.Unlock()
+	if browserErr != nil {
+		err := browserErr
+		browserErr = nil
+		return nil, err, true
+	}
+	if browserCtx == nil {
+		return nil, nil, false
+	}
+	return browserCtx, nil, true
+}
+
+// resetSharedBrowser tears down the shared browser (if any) and arms a fresh
+// sync.Once so the next sharedBrowser call relaunches Chromium. Called after a
+// render fails in a way that indicates the browser process itself died,
+// rather than just one request's tab timing out.
+func resetSharedBrowser() {
+	browserMu.Lock()
+	defer browserMu.Unlock()
+	if browserCancel != nil {
+		browserCancel()
+	}
+	browserCtx, browserCancel, browserErr = nil, nil, nil
+	browserOnce = &sync.Once{}
+}
+
 func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, printCtx PrintContext, settings domain.OrganizationSettings) ([]byte, error) {
 	htmlContent, err := RenderWorkOrderHTML(order, printCtx, settings)
 	if err != nil {
@@ -1231,17 +1368,25 @@ func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, printCtx Pr
 		return nil, err
 	}
 
-	// Create allocator context with no-sandbox flag to run reliably inside Docker environments.
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(execPath),
-		chromedp.NoSandbox,
-		chromedp.DisableGPU,
-	)
+	// Bound concurrent renders to two: each opens its own tab in the one
+	// shared browser below. Wait on the request's own context, not
+	// unconditionally, so a cancelled request doesn't queue forever behind
+	// others.
+	select {
+	case renderSemaphore <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-renderSemaphore }()
 
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, opts...)
-	defer cancelAlloc()
+	sharedCtx, err := sharedBrowser(execPath)
+	if err != nil {
+		return nil, fmt.Errorf("launch shared chromium: %w", err)
+	}
 
-	taskCtx, cancelTask := chromedp.NewContext(allocCtx)
+	// One tab per request in the shared browser, closed when this request is
+	// done; the browser process itself stays up for the next request.
+	taskCtx, cancelTask := chromedp.NewContext(sharedCtx)
 	defer cancelTask()
 
 	// Ensure there is a timeout for generation.
@@ -1271,6 +1416,13 @@ func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, printCtx Pr
 	)
 
 	if err != nil {
+		// A dead browser process cancels its own root context (chromedp's
+		// ExecAllocator does this when it loses the browser's websocket
+		// connection). Relaunch on the next call instead of wedging every
+		// future render behind a browser process that is gone.
+		if sharedCtx.Err() != nil {
+			resetSharedBrowser()
+		}
 		return nil, fmt.Errorf("chromedp failed to render PDF: %w", err)
 	}
 

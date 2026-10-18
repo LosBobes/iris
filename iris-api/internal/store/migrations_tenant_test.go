@@ -1,10 +1,13 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"path/filepath"
 	"testing"
+
+	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
 // TestTenantIsolationMigrationBackfillsExistingData simulates the production
@@ -114,5 +117,39 @@ func TestTenantIsolationMigrationBackfillsExistingData(t *testing.T) {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
 			t.Fatalf("reuse across tenant %q: %v", statement, err)
 		}
+	}
+}
+
+// TestProductionLoginLogoMigration: a fresh database gives Grafika Čobanović its
+// sign-in logo, and re-running the seed never overwrites one an admin uploaded.
+func TestProductionLoginLogoMigration(t *testing.T) {
+	ctx := context.Background()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	productionCtx := ContextWithTenant(ctx, ProductionTenantID)
+
+	logo, err := sqliteStore.LoginLogo(productionCtx)
+	if err != nil {
+		t.Fatalf("LoginLogo() returned error: %v", err)
+	}
+	if logo == nil || logo.ContentType != "image/png" || !bytes.Equal(logo.Data, productionLoginLogo) {
+		t.Fatalf("production logo = %+v, want the embedded PNG", logo)
+	}
+
+	demoLogo, err := sqliteStore.LoginLogo(testTenantContext())
+	if err != nil || demoLogo != nil {
+		t.Fatalf("demo logo = %+v, %v; want none", demoLogo, err)
+	}
+
+	png := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+	uploaded, err := sqliteStore.SetLoginLogo(productionCtx, domain.LoginLogoUpload{ContentType: "image/png", Data: png})
+	if err != nil {
+		t.Fatalf("SetLoginLogo() returned error: %v", err)
+	}
+	if err := productionLoginLogoMigration(ctx, sqliteStore.db); err != nil {
+		t.Fatalf("re-running migration returned error: %v", err)
+	}
+	logo, err = sqliteStore.LoginLogo(productionCtx)
+	if err != nil || logo == nil || !bytes.Equal(logo.Data, uploaded.Data) {
+		t.Fatalf("logo after re-seed = %+v, %v; want the admin's upload kept", logo, err)
 	}
 }

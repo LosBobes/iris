@@ -1,3 +1,4 @@
+import { APP_VERSION } from '@/lib/app-version'
 import type {
   Customer,
   CreateWorkOrderInput,
@@ -14,6 +15,7 @@ import type {
   WorkOrderListQuery,
   WorkOrderListResult,
 } from '@/types/work-order'
+import type { ClientAttentionRow, DashboardData, DashboardQuery } from '@/types/dashboard'
 import type {
   CatalogCleanupFilter,
   CatalogItem,
@@ -22,16 +24,65 @@ import type {
   CatalogItemListResult,
   CatalogItemQuery,
 } from '@/types/catalog'
-import type { OrganizationSettings } from '@/types/settings'
+import type {
+  LoginLogoInfo,
+  LoginLogoUpload,
+  OrganizationModules,
+  OrganizationSettings,
+  PublicOrganization,
+} from '@/types/settings'
+import { normalizeOrganizationModules } from '@/types/settings'
+import type {
+  PlatformLoginResponse,
+  PlatformMetrics,
+  PlatformPasswordChange,
+  PlatformRangeDays,
+  PlatformTenantUsers,
+  PlatformImpersonationResponse,
+  PlatformImpersonationAction,
+  PlatformAuditLog,
+  PlatformTenant,
+  PlatformCreateTenantInput,
+  PlatformUpdateTenantInput,
+} from '@/types/platform'
+import type {
+  ProcessGraph,
+  ProcessTemplate,
+  ProcessTemplateInput,
+  WorkOrderProcess,
+  WorkOrderProcessInput,
+} from '@/types/process'
+import type {
+  StockCountInput,
+  StockLevelList,
+  StockLevelQuery,
+  StockMovementList,
+  StockMovementQuery,
+  StockPostingResult,
+  StockReceiptInput,
+} from '@/types/stock'
 import type {
   CreateUserInput,
   ManagedUser,
   UpdateUserInput,
 } from '@/types/user'
 import i18n from '@/i18n'
-import { ApiError, reportApiError } from '@/lib/errors'
+import {
+  addApiBreadcrumb,
+  ApiError,
+  ApiNetworkError,
+  type ResponseBodyFailure,
+  reportApiError,
+  reportNetworkError,
+} from '@/lib/errors'
+import { notifySessionExpired } from '@/lib/session'
 
 type FetchLike = typeof fetch
+
+/** Settings from an older server may lack `modules`: treat that as both off. */
+function withModules(settings: OrganizationSettings): OrganizationSettings {
+  return { ...settings, modules: normalizeOrganizationModules(settings.modules) }
+}
 
 function errorField(payload: unknown, field: 'error' | 'requestId'): string | undefined {
   if (typeof payload !== 'object' || payload === null || !(field in payload)) {
@@ -41,31 +92,167 @@ function errorField(payload: unknown, field: 'error' | 'requestId'): string | un
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
-// fail builds the error, reports it, and throws it, so every failed call lands
-// in Sentry with its request reference instead of only in a toast.
+/**
+ * The method and URL each response was actually requested with.
+ *
+ * A `Response` carries neither its method nor, reliably, its URL: `response.url`
+ * is empty on a synthesised response and follows redirects on a real one. The
+ * error is built where only the response is in scope, so the request details are
+ * recorded here as the response comes back. Keying by the response object keeps
+ * the answer right when several requests are in flight, and the weak reference
+ * means nothing is retained after the response is discarded.
+ */
+const requestDetails = new WeakMap<Response, { method: string; url: string }>()
+
+/**
+ * Every route behind `requireAuth` answers 401 once the session cookie is gone,
+ * and only those routes ever do — `/auth/*` reports a rejected login as a 200
+ * with `success: false`. So a 401 here always means "this session ended", which
+ * the app shell turns into a forced re-login. The check on `/auth/` is
+ * belt-and-braces: a future auth route that did answer 401 must not bounce the
+ * operator off the login form they are already looking at.
+ */
+function announceIfSessionExpired(status: number, url: string): void {
+  if (status !== 401) return
+  let path = url
+  try {
+    path = new URL(url).pathname
+  } catch {
+    // Relative or unparseable; match on whatever we were given.
+  }
+  // Auth routes, and the Backoffice, which has its own session: a 401
+  // there says nothing about the organization session.
+  if (/(^|\/)(auth|platform)\//.test(path)) return
+  notifySessionExpired()
+}
+
+// fail builds the error and throws it. Reporting happens in the operation
+// wrapper below, which is the only place that knows which client method the
+// call came from.
 function fail(
   message: string,
   response: Response,
   payload: unknown,
+  bodyFailure?: ResponseBodyFailure,
 ): never {
+  const request = requestDetails.get(response)
   const error = new ApiError(message, {
     status: response.status,
     requestId:
       errorField(payload, 'requestId') ?? response.headers.get('X-Request-Id'),
-    url: response.url,
+    url: request?.url || response.url,
+    method: request?.method,
+    bodyFailure,
   })
-  reportApiError(error)
+  announceIfSessionExpired(error.status, error.url)
   throw error
+}
+
+/**
+ * Bodies the fetch wrapper already read (and parsed) on the way in, keyed by
+ * the response it handed back. A GET's JSON body is read eagerly so that a
+ * body that fails mid-transfer can be retried while the request is still in
+ * the wrapper's hands; see `bufferJSONBody`.
+ */
+const bufferedBodies = new WeakMap<
+  Response,
+  { payload: unknown; failure: ResponseBodyFailure | null }
+>()
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`
+  return String(error)
+}
+
+function bodyFailure(
+  response: Response,
+  stage: ResponseBodyFailure['stage'],
+  error: unknown,
+  receivedChars: number,
+  attempts: number,
+): ResponseBodyFailure {
+  return {
+    stage,
+    reason: describeError(error),
+    contentType: response.headers.get('Content-Type') ?? '(none)',
+    contentLength: response.headers.get('Content-Length') ?? '(none)',
+    receivedChars,
+    attempts,
+  }
+}
+
+function isJSONResponse(response: Response): boolean {
+  return (response.headers.get('Content-Type') ?? '').includes('application/json')
+}
+
+/**
+ * Reads and parses a JSON response body up front, returning a fresh Response
+ * that replays it plus whether the read or parse failed.
+ *
+ * Production saw 200 responses whose body never arrived intact (Sentry
+ * IRIS-FE-8/9/A): the status line and headers came through, then the body
+ * stream broke, and the list page showed "Neispravan odgovor servera." Reading
+ * the body here — instead of later in `readJSON` — is what makes a retry
+ * possible, because only the fetch wrapper can send the request again.
+ */
+async function bufferJSONBody(
+  response: Response,
+  attempts: number,
+): Promise<{ response: Response; failure: ResponseBodyFailure | null }> {
+  const init = {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  }
+  let text: string
+  try {
+    text = await response.text()
+  } catch (error) {
+    const failure = bodyFailure(response, 'read', error, 0, attempts)
+    const replay = new Response(null, init)
+    bufferedBodies.set(replay, { payload: undefined, failure })
+    return { response: replay, failure }
+  }
+
+  let payload: unknown
+  let failure: ResponseBodyFailure | null = null
+  try {
+    payload = JSON.parse(text)
+  } catch (error) {
+    payload = undefined
+    failure = bodyFailure(response, 'parse', error, text.length, attempts)
+  }
+  // A null-body status (204/304) cannot be constructed with a body.
+  const replay = new Response(text === '' ? null : text, init)
+  bufferedBodies.set(replay, { payload, failure })
+  return { response: replay, failure }
+}
+
+// A successful 204 has no body to parse; anything else goes through readJSON so
+// the failure carries the server's message and status like every other call.
+async function readNoContent(response: Response): Promise<void> {
+  if (response.ok) return
+  await readJSON<unknown>(response)
 }
 
 async function readJSON<T>(response: Response): Promise<T> {
   // Error responses are not guaranteed to be JSON (e.g. an HTML page from a
   // proxy), so parse failures must not mask the HTTP status.
   let payload: unknown
-  try {
-    payload = await response.json()
-  } catch {
-    payload = undefined
+  let failure: ResponseBodyFailure | null = null
+  const buffered = bufferedBodies.get(response)
+  if (buffered) {
+    payload = buffered.payload
+    failure = buffered.failure
+  } else {
+    let text: string | null = null
+    try {
+      text = await response.text()
+      payload = JSON.parse(text)
+    } catch (error) {
+      payload = undefined
+      failure = bodyFailure(response, text === null ? 'read' : 'parse', error, text?.length ?? 0, 1)
+    }
   }
 
   if (!response.ok) {
@@ -77,7 +264,7 @@ async function readJSON<T>(response: Response): Promise<T> {
   }
 
   if (payload === undefined) {
-    fail('Neispravan odgovor servera.', response, payload)
+    fail('Neispravan odgovor servera.', response, payload, failure ?? undefined)
   }
 
   return payload as T
@@ -120,6 +307,19 @@ function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path}`
 }
 
+// normalizeGraph guards against a nil Go slice surfacing as null.
+function normalizeGraph(graph: ProcessGraph | null | undefined): ProcessGraph {
+  return { nodes: readArray(graph?.nodes), edges: readArray(graph?.edges) }
+}
+
+function normalizeTemplate(template: ProcessTemplate): ProcessTemplate {
+  return { ...template, graph: normalizeGraph(template?.graph) }
+}
+
+function normalizeProcess(process: WorkOrderProcess): WorkOrderProcess {
+  return { ...process, graph: normalizeGraph(process?.graph) }
+}
+
 function jsonRequest(method: string, body: unknown): RequestInit {
   return {
     method,
@@ -133,7 +333,7 @@ function credentialedRequest(init: RequestInit = {}): RequestInit {
   return { ...init, credentials: 'include' }
 }
 
-function queryString(query: WorkOrderListQuery = {}): string {
+function queryString(query: WorkOrderListQuery | DashboardQuery = {}): string {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null || value === '') continue
@@ -141,6 +341,32 @@ function queryString(query: WorkOrderListQuery = {}): string {
   }
   const encoded = params.toString()
   return encoded ? `?${encoded}` : ''
+}
+
+// normalizeDashboardData guards against a server that serializes empty lists
+// as null, so the dashboard components can always map over arrays.
+function normalizeDashboardData(data: DashboardData): DashboardData {
+  const rows = (list: ClientAttentionRow[] | null | undefined): ClientAttentionRow[] =>
+    readArray(list).map((row) => ({ ...row, orders: readArray(row.orders) }))
+  return {
+    ...data,
+    monthlyBuckets: readArray(data.monthlyBuckets),
+    deliveryDistribution: readArray(data.deliveryDistribution),
+    topClients: readArray(data.topClients),
+    clientAttentionRows: rows(data.clientAttentionRows),
+    internalAttentionRows: rows(data.internalAttentionRows),
+    finance: data.finance
+      ? {
+          ...data.finance,
+          monthlyProfit: readArray(data.finance.monthlyProfit),
+          companyProfit: readArray(data.finance.companyProfit),
+          itemProfit: {
+            services: readArray(data.finance.itemProfit?.services),
+            articles: readArray(data.finance.itemProfit?.articles),
+          },
+        }
+      : null,
+  }
 }
 
 // catalogCleanupQuery encodes a cleanup filter the way the API expects it: one
@@ -154,12 +380,105 @@ function catalogCleanupQuery(filter: CatalogCleanupFilter): string {
   return params.toString()
 }
 
-export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Window['api'] {
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
+
+/**
+ * Names every failure after the client method that produced it, and reports it.
+ *
+ * Reporting lives here rather than at the throw site because this is the only
+ * layer that knows a request was `getLocations` and not just `GET /locations`.
+ * A Sentry event that says `getLocations` is one an engineer can grep for; a
+ * minified frame called `ns` is not, and production bundles have no source maps.
+ *
+ * Synchronous members (the URL builders) are passed through untouched, so
+ * wrapping does not turn them into promises.
+ */
+function withOperationReporting(api: Window['api']): Window['api'] {
+  const report = (operation: string, error: unknown): void => {
+    if (error instanceof ApiError) {
+      error.withOperation(operation)
+      addApiBreadcrumb(operation, error.method, error.url, error.status)
+      reportApiError(error)
+      return
+    }
+    if (error instanceof ApiNetworkError) {
+      error.withOperation(operation)
+      addApiBreadcrumb(operation, error.method, error.url, null)
+      reportNetworkError(error)
+    }
+  }
+
+  const entries = Object.entries(api).map(([operation, value]) => {
+    if (typeof value !== 'function') return [operation, value] as const
+
+    const original = value as (...args: never[]) => unknown
+    const wrapped = (...args: never[]): unknown => {
+      let result: unknown
+      try {
+        result = original(...args)
+      } catch (error) {
+        report(operation, error)
+        throw error
+      }
+      if (result instanceof Promise) {
+        return result.catch((error: unknown) => {
+          report(operation, error)
+          throw error
+        })
+      }
+      return result
+    }
+    return [operation, wrapped] as const
+  })
+
+  return Object.fromEntries(entries) as Window['api']
+}
+
+export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Window['api'] {
   const url = (path: string): string => joinUrl(baseUrl, path)
 
-  return {
+  // Records the method each response was fetched with, and turns a transport
+  // failure — offline, DNS, a blocked response — into an error that names the
+  // route instead of the bare `TypeError: Failed to fetch` the browser throws.
+  const send: FetchLike = async (input, init) => {
+    const method = (init?.method ?? 'GET').toUpperCase()
+    try {
+      const response = await baseFetch(input, init)
+      requestDetails.set(response, { method, url: requestUrl(input) })
+      return response
+    } catch (cause) {
+      if (cause instanceof ApiNetworkError) throw cause
+      throw new ApiNetworkError({ url: requestUrl(input), method, cause })
+    }
+  }
+
+  // A successful GET whose JSON body breaks off mid-transfer is sent once more:
+  // a GET is safe to repeat, and a second attempt over a fresh connection is
+  // what an operator would otherwise do by hand with a refresh. Writes are never
+  // repeated, and neither is a failed status — that answer is already final.
+  const fetchImpl: FetchLike = async (input, init) => {
+    const method = (init?.method ?? 'GET').toUpperCase()
+    if (method !== 'GET') return send(input, init)
+
+    for (let attempt = 1; ; attempt += 1) {
+      const response = await send(input, init)
+      if (!isJSONResponse(response)) return response
+
+      const buffered = await bufferJSONBody(response, attempt)
+      requestDetails.set(buffered.response, { method, url: requestUrl(input) })
+      if (!buffered.failure || !response.ok || attempt >= 2) {
+        return buffered.response
+      }
+    }
+  }
+
+  return withOperationReporting({
     async getAppVersion() {
-      return '0.1.0-dev'
+      return APP_VERSION
     },
 
     async getBackendStatus() {
@@ -360,12 +679,150 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async getSettings() {
       const response = await fetchImpl(url('/settings'), credentialedRequest())
-      return readJSON<OrganizationSettings>(response)
+      return withModules(await readJSON<OrganizationSettings>(response))
     },
 
-    async updateSettings(settings: Partial<OrganizationSettings>) {
-      const response = await fetchImpl(url('/settings'), jsonRequest('PUT', settings))
-      return readJSON<OrganizationSettings>(response)
+    async updateSettings(settings: Partial<Omit<OrganizationSettings, 'modules'>>) {
+      // Modules are switched by Backoffice only; never send them from here even
+      // if a caller spread a full settings object into the update.
+      const { modules: _ignored, ...editable } = settings as Partial<OrganizationSettings>
+      void _ignored
+      const response = await fetchImpl(url('/settings'), jsonRequest('PUT', editable))
+      return withModules(await readJSON<OrganizationSettings>(response))
+    },
+
+    async getPublicOrganization(slug: string) {
+      const response = await fetchImpl(
+        url(`/public/organizations/${encodeURIComponent(slug)}`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return readJSON<PublicOrganization>(response)
+    },
+
+    getPublicOrganizationLogoUrl(slug: string, logoVersion: string) {
+      return url(
+        `/public/organizations/${encodeURIComponent(slug)}/logo?v=${encodeURIComponent(logoVersion)}`,
+      )
+    },
+
+    async getLoginLogo() {
+      const response = await fetchImpl(url('/settings/login-logo'), credentialedRequest())
+      if (response.status === 404) return null
+      if (!response.ok) {
+        // Reuse readJSON's error path so the failure names the status.
+        await readJSON<never>(response)
+      }
+      return response.blob()
+    },
+
+    async updateLoginLogo(upload: LoginLogoUpload) {
+      const response = await fetchImpl(url('/settings/login-logo'), jsonRequest('PUT', upload))
+      return readJSON<LoginLogoInfo>(response)
+    },
+
+    async deleteLoginLogo() {
+      const response = await fetchImpl(
+        url('/settings/login-logo'),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      if (!response.ok) await readJSON<never>(response)
+    },
+
+    async platformLogin(credentials) {
+      const response = await fetchImpl(url('/platform/auth/login'), jsonRequest('POST', credentials))
+      return readJSON<PlatformLoginResponse>(response)
+    },
+
+    async getPlatformSession() {
+      const response = await fetchImpl(url('/platform/auth/session'), credentialedRequest())
+      return readJSON<PlatformLoginResponse>(response)
+    },
+
+    async platformLogout() {
+      const response = await fetchImpl(
+        url('/platform/auth/logout'),
+        credentialedRequest({ method: 'POST' }),
+      )
+      await readJSON<{ success: boolean }>(response)
+    },
+
+    async changePlatformPassword(change: PlatformPasswordChange) {
+      const response = await fetchImpl(url('/platform/auth/password'), jsonRequest('POST', change))
+      return readJSON<PlatformLoginResponse>(response)
+    },
+
+    async getPlatformMetrics(days: PlatformRangeDays) {
+      const response = await fetchImpl(url(`/platform/metrics?days=${days}`), credentialedRequest())
+      return readJSON<PlatformMetrics>(response)
+    },
+
+    async getPlatformTenantUsers(slug: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/users`),
+        credentialedRequest(),
+      )
+      return readJSON<PlatformTenantUsers>(response)
+    },
+
+    async platformImpersonate(slug: string, userId: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/impersonate`),
+        jsonRequest('POST', { userId }),
+      )
+      return readJSON<PlatformImpersonationResponse>(response)
+    },
+
+    async getPlatformAudit({ limit, offset }: { limit: number; offset: number }) {
+      const response = await fetchImpl(url(`/platform/audit?limit=${limit}&offset=${offset}`), credentialedRequest())
+      return readJSON<PlatformAuditLog>(response)
+    },
+
+    async getPlatformTenants() {
+      const response = await fetchImpl(url('/platform/tenants'), credentialedRequest())
+      return readJSON<PlatformTenant[]>(response)
+    },
+
+    async createPlatformTenant(input: PlatformCreateTenantInput) {
+      const response = await fetchImpl(url('/platform/tenants'), jsonRequest('POST', input))
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async updatePlatformTenant(slug: string, input: PlatformUpdateTenantInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}`),
+        jsonRequest('PATCH', input),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async setPlatformTenantSuspended(slug: string, suspended: boolean) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/${suspended ? 'suspend' : 'reactivate'}`),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async setPlatformTenantModules(slug: string, modules: OrganizationModules) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/modules`),
+        jsonRequest('PUT', { processes: modules.processes, stock: modules.stock }),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async resetPlatformUserPassword(slug: string, userId: string, password: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/users/${encodeURIComponent(userId)}/password`),
+        jsonRequest('POST', { password }),
+      )
+      return readJSON<AuthenticatedUser>(response)
+    },
+
+    async getPlatformImpersonationActions(id: number) {
+      const response = await fetchImpl(url(`/platform/impersonations/${id}/actions`), credentialedRequest())
+      return readJSON<PlatformImpersonationAction[]>(response)
     },
 
     async listUsers() {
@@ -402,6 +859,11 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     async getWorkOrderOperators() {
       const response = await fetchImpl(url('/work-orders/operators'), credentialedRequest())
       return readArray(await readJSON<string[] | null>(response))
+    },
+
+    async getDashboard(query) {
+      const response = await fetchImpl(url(`/dashboard${queryString(query)}`), credentialedRequest())
+      return normalizeDashboardData(await readJSON<DashboardData>(response))
     },
 
     async getWorkOrderById(id) {
@@ -463,7 +925,11 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
 
     async getWorkOrderPreviewHtml(order: WorkOrder) {
       const response = await fetchImpl(url('/work-orders/preview'), jsonRequest('POST', order))
-      if (!response.ok) throw new Error(i18n.t('common.previewError'))
+      // The response is HTML rather than JSON, but the failure path is the same
+      // one every other call uses: a bare `Error` here would carry no status and
+      // no request reference, and would look like a defect rather than a session
+      // that lapsed.
+      if (!response.ok) fail(i18n.t('common.previewError'), response, undefined)
       return response.text()
     },
 
@@ -484,5 +950,144 @@ export function createHttpApi(baseUrl: string, fetchImpl: FetchLike = fetch): Wi
     getWorkOrderReportUrl(id: string) {
       return url(`/work-orders/${encodeURIComponent(id)}/report`)
     },
-  }
+
+    async getStockLevels(query: StockLevelQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.search) params.set('search', query.search)
+      if (query.lowOnly) params.set('lowOnly', 'true')
+      if (query.limit !== undefined) params.set('limit', String(query.limit))
+      if (query.offset !== undefined) params.set('offset', String(query.offset))
+      const search = params.toString()
+      const response = await fetchImpl(url(`/stock${search ? `?${search}` : ''}`), credentialedRequest())
+      const result = await readJSON<StockLevelList>(response)
+      return { items: readArray(result?.items), total: result?.total ?? 0 }
+    },
+
+    async getStockMovements(query: StockMovementQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.catalogItemId) params.set('catalogItemId', query.catalogItemId)
+      if (query.workOrderId) params.set('workOrderId', query.workOrderId)
+      if (query.limit !== undefined) params.set('limit', String(query.limit))
+      if (query.offset !== undefined) params.set('offset', String(query.offset))
+      const search = params.toString()
+      const response = await fetchImpl(
+        url(`/stock/movements${search ? `?${search}` : ''}`),
+        credentialedRequest(),
+      )
+      const result = await readJSON<StockMovementList>(response)
+      return { items: readArray(result?.items), total: result?.total ?? 0 }
+    },
+
+    async postStockReceipt(input: StockReceiptInput) {
+      const response = await fetchImpl(url('/stock/receipts'), jsonRequest('POST', input))
+      const result = await readJSON<StockPostingResult>(response)
+      return { movements: readArray(result?.movements) }
+    },
+
+    async postStockCount(input: StockCountInput) {
+      const response = await fetchImpl(url('/stock/counts'), jsonRequest('POST', input))
+      const result = await readJSON<StockPostingResult>(response)
+      return { movements: readArray(result?.movements) }
+    },
+
+    async getProcessTemplates() {
+      const response = await fetchImpl(url('/process-templates'), credentialedRequest())
+      return readArray(await readJSON<ProcessTemplate[]>(response)).map(normalizeTemplate)
+    },
+
+    async getProcessTemplate(id: string) {
+      const response = await fetchImpl(
+        url(`/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async createProcessTemplate(input: ProcessTemplateInput) {
+      const response = await fetchImpl(url('/process-templates'), jsonRequest('POST', input))
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async updateProcessTemplate(id: string, input: ProcessTemplateInput) {
+      const response = await fetchImpl(
+        url(`/process-templates/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async deleteProcessTemplate(id: string) {
+      const response = await fetchImpl(
+        url(`/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async getWorkOrderProcess(workOrderId: string) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        credentialedRequest(),
+      )
+      if (response.status === 404) return null
+      return normalizeProcess(await readJSON<WorkOrderProcess>(response))
+    },
+
+    async applyProcessTemplate(workOrderId: string, templateId: string) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        jsonRequest('POST', { templateId }),
+      )
+      return normalizeProcess(await readJSON<WorkOrderProcess>(response))
+    },
+
+    async updateWorkOrderProcess(workOrderId: string, input: WorkOrderProcessInput) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        jsonRequest('PUT', input),
+      )
+      return normalizeProcess(await readJSON<WorkOrderProcess>(response))
+    },
+
+    async deleteWorkOrderProcess(workOrderId: string) {
+      const response = await fetchImpl(
+        url(`/work-orders/${encodeURIComponent(workOrderId)}/process`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async getPlatformProcessTemplates(slug: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates`),
+        credentialedRequest(),
+      )
+      return readArray(await readJSON<ProcessTemplate[]>(response)).map(normalizeTemplate)
+    },
+
+    async createPlatformProcessTemplate(slug: string, input: ProcessTemplateInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates`),
+        jsonRequest('POST', input),
+      )
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async updatePlatformProcessTemplate(slug: string, id: string, input: ProcessTemplateInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return normalizeTemplate(await readJSON<ProcessTemplate>(response))
+    },
+
+    async deletePlatformProcessTemplate(slug: string, id: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+  })
 }

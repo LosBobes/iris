@@ -1,4 +1,13 @@
 import type {
+  AttentionSignal,
+  AttentionSignalCounts,
+  ClientAttentionRow,
+  ClientCount,
+  DashboardAttentionOrder,
+  DeliveryCount,
+  MonthlyBucket,
+} from '@/types/dashboard'
+import type {
   WorkOrder,
   WorkOrderStatus,
   DashboardFilters,
@@ -6,6 +15,7 @@ import type {
   DeliveryMethod
 } from '@/types/work-order'
 import {
+  countsTowardWorkQueue,
   getLocalIsoDate,
   WORK_ORDER_STATUS_ORDER,
 } from '@/shared/utils/work-orders'
@@ -14,23 +24,15 @@ import {
 // Public data shapes returned by aggregation functions
 // ---------------------------------------------------------------------------
 
-export interface MonthlyBucket {
-  /** 'YYYY-MM' */
-  month: string
-  count: number
-  /** Sum of price for orders with price !== null */
-  revenue: number
-}
-
-export interface DeliveryCount {
-  method: DeliveryMethod
-  count: number
-}
-
-export interface ClientCount {
-  clientName: string
-  count: number
-}
+export type {
+  AttentionSignal,
+  AttentionSignalCounts,
+  ClientAttentionRow,
+  ClientCount,
+  DashboardAttentionOrder,
+  DeliveryCount,
+  MonthlyBucket,
+} from '@/types/dashboard'
 
 export const CORE_ATTENTION_SIGNALS = [
   'overdue',
@@ -46,19 +48,6 @@ export const ATTENTION_SIGNALS = [
   ...CORE_ATTENTION_SIGNALS,
   ...INTERNAL_ATTENTION_SIGNALS,
 ] as const
-
-export type AttentionSignal = (typeof ATTENTION_SIGNALS)[number]
-
-export type AttentionSignalCounts = Record<AttentionSignal, number>
-
-export interface ClientAttentionRow {
-  groupKey: string
-  customerId: string | null
-  displayName: string
-  counts: AttentionSignalCounts
-  orders: WorkOrder[]
-  severity: number
-}
 
 const ATTENTION_SIGNAL_SEVERITY: Record<AttentionSignal, number> = {
   overdue: 600,
@@ -109,6 +98,16 @@ function compareOrderAttention(
   )
 }
 
+function toAttentionOrder(order: WorkOrder): DashboardAttentionOrder {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    jobDescription: order.jobDescription,
+    status: order.status,
+    dueDate: order.dueDate,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Filtering
 // ---------------------------------------------------------------------------
@@ -142,6 +141,11 @@ export function getWorkOrderAttentionSignals(
   today = getLocalIsoDate(),
 ): AttentionSignal[] {
   const signals: AttentionSignal[] = []
+
+  // A cancelled nalog raises no signal at all — no deadline to miss and nobody
+  // left to assign it to.
+  if (!countsTowardWorkQueue(order)) return signals
+
   const dueDate = getAttentionDueDate(order)
 
   if (dueDate !== null) {
@@ -193,7 +197,10 @@ export function buildClientAttentionRows(
   const selected = new Set<AttentionSignal>(selectedSignals)
   const rows = new Map<
     string,
-    ClientAttentionRow & { latestUpdatedAt: string }
+    Omit<ClientAttentionRow, 'orders'> & {
+      orders: WorkOrder[]
+      latestUpdatedAt: string
+    }
   >()
 
   for (const order of orders) {
@@ -236,7 +243,9 @@ export function buildClientAttentionRows(
       displayName: row.displayName,
       counts: row.counts,
       severity: row.severity + totalSignalCount(row.counts) / 100,
-      orders: [...row.orders].sort((a, b) => compareOrderAttention(a, b, today)),
+      orders: [...row.orders]
+        .sort((a, b) => compareOrderAttention(a, b, today))
+        .map(toAttentionOrder),
     }))
     .sort(
       (a, b) =>

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
 const initialSQLiteMigration = `
@@ -333,6 +335,36 @@ CREATE INDEX IF NOT EXISTS idx_wo_edit_locks_active
 	ON work_order_edit_locks(tenant_id, expires_at);
 `
 
+// workOrderPublicTokenMigration adds a dedicated, indexed column for the public
+// tracking token so WorkOrderByPublicToken can look it up directly instead of
+// scanning and JSON-decoding every work order. The token still lives in the
+// payload (source of truth); this column is a denormalized copy kept in sync by
+// putWorkOrder. It also adds the composite tenant-leading indexes the list/report
+// queries in buildWorkOrderWhere, workOrderOrderBy, and Customers already filter
+// and sort by, so those queries can use an index instead of a full table scan.
+const workOrderPublicTokenMigration = `
+ALTER TABLE work_orders ADD COLUMN public_token TEXT;
+
+UPDATE work_orders
+   SET public_token = NULLIF(json_extract(payload, '$.communication.publicToken'), '');
+
+CREATE INDEX IF NOT EXISTS idx_work_orders_public_token ON work_orders(public_token);
+CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_issue_date ON work_orders(tenant_id, issue_date DESC, id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_status ON work_orders(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_due_date ON work_orders(tenant_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_customers_tenant_name ON customers(tenant_id, name COLLATE NOCASE);
+`
+
+// catalogDefaultTaxGroupMigration backfills the PDV type on catalog items that
+// have none (or the fiscal-receipt spelling "Đ"), so every stored item carries
+// an explicit tax group. Empty values already priced at the general rate; other
+// legacy codes are left as-is.
+const catalogDefaultTaxGroupMigration = `
+UPDATE catalog_items
+   SET tax_group = '` + domain.DefaultTaxGroup + `'
+ WHERE tax_group IS NULL OR TRIM(tax_group) IN ('', 'Đ');
+`
+
 // sqliteMigrations is the ordered list of schema versions. Each entry is applied
 // once, in order, and recorded in schema_migrations so existing databases pick
 // up later versions on the next startup.
@@ -358,6 +390,16 @@ var sqliteMigrations = []struct {
 	{version: 10, fn: tenantIsolationMigration},
 	{version: 11, sql: workOrderNumberReservationsMigration},
 	{version: 12, sql: workOrderEditLocksMigration},
+	{version: 13, sql: workOrderPublicTokenMigration},
+	{version: 14, sql: catalogDefaultTaxGroupMigration},
+	{version: 15, fn: productionLoginLogoMigration},
+	{version: 16, sql: platformMigration},
+	{version: 17, fn: platformDefaultAdminMigration},
+	{version: 18, sql: platformImpersonationMigration},
+	{version: 19, sql: platformManagementMigration},
+	{version: 20, sql: processGraphMigration},
+	{version: 21, sql: stockMigration},
+	{version: 22, sql: workOrderProcessStockTrackedMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

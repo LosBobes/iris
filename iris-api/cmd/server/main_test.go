@@ -1,6 +1,8 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestDatabasePathFromEnvPrefersDatabasePath(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "/data/iris.db")

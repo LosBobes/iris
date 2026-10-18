@@ -107,5 +107,6 @@ func (s *FixtureStore) organizationSettingsLocked() domain.OrganizationSettings 
 		PriorityDefaults:    priorityDefaults,
 		PrintItemColumns:    printItemColumns,
 		ShowShippingOptions: showShippingOptions,
+		Modules:             s.modules,
 	}
 }

@@ -5,6 +5,7 @@ import {
   removeLocation,
   slugId,
   validateCustomerIdentifiers,
+  validateIdentifierFormat,
 } from "@/lib/customers";
 import type { Customer, Location } from "@/types/work-order";
 
@@ -94,5 +95,20 @@ describe("slugId", () => {
   it("builds a prefixed slug from a name", () => {
     expect(slugId("cust", "Štampa Doo")).toMatch(/^cust-/);
     expect(slugId("loc", "Main Office")).toBe("loc-main-office");
+  });
+});
+
+describe("validateIdentifierFormat", () => {
+  it("accepts blank or well-formed identifiers", () => {
+    expect(validateIdentifierFormat("", "")).toBeNull();
+    expect(validateIdentifierFormat(" 100197914 ", "53671888")).toBeNull();
+  });
+
+  it("rejects a PIB with a bad control digit, as the API does", () => {
+    expect(validateIdentifierFormat("123456789", "")).toContain("PIB");
+  });
+
+  it("rejects an MB that is not 8 digits", () => {
+    expect(validateIdentifierFormat("", "123")).not.toBeNull();
   });
 });

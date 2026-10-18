@@ -85,6 +85,16 @@ extendable by an admin through the `billingDocumentType` managed enum.
 - `cashCollection` (`Otkup`): Cash collected on delivery.
 - `proforma` (`Profaktura`): Pre-payment request sheet.
 
+Catalog sale prices are net (bez PDV-a). On an `cashCollection` (otkup) order the
+web form prices catalog articles (roba) gross, at the item's PDV type; catalog
+services keep their catalog price. Faktura and profaktura keep net prices.
+
+### PDV Type (catalog `taxGroup`)
+The catalog item's `taxGroup` (`Poreska grupa`) holds the fiscal-receipt tax label:
+- `DJ`: General rate (opšta stopa), 20% — `Đ` on fiscal receipts. Default for empty or unknown codes.
+- `E`: Special rate (posebna stopa), 10%.
+- `A`: Exempt from PDV, 0%.
+
 ### Delivery Method (`DeliveryMethod`)
 - `pickup` (`Lično preuzimanje`): Client collects order in person.
 - `postExpress` (`Post Express`): Delivered via Post Express courier.
@@ -106,6 +116,35 @@ setting needs no migration.
 | **Billing Defaults** | `billingDefaults` | `Podrazumevani obračun` | Default `documentType` for new orders. Default `proforma`; operators can always change it per order. |
 | **Priority Defaults** | `priorityDefaults` | `Podrazumevani prioritet` | Default `priority` for new orders + `allowOverride`. Default `normal`, not overridable. |
 | **Show Shipping Options** | `showShippingOptions` | `Prikaži opcije otpreme` | Toggles the extra shipping/handling fields on the work-order form. Off by default. |
+
+## Work-Order Processes
+
+Admin-modeled production graphs (see [D-017](DECISIONS.md#d-017-model-work-order-processes-as-a-separate-graph-not-as-new-statuses)). Independent of the order `status` lifecycle.
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **Process Template** | `ProcessTemplate` | `Proces rada` | Per-tenant reusable graph. At most one is the default (`isDefault`), copied onto every new work order. |
+| **Work-Order Process** | `WorkOrderProcess` | `Proces rada naloga` | The order's own editable copy of a template graph plus per-order state. |
+| **Step** | `step` | `Korak` | A process stage. Per-order `status`: `pending` (`Na čekanju`), `in_progress` (`U toku`), `done` (`Završeno`), `skipped` (`Preskočeno`). |
+| **Input** | `input` | `Ulaz` | Material a step consumes (planned `quantity`/`unit`, per-order `actualQuantity`). Only connects into a step. |
+| **Product** | `product` | `Proizvod` | Output of a step; may feed a later step as an intermediate product. |
+| **Byproduct** | `byproduct` | `Nusproizvod` | Side output of a step (waste, offcuts, makulatura); may feed a later step. |
+
+Allowed edges: input→step, step→step, step→product, step→byproduct, product→step, byproduct→step; the graph must be acyclic.
+
+## Warehouse (Magacin)
+
+Stock of catalog **articles**, kept as a movement ledger (see [D-018](DECISIONS.md#d-018-iris-owns-warehouse-stock-as-a-movement-ledger)).
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **On hand** | `onHand` | `Na stanju` | Sum of the article's stock movements. |
+| **Reserved** | `reserved` | `Rezervisano` | Planned inputs of open work orders whose consuming step is not done yet. |
+| **Available** | `available` | `Raspoloživo` | On hand − reserved. |
+| **Minimum stock** | `minStock` | `Minimalna zaliha` | Optional threshold; below it the article is flagged as low. |
+| **Goods receipt** | `receipt` | `Prijem robe` | Incoming material (+). Any user. |
+| **Stock count** | `adjustment` / `opening` | `Popis` / `Početno stanje` | Admin enters counted quantities; the difference is posted. The first count of an article is its opening balance. |
+| **Consumption / Production** | `consumption` / `production` | `Utrošak` / `Proizvodnja` | Posted automatically from work-order processes when steps are done. |
 
 ## Concurrency & Reservation
 

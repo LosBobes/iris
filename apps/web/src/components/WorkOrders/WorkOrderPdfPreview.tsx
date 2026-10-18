@@ -145,9 +145,9 @@ export function WorkOrderPreviewPane({
         style={{ height: PAGE_HEIGHT_PX * scale }}
       >
         <iframe
-          title="Pregled radnog naloga"
+          title={t("workOrders.detail.pdfPreviewTitle")}
           srcDoc={html}
-          aria-label="Pregled radnog naloga"
+          aria-label={t("workOrders.detail.pdfPreviewTitle")}
           className="origin-top-left border-0 bg-white"
           style={{
             width: PAGE_WIDTH_PX,

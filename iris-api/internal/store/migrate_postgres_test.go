@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/testutil"
 )
@@ -22,8 +23,16 @@ func TestMigrateToPostgresCopiesASeededDatabase(t *testing.T) {
 	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
-	if err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t)); err != nil {
+	if _, err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t), "", "", ""); err != nil {
 		t.Fatalf("SeedDemoFromFixtures() returned error: %v", err)
+	}
+
+	// login_events has an identity key that is copied with its original ids.
+	loginAt := time.Now().UTC()
+	for _, userID := range []string{"user-admin", "user-operater"} {
+		if err := sqliteStore.RecordLogin(ctx, DemoTenantID, userID, loginAt); err != nil {
+			t.Fatalf("RecordLogin() on sqlite returned error: %v", err)
+		}
 	}
 
 	postgresStore := newPostgresStoreForTest(t, ctx, dsn)
@@ -43,6 +52,12 @@ func TestMigrateToPostgresCopiesASeededDatabase(t *testing.T) {
 	}
 	if len(mismatches) != 0 {
 		t.Fatalf("VerifyMigration() found row-count mismatches: %v", mismatches)
+	}
+
+	// The copied identity sequences must have been advanced past the copied ids,
+	// or the next login after cutover would collide with a migrated row.
+	if err := postgresStore.RecordLogin(ctx, DemoTenantID, "user-admin", loginAt); err != nil {
+		t.Fatalf("RecordLogin() after migration returned error (identity sequence not resynced?): %v", err)
 	}
 
 	// The work-order list must come back identically, payload JSON included.
@@ -122,7 +137,7 @@ func TestMigrateToPostgresRefusesANonEmptyTarget(t *testing.T) {
 	ctx := testTenantContext()
 	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	defer sqliteStore.Close()
-	if err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t)); err != nil {
+	if _, err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t), "", "", ""); err != nil {
 		t.Fatalf("SeedDemoFromFixtures() returned error: %v", err)
 	}
 

@@ -84,6 +84,17 @@ services:
       IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-}"
       # Optional release identifier shown in Sentry (e.g. the git sha).
       IRIS_RELEASE: "${IRIS_RELEASE:-}"
+      # Passwords for the optional demo organization (/login/demo), read by
+      # `irisctl seed-demo` run inside this container. Required to seed it in
+      # production (12+ characters, not the public demo passwords); the demo org
+      # is created only when you run seed-demo, never on start. Kept in the
+      # server's .env (gitignored), never committed.
+      IRIS_DEMO_ADMIN_PASSWORD: "${IRIS_DEMO_ADMIN_PASSWORD:-}"
+      IRIS_DEMO_OPERATOR_PASSWORD: "${IRIS_DEMO_OPERATOR_PASSWORD:-}"
+      # Prefix for the demo fixture record ids, needed when another tenant in the
+      # same database already uses the fixed fixture ids (e.g. the real Čobanović
+      # data, whose customers are also cust-N). Read by seed-demo only.
+      IRIS_DEMO_ID_PREFIX: "${IRIS_DEMO_ID_PREFIX:-}"
     # Internal only: never published to the host. nginx (frontend) reaches it
     # over the compose network on this port.
     expose:
@@ -95,10 +106,17 @@ services:
     healthcheck:
       # frontend waits on this check before it starts, so the interval is the
       # floor on deploy downtime: at 30s a recreate blacked the site out for
-      # half a minute even though the API was up in well under a second.
+      # half a minute even though the API was up in well under a second. It is
+      # also pure latency — the API is serving before Docker asks — so it is
+      # polled at 1s. Measured on deploy run 35, at 2s the gate took 5.6s of
+      # the 5.9s the site spent unreachable; the rest is the container start
+      # itself. What matters is that the total stays inside the window Caddy
+      # retries across (Caddyfile), or a deploy shows up as 502s. The check is
+      # a local wget against an in-process handler, so polling it this often
+      # costs nothing.
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/healthz"]
-      interval: 5s
-      timeout: 3s
+      interval: 1s
+      timeout: 2s
       retries: 5
       start_period: 30s
 
@@ -108,6 +126,11 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
+    # Ordering for `compose up` only. It is NOT honoured when the Docker
+    # daemon restarts the stack itself (a host reboot), where the restart
+    # policy can start this container before the backend exists — so nginx
+    # must not depend on the backend being resolvable at startup. It doesn't:
+    # see the resolver comment in frontend/nginx.conf.
     depends_on:
       backend:
         condition: service_healthy

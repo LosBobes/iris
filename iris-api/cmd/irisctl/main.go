@@ -35,11 +35,23 @@ func main() {
 	case "seed-demo":
 		cmd := flag.NewFlagSet("seed-demo", flag.ExitOnError)
 		fixtureDir := cmd.String("fixtures", "testdata/fixtures", "putanja do JSON demo podataka")
+		adminPassword := cmd.String("admin-password", os.Getenv("IRIS_DEMO_ADMIN_PASSWORD"), "lozinka naloga admin (podrazumevano IRIS_DEMO_ADMIN_PASSWORD; obavezno u produkciji)")
+		operatorPassword := cmd.String("operator-password", os.Getenv("IRIS_DEMO_OPERATOR_PASSWORD"), "lozinka operaterskih naloga (podrazumevano IRIS_DEMO_OPERATOR_PASSWORD; obavezno u produkciji)")
+		idPrefix := cmd.String("id-prefix", os.Getenv("IRIS_DEMO_ID_PREFIX"), "prefiks za id-jeve fiksnih zapisa (npr. demo-) kad baza već ima drugu organizaciju sa istim id-jevima")
 		_ = cmd.Parse(os.Args[2:])
+		// Outside production the public demo passwords are kept; production
+		// requires strong passwords of its own (see store.DemoPasswords) so the
+		// server does not refuse to start on the demo admin/admin123 login.
+		production := strings.EqualFold(strings.TrimSpace(os.Getenv("IRIS_ENV")), "production")
+		adminPw, operatorPw, err := store.DemoPasswords(production, *adminPassword, *operatorPassword)
+		if err != nil {
+			log.Fatalf("seed-demo: %v", err)
+		}
 		dataStore := mustOpenStore(ctx)
 		defer dataStore.Close()
-		must(store.SeedDemoFromFixtures(ctx, dataStore, *fixtureDir))
-		fmt.Println("Demo podaci su upisani u SQLite bazu.")
+		result, err := store.SeedDemoFromFixtures(ctx, dataStore, *fixtureDir, adminPw, operatorPw, *idPrefix)
+		must(err)
+		printDemoSummary(result, production)
 	case "seed-cobanovic":
 		cmd := flag.NewFlagSet("seed-cobanovic", flag.ExitOnError)
 		dir := cmd.String("dir", cobanovic.DefaultDataDir, "putanja do generisanog Čobanović seed skupa")
@@ -47,7 +59,7 @@ func main() {
 		dataStore := mustOpenStore(ctx)
 		defer dataStore.Close()
 		must(cobanovic.Seed(ctx, dataStore, *dir))
-		fmt.Println("Čobanović podaci su upisani u SQLite bazu.")
+		fmt.Println("Čobanović podaci su upisani u bazu.")
 	case "create-tenant":
 		cmd := flag.NewFlagSet("create-tenant", flag.ExitOnError)
 		slug := cmd.String("slug", "", "oznaka organizacije (za prijavu)")
@@ -89,6 +101,17 @@ func main() {
 		}
 		must(dataStore.CreateUser(tenantCtx, *id, *username, *password, domain.UserRole(*role), false))
 		fmt.Printf("Korisnik %s je sačuvan.\n", *username)
+	case "create-platform-admin":
+		// Back-office (superadmin) accounts. A database with none gets the
+		// default admin, which must change its password on first sign-in.
+		cmd := flag.NewFlagSet("create-platform-admin", flag.ExitOnError)
+		username := cmd.String("username", "", "korisničko ime superadmina")
+		password := cmd.String("password", "", "lozinka (najmanje 12 znakova)")
+		_ = cmd.Parse(os.Args[2:])
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(dataStore.UpsertPlatformAdmin(ctx, *username, *password))
+		fmt.Printf("Superadmin %s je sačuvan.\n", strings.TrimSpace(*username))
 	case "backup":
 		cmd := flag.NewFlagSet("backup", flag.ExitOnError)
 		out := cmd.String("out", "", "putanja izlazne .db kopije")
@@ -165,10 +188,66 @@ func main() {
 		report, err := importCSV(importCtx, dataStore, *dir, *apply)
 		must(err)
 		fmt.Print(report)
+	case "import-stock":
+		cmd := flag.NewFlagSet("import-stock", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		file := cmd.String("file", "", "CSV fajl sa kolonama code,quantity[,note]")
+		dryRun := cmd.Bool("dry-run", false, "samo prikaži šta bi bilo upisano")
+		apply := cmd.Bool("apply", false, "upiši stanje kao popis")
+		_ = cmd.Parse(os.Args[2:])
+		if *dryRun == *apply {
+			log.Fatal("koristite --dry-run ili --apply")
+		}
+		if *file == "" {
+			log.Fatal("koristite --file <putanja do CSV fajla>")
+		}
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		report, err := importStock(mustTenantContext(ctx, dataStore, *tenantSlug), dataStore, *file, *apply)
+		must(err)
+		fmt.Print(report)
 	default:
 		usage()
 		os.Exit(2)
 	}
+}
+
+// printDemoSummary tells the operator how to sign in and what to look at. The
+// demo organization carries both the plain fixture work orders and the
+// process- and stock-driven content, with both modules on.
+func printDemoSummary(result store.DemoSeedResult, production bool) {
+	if result.AlreadySeeded {
+		fmt.Println("Demo podaci su već upisani (fiksni nalozi osveženi); procesi i magacin ostaju netaknuti.")
+		return
+	}
+	adminCreds, operatorCreds := "admin / admin123", "operater / operater123"
+	if production {
+		// Never echo the strong passwords; name where they came from instead.
+		adminCreds = "admin / (lozinka iz IRIS_DEMO_ADMIN_PASSWORD)"
+		operatorCreds = "operater / (lozinka iz IRIS_DEMO_OPERATOR_PASSWORD)"
+	}
+	fmt.Printf(`Demo podaci su upisani u bazu.
+
+Prijava:    /login/demo
+  admin     %s
+  operater  %s
+Moduli:     Magacin i Procesi rada uključeni
+Sadržaj:    fiksni radni nalozi iz testdata/fixtures + %d šablona procesa i
+            %d radnih naloga sa procesima, magacin sa početnim stanjem i 3 prijema
+
+Šta pogledati
+  Magacin:         nizak lager (ispod minimuma): %s
+  Nedostatak:      nalog %s (planirani papir premašuje stanje) - tabela Materijal i simulator
+  U toku:          nalog %s (stvarna količina papira veća od planirane); nalog %s je brošura sa dva paralelna koraka
+  Otkazan:         nalog %s ne rezerviše zalihe
+  Simulator:       šablon %q (međuproizvod "Štampani tabaci", dva koraka u istom talasu)
+Backoffice:  /backoffice, podrazumevani nalog admin / admin123321 se pravi pri prvom pokretanju servera
+             (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju.
+`,
+		adminCreds, operatorCreds,
+		result.Templates, result.Orders,
+		strings.Join(result.LowArticles, ", "),
+		result.ShortageOrder, result.InProgressOrder, result.BrochureOrder, result.CancelledOrder, result.BrochureTemplate)
 }
 
 func importCSV(ctx context.Context, dataStore *store.SQLStore, dir string, apply bool) (string, error) {
@@ -430,17 +509,62 @@ func mustTenantContext(ctx context.Context, dataStore *store.SQLStore, slug stri
 	return store.ContextWithTenant(ctx, tenant.ID)
 }
 
+// parseOnOff reads an optional on|off flag; an empty value means "unchanged".
+func parseOnOff(name, value string) *bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return nil
+	case "on":
+		on := true
+		return &on
+	case "off":
+		off := false
+		return &off
+	}
+	log.Fatalf("--%s mora biti on ili off", name)
+	return nil
+}
+
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
+}
+
 func usage() {
 	fmt.Println(`Korišćenje:
   irisctl migrate
-  irisctl seed-demo [-fixtures testdata/fixtures]
+  irisctl seed-demo [-fixtures testdata/fixtures] [-admin-password … -operator-password …] [-id-prefix demo-]
   irisctl seed-cobanovic [-dir internal/seed/cobanovic/data]
   irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
   irisctl import-csv -tenant oznaka --dry-run --dir import/
   irisctl import-csv -tenant oznaka --apply --dir import/
+  irisctl import-stock -tenant oznaka --file stanje.csv --dry-run
+  irisctl import-stock -tenant oznaka --file stanje.csv --apply
+  irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
+  irisctl create-platform-admin -username ime -password lozinka
   irisctl backup [-out backups/iris.db]
   irisctl migrate-to-postgres [-from ./data/iris.db] [-to postgres://...]
+
+import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
+a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
+
+set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin);
+izostavljen modul ostaje kakav jeste. Za razliku od Backoffice-a ne upisuje zapis u aktivnost.
+Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastali.
+
+seed-demo pravi jednu "demo" organizaciju sa uključenim modulima Procesi rada i Magacin:
+fiksni radni nalozi iz testdata/fixtures plus šabloni procesa, artikli, početno stanje,
+prijemi i radni nalozi sa procesima u raznim statusima, na /login/demo. Van produkcije
+prijava je admin / admin123 i operater / operater123. Kada je IRIS_ENV=production, lozinke
+se moraju zadati (IRIS_DEMO_ADMIN_PASSWORD i IRIS_DEMO_OPERATOR_PASSWORD ili -admin-password i
+-operator-password, najmanje 12 znakova, ne demo lozinke) — inače bi server odbio da se
+pokrene zbog demo naloga admin / admin123. Ako baza već sadrži drugu organizaciju sa istim
+id-jevima zapisa (fiksni id-jevi cust-1, loc-1, radni nalog "1", …), koristite -id-prefix
+(npr. demo-) da im se doda prefiks i izbegne sudar; procesni/magacin deo već koristi
+sopstvene id-jeve.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.
 DATABASE_URL bira Postgres umesto SQLite za sve komande osim migrate-to-postgres,

@@ -2,11 +2,13 @@ import { createContext } from 'react'
 import {
   DEFAULT_BILLING_DEFAULTS,
   DEFAULT_FIRM_NAME,
+  DEFAULT_ORGANIZATION_MODULES,
   DEFAULT_PDF_SECTIONS,
   DEFAULT_PRINT_ITEM_COLUMNS,
   DEFAULT_PRIORITY_DEFAULTS,
   DEFAULT_SHOW_SHIPPING_OPTIONS,
   type BillingDefaults,
+  type OrganizationModules,
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
@@ -37,6 +39,11 @@ export interface OrganizationContextValue {
   showShippingOptions: boolean
   /** Updates the in-memory shipping-options toggle after a successful save. */
   setShowShippingOptions: (showShippingOptions: boolean) => void
+  /**
+   * Optional modules enabled for the organization (Backoffice-controlled, both
+   * off by default and while settings are loading or unknown).
+   */
+  modules: OrganizationModules
 }
 
 export const OrganizationContext = createContext<OrganizationContextValue>({
@@ -52,4 +59,5 @@ export const OrganizationContext = createContext<OrganizationContextValue>({
   setPrintItemColumns: () => {},
   showShippingOptions: DEFAULT_SHOW_SHIPPING_OPTIONS,
   setShowShippingOptions: () => {},
+  modules: DEFAULT_ORGANIZATION_MODULES,
 })

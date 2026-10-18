@@ -8,7 +8,7 @@ Onboarding snapshot for senior engineers. **Last verified:** 2026-07-10.
 
 - **Work orders** - lifecycle from `new` through `invoiced`, with assignment, materials, notes, events, invoice drafts, order-number reservation, and a per-order edit lock
 - **Customers and locations** - normalized master data (web client; API-backed)
-- **Dashboard** - revenue/status charts and queue summaries (aggregated client-side)
+- **Dashboard** - revenue/status charts and queue summaries (aggregated server-side by `GET /dashboard`)
 - **Public tracking** - token-based status lookup at `/public/work-orders/:token` (web only)
 - **Organization settings** - admin-configurable, shop-wide defaults (firm name, PDF sections, billing/priority defaults, shipping-options toggle)
 
@@ -118,7 +118,8 @@ Web client
 
 ### Dashboard analytics
 
-- Clients fetch **raw work orders**, then aggregate in `*/lib/dashboard/` (pure functions, unit-tested). Not computed on the server.
+- `GET /dashboard` aggregates **server-side** (`iris-api/internal/dashboard`, pure functions, unit-tested): filtered summary/charts, admin-only finance (`null` for operators), attention signals and queues over all orders, and slim attention-order rows. Query: `dateFrom`, `dateTo`, `issuedBy`, `companyKey`, `today`.
+- The web keeps a TypeScript reference implementation in `apps/web/src/lib/dashboard/` that fixture mode serves; keep the two in sync.
 
 ### Public tracking (web)
 
@@ -134,6 +135,37 @@ Web client
 - **Order-number reservation** (`POST /work-orders/reserve-number` /
   `release-number`, migration v11, 12h TTL): the create form can show the next
   `RN-<year>-<seq>` (5-digit) number before save.
+
+### Work-order processes
+
+- Per-tenant **process templates** (`GET/POST/PUT/DELETE /process-templates`, admin
+  writes) hold a directed acyclic graph of `step`, `input`, `product` and `byproduct`
+  nodes (stored as JSON, migration v20). Each work order can carry its own copy
+  with per-order state (`/work-orders/{id}/process`): step status and actual
+  quantities. Operators may change only that state; structure needs admin.
+  A new order gets the default template. Backoffice: `/platform/tenants/{slug}/process-templates`
+  (audited). Web: Settings → "Procesi rada", work-order detail "Proces rada"
+  card, Backoffice "Procesi" per organization; canvas via `@xyflow/react`.
+  See [D-017](docs/DECISIONS.md).
+
+### Warehouse stock (magacin)
+
+- Catalog articles carry stock in the append-only `stock_movements` ledger
+  (migration v21). `GET /stock` returns on-hand / reserved / available per article;
+  `POST /stock/receipts` (any user) and `POST /stock/counts` (admin, also the opening
+  balance) post movements; `irisctl import-stock` imports an opening balance CSV.
+  Linked process nodes post consumption/production automatically when steps are
+  done. Web: "Magacin" page (`/stock`), stock in Catalog, material shortages on the
+  work-order process card and in the simulator/tester. See [D-018](docs/DECISIONS.md).
+
+### Modules (feature toggles)
+
+- `stock` (Magacin) and `processes` (Procesi rada, requires Magacin) are per-organization
+  modules, **off by default**, switched by superadmins in Backoffice → Organizacije →
+  Moduli (`PUT /platform/tenants/{slug}/modules`, audited). Stored in `app_settings`
+  (`modules`). The API returns 403 on disabled module routes; the web hides dependent
+  UI. Stock posting only applies to processes created while Magacin was
+  on (`stock_tracked`, migration v22). See [D-019](docs/DECISIONS.md).
 
 ### Organization settings
 

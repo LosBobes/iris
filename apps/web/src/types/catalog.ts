@@ -21,6 +21,10 @@ export interface CatalogItem {
   taxGroup: string | null
   description: string | null
   isActive: boolean
+  /** Read-only on-hand stock (articles only; null for services). */
+  stockOnHand?: number | null
+  /** Low-stock threshold (articles only; null = none). Editable by admins. */
+  minStock?: number | null
   createdAt?: string
   updatedAt?: string
 }
@@ -36,6 +40,8 @@ export interface CatalogItemInput {
   taxGroup: string | null
   description: string | null
   isActive: boolean
+  /** Low-stock threshold, >= 0 or null; articles only (admin). */
+  minStock?: number | null
   /**
    * Date (YYYY-MM-DD) a changed price takes effect. Optional (defaults to today);
    * must be today or later. A future date schedules the new price without moving

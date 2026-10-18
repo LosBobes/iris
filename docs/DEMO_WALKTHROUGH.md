@@ -60,9 +60,9 @@ redovi rada".
      tooltip reads the month and count, e.g. *“jun '26 / 14 naloga”*.
    - **Prihod po mesecu** (revenue per month).
 
-What it demonstrates: client-side dashboard aggregation (the client fetches work
-orders and computes the queues/series in the browser) and deep-link drill-downs
-into the filtered list.
+What it demonstrates: server-side dashboard aggregation (`GET /dashboard`
+returns the queues/series already computed, so the browser never downloads every
+work order) and deep-link drill-downs into the filtered list.
 
 ---
 

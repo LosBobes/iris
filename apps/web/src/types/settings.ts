@@ -50,6 +50,17 @@ export interface PriorityDefaults {
  */
 export type PrintItemColumn = 'quantity' | 'unitPrice' | 'total'
 
+/**
+ * Optional feature modules, switched per organization by Backoffice superadmins
+ * only. Both are off by default; processes requires stock (stock may be on alone).
+ */
+export interface OrganizationModules {
+  /** "Procesi rada": process templates, order processes and the simulator. Requires `stock`. */
+  processes: boolean
+  /** "Magacin": the stock ledger, receipts, counts and stock in the catalog. */
+  stock: boolean
+}
+
 export interface OrganizationSettings {
   /** The shop's display name shown in the app branding. */
   firmName: string
@@ -70,6 +81,11 @@ export interface OrganizationSettings {
    * insurance). Off by default so the form stays compact.
    */
   showShippingOptions: boolean
+  /**
+   * Optional modules enabled for this organization. Read-only here: tenant
+   * admins cannot change it (PUT /settings ignores it), so it is never sent.
+   */
+  modules: OrganizationModules
 }
 
 /** Fallback firm name used before settings load or when the request fails. */
@@ -96,6 +112,27 @@ export const DEFAULT_BILLING_DEFAULTS: BillingDefaults = {
 export const DEFAULT_PRIORITY_DEFAULTS: PriorityDefaults = {
   priority: 'normal',
   allowOverride: false,
+}
+
+/** Both optional modules are off until a Backoffice superadmin enables them. */
+export const DEFAULT_ORGANIZATION_MODULES: OrganizationModules = {
+  processes: false,
+  stock: false,
+}
+
+/**
+ * Coerces a received value into the effective modules (missing = off).
+ * "Procesi rada" requires "Magacin", so processes is only on while stock is on
+ * (an inconsistent stored value counts as processes off).
+ */
+export function normalizeOrganizationModules(
+  modules: Partial<OrganizationModules> | null | undefined,
+): OrganizationModules {
+  const stock = modules?.stock === true
+  return {
+    processes: stock && modules?.processes === true,
+    stock,
+  }
 }
 
 /** Extra shipping/handling fields are hidden by default. */
@@ -130,4 +167,28 @@ export function normalizePrintItemColumns(
     return [...DEFAULT_PRINT_ITEM_COLUMNS]
   }
   return [...columns]
+}
+
+/**
+ * What the sign-in screen learns about an organization before anyone is signed
+ * in. Contract-sync point with the PublicOrganization schema in
+ * iris-api/openapi.yaml.
+ */
+export interface PublicOrganization {
+  slug: string
+  name: string
+  /** Content hash of the sign-in logo; null when the organization has none. */
+  logoVersion: string | null
+}
+
+/** PUT /settings/login-logo payload (LoginLogoUpload in openapi.yaml). */
+export interface LoginLogoUpload {
+  contentType: 'image/png' | 'image/jpeg' | 'image/webp'
+  /** Base64 image bytes, max 512 KB decoded. */
+  data: string
+}
+
+/** Returned after an upload (LoginLogoInfo in openapi.yaml). */
+export interface LoginLogoInfo {
+  logoVersion: string
 }

@@ -350,7 +350,7 @@ function InteractiveTourOverlay({
             aria-label={t("help.tour.close")}
             className="iris-focusable iris-press -mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center text-[color:var(--iris-ink-mute)] hover:bg-black/[0.04] hover:text-foreground"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -385,7 +385,7 @@ function InteractiveTourOverlay({
                 onClick={onBack}
                 className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium text-foreground hover:bg-black/[0.03]"
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
                 {t("help.tour.previous")}
               </button>
             )}
@@ -395,7 +395,7 @@ function InteractiveTourOverlay({
               className="iris-focusable iris-press flex items-center gap-1.5 bg-foreground px-3 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
             >
               {isLastStep ? t("help.tour.finish") : t("help.tour.next")}
-              {!isLastStep && <ArrowRight className="h-3.5 w-3.5" />}
+              {!isLastStep && <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
             </button>
           </div>
         </div>

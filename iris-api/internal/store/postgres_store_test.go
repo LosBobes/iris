@@ -39,6 +39,7 @@ func storeScenarios() []storeScenario {
 		{name: "WorkOrderPublicTokenLookup", run: scenarioWorkOrderPublicTokenLookup},
 		{name: "OrderNumberReservationIsUnique", run: scenarioOrderNumberReservationIsUnique},
 		{name: "EditLockIsExclusive", run: scenarioEditLockIsExclusive},
+		{name: "ConcurrentCreatesKeepEveryWorkOrder", run: scenarioConcurrentCreatesKeepEveryWorkOrder},
 		{name: "EnumValuesRoundTrip", run: scenarioEnumValuesRoundTrip},
 		{name: "OrganizationSettingsRoundTrip", run: scenarioOrganizationSettingsRoundTrip},
 	}
@@ -88,8 +89,10 @@ func TestPostgresStoreAppliesBaselineSchemaVersion(t *testing.T) {
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&applied); err != nil {
 		t.Fatalf("count schema_migrations returned error: %v", err)
 	}
-	if applied != postgresSchemaVersion {
-		t.Fatalf("schema_migrations has %d rows, want %d", applied, postgresSchemaVersion)
+	// The baseline is stamped as 1..postgresSchemaVersion and every later shared
+	// migration is applied on top, so a fresh database ends fully up to date.
+	if applied != len(sqliteMigrations) {
+		t.Fatalf("schema_migrations has %d rows, want %d", applied, len(sqliteMigrations))
 	}
 
 	// Re-opening must be a no-op rather than a duplicate-key failure.
@@ -358,6 +361,41 @@ func scenarioCatalogPricesRoundTripExactly(t *testing.T, ctx context.Context, st
 	}
 	if !fetched.IsActive {
 		t.Fatalf("IsActive = false, want true (flag column round-trip)")
+	}
+}
+
+// Postgres runs transactions at READ COMMITTED, so two concurrent creates would
+// both compute the same next id unless CreateWorkOrder serializes allocation;
+// the second upsert would then silently replace the first work order.
+func scenarioConcurrentCreatesKeepEveryWorkOrder(t *testing.T, ctx context.Context, store *SQLStore) {
+	const writers = 8
+	errs := make(chan error, writers)
+	start := make(chan struct{})
+	for i := 0; i < writers; i++ {
+		go func() {
+			<-start
+			_, err := store.CreateWorkOrder(ctx, domain.CreateWorkOrderInput{
+				ClientName:     "Concurrent Co",
+				JobDescription: "concurrent write",
+				IssuedBy:       "admin",
+				IssueDate:      time.Now().UTC().Format("2006-01-02"),
+			})
+			errs <- err
+		}()
+	}
+	close(start)
+	for i := 0; i < writers; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent CreateWorkOrder() returned error: %v", err)
+		}
+	}
+
+	listed, err := store.WorkOrders(ctx, WorkOrderListQuery{})
+	if err != nil {
+		t.Fatalf("WorkOrders() returned error: %v", err)
+	}
+	if listed.Total != writers {
+		t.Fatalf("Total = %d, want %d: concurrent creates overwrote each other", listed.Total, writers)
 	}
 }
 

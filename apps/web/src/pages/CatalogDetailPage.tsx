@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
 import { startOfDay } from "date-fns";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PriceHistoryPanel } from "@/components/Catalog/PriceHistoryPanel";
 import {
@@ -17,7 +16,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrganization } from "@/hooks/useOrganization";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import {
   costPriceLabel,
@@ -30,6 +32,14 @@ import {
 } from "@/lib/catalog";
 import type { CatalogItem, CatalogItemKind } from "@/types/catalog";
 import { cn } from "@/lib/utils";
+import { DEFAULT_VAT_TYPE, VAT_TYPES, isVatTypeCode } from "@/shared/utils/vat";
+import { ApiError, reportUnexpectedError } from "@/lib/errors";
+import { formatStockQuantity } from "@/lib/stock/format";
+import { minStockSchema } from "@/lib/stock/validation";
+
+function snapshotOf(value: CatalogItem, effective: string): string {
+  return JSON.stringify([value, effective]);
+}
 
 function CatalogDetailPage(): React.JSX.Element {
   const { t } = useTranslation();
@@ -37,6 +47,8 @@ function CatalogDetailPage(): React.JSX.Element {
   const { id: routeId } = useParams<{ id: string }>();
   const isNew = routeId === undefined || routeId === "new";
   const { currentUser } = useAuth();
+  const { modules } = useOrganization();
+  const stockEnabled = modules.stock;
   const isAdmin = currentUser.role === "admin";
   const readOnly = !isAdmin;
 
@@ -52,6 +64,19 @@ function CatalogDetailPage(): React.JSX.Element {
   // Only existing items can schedule a future price; new items price immediately.
   const canSchedulePrice = isAdmin && !isNew;
 
+  // Unsaved-changes tracking: compare against the last loaded/saved item (and
+  // the scheduled price date, which is also an edit once admin changes it).
+  const [baseline, setBaseline] = useState<string | null>(() =>
+    isNew ? snapshotOf(emptyCatalogItem, todayIso()) : null,
+  );
+  const dirty =
+    !readOnly &&
+    !loading &&
+    baseline !== null &&
+    snapshotOf(item, effectiveFrom) !== baseline;
+  const guard = useUnsavedChangesGuard(dirty);
+  const { allowNavigation } = guard;
+
   const load = useCallback(async () => {
     if (isNew || !routeId) return;
     setLoading(true);
@@ -62,8 +87,10 @@ function CatalogDetailPage(): React.JSX.Element {
         return;
       }
       setItem(found);
-    } catch {
-      toast.error(t("catalog.detail.loadError"));
+      setBaseline(snapshotOf(found, todayIso()));
+    } catch (error: unknown) {
+      reportUnexpectedError("CatalogDetailPage.load", error);
+      toast.error(formatActionError(t("catalog.detail.loadError"), error));
     } finally {
       setLoading(false);
     }
@@ -76,6 +103,10 @@ function CatalogDetailPage(): React.JSX.Element {
   const saveItem = useCallback(async () => {
     if (!item.name.trim()) {
       toast.error(t("catalog.detail.nameRequired"));
+      return;
+    }
+    if (stockEnabled && item.kind === "article" && !minStockSchema.safeParse(item.minStock ?? null).success) {
+      toast.error(t("catalog.detail.minStockInvalid"));
       return;
     }
     setSaving(true);
@@ -91,12 +122,14 @@ function CatalogDetailPage(): React.JSX.Element {
         : await window.api.updateCatalogItem(item.id, input);
       toast.success(t("catalog.detail.saved"));
       if (isNew) {
+        allowNavigation();
         navigate(`/catalog/${encodeURIComponent(saved.id)}`, { replace: true });
       } else {
         // The response reflects the price effective today; a scheduled future
         // change lives in the history panel. Reset the date and reload history.
         setItem(saved);
         setEffectiveFrom(todayIso());
+        setBaseline(snapshotOf(saved, todayIso()));
         setHistoryRefresh((token) => token + 1);
       }
     } catch (error) {
@@ -104,36 +137,43 @@ function CatalogDetailPage(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom]);
+  }, [item, isNew, navigate, t, canSchedulePrice, effectiveFrom, allowNavigation, stockEnabled]);
 
   const handleDelete = useCallback(async () => {
     try {
       await window.api.deleteCatalogItem(item.id);
       toast.success(t("catalog.detail.deleted"));
+      allowNavigation();
       navigate("/catalog");
-    } catch {
-      toast.error(t("catalog.detail.deleteError"));
+    } catch (error: unknown) {
+      reportUnexpectedError("CatalogDetailPage.delete", error);
+      // 409: the article has warehouse movements, so it can only be deactivated.
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error(t("catalog.detail.deleteHasStock"));
+      } else {
+        toast.error(formatActionError(t("catalog.detail.deleteError"), error));
+      }
     } finally {
       setConfirmDelete(false);
     }
-  }, [item.id, navigate, t]);
+  }, [allowNavigation, item.id, navigate, t]);
 
   const title = isNew ? t("catalog.newItem") : item.name || t("catalog.detail.itemFallback");
 
   if (loading) {
     return (
-      <AppShell>
+      <>
         <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           {t("catalog.detail.loading")}
         </div>
-      </AppShell>
+      </>
     );
   }
 
   if (notFound) {
     return (
-      <AppShell>
+      <>
         <div className="px-8 py-20 text-center text-sm text-muted-foreground">
           <p>{t("catalog.detail.notFound")}</p>
           <button
@@ -145,12 +185,12 @@ function CatalogDetailPage(): React.JSX.Element {
             {t("catalog.detail.backToCatalog")}
           </button>
         </div>
-      </AppShell>
+      </>
     );
   }
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-6">
         <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
           <button
@@ -178,6 +218,7 @@ function CatalogDetailPage(): React.JSX.Element {
               canSchedulePrice={canSchedulePrice}
               effectiveFrom={effectiveFrom}
               onEffectiveFromChange={setEffectiveFrom}
+              stockEnabled={stockEnabled}
             />
             {canSchedulePrice && (
               <PriceHistoryPanel itemId={item.id} refreshToken={historyRefresh} />
@@ -207,6 +248,23 @@ function CatalogDetailPage(): React.JSX.Element {
                 />
               )}
               <SummaryRow label={t("catalog.detail.code")} value={item.code || null} />
+              {!isNew && stockEnabled && item.kind === "article" && typeof item.stockOnHand === "number" && (
+                <div className="flex items-center justify-between gap-3" data-testid="catalog-detail-stock">
+                  <dt className="text-[color:var(--iris-ink-soft)]">{t("catalog.detail.stockOnHand")}</dt>
+                  <dd className="tnum min-w-0 truncate text-foreground">
+                    <Link
+                      to={`/stock/${encodeURIComponent(item.id)}`}
+                      title={t("catalog.detail.stockHistory")}
+                      className={
+                        "iris-focusable underline-offset-2 hover:underline " +
+                        (item.stockOnHand < 0 ? "text-destructive" : "")
+                      }
+                    >
+                      {formatStockQuantity(item.stockOnHand, item.unit)}
+                    </Link>
+                  </dd>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <dt className="text-[color:var(--iris-ink-soft)]">{t("catalog.detail.status")}</dt>
                 <dd className="text-foreground">{item.isActive ? t("catalog.detail.active") : t("catalog.detail.inactive")}</dd>
@@ -272,7 +330,8 @@ function CatalogDetailPage(): React.JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppShell>
+      <UnsavedChangesDialog {...guard} />
+    </>
   );
 }
 
@@ -298,7 +357,9 @@ function DetailsForm({
   canSchedulePrice,
   effectiveFrom,
   onEffectiveFromChange,
+  stockEnabled,
 }: {
+  stockEnabled: boolean;
   value: CatalogItem;
   readOnly: boolean;
   onChange: (value: CatalogItem) => void;
@@ -378,15 +439,42 @@ function DetailsForm({
             </span>
           </label>
         )}
+        {/* Low-stock threshold: articles only, admin-editable. */}
+        {stockEnabled && value.kind === "article" &&
+          (readOnly ? (
+            <ReadOnlyValue
+              label={t("catalog.detail.minStockField")}
+              value={value.minStock === null || value.minStock === undefined ? "" : formatStockQuantity(value.minStock, value.unit)}
+            />
+          ) : (
+            <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
+              {t("catalog.detail.minStockField")}
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={value.minStock ?? ""}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    minStock: event.target.value === "" ? null : Number(event.target.value),
+                  })
+                }
+                className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+              />
+              <span className="mt-1 block text-[10px] text-[color:var(--iris-ink-mute)]">
+                {t("catalog.detail.minStockHint")}
+              </span>
+            </label>
+          ))}
         <Field
           label={t("catalog.detail.barcode")}
           value={value.barcode ?? ""}
           readOnly={readOnly}
           onChange={(barcode) => onChange({ ...value, barcode })}
         />
-        <Field
-          label={t("catalog.detail.taxGroup")}
-          value={value.taxGroup ?? ""}
+        <VatTypeField
+          value={value.taxGroup}
           readOnly={readOnly}
           onChange={(taxGroup) => onChange({ ...value, taxGroup })}
         />
@@ -516,6 +604,53 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
       />
+    </label>
+  );
+}
+
+/**
+ * PDV type picker for the item's tax group (poreska grupa). An empty value is
+ * the general 20% rate, so it shows as DJ; a legacy code outside the known
+ * labels is kept selectable and priced at the general rate.
+ */
+function VatTypeField({
+  value,
+  readOnly,
+  onChange,
+}: {
+  value: string | null;
+  readOnly?: boolean;
+  onChange: (value: string) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const options: { value: string; label: string }[] = VAT_TYPES.map((type) => ({
+    value: type.code,
+    label: t(`catalog.vatType.${type.code}`),
+  }));
+  const selected = value || DEFAULT_VAT_TYPE;
+  if (!isVatTypeCode(selected)) {
+    options.push({ value: selected, label: t("catalog.vatType.legacy", { code: selected }) });
+  }
+
+  if (readOnly) {
+    const current = options.find((option) => option.value === selected);
+    return <ReadOnlyValue label={t("catalog.detail.taxGroup")} value={current?.label ?? selected} />;
+  }
+
+  return (
+    <label className="block text-[11px] text-[color:var(--iris-ink-soft)]">
+      {t("catalog.detail.taxGroup")}
+      <select
+        value={selected}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

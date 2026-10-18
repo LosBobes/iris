@@ -1,13 +1,17 @@
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { AppShell } from '@/components/layout/AppShell'
 import { DashboardActionSection } from '@/components/dashboard/DashboardActionSection'
 import { DashboardFinanceSection } from '@/components/dashboard/DashboardFinanceSection'
+import { LowStockCard } from '@/components/dashboard/LowStockCard'
 import { OperatorQueueGrid } from '@/components/dashboard/OperatorQueueGrid'
+import { useAuth } from '@/hooks/useAuth'
 import { useDashboardData } from '@/hooks/useDashboardData'
+import { useOrganization } from '@/hooks/useOrganization'
 
 function DashboardPage(): React.JSX.Element {
   const { t } = useTranslation()
+  const { currentUser } = useAuth()
+  const { modules } = useOrganization()
   const {
     summary,
     monthlyOrders,
@@ -42,7 +46,7 @@ function DashboardPage(): React.JSX.Element {
   const showDashboard = !loading && !error && hasSourceData
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-8">
         <div
           data-tour="dashboard-overview"
@@ -83,7 +87,7 @@ function DashboardPage(): React.JSX.Element {
           <div className="px-5 sm:px-8">
             <div className="animate-iris-fade py-20 text-center">
               <p className="text-sm text-muted-foreground">
-                Nema radnih naloga u bazi podataka.
+                {t('dashboard.noOrders')}
               </p>
             </div>
           </div>
@@ -117,6 +121,8 @@ function DashboardPage(): React.JSX.Element {
               />
             )}
 
+            {currentUser.role === 'admin' && modules.stock && <LowStockCard />}
+
             <DashboardActionSection
               clientAttentionRows={clientAttentionRows}
               internalAttentionRows={internalAttentionRows}
@@ -127,7 +133,7 @@ function DashboardPage(): React.JSX.Element {
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   )
 }
 

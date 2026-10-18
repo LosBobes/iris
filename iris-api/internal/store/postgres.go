@@ -124,7 +124,10 @@ CREATE TABLE IF NOT EXISTS customer_contacts (
 CREATE TABLE IF NOT EXISTS work_orders (
 	id TEXT PRIMARY KEY,
 	tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-	order_number TEXT NOT NULL,
+	-- COLLATE "C" = SQLite BINARY: nextOrderNumber finds a year's numbers with a
+	-- byte-range scan (>= 'RN-2026-' AND < 'RN-2026.'), which a linguistic
+	-- locale collation (punctuation-insensitive) would get wrong.
+	order_number TEXT NOT NULL COLLATE "C",
 	customer_id TEXT,
 	location_id TEXT,
 	client_name TEXT NOT NULL,
@@ -386,10 +389,21 @@ func runPostgresMigrations(ctx context.Context, db *sql.DB) error {
 		}
 
 		if migration.fn != nil {
-			return fmt.Errorf(
-				"migration %d is a SQLite-specific function migration and has no Postgres path",
+			// Function migrations are plain database/sql code, so they run
+			// through the translating driver like everything else. A new one
+			// must stay portable: no PRAGMA, and probe columns only through
+			// pragma_table_info (which the translator maps).
+			if err := migration.fn(ctx, db); err != nil {
+				return fmt.Errorf("run migration %d: %w", migration.version, err)
+			}
+			if _, err := db.ExecContext(
+				ctx,
+				`INSERT OR IGNORE INTO schema_migrations(version) VALUES (?)`,
 				migration.version,
-			)
+			); err != nil {
+				return fmt.Errorf("record migration %d: %w", migration.version, err)
+			}
+			continue
 		}
 		if err := applyMigration(ctx, db, migration.version, migration.sql); err != nil {
 			return err

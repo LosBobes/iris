@@ -5,12 +5,21 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
+
+// catalogSelectColumns is the column list scanCatalogItem expects. The stock
+// balance is computed from the movement ledger for articles and NULL for services.
+const catalogSelectColumns = `id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active,
+	min_stock,
+	CASE WHEN kind = 'article' THEN COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.catalog_item_id = catalog_items.id), 0) END,
+	created_at, updated_at`
 
 // CatalogItems lists catalog items, optionally filtered by kind, a name/code
 // search term, and active state. Results are ordered by name for the pickers.
@@ -49,7 +58,7 @@ func (s *SQLiteStore) CatalogItems(
 		return CatalogItemListResult{}, fmt.Errorf("count catalog items: %w", err)
 	}
 
-	sqlText := `SELECT id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at
+	sqlText := `SELECT ` + catalogSelectColumns + `
 		FROM catalog_items` + where + ` ORDER BY name COLLATE NOCASE`
 	if query.Limit > 0 {
 		sqlText += " LIMIT ? OFFSET ?"
@@ -94,7 +103,7 @@ func (s *SQLiteStore) CatalogItemByID(ctx context.Context, id string) (*domain.C
 	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at
+		`SELECT `+catalogSelectColumns+`
 			FROM catalog_items WHERE id = ? AND tenant_id = ?`,
 		id,
 		tenantID,
@@ -156,8 +165,8 @@ func (s *SQLiteStore) UpsertCatalogItem(
 
 	_, err = tx.ExecContext(
 		ctx,
-		`INSERT INTO catalog_items(id, tenant_id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO catalog_items(id, tenant_id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, min_stock, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   code = excluded.code,
 		   name = excluded.name,
@@ -182,6 +191,7 @@ func (s *SQLiteStore) UpsertCatalogItem(
 		ptrStringValue(normalized.TaxGroup),
 		ptrStringValue(normalized.Description),
 		boolInt(normalized.IsActive),
+		ptrFloatValue(normalized.MinStock),
 		now,
 		now,
 	)
@@ -223,6 +233,18 @@ func (s *SQLiteStore) UpsertCatalogItem(
 		normalized.SalePrice = effective.Sale
 	}
 
+	if normalized.Kind == domain.CatalogItemKindArticle {
+		var onHand float64
+		if err := s.db.QueryRowContext(
+			ctx,
+			`SELECT COALESCE(SUM(quantity), 0) FROM stock_movements WHERE catalog_item_id = ? AND tenant_id = ?`,
+			normalized.ID, tenantID,
+		).Scan(&onHand); err != nil {
+			return nil, fmt.Errorf("read stock on hand: %w", err)
+		}
+		normalized.StockOnHand = &onHand
+	}
+
 	normalized.UpdatedAt = now
 	if normalized.CreatedAt == "" {
 		normalized.CreatedAt = now
@@ -259,14 +281,38 @@ func foldDiacriticsSQL(column string) string {
 	return expr
 }
 
-// DeleteCatalogItem removes a catalog item by id.
+// ErrCatalogItemHasMovements means the article has warehouse movements and can
+// only be deactivated, not deleted.
+var ErrCatalogItemHasMovements = errors.New("catalog item has stock movements")
+
+// DeleteCatalogItem removes a catalog item by id. It returns
+// ErrCatalogItemHasMovements when the item has stock movements.
 func (s *SQLiteStore) DeleteCatalogItem(ctx context.Context, id string) error {
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM catalog_items WHERE id = ? AND tenant_id = ?`, id, tenantID); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete catalog item: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var movements int
+	if err := tx.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM stock_movements WHERE catalog_item_id = ? AND tenant_id = ?`,
+		id, tenantID,
+	).Scan(&movements); err != nil {
+		return fmt.Errorf("count stock movements: %w", err)
+	}
+	if movements > 0 {
+		return ErrCatalogItemHasMovements
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM catalog_items WHERE id = ? AND tenant_id = ?`, id, tenantID); err != nil {
 		return fmt.Errorf("delete catalog item: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete catalog item: %w", err)
 	}
 	return nil
 }
@@ -296,7 +342,8 @@ func catalogCleanupWhere(tenantID string, filter CatalogCleanupFilter) (string, 
 	}
 	where := ` WHERE tenant_id = ?
 		     AND kind IN (` + strings.Join(placeholders, ",") + `)
-		     AND ` + missingPriceCondition(filter.Missing)
+		     AND ` + missingPriceCondition(filter.Missing) + `
+	     AND NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.catalog_item_id = catalog_items.id)`
 	return where, args
 }
 
@@ -314,7 +361,7 @@ func (s *SQLiteStore) CatalogItemsMissingPrices(ctx context.Context, filter Cata
 	}
 	where, args := catalogCleanupWhere(tenantID, filter)
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active, created_at, updated_at
+		`SELECT `+catalogSelectColumns+`
 			FROM catalog_items`+where+` ORDER BY kind, name COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list catalog items missing prices: %w", err)
@@ -362,6 +409,7 @@ func scanCatalogItem(rows *sql.Rows) (domain.CatalogItem, error) {
 	var purchasePrice, salePrice sql.NullFloat64
 	var barcode, taxGroup, description sql.NullString
 	var isActive int
+	var minStock, stockOnHand sql.NullFloat64
 	if err := rows.Scan(
 		&item.ID,
 		&item.Code,
@@ -374,6 +422,8 @@ func scanCatalogItem(rows *sql.Rows) (domain.CatalogItem, error) {
 		&taxGroup,
 		&description,
 		&isActive,
+		&minStock,
+		&stockOnHand,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 	); err != nil {
@@ -390,6 +440,12 @@ func scanCatalogItem(rows *sql.Rows) (domain.CatalogItem, error) {
 	item.TaxGroup = nullStringPtr(taxGroup)
 	item.Description = nullStringPtr(description)
 	item.IsActive = isActive != 0
+	if minStock.Valid {
+		item.MinStock = &minStock.Float64
+	}
+	if stockOnHand.Valid {
+		item.StockOnHand = &stockOnHand.Float64
+	}
 	return item, nil
 }
 
@@ -405,8 +461,30 @@ func normalizeCatalogItem(item domain.CatalogItem) (domain.CatalogItem, error) {
 	if item.Kind == "" {
 		item.Kind = domain.CatalogItemKindService
 	}
+	if item.TaxGroup == nil || strings.TrimSpace(*item.TaxGroup) == "" {
+		taxGroup := domain.DefaultTaxGroup
+		item.TaxGroup = &taxGroup
+	} else {
+		taxGroup := strings.TrimSpace(*item.TaxGroup)
+		if taxGroup == "Đ" {
+			// The fiscal-receipt spelling of the default label.
+			taxGroup = domain.DefaultTaxGroup
+		}
+		item.TaxGroup = &taxGroup
+	}
 	if item.Name == "" {
 		return domain.CatalogItem{}, newValidationError("Naziv artikla je obavezan.")
+	}
+	// Stock fields: the balance is computed, never accepted; the minimum only
+	// applies to articles and cannot be negative.
+	item.StockOnHand = nil
+	if item.MinStock != nil {
+		if *item.MinStock < 0 || math.IsNaN(*item.MinStock) || math.IsInf(*item.MinStock, 0) {
+			return domain.CatalogItem{}, newValidationError("Minimalna zaliha ne može biti negativna.")
+		}
+		if item.Kind != domain.CatalogItemKindArticle {
+			item.MinStock = nil
+		}
 	}
 	if item.Kind != domain.CatalogItemKindService && item.Kind != domain.CatalogItemKindArticle {
 		return domain.CatalogItem{}, newValidationError(invalidWorkOrderMessage)

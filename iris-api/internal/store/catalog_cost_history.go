@@ -211,13 +211,26 @@ func (s *SQLiteStore) catalogCostsAsOf(
 	ids []string,
 	date string,
 ) (map[string]float64, error) {
-	costs := make(map[string]float64, len(ids))
-	if len(ids) == 0 {
-		return costs, nil
-	}
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return nil, err
+	}
+	return catalogCostsAsOf(ctx, s.db, tenantID, ids, date)
+}
+
+// catalogCostsAsOf is the query-only core of the method above, factored out so
+// UpdateWorkOrder can price line items inside the same transaction it reads and
+// writes the work order in.
+func catalogCostsAsOf(
+	ctx context.Context,
+	db dbExecQuerier,
+	tenantID string,
+	ids []string,
+	date string,
+) (map[string]float64, error) {
+	costs := make(map[string]float64, len(ids))
+	if len(ids) == 0 {
+		return costs, nil
 	}
 	placeholders := make([]string, len(ids))
 	args := make([]any, 0, len(ids)+3)
@@ -232,7 +245,7 @@ func (s *SQLiteStore) catalogCostsAsOf(
 
 	// Rank each item's records: those effective on/before the date first (latest
 	// of them), otherwise the earliest record as a fallback. rn = 1 is the pick.
-	rows, err := s.db.QueryContext(
+	rows, err := db.QueryContext(
 		ctx,
 		`SELECT catalog_item_id, purchase_price FROM (
 		   SELECT catalog_item_id, purchase_price,
