@@ -19,6 +19,11 @@
 # checkout (local troubleshooting, or a manual rebuild if GHCR is unreachable).
 # IRIS_IMAGE_TAG pins the release: the deploy workflow sets it to git-<sha7> so
 # a deploy is immutable and a rollback is just re-running with an older tag.
+#
+# Manual `docker compose` commands on the box (migration, rollback, exec) must
+# export the RUNNING tag first, or `:latest` (stale locally) is used and the
+# stack can be recreated on the wrong image. deploy/POSTGRES.md step 0 has the
+# one-liner.
 
 services:
   db:
@@ -31,7 +36,11 @@ services:
     # Debian-based rather than -alpine on purpose: the schema creates an ICU
     # collation ("nocase") for the case-insensitive ordering and lookups the
     # store relies on, and the Debian image ships ICU without extra packages.
-    image: "postgres:16"
+    # Pinned to a minor so routine deploys (a plain `compose up -d`) never
+    # recreate the database container on a new image; bump it deliberately
+    # (pg_dump first). Do NOT move to Postgres 18: its image keeps data under a
+    # different path than the volume mounted below. See deploy/POSTGRES.md.
+    image: "postgres:16.15"
     restart: unless-stopped
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-iris}"
@@ -77,6 +86,8 @@ services:
       #   DATABASE_URL=postgres://iris:<password>@db:5432/iris?sslmode=disable
       # Clearing it again is the rollback: the SQLite volume below is retained
       # and the migration only ever read from it.
+      # Never deploy an image older than the Postgres support (PR #46) while this
+      # is set: it ignores the variable and silently serves SQLite instead.
       DATABASE_URL: "${DATABASE_URL:-}"
       DATABASE_PATH: "/data/iris.db"
       # Same-origin: the browser hits Caddy -> nginx -> /api/, so no
