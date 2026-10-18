@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/api"
@@ -107,8 +109,29 @@ func main() {
 	}
 
 	log.Printf("iris-api listening on %s", addr)
-	if err := httpServer.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	// Serve until SIGINT/SIGTERM (docker stop sends SIGTERM), then drain in-flight
+	// requests and fall through to the deferred store Close so SQLite checkpoints
+	// its WAL instead of being killed mid-write.
+	stop, cancelSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer cancelSignals()
+
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- httpServer.ListenAndServe() }()
+
+	select {
+	case err := <-serveErr:
+		// ListenAndServe only returns on failure here (e.g. the port is taken).
+		log.Printf("server stopped: %v", err)
+		dataStore.Close()
+		os.Exit(1)
+	case <-stop.Done():
+	}
+
+	log.Printf("shutting down")
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown: %v", err)
 	}
 }
 

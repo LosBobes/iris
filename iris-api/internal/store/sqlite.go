@@ -1337,7 +1337,10 @@ func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year 
 	if err := db.QueryRowContext(
 		ctx,
 		`SELECT COALESCE(MAX(seq), 0) + 1 FROM (
-		   SELECT CAST(substr(order_number, ?) AS INTEGER) AS seq
+		   SELECT CASE WHEN substr(order_number, ?) <> ''
+		                 AND substr(order_number, ?) NOT GLOB '*[^0-9]*'
+		                 AND length(substr(order_number, ?)) <= 9
+		               THEN CAST(substr(order_number, ?) AS INTEGER) END AS seq
 		     FROM work_orders
 		     WHERE tenant_id = ? AND order_number >= ? AND order_number < ?
 		   UNION ALL
@@ -1346,6 +1349,9 @@ func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year 
 		     WHERE tenant_id = ? AND year = ? AND expires_at > ?
 		 )`,
 		len(prefix)+1, // substr is 1-indexed: start just past the "RN-<year>-" prefix
+		len(prefix)+1,
+		len(prefix)+1,
+		len(prefix)+1,
 		tenantID,
 		prefix,
 		prefixEnd,

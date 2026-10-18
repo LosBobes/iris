@@ -127,6 +127,7 @@ func main() {
 		cmd := flag.NewFlagSet("migrate-to-postgres", flag.ExitOnError)
 		from := cmd.String("from", "", "putanja SQLite baze (podrazumevano DATABASE_PATH)")
 		to := cmd.String("to", "", "Postgres veza (podrazumevano DATABASE_URL)")
+		check := cmd.Bool("check", false, "samo proveri izvornu bazu, bez Postgres veze i bez kopiranja")
 		_ = cmd.Parse(os.Args[2:])
 
 		sourcePath := strings.TrimSpace(*from)
@@ -137,18 +138,47 @@ func main() {
 		if targetURL == "" {
 			targetURL = strings.TrimSpace(os.Getenv("DATABASE_URL"))
 		}
-		if targetURL == "" {
+		if targetURL == "" && !*check {
 			log.Fatal("koristite -to postgres://... ili podesite DATABASE_URL")
 		}
+
+		// OpenSQLite creates a missing file, so a mistyped -from would become an
+		// empty database that "migrates" only seed rows. Refuse that up front.
+		must(store.ValidateSQLiteSourceFile(sourcePath))
 
 		// The source is opened explicitly as SQLite: this command only ever
 		// copies a file into Postgres, never the reverse.
 		source := mustOpenSQLite(ctx, sourcePath)
 		defer source.Close()
+
+		report, err := store.InspectMigrationSource(ctx, source)
+		must(err)
+		fmt.Printf("Izvor: %s (verzija šeme %d)\n", sourcePath, report.SchemaVersion)
+		for _, table := range report.Uncovered {
+			log.Printf("UPOZORENJE: tabela %s nije obuhvaćena migracijom", table)
+		}
+		for _, problem := range report.Problems {
+			log.Printf("UPOZORENJE: %s", problem)
+		}
+		if *check {
+			total := 0
+			for _, count := range report.Counts {
+				fmt.Printf("  %-32s %6d\n", count.Table, count.Rows)
+				total += count.Rows
+			}
+			if len(report.Uncovered) > 0 || len(report.Problems) > 0 {
+				log.Fatalf("provera izvora je pronašla probleme (%d redova ukupno)", total)
+			}
+			fmt.Printf("Provera izvora je prošla: %d redova, nema upozorenja.\n", total)
+			return
+		}
+
 		target, err := store.OpenPostgres(ctx, targetURL)
 		must(err)
 		defer target.Close()
 
+		// The copy verifies row counts inside its transaction, so any mismatch
+		// rolls back and leaves the target empty.
 		counts, err := store.MigrateToPostgres(ctx, source, target)
 		must(err)
 
@@ -156,15 +186,6 @@ func main() {
 		for _, count := range counts {
 			fmt.Printf("  %-32s %6d\n", count.Table, count.Rows)
 			total += count.Rows
-		}
-
-		mismatches, err := store.VerifyMigration(ctx, source, target)
-		must(err)
-		if len(mismatches) > 0 {
-			for _, mismatch := range mismatches {
-				log.Printf("NESLAGANJE: %s", mismatch)
-			}
-			log.Fatal("provera nakon migracije nije uspela")
 		}
 		fmt.Printf("Migracija je završena: %d redova, sve tabele se poklapaju.\n", total)
 	case "import-csv":
@@ -546,7 +567,7 @@ func usage() {
   irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
   irisctl create-platform-admin -username ime -password lozinka
   irisctl backup [-out backups/iris.db]
-  irisctl migrate-to-postgres [-from ./data/iris.db] [-to postgres://...]
+  irisctl migrate-to-postgres [-check] [-from ./data/iris.db] [-to postgres://...]
 
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
 a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).

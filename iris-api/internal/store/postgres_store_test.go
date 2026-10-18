@@ -38,6 +38,7 @@ func storeScenarios() []storeScenario {
 		{name: "WorkOrderCreateListAndSearch", run: scenarioWorkOrderCreateListAndSearch},
 		{name: "WorkOrderPublicTokenLookup", run: scenarioWorkOrderPublicTokenLookup},
 		{name: "OrderNumberReservationIsUnique", run: scenarioOrderNumberReservationIsUnique},
+		{name: "NextOrderNumberIgnoresNonDigitSuffixes", run: scenarioNextOrderNumberIgnoresNonDigitSuffixes},
 		{name: "EditLockIsExclusive", run: scenarioEditLockIsExclusive},
 		{name: "ConcurrentCreatesKeepEveryWorkOrder", run: scenarioConcurrentCreatesKeepEveryWorkOrder},
 		{name: "EnumValuesRoundTrip", run: scenarioEnumValuesRoundTrip},

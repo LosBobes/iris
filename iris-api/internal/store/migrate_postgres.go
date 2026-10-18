@@ -102,9 +102,19 @@ func MigrateToPostgres(ctx context.Context, source *SQLStore, target *SQLStore) 
 		}
 	}
 
+	// Every source table is read inside one read-only transaction, so the copy
+	// sees a single snapshot. Without it a writer active between two tables could
+	// yield children whose parents were read earlier, i.e. a foreign-key
+	// inconsistent copy. The runbook still stops the backend first.
+	sourceTx, err := source.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("begin source snapshot: %w", err)
+	}
+	defer func() { _ = sourceTx.Rollback() }()
+
 	var counts []TableCount
 	for _, table := range migrationTables {
-		rows, err := copyTable(ctx, source.db, tx, table)
+		rows, err := copyTable(ctx, sourceTx, tx, table)
 		if err != nil {
 			return nil, err
 		}
@@ -114,6 +124,24 @@ func MigrateToPostgres(ctx context.Context, source *SQLStore, target *SQLStore) 
 	for _, table := range identitySequenceTables {
 		if err := resyncIdentitySequence(ctx, tx, table); err != nil {
 			return nil, err
+		}
+	}
+
+	// Verify before committing: a mismatch rolls the whole copy back, so a failed
+	// verification never leaves a populated target that blocks the next attempt.
+	for _, count := range counts {
+		var sourceCount, targetCount int
+		if err := sourceTx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+count.Table).Scan(&sourceCount); err != nil {
+			return nil, fmt.Errorf("count source %s: %w", count.Table, err)
+		}
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+count.Table).Scan(&targetCount); err != nil {
+			return nil, fmt.Errorf("count target %s: %w", count.Table, err)
+		}
+		if sourceCount != targetCount || sourceCount != count.Rows {
+			return nil, fmt.Errorf(
+				"provera nije uspela, migracija je poništena: %s: sqlite ima %d, kopirano %d, postgres ima %d redova",
+				count.Table, sourceCount, count.Rows, targetCount,
+			)
 		}
 	}
 
@@ -157,7 +185,7 @@ func verifyTargetIsEmpty(ctx context.Context, target *SQLStore) error {
 // copyTable streams one table from SQLite into Postgres. Columns are read from
 // the source result set rather than hard-coded, so the copy follows the schema
 // instead of a list that has to be kept in sync with it.
-func copyTable(ctx context.Context, source *sql.DB, target *sql.Tx, table string) (int, error) {
+func copyTable(ctx context.Context, source *sql.Tx, target *sql.Tx, table string) (int, error) {
 	rows, err := source.QueryContext(ctx, `SELECT * FROM `+table)
 	if err != nil {
 		return 0, fmt.Errorf("read source %s: %w", table, err)
