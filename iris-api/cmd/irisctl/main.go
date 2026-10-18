@@ -35,12 +35,22 @@ func main() {
 	case "seed-demo":
 		cmd := flag.NewFlagSet("seed-demo", flag.ExitOnError)
 		fixtureDir := cmd.String("fixtures", "testdata/fixtures", "putanja do JSON demo podataka")
+		adminPassword := cmd.String("admin-password", os.Getenv("IRIS_DEMO_ADMIN_PASSWORD"), "lozinka naloga admin (podrazumevano IRIS_DEMO_ADMIN_PASSWORD; obavezno u produkciji)")
+		operatorPassword := cmd.String("operator-password", os.Getenv("IRIS_DEMO_OPERATOR_PASSWORD"), "lozinka operaterskih naloga (podrazumevano IRIS_DEMO_OPERATOR_PASSWORD; obavezno u produkciji)")
 		_ = cmd.Parse(os.Args[2:])
+		// Outside production the public demo passwords are kept; production
+		// requires strong passwords of its own (see store.DemoPasswords) so the
+		// server does not refuse to start on the demo admin/admin123 login.
+		production := strings.EqualFold(strings.TrimSpace(os.Getenv("IRIS_ENV")), "production")
+		adminPw, operatorPw, err := store.DemoPasswords(production, *adminPassword, *operatorPassword)
+		if err != nil {
+			log.Fatalf("seed-demo: %v", err)
+		}
 		sqliteStore := mustOpen(ctx, dbPathFromEnv())
 		defer sqliteStore.Close()
-		result, err := store.SeedDemoFromFixtures(ctx, sqliteStore, *fixtureDir)
+		result, err := store.SeedDemoFromFixtures(ctx, sqliteStore, *fixtureDir, adminPw, operatorPw)
 		must(err)
-		printDemoSummary(result)
+		printDemoSummary(result, production)
 	case "seed-cobanovic":
 		cmd := flag.NewFlagSet("seed-cobanovic", flag.ExitOnError)
 		dir := cmd.String("dir", cobanovic.DefaultDataDir, "putanja do generisanog Čobanović seed skupa")
@@ -160,16 +170,22 @@ func main() {
 // printDemoSummary tells the operator how to sign in and what to look at. The
 // demo organization carries both the plain fixture work orders and the
 // process- and stock-driven content, with both modules on.
-func printDemoSummary(result store.DemoSeedResult) {
+func printDemoSummary(result store.DemoSeedResult, production bool) {
 	if result.AlreadySeeded {
 		fmt.Println("Demo podaci su već upisani (fiksni nalozi osveženi); procesi i magacin ostaju netaknuti.")
 		return
 	}
+	adminCreds, operatorCreds := "admin / admin123", "operater / operater123"
+	if production {
+		// Never echo the strong passwords; name where they came from instead.
+		adminCreds = "admin / (lozinka iz IRIS_DEMO_ADMIN_PASSWORD)"
+		operatorCreds = "operater / (lozinka iz IRIS_DEMO_OPERATOR_PASSWORD)"
+	}
 	fmt.Printf(`Demo podaci su upisani u SQLite bazu.
 
 Prijava:    /login/demo
-  admin     admin / admin123
-  operater  operater / operater123
+  admin     %s
+  operater  %s
 Moduli:     Magacin i Procesi rada uključeni
 Sadržaj:    fiksni radni nalozi iz testdata/fixtures + %d šablona procesa i
             %d radnih naloga sa procesima, magacin sa početnim stanjem i 3 prijema
@@ -183,6 +199,7 @@ Sadržaj:    fiksni radni nalozi iz testdata/fixtures + %d šablona procesa i
 Backoffice:  /backoffice, podrazumevani nalog admin / admin123321 se pravi pri prvom pokretanju servera
              (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju.
 `,
+		adminCreds, operatorCreds,
 		result.Templates, result.Orders,
 		strings.Join(result.LowArticles, ", "),
 		result.ShortageOrder, result.InProgressOrder, result.BrochureOrder, result.CancelledOrder, result.BrochureTemplate)
@@ -461,7 +478,7 @@ func onOff(value bool) string {
 func usage() {
 	fmt.Println(`Korišćenje:
   irisctl migrate
-  irisctl seed-demo [-fixtures testdata/fixtures]
+  irisctl seed-demo [-fixtures testdata/fixtures] [-admin-password … -operator-password …]
   irisctl seed-cobanovic [-dir internal/seed/cobanovic/data]
   irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
@@ -482,8 +499,11 @@ Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastal
 
 seed-demo pravi jednu "demo" organizaciju sa uključenim modulima Procesi rada i Magacin:
 fiksni radni nalozi iz testdata/fixtures plus šabloni procesa, artikli, početno stanje,
-prijemi i radni nalozi sa procesima u raznim statusima. Prijava admin / admin123 i
-operater / operater123 (samo van produkcije) na /login/demo.
+prijemi i radni nalozi sa procesima u raznim statusima, na /login/demo. Van produkcije
+prijava je admin / admin123 i operater / operater123. Kada je IRIS_ENV=production, lozinke
+se moraju zadati (IRIS_DEMO_ADMIN_PASSWORD i IRIS_DEMO_OPERATOR_PASSWORD ili -admin-password i
+-operator-password, najmanje 12 znakova, ne demo lozinke) — inače bi server odbio da se
+pokrene zbog demo naloga admin / admin123.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }

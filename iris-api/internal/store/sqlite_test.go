@@ -20,7 +20,7 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	ctx := testTenantContext()
 	dbPath := filepath.Join(t.TempDir(), "iris.db")
 	sqliteStore := newSQLiteStoreForTest(t, ctx, dbPath)
-	if _, err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t)); err != nil {
+	if _, err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t), "", ""); err != nil {
 		t.Fatalf("SeedDemoFromFixtures() returned error: %v", err)
 	}
 

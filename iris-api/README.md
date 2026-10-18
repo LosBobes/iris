@@ -92,6 +92,7 @@ iris-api/
 | `IRIS_ALLOWED_ORIGINS` | Comma-separated CORS origins. Empty allows local dev origins. | empty |
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary used to render work-order PDFs (`GET /work-orders/{id}/report`). When empty the usual names (`chromium`, `chromium-browser`, `google-chrome`, …) are searched on `$PATH`; when nothing is found the endpoint answers `503` instead of rendering. | empty |
+| `IRIS_DEMO_ADMIN_PASSWORD`, `IRIS_DEMO_OPERATOR_PASSWORD` | Passwords for the demo organization's `admin` / operator logins, read by `irisctl seed-demo`. Required in production (12+ characters, not a public demo password); outside production the public demo passwords are kept. Nothing on server start reads them — the demo org is created only when you run `seed-demo`. | empty |
 
 ## Commands
 
@@ -157,8 +158,14 @@ cancelled), with step progress posted so consumption and production movements co
 posting logic. Article codes and order numbers are unique per tenant, so the fixtures are seeded first
 and these orders take the next free `RN-<year>-<seq>` numbers after them. It is idempotent: the fixture
 half re-upserts and the process/stock content is added only once (a re-run reports it is already
-present and leaves it untouched). The logins use the public demo passwords, so it is for non-production
-use. The Backoffice default account is created on the first server start.
+present and leaves it untouched). The Backoffice default account is created on the first server start.
+
+Outside production the logins use the public demo passwords (`admin` / `admin123`, `operater` /
+`operater123`). In production a server refuses to start when any tenant has the demo `admin` /
+`admin123` login, so `seed-demo` requires strong passwords there: set `IRIS_DEMO_ADMIN_PASSWORD` and
+`IRIS_DEMO_OPERATOR_PASSWORD` (or pass `-admin-password` / `-operator-password`), at least 12
+characters and not a public demo password. The admin password replaces the fixture admin's; the
+operator password replaces every non-admin login's (the fixture operators and the content `operater`).
 
 Verification:
 

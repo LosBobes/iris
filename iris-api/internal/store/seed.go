@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
 // SeedDemoFromFixtures populates the single demo organization. It runs in two
@@ -20,22 +22,30 @@ import (
 // Article codes and order numbers are unique per tenant, so the fixtures are
 // seeded first and the content orders take the next free RN-<year>-<seq>
 // numbers after them. The result describes the content half for the CLI summary.
-func SeedDemoFromFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixtureDir string) (DemoSeedResult, error) {
+//
+// adminPassword and operatorPassword override the logins' passwords when set:
+// adminPassword replaces the fixture admin's password, operatorPassword replaces
+// every non-admin login's (the fixture operators and the content operater).
+// Empty keeps the public demo passwords. Resolve them with DemoPasswords so a
+// production server never gets the demo admin/admin123 login it refuses to start
+// with.
+func SeedDemoFromFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixtureDir, adminPassword, operatorPassword string) (DemoSeedResult, error) {
 	if err := sqliteStore.EnsureTenant(ctx, DemoTenantID, DemoTenantSlug, DemoTenantName); err != nil {
 		return DemoSeedResult{}, err
 	}
 	ctx = ContextWithTenant(ctx, DemoTenantID)
 
-	if err := seedDemoFixtures(ctx, sqliteStore, fixtureDir); err != nil {
+	if err := seedDemoFixtures(ctx, sqliteStore, fixtureDir, adminPassword, operatorPassword); err != nil {
 		return DemoSeedResult{}, err
 	}
-	return seedDemoContent(ctx, sqliteStore, DemoTenantSlug, time.Time{})
+	return seedDemoContent(ctx, sqliteStore, DemoTenantSlug, operatorPassword, time.Time{})
 }
 
 // seedDemoFixtures loads the fixture users, customers, locations and work orders
 // into the demo tenant (already in ctx). Work orders are written directly, so
-// they carry their fixture order numbers and get no process.
-func seedDemoFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixtureDir string) error {
+// they carry their fixture order numbers and get no process. The password
+// overrides follow SeedDemoFromFixtures.
+func seedDemoFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixtureDir, adminPassword, operatorPassword string) error {
 	fixtures := NewFixtureStore(fixtureDir)
 
 	users, err := fixtures.Users(ctx)
@@ -43,7 +53,15 @@ func seedDemoFixtures(ctx context.Context, sqliteStore *SQLiteStore, fixtureDir 
 		return err
 	}
 	for _, user := range users {
-		if err := sqliteStore.CreateUser(ctx, user.ID, user.Username, user.Password, user.Role, true); err != nil {
+		password := user.Password
+		if user.Role == domain.RoleAdmin {
+			if adminPassword != "" {
+				password = adminPassword
+			}
+		} else if operatorPassword != "" {
+			password = operatorPassword
+		}
+		if err := sqliteStore.CreateUser(ctx, user.ID, user.Username, password, user.Role, true); err != nil {
 			return fmt.Errorf("seed user %s: %w", user.Username, err)
 		}
 	}

@@ -134,7 +134,7 @@ curl http://localhost:8080/healthz
 # → {"status":"ok"}
 ```
 
-Default demo credentials — organization **`demo`**, username **`admin`**, password **`admin123`**. `seed-demo` creates the single `demo` tenant with this account plus an **`operater`** / **`operater123`** operator login, turns on both optional modules (Procesi rada and Magacin), and fills it with the fixture work orders alongside process- and stock-driven sample orders, four process templates and warehouse stock. Non-production only.
+Default demo credentials — organization **`demo`**, username **`admin`**, password **`admin123`**. `seed-demo` creates the single `demo` tenant with this account plus an **`operater`** / **`operater123`** operator login, turns on both optional modules (Procesi rada and Magacin), and fills it with the fixture work orders alongside process- and stock-driven sample orders, four process templates and warehouse stock. In production the public passwords are rejected (the server won't start on `admin` / `admin123`), so `seed-demo` there requires `IRIS_DEMO_ADMIN_PASSWORD` and `IRIS_DEMO_OPERATOR_PASSWORD` (12+ chars) — see [iris-api/README.md](iris-api/README.md).
 
 ---
 

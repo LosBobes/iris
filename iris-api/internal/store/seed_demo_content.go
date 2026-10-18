@@ -36,6 +36,38 @@ const (
 	demoBrochureTemplate = "Brošura sa šivenjem"
 )
 
+// MinDemoPasswordLength is required for the demo logins in production.
+const MinDemoPasswordLength = 12
+
+// DemoPasswords resolves the password overrides for the demo organization's
+// logins. Outside production both may be empty, meaning "keep the public demo
+// passwords" (the fixture admin password and operater123). In production both
+// must be set, at least MinDemoPasswordLength characters, and must not be a
+// public demo password: a production server refuses to start when any tenant
+// has the demo admin/admin123 login (see cmd/server/main.go), and the demo org
+// is reachable at /login/demo on the live host. The returned values are the
+// overrides to apply; empty means leave the default in place.
+func DemoPasswords(production bool, admin, operator string) (string, string, error) {
+	admin, operator = strings.TrimSpace(admin), strings.TrimSpace(operator)
+	if !production {
+		return admin, operator, nil
+	}
+	for _, pw := range []struct{ name, value string }{
+		{"IRIS_DEMO_ADMIN_PASSWORD", admin},
+		{"IRIS_DEMO_OPERATOR_PASSWORD", operator},
+	} {
+		switch {
+		case pw.value == "":
+			return "", "", fmt.Errorf("%s is required in production", pw.name)
+		case len(pw.value) < MinDemoPasswordLength:
+			return "", "", fmt.Errorf("%s must be at least %d characters", pw.name, MinDemoPasswordLength)
+		case pw.value == "admin123" || pw.value == demoOperatorPassword || pw.value == "admin123321":
+			return "", "", fmt.Errorf("%s must not be a demo password", pw.name)
+		}
+	}
+	return admin, operator, nil
+}
+
 // DemoSeedResult describes what SeedDemoFromFixtures created, for the CLI
 // summary. The order numbers are resolved at creation time because they follow
 // the fixture orders. When AlreadySeeded is true the process/stock content was
@@ -91,7 +123,7 @@ var demoServices = []struct {
 // creates only the operater login (the admin login comes from the fixtures) and
 // its orders take the next free order numbers. now anchors the order dates; zero
 // means time.Now().
-func seedDemoContent(ctx context.Context, s *SQLiteStore, slug string, now time.Time) (DemoSeedResult, error) {
+func seedDemoContent(ctx context.Context, s *SQLiteStore, slug, operatorPassword string, now time.Time) (DemoSeedResult, error) {
 	// Idempotency sentinel: process templates exist only once this content has
 	// run, so their presence means a prior seed already added everything here.
 	// The fixture half (seedDemoFixtures) is upsert-based and safe to re-run; the
@@ -105,8 +137,12 @@ func seedDemoContent(ctx context.Context, s *SQLiteStore, slug string, now time.
 	if now.IsZero() {
 		now = time.Now()
 	}
+	operatorPw := demoOperatorPassword
+	if operatorPassword != "" {
+		operatorPw = operatorPassword
+	}
 	b := &demoContentBuilder{
-		s: s, slug: slug, ctx: ctx, now: now,
+		s: s, slug: slug, ctx: ctx, now: now, operatorPassword: operatorPw,
 		articles:  map[string]domain.CatalogItem{},
 		customers: map[string]domain.Customer{},
 		locations: map[string]domain.Location{},
@@ -120,14 +156,15 @@ func seedDemoContent(ctx context.Context, s *SQLiteStore, slug string, now time.
 }
 
 type demoContentBuilder struct {
-	s         *SQLiteStore
-	ctx       context.Context
-	slug      string
-	now       time.Time
-	articles  map[string]domain.CatalogItem
-	customers map[string]domain.Customer
-	locations map[string]domain.Location
-	templates map[string]*domain.ProcessTemplate
+	s                *SQLiteStore
+	ctx              context.Context
+	slug             string
+	now              time.Time
+	operatorPassword string
+	articles         map[string]domain.CatalogItem
+	customers        map[string]domain.Customer
+	locations        map[string]domain.Location
+	templates        map[string]*domain.ProcessTemplate
 }
 
 func (b *demoContentBuilder) build(result *DemoSeedResult) error {
@@ -144,7 +181,7 @@ func (b *demoContentBuilder) build(result *DemoSeedResult) error {
 
 func (b *demoContentBuilder) users() error {
 	id := "user-" + b.slug + "-" + demoOperatorUsername
-	if err := b.s.CreateUser(b.ctx, id, demoOperatorUsername, demoOperatorPassword, domain.RoleUser, true); err != nil {
+	if err := b.s.CreateUser(b.ctx, id, demoOperatorUsername, b.operatorPassword, domain.RoleUser, true); err != nil {
 		return fmt.Errorf("demo user %s: %w", demoOperatorUsername, err)
 	}
 	return nil

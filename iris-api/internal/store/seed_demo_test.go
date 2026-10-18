@@ -47,7 +47,7 @@ func seededProcesses(t *testing.T, s *SQLiteStore, tctx context.Context) []domai
 func TestSeedDemoFromFixtures(t *testing.T) {
 	s, ctx := openDemoStore(t)
 
-	result, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir)
+	result, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "")
 	if err != nil || result.AlreadySeeded {
 		t.Fatalf("SeedDemoFromFixtures = %+v, %v", result, err)
 	}
@@ -216,7 +216,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 	// and stock content untouched.
 	beforeMovements := movements.Total
 	beforeOrders := all.Total
-	again, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir)
+	again, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "")
 	if err != nil || !again.AlreadySeeded {
 		t.Fatalf("second run = %+v, %v", again, err)
 	}
@@ -231,11 +231,62 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 	}
 }
 
+func TestDemoPasswords(t *testing.T) {
+	// Outside production both overrides pass through untouched (empty = keep the
+	// public demo passwords).
+	if admin, operator, err := DemoPasswords(false, "", ""); err != nil || admin != "" || operator != "" {
+		t.Fatalf("non-production empty = %q %q %v", admin, operator, err)
+	}
+	for name, pw := range map[string][2]string{
+		"missing admin":    {"", "operater-strong-pass"},
+		"missing operator": {"admin-strong-pass", ""},
+		"short":            {"short", "operater-strong-pass"},
+		"demo admin":       {"admin123", "operater-strong-pass"},
+		"demo op":          {"admin-strong-pass", "operater123"},
+		"backoffice demo":  {"admin123321", "operater-strong-pass"},
+	} {
+		if _, _, err := DemoPasswords(true, pw[0], pw[1]); err == nil {
+			t.Errorf("%s: production accepted %q / %q", name, pw[0], pw[1])
+		}
+	}
+	admin, operator, err := DemoPasswords(true, " admin-strong-pass ", "operater-strong-pass")
+	if err != nil || admin != "admin-strong-pass" || operator != "operater-strong-pass" {
+		t.Fatalf("production passwords = %q %q %v", admin, operator, err)
+	}
+}
+
+func TestSeedDemoWithProductionPasswords(t *testing.T) {
+	s, ctx := openDemoStore(t)
+	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "admin-strong-pass", "operater-strong-pass"); err != nil {
+		t.Fatal(err)
+	}
+	tenant, _ := s.TenantBySlug(ctx, DemoTenantSlug)
+	// The demo admin/admin123 login that the production startup guard rejects
+	// must not exist anywhere.
+	if demo, err := s.HasUserPassword(ctx, "admin", "admin123"); err != nil || demo {
+		t.Fatalf("HasUserPassword(admin, admin123) = %v, %v", demo, err)
+	}
+	// Admin and both operator logins authenticate with the strong passwords.
+	for _, creds := range [][2]string{
+		{"admin", "admin-strong-pass"},
+		{demoOperatorUsername, "operater-strong-pass"},
+		{"ana.jovic", "operater-strong-pass"}, // a fixture operator, overridden too
+	} {
+		if user, err := s.AuthenticateUser(ctx, tenant.ID, creds[0], creds[1]); err != nil || user == nil {
+			t.Fatalf("login %s = %v, %v", creds[0], user, err)
+		}
+	}
+	// The public operator password no longer works for any login.
+	if user, err := s.AuthenticateUser(ctx, tenant.ID, demoOperatorUsername, "operater123"); err == nil && user != nil {
+		t.Fatal("demo operator password still works")
+	}
+}
+
 // TestDeleteTenantCascades checks that deleting a tenant leaves no row behind in
 // any table that carries tenant data, including child tables without a tenant_id.
 func TestDeleteTenantCascades(t *testing.T) {
 	s, ctx := openDemoStore(t)
-	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir); err != nil {
+	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	tenant, _ := s.TenantBySlug(ctx, DemoTenantSlug)
