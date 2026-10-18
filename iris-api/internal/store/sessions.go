@@ -74,7 +74,7 @@ func (s *SQLiteStore) StartSession(ctx context.Context, input NewSession) (strin
 		input.UserID,
 		input.ExpiresAt.UTC().Format(time.RFC3339),
 		absolute.UTC().Format(time.RFC3339),
-		input.Remember,
+		boolInt(input.Remember), // INTEGER 0/1 column: bind an int, not a Go bool
 	); err != nil {
 		return "", fmt.Errorf("create session: %w", err)
 	}
@@ -95,7 +95,7 @@ func (s *SQLiteStore) SessionByToken(ctx context.Context, token string) (*Sessio
 	var user domain.User
 	var expiresAtRaw string
 	var absoluteRaw sql.NullString
-	var remember bool
+	var remember int
 	var impersonatedBy sql.NullString
 	var impersonationID sql.NullInt64
 	// An impersonation session (see CreateImpersonationSession) carries the
@@ -134,7 +134,7 @@ func (s *SQLiteStore) SessionByToken(ctx context.Context, token string) (*Sessio
 		user.ImpersonatedBy = &impersonatedBy.String
 		user.ImpersonationID = impersonationID.Int64
 	}
-	return &Session{User: &user, ExpiresAt: expiresAt, AbsoluteExpiresAt: absolute, Remember: remember}, nil
+	return &Session{User: &user, ExpiresAt: expiresAt, AbsoluteExpiresAt: absolute, Remember: remember != 0}, nil
 }
 
 // ExtendSession moves a session's idle expiry to expiresAt. It never moves it

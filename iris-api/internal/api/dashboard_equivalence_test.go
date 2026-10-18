@@ -3,9 +3,11 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"testing"
 
 	"github.com/LosBobes/iris/iris-api/internal/dashboard"
@@ -30,8 +32,22 @@ func referenceDashboard(t *testing.T, ctx context.Context, s *store.SQLiteStore,
 }
 
 func TestDashboardSQLPruningMatchesFullScan(t *testing.T) {
-	server, _, _ := newServerWithRoles(t)
-	sqliteStore := server.store.(*store.SQLiteStore)
+	dbPath := filepath.Join(t.TempDir(), "iris.db")
+	sqliteStore, err := store.OpenSQLite(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = sqliteStore.Close() })
+	if err := sqliteStore.EnsureTenant(context.Background(), store.DemoTenantID, store.DemoTenantSlug, store.DemoTenantName); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	server := NewServer(sqliteStore)
+	// A second handle for writing rows the store itself no longer produces.
+	rawDB, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("open raw db: %v", err)
+	}
+	t.Cleanup(func() { _ = rawDB.Close() })
 	ctx := store.ContextWithTenant(context.Background(), store.DemoTenantID)
 
 	rng := rand.New(rand.NewSource(42))
@@ -75,7 +91,12 @@ func TestDashboardSQLPruningMatchesFullScan(t *testing.T) {
 			user := users[rng.Intn(len(users))]
 			order.Assignment.AssignedTo = &user
 		}
-		if rng.Intn(6) > 0 { // some without a due date
+		switch rng.Intn(8) {
+		case 0: // no due date
+		case 1: // an empty due date (PATCH {"dueDate":""}, imports) means none
+			empty := ""
+			order.DueDate = &empty
+		default:
 			due := pickDate(2026, 5+rng.Intn(3), 28) // May-Jul around "today"
 			order.DueDate = &due
 		}
@@ -104,6 +125,16 @@ func TestDashboardSQLPruningMatchesFullScan(t *testing.T) {
 		if err := sqliteStore.PutWorkOrder(ctx, order); err != nil {
 			t.Fatalf("put work order: %v", err)
 		}
+	}
+
+	// Rows stored before empty due dates were normalized away keep "" in
+	// both the column and the payload.
+	if _, err := rawDB.ExecContext(ctx, `UPDATE work_orders
+		SET due_date = '', payload = json_set(payload, '$.dueDate', ''),
+		    summary_payload = json_set(summary_payload, '$.dueDate', '')
+		WHERE id IN (SELECT id FROM work_orders WHERE tenant_id = ? AND due_date IS NULL ORDER BY id LIMIT 15)`,
+		store.DemoTenantID); err != nil {
+		t.Fatalf("store legacy empty due dates: %v", err)
 	}
 
 	// Another organization's orders must never leak into this one's dashboard.

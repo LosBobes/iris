@@ -1239,6 +1239,8 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
     },
 
     async exportWorkOrdersCsv(query = {}) {
+      // `lang` needs no handling (filters ignore it): the in-browser twin
+      // labels in the current UI language, which is what the page sends.
       const { columns, ...filters } = query
       const keys = new Set<WorkOrderColumnKey>(
         (columns && columns.length > 0 ? columns : ALL_COLUMN_KEYS) as WorkOrderColumnKey[],

@@ -66,8 +66,9 @@ function dateToLocalTimestamp(date: string): number {
   return new Date(`${date}T00:00:00`).getTime()
 }
 
+// An empty due date counts as none (matches the Go port and the queue summary).
 function getAttentionDueDate(order: WorkOrder): string | null {
-  return order.dueDate
+  return order.dueDate || null
 }
 
 function totalSignalCount(counts: AttentionSignalCounts): number {

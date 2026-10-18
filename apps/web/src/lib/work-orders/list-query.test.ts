@@ -128,6 +128,22 @@ describe("work-order list query (fixture twin of the API)", () => {
     expect(numbers(filterAndSortWorkOrders(orders, { sort: "-dueDate" })).at(-1)).toBe("RN-2026-9");
   });
 
+  it("sorts client names and job descriptions with Serbian letters folded", () => {
+    const names = ["Zora", "Čačak", "cvet", "Đurić", "Dejan"];
+    const orders = names.map((name, index) =>
+      makeOrder({ id: String(index), orderNumber: name, clientName: name, jobDescription: name }),
+    );
+    for (const sort of ["clientName", "jobDescription"]) {
+      expect(numbers(filterAndSortWorkOrders(orders, { sort }))).toEqual([
+        "Čačak",
+        "cvet",
+        "Dejan",
+        "Đurić",
+        "Zora",
+      ]);
+    }
+  });
+
   it("pages like the API: default 50, capped at 200, total over every match", () => {
     const orders = Array.from({ length: 260 }, (_, index) =>
       makeOrder({ id: String(index), orderNumber: `RN-${index}` }),

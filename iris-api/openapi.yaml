@@ -869,8 +869,11 @@ paths:
       description: >-
         Same filters and sort as `GET /work-orders`, without paging. The file
         starts with a UTF-8 BOM, uses CRLF line endings and RFC 4180 quoting,
-        Serbian column headers and labels (priority, document type, status),
-        the due date as DD.MM.YYYY and the selling price as a plain number.
+        column headers and labels (priority, document type, status) in the
+        `lang` language, the due date as DD.MM.YYYY and the selling price as a
+        plain number. A text cell that starts with `=`, `+`, `-`, `@`, a tab
+        or a carriage return is prefixed with `'` so spreadsheets do not run it
+        as a formula (the price column is never prefixed).
       parameters:
         - $ref: '#/components/parameters/WorkOrderSearch'
         - $ref: '#/components/parameters/WorkOrderStatusFilter'
@@ -894,6 +897,15 @@ paths:
           schema:
             type: string
             example: clientName,jobDescription,status
+        - name: lang
+          in: query
+          description: >-
+            Language of the column headers and labels: `sr` (Serbian, default)
+            or `en` (English). The web client sends its current UI language.
+          schema:
+            type: string
+            enum: [sr, en]
+            default: sr
       responses:
         '200':
           description: CSV file (`Content-Disposition` attachment).

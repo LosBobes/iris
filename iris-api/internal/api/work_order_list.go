@@ -41,7 +41,8 @@ func (s *Server) handleWorkOrders(w http.ResponseWriter, r *http.Request) {
 // handleExportWorkOrdersCSV streams every order matching the list filters (no
 // paging) as the CSV the work-order list's "Izvoz" button downloads. The
 // optional `columns` parameter (comma-separated list column keys) picks the
-// columns, matching what the user has visible.
+// columns, matching what the user has visible; `lang=en` switches headers and
+// labels to English (default Serbian).
 func (s *Server) handleExportWorkOrdersCSV(w http.ResponseWriter, r *http.Request) {
 	query := parseWorkOrderListFilters(r)
 	query.Summary = true
@@ -58,7 +59,11 @@ func (s *Server) handleExportWorkOrdersCSV(w http.ResponseWriter, r *http.Reques
 	var body bytes.Buffer
 	// The export carries only the selling price, which every role may see, so
 	// no cost stripping is needed here.
-	if err := store.WriteWorkOrdersCSV(&body, result.Items, columns); err != nil {
+	lang := store.CSVLanguageSerbian
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("lang")), store.CSVLanguageEnglish) {
+		lang = store.CSVLanguageEnglish
+	}
+	if err := store.WriteWorkOrdersCSV(&body, result.Items, columns, lang); err != nil {
 		writeServerError(w, r, err)
 		return
 	}

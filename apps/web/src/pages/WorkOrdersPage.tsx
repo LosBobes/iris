@@ -22,7 +22,7 @@ import type { WorkOrder } from "@/types/work-order";
 import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 
 function WorkOrdersPage(): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const {
     orders,
@@ -63,6 +63,7 @@ function WorkOrdersPage(): React.JSX.Element {
       const blob = await window.api.exportWorkOrdersCsv({
         ...exportFilters,
         columns: [...visibleColumnSet],
+        lang: i18n.resolvedLanguage?.startsWith("en") ? "en" : "sr",
       });
       downloadWorkOrdersCsv(blob);
       toast.success(t("workOrders.toast.exported", { count: totalFiltered }));
@@ -70,7 +71,7 @@ function WorkOrdersPage(): React.JSX.Element {
       reportUnexpectedError("WorkOrdersPage.exportCsv", error);
       toast.error(formatActionError(t("workOrders.toast.exportError"), error));
     }
-  }, [exportFilters, totalFiltered, visibleColumnSet, t]);
+  }, [exportFilters, totalFiltered, visibleColumnSet, t, i18n]);
 
   const advanceStatus = useCallback(
     async (order: WorkOrder) => {

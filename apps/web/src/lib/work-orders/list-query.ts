@@ -127,10 +127,12 @@ function sortValue(order: WorkOrder, field: string): string | number | null {
   switch (field) {
     case "orderNumber":
       return orderNumberSortKey(order.orderNumber);
+    // Folded like the API's client_name_sort / job_description_sort, so
+    // "Čačak" sorts with C rather than after "Zora".
     case "clientName":
-      return order.clientName.toLowerCase();
+      return foldSearchText(order.clientName);
     case "jobDescription":
-      return order.jobDescription.toLowerCase();
+      return foldSearchText(order.jobDescription);
     case "status":
       return order.status;
     case "assignedTo":

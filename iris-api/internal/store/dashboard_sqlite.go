@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -47,15 +49,21 @@ func (s *SQLiteStore) DashboardOrders(ctx context.Context, query DashboardOrders
 	}
 
 	var result DashboardOrders
-	var exists int
-	if err := s.db.QueryRowContext(
+	// SELECT 1 … LIMIT 1 rather than EXISTS(): PostgreSQL returns EXISTS as a
+	// boolean, SQLite as an integer.
+	var one int
+	switch err := s.db.QueryRowContext(
 		ctx,
-		`SELECT EXISTS(SELECT 1 FROM work_orders WHERE tenant_id = ?)`,
+		`SELECT 1 FROM work_orders WHERE tenant_id = ? LIMIT 1`,
 		tenantID,
-	).Scan(&exists); err != nil {
+	).Scan(&one); {
+	case err == nil:
+		result.HasOrders = true
+	case errors.Is(err, sql.ErrNoRows):
+		result.HasOrders = false
+	default:
 		return DashboardOrders{}, fmt.Errorf("check work orders: %w", err)
 	}
-	result.HasOrders = exists != 0
 	if !result.HasOrders {
 		result.Orders = []domain.WorkOrder{}
 		return result, nil

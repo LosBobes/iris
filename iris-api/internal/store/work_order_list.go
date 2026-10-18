@@ -83,6 +83,10 @@ type workOrderListColumns struct {
 	SearchText          string
 	OrderNumberSort     string
 	SummaryPayload      string
+	// Folded (FoldSearchText) sort keys: SQLite's LOWER() is ASCII-only and
+	// would sort "Čačak" after "Zora".
+	ClientNameSort     string
+	JobDescriptionSort string
 }
 
 func listColumnsFor(workOrder domain.WorkOrder) (workOrderListColumns, error) {
@@ -96,6 +100,9 @@ func listColumnsFor(workOrder domain.WorkOrder) (workOrderListColumns, error) {
 		SearchText:      workOrderSearchText(workOrder),
 		OrderNumberSort: orderNumberSortKey(workOrder.OrderNumber),
 		SummaryPayload:  string(summary),
+
+		ClientNameSort:     FoldSearchText(workOrder.ClientName),
+		JobDescriptionSort: FoldSearchText(workOrder.JobDescription),
 	}
 	if workOrder.BillingDocumentType != nil && *workOrder.BillingDocumentType != "" {
 		columns.BillingDocumentType = string(*workOrder.BillingDocumentType)
@@ -304,9 +311,9 @@ func workOrderOrderBy(sortKey string) string {
 	case "orderNumber":
 		return "ORDER BY order_number_sort " + direction + ", id ASC"
 	case "clientName":
-		return "ORDER BY LOWER(client_name) " + direction + ", id ASC"
+		return "ORDER BY client_name_sort " + direction + ", id ASC"
 	case "jobDescription":
-		return "ORDER BY LOWER(job_description) " + direction + ", id ASC"
+		return "ORDER BY job_description_sort " + direction + ", id ASC"
 	case "status":
 		return "ORDER BY status " + direction + ", id ASC"
 	case "assignedTo":
@@ -438,9 +445,9 @@ func workOrderSortValue(workOrder domain.WorkOrder, field string) (string, bool)
 	case "orderNumber":
 		return orderNumberSortKey(workOrder.OrderNumber), false
 	case "clientName":
-		return strings.ToLower(workOrder.ClientName), false
+		return FoldSearchText(workOrder.ClientName), false
 	case "jobDescription":
-		return strings.ToLower(workOrder.JobDescription), false
+		return FoldSearchText(workOrder.JobDescription), false
 	case "status":
 		return string(workOrder.Status), false
 	case "assignedTo":
@@ -476,8 +483,9 @@ func workOrderSortValue(workOrder domain.WorkOrder, field string) (string, bool)
 
 // workOrderListColumnsMigration (v24) adds the denormalized list columns —
 // billing_document_type, delivery_method, priority, is_completed, search_text
-// (folded haystack), order_number_sort (natural-sort key) and summary_payload
-// (the slim list JSON) — plus tenant-scoped indexes, then backfills every row
+// (folded haystack), order_number_sort (natural-sort key), summary_payload
+// (the slim list JSON) and the folded client_name_sort / job_description_sort
+// keys — plus tenant-scoped indexes, then backfills every row
 // from its payload. The backfill needs the Go folding/formatting logic, hence a
 // Go migration; the DDL is plain portable SQL.
 func workOrderListColumnsMigration(ctx context.Context, db *sql.DB) error {
@@ -495,6 +503,9 @@ func workOrderListColumnsMigration(ctx context.Context, db *sql.DB) error {
 		`ALTER TABLE work_orders ADD COLUMN search_text TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE work_orders ADD COLUMN order_number_sort TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE work_orders ADD COLUMN summary_payload TEXT`,
+		`ALTER TABLE work_orders ADD COLUMN client_name_sort TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE work_orders ADD COLUMN job_description_sort TEXT NOT NULL DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_client_name_sort ON work_orders(tenant_id, client_name_sort)`,
 		`CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_order_number_sort ON work_orders(tenant_id, order_number_sort)`,
 		`CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_due_date ON work_orders(tenant_id, due_date)`,
 		`CREATE INDEX IF NOT EXISTS idx_work_orders_tenant_customer ON work_orders(tenant_id, customer_id)`,
@@ -509,6 +520,12 @@ func workOrderListColumnsMigration(ctx context.Context, db *sql.DB) error {
 	}
 	if err := backfillWorkOrderListColumns(ctx, tx); err != nil {
 		return err
+	}
+	// Recorded in the same transaction, so a crash cannot leave the columns
+	// added without the version (the next start would fail on "duplicate
+	// column"). The runner's own record is INSERT OR IGNORE.
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version) VALUES (?)`, 24); err != nil {
+		return fmt.Errorf("record work-order list columns migration: %w", err)
 	}
 	return tx.Commit()
 }
@@ -549,10 +566,12 @@ func backfillWorkOrderListColumns(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(
 			ctx,
 			`UPDATE work_orders SET billing_document_type = ?, delivery_method = ?, priority = ?,
-			   is_completed = ?, search_text = ?, order_number_sort = ?, summary_payload = ?
+			   is_completed = ?, search_text = ?, order_number_sort = ?, summary_payload = ?,
+			   client_name_sort = ?, job_description_sort = ?
 			 WHERE id = ?`,
 			columns.BillingDocumentType, columns.DeliveryMethod, columns.Priority,
 			columns.IsCompleted, columns.SearchText, columns.OrderNumberSort, columns.SummaryPayload,
+			columns.ClientNameSort, columns.JobDescriptionSort,
 			row.id,
 		); err != nil {
 			return fmt.Errorf("backfill work order %s: %w", row.id, err)

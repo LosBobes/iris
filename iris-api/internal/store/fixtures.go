@@ -822,7 +822,6 @@ func cloneEnumValues(values []domain.EnumValue) []domain.EnumValue {
 	return cloned
 }
 
-
 func paginateWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) []domain.WorkOrder {
 	if query.Offset >= len(workOrders) {
 		return []domain.WorkOrder{}

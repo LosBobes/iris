@@ -872,7 +872,7 @@ func (s *SQLiteStore) CreateWorkOrder(
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	sequence, err := nextSequence(ctx, tx)
+	sequence, err := nextFreeSequence(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -930,7 +930,9 @@ func (s *SQLiteStore) CreateWorkOrder(
 		workOrder.Events = applyCostReviewEvents(workOrder.Events, false, true, input.IssuedBy, now)
 	}
 
-	if err := putWorkOrder(ctx, tx, tenantID, workOrder); err != nil {
+	// A plain insert: if the id is taken after all (a writer that bypasses
+	// the counter), the create fails instead of overwriting that order.
+	if err := insertWorkOrder(ctx, tx, tenantID, workOrder); err != nil {
 		return nil, err
 	}
 	if err := attachDefaultProcess(ctx, tx, tenantID, workOrder.ID, input.IssuedBy, now); err != nil {
@@ -1072,34 +1074,40 @@ type sqlExecutor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+// PutWorkOrder upserts a work order with a caller-chosen id (fixtures, seeds,
+// imports). The counter bump and the write share one transaction, so a
+// concurrent create never sees the row without the raised counter.
 func (s *SQLiteStore) PutWorkOrder(ctx context.Context, workOrder domain.WorkOrder) error {
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	return putWorkOrder(ctx, s.db, tenantID, workOrder)
-}
-
-func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrder domain.WorkOrder) error {
-	payload, err := json.Marshal(workOrder)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("encode work order payload: %w", err)
+		return fmt.Errorf("begin put work order: %w", err)
 	}
-	assignedTo := ptrStringValue(workOrder.Assignment.AssignedTo)
-	publicToken := nullIfEmpty(workOrder.Communication.PublicToken)
-	list, err := listColumnsFor(workOrder)
-	if err != nil {
+	defer func() { _ = tx.Rollback() }()
+	if err := putWorkOrder(ctx, tx, tenantID, workOrder); err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(
-		ctx,
-		`INSERT INTO work_orders(
-		   id, tenant_id, order_number, customer_id, location_id, client_name, job_description,
-		   issued_by, assigned_to, status, issue_date, due_date, price, needs_cost_review,
-		   payload, created_at, updated_at, public_token,
-		   billing_document_type, delivery_method, priority, is_completed, search_text,
-		   order_number_sort, summary_payload
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit put work order: %w", err)
+	}
+	return nil
+}
+
+// putWorkOrder upserts a work order of this tenant. An id held by another
+// tenant is left alone (the upsert's WHERE matches nothing).
+func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrder domain.WorkOrder) error {
+	return writeWorkOrder(ctx, db, tenantID, workOrder, true)
+}
+
+// insertWorkOrder inserts a new work order and fails if its id exists.
+func insertWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrder domain.WorkOrder) error {
+	return writeWorkOrder(ctx, db, tenantID, workOrder, false)
+}
+
+const workOrderUpsertClause = `
 		 ON CONFLICT(id) DO UPDATE SET
 		   order_number = excluded.order_number,
 		   customer_id = excluded.customer_id,
@@ -1123,8 +1131,40 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 		   is_completed = excluded.is_completed,
 		   search_text = excluded.search_text,
 		   order_number_sort = excluded.order_number_sort,
-		   summary_payload = excluded.summary_payload
-		 WHERE work_orders.tenant_id = excluded.tenant_id`,
+		   summary_payload = excluded.summary_payload,
+		   client_name_sort = excluded.client_name_sort,
+		   job_description_sort = excluded.job_description_sort
+		 WHERE work_orders.tenant_id = excluded.tenant_id`
+
+func writeWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrder domain.WorkOrder, upsert bool) error {
+	// An empty due date means none (PATCH {"dueDate":""}, imports): store it
+	// as absent so lists, filters and the dashboard agree.
+	if workOrder.DueDate != nil && *workOrder.DueDate == "" {
+		workOrder.DueDate = nil
+	}
+	payload, err := json.Marshal(workOrder)
+	if err != nil {
+		return fmt.Errorf("encode work order payload: %w", err)
+	}
+	assignedTo := ptrStringValue(workOrder.Assignment.AssignedTo)
+	publicToken := nullIfEmpty(workOrder.Communication.PublicToken)
+	list, err := listColumnsFor(workOrder)
+	if err != nil {
+		return err
+	}
+	upsertClause := ""
+	if upsert {
+		upsertClause = workOrderUpsertClause
+	}
+	if _, err := db.ExecContext(
+		ctx,
+		`INSERT INTO work_orders(
+		   id, tenant_id, order_number, customer_id, location_id, client_name, job_description,
+		   issued_by, assigned_to, status, issue_date, due_date, price, needs_cost_review,
+		   payload, created_at, updated_at, public_token,
+		   billing_document_type, delivery_method, priority, is_completed, search_text,
+		   order_number_sort, summary_payload, client_name_sort, job_description_sort
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`+upsertClause,
 		workOrder.ID,
 		tenantID,
 		workOrder.OrderNumber,
@@ -1150,6 +1190,8 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 		list.SearchText,
 		list.OrderNumberSort,
 		list.SummaryPayload,
+		list.ClientNameSort,
+		list.JobDescriptionSort,
 	); err != nil {
 		return fmt.Errorf("put work order: %w", err)
 	}

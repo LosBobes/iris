@@ -446,6 +446,8 @@ export interface WorkOrderListQuery extends WorkOrderListFilters {
 export interface WorkOrderCsvExportQuery extends WorkOrderListFilters {
   /** List column keys to export (orderNumber is always included). */
   columns?: string[]
+  /** Header/label language; the API defaults to Serbian. */
+  lang?: 'sr' | 'en'
 }
 
 /** Page size the API uses when none is sent, and its cap on `limit`. */

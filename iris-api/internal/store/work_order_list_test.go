@@ -256,7 +256,7 @@ func TestWorkOrderListColumnsBackfill(t *testing.T) {
 	}
 	if _, err := sqliteStore.db.ExecContext(ctx, `UPDATE work_orders SET billing_document_type = NULL,
 		delivery_method = NULL, priority = '', is_completed = 0, search_text = '', order_number_sort = '',
-		summary_payload = NULL`); err != nil {
+		summary_payload = NULL, client_name_sort = '', job_description_sort = ''`); err != nil {
 		t.Fatalf("clear columns: %v", err)
 	}
 	tx, err := sqliteStore.db.BeginTx(ctx, nil)
@@ -280,6 +280,11 @@ func TestWorkOrderListColumnsBackfill(t *testing.T) {
 	if billing != "invoice" || !strings.Contains(search, "stamparija cobanovic") || sortKey == "" || summary == "" {
 		t.Fatalf("backfilled row = %q %q %q %q", billing, search, sortKey, summary)
 	}
+	var clientSort string
+	if err := sqliteStore.db.QueryRowContext(ctx,
+		`SELECT client_name_sort FROM work_orders WHERE id = '1'`).Scan(&clientSort); err != nil || clientSort != "stamparija cobanovic" {
+		t.Fatalf("client_name_sort = %q (%v)", clientSort, err)
+	}
 	if err := sqliteStore.db.QueryRowContext(ctx,
 		`SELECT is_completed FROM work_orders WHERE id = '12'`).Scan(&completed); err != nil || completed != 1 {
 		t.Fatalf("is_completed = %d (%v), want 1", completed, err)
@@ -290,7 +295,7 @@ func TestWriteWorkOrdersCSV(t *testing.T) {
 	orders := listTestOrders()[:2]
 	orders[0].JobDescription = `Vizit karte, "mat"`
 	var buffer bytes.Buffer
-	if err := WriteWorkOrdersCSV(&buffer, orders, []string{"clientName", "billing", "schedule", "price", "status"}); err != nil {
+	if err := WriteWorkOrdersCSV(&buffer, orders, []string{"clientName", "billing", "schedule", "price", "status"}, CSVLanguageSerbian); err != nil {
 		t.Fatalf("WriteWorkOrdersCSV returned error: %v", err)
 	}
 	want := "\xEF\xBB\xBF" +
@@ -302,11 +307,52 @@ func TestWriteWorkOrdersCSV(t *testing.T) {
 	}
 
 	buffer.Reset()
-	if err := WriteWorkOrdersCSV(&buffer, orders, []string{"jobDescription"}); err != nil {
+	if err := WriteWorkOrdersCSV(&buffer, orders, []string{"jobDescription"}, ""); err != nil {
 		t.Fatalf("WriteWorkOrdersCSV returned error: %v", err)
 	}
 	if !strings.Contains(buffer.String(), `RN-2026-1,"Vizit karte, ""mat"""`) {
 		t.Fatalf("csv = %q, want RFC 4180 quoting", buffer.String())
+	}
+
+	// English headers and labels.
+	buffer.Reset()
+	if err := WriteWorkOrdersCSV(&buffer, orders, []string{"billing", "priority", "status"}, CSVLanguageEnglish); err != nil {
+		t.Fatalf("WriteWorkOrdersCSV(en) returned error: %v", err)
+	}
+	wantEN := "\xEF\xBB\xBF" +
+		"Order no.,Priority,Document type,Status\r\n" +
+		"RN-2026-1,Normal,Invoice,New\r\n" +
+		"RN-2026-2,Normal,Proforma,New"
+	if got := buffer.String(); got != wantEN {
+		t.Fatalf("english csv =\n%q\nwant\n%q", got, wantEN)
+	}
+}
+
+// TestWriteWorkOrdersCSVNeutralizesFormulas: text cells that a spreadsheet
+// would evaluate get a leading apostrophe; a negative price stays a number.
+func TestWriteWorkOrdersCSVNeutralizesFormulas(t *testing.T) {
+	negative := -150.5
+	order := listTestOrder("1", func(o *domain.WorkOrder) {
+		o.ClientName = `=HYPERLINK("http://x")`
+		o.JobDescription = "+1-2"
+		o.Assignment.AssignedTo = strPtr("@ana")
+		o.Price = &negative
+	})
+	tabbed := listTestOrder("2", func(o *domain.WorkOrder) {
+		o.OrderNumber = "-RN-2"
+		o.ClientName = "\tcmd"
+		o.JobDescription = "\rx"
+	})
+	var buffer bytes.Buffer
+	if err := WriteWorkOrdersCSV(&buffer, []domain.WorkOrder{order, tabbed}, []string{"clientName", "jobDescription", "assigned", "price"}, ""); err != nil {
+		t.Fatalf("WriteWorkOrdersCSV returned error: %v", err)
+	}
+	want := "\xEF\xBB\xBF" +
+		"Br. naloga,Klijent,Opis posla,Operater,Cena\r\n" +
+		`RN-2026-1,"'=HYPERLINK(""http://x"")",'+1-2,'@ana,-150.5` + "\r\n" +
+		"'-RN-2,'\tcmd,\"'\rx\",,"
+	if got := buffer.String(); got != want {
+		t.Fatalf("csv =\n%q\nwant\n%q", got, want)
 	}
 }
 
@@ -352,5 +398,93 @@ func BenchmarkWorkOrderListSummary(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// TestWorkOrderListSortsFoldedNames: client name / job description sort on the
+// folded key, so "Čačak" sorts with C (SQLite LOWER() alone would put it after
+// "Zora"); the fixture sorter agrees.
+func TestWorkOrderListSortsFoldedNames(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+	names := map[string]string{"1": "Zora", "2": "Čačak", "3": "cvet", "4": "Đurić", "5": "Dejan"}
+	var orders []domain.WorkOrder
+	for id, name := range names {
+		order := listTestOrder(id, func(o *domain.WorkOrder) {
+			o.ClientName = name
+			o.JobDescription = name
+		})
+		orders = append(orders, order)
+		if err := sqliteStore.PutWorkOrder(ctx, order); err != nil {
+			t.Fatalf("PutWorkOrder(%s): %v", id, err)
+		}
+	}
+	want := []string{"2", "3", "5", "4", "1"} // cacak, cvet, dejan, djuric, zora
+	for _, sortKey := range []string{"clientName", "jobDescription"} {
+		result, err := sqliteStore.WorkOrders(ctx, WorkOrderListQuery{Sort: sortKey})
+		if err != nil {
+			t.Fatalf("WorkOrders(%s): %v", sortKey, err)
+		}
+		if got := idsOf(result.Items); !reflect.DeepEqual(got, want) {
+			t.Fatalf("sort %s = %v, want %v", sortKey, got, want)
+		}
+		fixture := append([]domain.WorkOrder(nil), orders...)
+		sortWorkOrders(fixture, sortKey)
+		if got := idsOf(fixture); !reflect.DeepEqual(got, want) {
+			t.Fatalf("fixture sort %s = %v, want %v", sortKey, got, want)
+		}
+	}
+}
+
+// TestWorkOrderListColumnsMigrationRecordsItsVersion: v24 records itself in
+// its own transaction, so a crash right after it cannot leave the columns
+// without the version (which would fail the next start on "duplicate column").
+func TestWorkOrderListColumnsMigrationRecordsItsVersion(t *testing.T) {
+	ctx := testTenantContext()
+	sqliteStore := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
+	defer sqliteStore.Close()
+	order := listTestOrder("1", func(o *domain.WorkOrder) { o.ClientName = "Čačak" })
+	if err := sqliteStore.PutWorkOrder(ctx, order); err != nil {
+		t.Fatal(err)
+	}
+
+	// Back to the pre-v24 shape.
+	for _, statement := range []string{
+		`DROP INDEX idx_work_orders_tenant_order_number_sort`,
+		`DROP INDEX idx_work_orders_tenant_billing`,
+		`DROP INDEX idx_work_orders_tenant_delivery`,
+		`DROP INDEX idx_work_orders_tenant_client_name_sort`,
+		`ALTER TABLE work_orders DROP COLUMN billing_document_type`,
+		`ALTER TABLE work_orders DROP COLUMN delivery_method`,
+		`ALTER TABLE work_orders DROP COLUMN priority`,
+		`ALTER TABLE work_orders DROP COLUMN is_completed`,
+		`ALTER TABLE work_orders DROP COLUMN search_text`,
+		`ALTER TABLE work_orders DROP COLUMN order_number_sort`,
+		`ALTER TABLE work_orders DROP COLUMN summary_payload`,
+		`ALTER TABLE work_orders DROP COLUMN client_name_sort`,
+		`ALTER TABLE work_orders DROP COLUMN job_description_sort`,
+		`DELETE FROM schema_migrations WHERE version = 24`,
+	} {
+		if _, err := sqliteStore.db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("%s: %v", statement, err)
+		}
+	}
+
+	// The migration alone (as if the process died before the runner's own
+	// record) already leaves the version behind.
+	if err := workOrderListColumnsMigration(ctx, sqliteStore.db); err != nil {
+		t.Fatalf("v24: %v", err)
+	}
+	var applied int
+	if err := sqliteStore.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version = 24`).Scan(&applied); err != nil || applied != 1 {
+		t.Fatalf("v24 recorded %d times (%v), want 1", applied, err)
+	}
+	if err := RunMigrations(ctx, sqliteStore.db); err != nil {
+		t.Fatalf("RunMigrations after v24: %v", err)
+	}
+	var clientSort string
+	if err := sqliteStore.db.QueryRowContext(ctx, `SELECT client_name_sort FROM work_orders WHERE id = '1'`).Scan(&clientSort); err != nil || clientSort != "cacak" {
+		t.Fatalf("client_name_sort = %q (%v), want backfilled", clientSort, err)
 	}
 }

@@ -867,9 +867,10 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     },
 
     async exportWorkOrdersCsv(query = {}) {
-      const { columns, ...filters } = query
+      const { columns, lang, ...filters } = query
       const params = new URLSearchParams(queryString(filters).slice(1))
       if (columns && columns.length > 0) params.set('columns', columns.join(','))
+      if (lang) params.set('lang', lang)
       const search = params.toString()
       const response = await fetchImpl(
         url(`/work-orders/export.csv${search ? `?${search}` : ''}`),
