@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Ban, Blocks, Pencil, Plus, RotateCcw, Users, Workflow } from "lucide-react";
+import { Ban, Blocks, Moon, Pencil, Plus, RotateCcw, StickyNote, Users, Workflow } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { staggerStyle } from "@/lib/motion";
 import type { PlatformTenant } from "@/types/platform";
@@ -14,6 +14,7 @@ import {
 } from "./BackofficeDialog";
 import { OrganizationFormDialog } from "./OrganizationFormDialog";
 import { OrganizationModulesDialog } from "./OrganizationModulesDialog";
+import { OrganizationNotesDialog } from "./OrganizationNotesDialog";
 import { OrganizationProcessesDialog } from "./OrganizationProcessesDialog";
 import { OrganizationUsersDialog } from "./OrganizationUsersDialog";
 
@@ -26,7 +27,62 @@ type OpenDialog =
   | { kind: "users"; tenant: PlatformTenant }
   | { kind: "processes"; tenant: PlatformTenant }
   | { kind: "modules"; tenant: PlatformTenant }
+  | { kind: "notes"; tenant: PlatformTenant }
   | { kind: "suspend"; tenant: PlatformTenant };
+
+export type OrganizationSort = "name" | "lastLogin" | "activity" | "created";
+export type OrganizationFilter = "all" | "active" | "dormant" | "suspended";
+
+const SORTS: OrganizationSort[] = ["name", "lastLogin", "activity", "created"];
+const FILTERS: OrganizationFilter[] = ["all", "active", "dormant", "suspended"];
+const SORT_KEYS: Record<OrganizationSort, string> = {
+  name: "platform.orgs.view.sortName",
+  lastLogin: "platform.orgs.view.sortLastLogin",
+  activity: "platform.orgs.view.sortActivity",
+  created: "platform.orgs.view.sortCreated",
+};
+const FILTER_KEYS: Record<OrganizationFilter, string> = {
+  all: "platform.orgs.view.filterAll",
+  active: "platform.orgs.view.filterActive",
+  dormant: "platform.orgs.view.filterDormant",
+  suspended: "platform.orgs.view.filterSuspended",
+};
+
+/** Dormant and not suspended (suspension already explains the silence). */
+const isDormant = (tenant: PlatformTenant): boolean => tenant.health.dormant && !tenant.suspendedAt;
+
+/** The organizations to show, filtered and sorted (newest/most active first). */
+export function arrangeOrganizations(
+  tenants: PlatformTenant[],
+  sort: OrganizationSort,
+  filter: OrganizationFilter,
+): PlatformTenant[] {
+  const byName = (a: PlatformTenant, b: PlatformTenant): number => a.name.localeCompare(b.name, "sr");
+  const desc = (a: string | null, b: string | null): number => (b ?? "").localeCompare(a ?? "");
+  const compare: Record<OrganizationSort, (a: PlatformTenant, b: PlatformTenant) => number> = {
+    name: byName,
+    lastLogin: (a, b) => desc(a.health.lastLoginAt, b.health.lastLoginAt) || byName(a, b),
+    activity: (a, b) =>
+      b.health.activeUsers30d - a.health.activeUsers30d ||
+      b.health.activeUsers7d - a.health.activeUsers7d ||
+      byName(a, b),
+    created: (a, b) => desc(a.createdAt, b.createdAt) || byName(a, b),
+  };
+  return tenants
+    .filter((tenant) => {
+      switch (filter) {
+        case "active":
+          return !tenant.suspendedAt && !isDormant(tenant);
+        case "dormant":
+          return isDormant(tenant);
+        case "suspended":
+          return Boolean(tenant.suspendedAt);
+        default:
+          return true;
+      }
+    })
+    .sort(compare[sort]);
+}
 
 /**
  * The Backoffice's organization management: create, edit, suspend or
@@ -40,6 +96,9 @@ export function OrganizationsPanel(): React.JSX.Element {
   const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sort, setSort] = useState<OrganizationSort>("name");
+  const [filter, setFilter] = useState<OrganizationFilter>("all");
+  const visible = useMemo(() => (tenants ? arrangeOrganizations(tenants, sort, filter) : []), [tenants, sort, filter]);
   // From tablet width up the organizations are a table; on a phone each is a
   // card, so the name and actions are visible without scrolling sideways.
   const isWide = useMediaQuery("(min-width: 768px)");
@@ -112,6 +171,89 @@ export function OrganizationsPanel(): React.JSX.Element {
     );
   };
 
+  const dormantBadge = (tenant: PlatformTenant): React.JSX.Element | null =>
+    isDormant(tenant) ? (
+      <span
+        data-testid="dormant-badge"
+        title={t("platform.orgs.health.dormantHint")}
+        className="inline-flex shrink-0 items-center gap-1 rounded border border-[#f2b544]/40 bg-[#f2b544]/10 px-1.5 py-0.5 text-[11px] text-[#f2b544]"
+      >
+        <Moon aria-hidden className="h-3 w-3" />
+        {t("platform.orgs.health.dormant")}
+      </span>
+    ) : null;
+
+  // Activity at a glance: last sign-in, active users, work orders.
+  const healthSummary = (tenant: PlatformTenant): React.JSX.Element => (
+    <div data-testid="org-health" className="space-y-0.5">
+      <div className="text-[color:var(--pf-text)]">
+        {tenant.health.lastLoginAt ? (
+          <>
+            <span className="text-[color:var(--pf-muted)]">{t("platform.orgs.health.lastLogin")}: </span>
+            {formatDateTime(tenant.health.lastLoginAt)}
+          </>
+        ) : (
+          <span className="text-[color:var(--pf-muted)]">{t("platform.orgs.health.neverLoggedIn")}</span>
+        )}
+      </div>
+      <div className="text-[11px] text-[color:var(--pf-text-2)]">
+        {t("platform.orgs.health.activeUsers", {
+          week: formatCount(tenant.health.activeUsers7d),
+          month: formatCount(tenant.health.activeUsers30d),
+        })}
+      </div>
+      <div className="text-[11px] text-[color:var(--pf-text-2)]">
+        {t("platform.orgs.health.workOrders", {
+          created: formatCount(tenant.health.workOrdersCreated30d),
+          open: formatCount(tenant.health.openWorkOrders),
+        })}
+      </div>
+    </div>
+  );
+
+  const notesButton = (tenant: PlatformTenant): React.JSX.Element => (
+    <button type="button" onClick={() => setDialog({ kind: "notes", tenant })} className={ghostButtonClass}>
+      <span className="relative">
+        <StickyNote className="h-3.5 w-3.5" />
+        {tenant.notes.updatedAt ? (
+          <span
+            aria-label={t("platform.orgs.notes.hasNotes")}
+            role="img"
+            className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-[#5fb88a]"
+          />
+        ) : null}
+      </span>
+      {t("platform.orgs.notes.button")}
+    </button>
+  );
+
+  const selectClass =
+    "iris-focusable h-9 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-2.5 text-[13px] text-[color:var(--pf-text)]";
+  const viewControls = (
+    <div className="flex flex-wrap items-center gap-3 px-4 pt-3">
+      <label className="flex items-center gap-2 text-[12px] text-[color:var(--pf-text-2)]">
+        {t("platform.orgs.view.filterLabel")}
+        <select aria-label={t("platform.orgs.view.filterLabel")} value={filter} onChange={(event) => setFilter(event.target.value as OrganizationFilter)} className={selectClass}>
+          {FILTERS.map((value) => (
+            <option key={value} value={value}>
+              {t(FILTER_KEYS[value])}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2 text-[12px] text-[color:var(--pf-text-2)]">
+        {t("platform.orgs.view.sortLabel")}
+        <select aria-label={t("platform.orgs.view.sortLabel")} value={sort} onChange={(event) => setSort(event.target.value as OrganizationSort)} className={selectClass}>
+          {SORTS.map((value) => (
+            <option key={value} value={value}>
+              {t(SORT_KEYS[value])}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+
   // The actions fall into two groups: the three ways into an organization
   // (users, processes, modules) get equal weight; editing and suspending are
   // housekeeping, set apart and quieter, with suspend in the danger colour.
@@ -160,21 +302,28 @@ export function OrganizationsPanel(): React.JSX.Element {
         </div>
       ) : null}
 
+      {tenants && tenants.length > 0 ? viewControls : null}
       {tenants === null ? (
         error ? null : <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("common.loading")}</p>
       ) : tenants.length === 0 ? (
         <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("platform.orgs.empty")}</p>
+      ) : visible.length === 0 ? (
+        <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("platform.orgs.view.noMatch")}</p>
       ) : !isWide ? (
         <ul className="mt-1">
-          {tenants.map((tenant, index) => (
+          {visible.map((tenant, index) => (
             <li key={tenant.id} style={staggerStyle(index)} className="animate-iris-rise iris-stagger space-y-2.5 border-t border-[color:var(--pf-border)] px-4 py-3 first:border-t-0 text-[13px]">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-[14px] text-[color:var(--pf-text)]">{tenant.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[14px] text-[color:var(--pf-text)]">{tenant.name}</span>
+                    {dormantBadge(tenant)}
+                  </div>
                   <div className="truncate text-[11px] text-[color:var(--pf-muted)]">/login/{tenant.slug}</div>
                 </div>
                 <div className="shrink-0 text-right text-[12px]">{status(tenant)}</div>
               </div>
+              <div className="text-[12px]">{healthSummary(tenant)}</div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[color:var(--pf-text-2)]">
                 <span>
                   {t("platform.orgs.users")}:{" "}
@@ -200,7 +349,10 @@ export function OrganizationsPanel(): React.JSX.Element {
                 ))}
               </div>
               <div className="flex items-center justify-between">
-                {editButton(tenant)}
+                <div className="flex items-center gap-1">
+                  {editButton(tenant)}
+                  {notesButton(tenant)}
+                </div>
                 {suspendButton(tenant)}
               </div>
             </li>
@@ -211,11 +363,12 @@ export function OrganizationsPanel(): React.JSX.Element {
         // inside the scroller; without it the label sits at the table's right
         // edge and widens the whole page on a phone.
         <div className="relative mt-1 overflow-x-auto">
-          <table className="w-full min-w-[980px] text-[13px]">
+          <table className="w-full min-w-[1180px] text-[13px]">
             <thead className="text-left text-[12px] text-[color:var(--pf-muted)]">
               <tr>
                 <th className="px-4 py-2.5 font-normal">{t("platform.orgs.name")}</th>
                 <th className="px-3 py-2.5 text-right font-normal">{t("platform.orgs.users")}</th>
+                <th className="px-3 py-2.5 font-normal">{t("platform.orgs.health.column")}</th>
                 <th className="px-3 py-2.5 font-normal">{t("platform.orgs.created")}</th>
                 <th className="px-3 py-2.5 font-normal">{t("platform.orgs.modules.column")}</th>
                 <th className="px-3 py-2.5 font-normal">{t("platform.orgs.status")}</th>
@@ -225,20 +378,24 @@ export function OrganizationsPanel(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {tenants.map((tenant, index) => (
+              {visible.map((tenant, index) => (
                 <tr
                   key={tenant.id}
                   style={staggerStyle(index)}
                   className="animate-iris-rise iris-stagger iris-row h-14 border-t border-[color:var(--pf-border)] hover:bg-white/[0.02]"
                 >
                   <td className="px-4 py-2">
-                    <div className="text-[color:var(--pf-text)]">{tenant.name}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[color:var(--pf-text)]">{tenant.name}</span>
+                      {dormantBadge(tenant)}
+                    </div>
                     <div className="text-[11px] text-[color:var(--pf-muted)]">/login/{tenant.slug}</div>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {formatCount(tenant.users)}
                     <span className="text-[color:var(--pf-muted)]"> / {formatCount(tenant.admins)}</span>
                   </td>
+                  <td className="px-3 py-2 text-[12px]">{healthSummary(tenant)}</td>
                   <td className="px-3 py-2 text-[color:var(--pf-text-2)]">{formatDate(tenant.createdAt)}</td>
                   <td className="px-3 py-2">{moduleBadges(tenant)}</td>
                   <td className="whitespace-nowrap px-3 py-2">{status(tenant)}</td>
@@ -258,6 +415,7 @@ export function OrganizationsPanel(): React.JSX.Element {
                         ))}
                       </div>
                       {editButton(tenant)}
+                      {notesButton(tenant)}
                       <span aria-hidden className="h-5 w-px bg-[color:var(--pf-border)]" />
                       {suspendButton(tenant)}
                     </div>
@@ -292,7 +450,18 @@ export function OrganizationsPanel(): React.JSX.Element {
           }}
         />
       ) : null}
-      {dialog?.kind === "processes" ? <OrganizationProcessesDialog tenant={dialog.tenant} onClose={close} /> : null}
+      {dialog?.kind === "notes" ? (
+        <OrganizationNotesDialog
+          tenant={dialog.tenant}
+          onClose={close}
+          onSaved={(saved) => {
+            setNotice(t("platform.orgs.notes.savedNotice", { name: saved.name }));
+            setDialog(null);
+            void load();
+          }}
+        />
+      ) : null}
+      {dialog?.kind === "processes" ?<OrganizationProcessesDialog tenant={dialog.tenant} onClose={close} /> : null}
       {dialog?.kind === "suspend" ? (
         <BackofficeDialog
           title={t(dialog.tenant.suspendedAt ? "platform.orgs.reactivateTitle" : "platform.orgs.suspendTitle", { name: dialog.tenant.name })}

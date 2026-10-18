@@ -101,13 +101,27 @@ const platformTenantSelect = `
 	SELECT t.id, t.slug, t.name, t.created_at, t.suspended_at,
 	       (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id),
 	       (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id AND u.role = 'admin'),
-	       (SELECT s.value FROM app_settings s WHERE s.tenant_id = t.id AND s.key = 'modules')
-	FROM tenants t`
+	       (SELECT s.value FROM app_settings s WHERE s.tenant_id = t.id AND s.key = 'modules'),
+	       n.contact_name, n.contact_email, n.contact_phone, n.plan_name, n.notes, n.updated_at, n.updated_by
+	FROM tenants t
+	LEFT JOIN tenant_notes n ON n.tenant_id = t.id`
 
 func scanPlatformTenant(row interface{ Scan(...any) error }) (domain.PlatformTenant, error) {
 	var tenant domain.PlatformTenant
 	var suspended, modules sql.NullString
-	err := row.Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.CreatedAt, &suspended, &tenant.Users, &tenant.Admins, &modules)
+	var contactName, contactEmail, contactPhone, plan, notes, notesUpdatedAt, notesUpdatedBy sql.NullString
+	err := row.Scan(&tenant.ID, &tenant.Slug, &tenant.Name, &tenant.CreatedAt, &suspended, &tenant.Users, &tenant.Admins, &modules,
+		&contactName, &contactEmail, &contactPhone, &plan, &notes, &notesUpdatedAt, &notesUpdatedBy)
+	tenant.Notes = domain.PlatformTenantNotes{
+		ContactName:  contactName.String,
+		ContactEmail: contactEmail.String,
+		ContactPhone: contactPhone.String,
+		Plan:         plan.String,
+		Notes:        notes.String,
+	}
+	if notesUpdatedAt.Valid {
+		tenant.Notes.UpdatedAt, tenant.Notes.UpdatedBy = &notesUpdatedAt.String, &notesUpdatedBy.String
+	}
 	if modules.Valid {
 		tenant.Modules = parseModules(modules.String)
 	}
@@ -131,7 +145,14 @@ func (s *SQLiteStore) PlatformTenants(ctx context.Context) ([]domain.PlatformTen
 		}
 		tenants = append(tenants, tenant)
 	}
-	return tenants, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if err := s.attachTenantHealth(ctx, time.Now(), tenants, ""); err != nil {
+		return nil, err
+	}
+	return tenants, nil
 }
 
 func (s *SQLiteStore) platformTenantByID(ctx context.Context, id string) (*domain.PlatformTenant, error) {
@@ -142,7 +163,11 @@ func (s *SQLiteStore) platformTenantByID(ctx context.Context, id string) (*domai
 	if err != nil {
 		return nil, fmt.Errorf("load tenant: %w", err)
 	}
-	return &tenant, nil
+	one := []domain.PlatformTenant{tenant}
+	if err := s.attachTenantHealth(ctx, time.Now(), one, tenant.ID); err != nil {
+		return nil, err
+	}
+	return &one[0], nil
 }
 
 // PlatformCreateTenant creates an organization and its first admin account.

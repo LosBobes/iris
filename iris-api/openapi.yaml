@@ -2057,6 +2057,10 @@ paths:
     get:
       tags: [Platform]
       summary: List organizations with status and account counts (operator only)
+      description: >-
+        Each organization carries `health` (activity counts and dates only; never customer, user or
+        work-order records — one grouped query per source, not per organization) and the superadmins'
+        internal `notes` (`PUT /platform/tenants/{slug}/notes`).
       operationId: getPlatformTenants
       security:
         - PlatformSession: []
@@ -2268,6 +2272,64 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: '`processes` without `stock`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/notes:
+    put:
+      tags: [Platform]
+      summary: Replace an organization's internal notes (operator only)
+      description: >-
+        Contact person, contact e-mail/phone, plan (free text) and multiline notes, visible only in the
+        Backoffice (stored in `tenant_notes`, never in the organization's settings). Values are trimmed;
+        the four short fields take at most 200 characters, `notes` at most 10000, and a non-empty
+        `contactEmail` must look like an address (422 otherwise). Recorded as `tenant.notes` in the
+        activity log, in the same transaction, with detail `{"fields":"contactName,plan,..."}` — the
+        names of the changed fields, never their contents. Saving identical notes is a no-op: 200 and
+        no audit row.
+      operationId: setPlatformTenantNotes
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformTenantNotesInput'
+      responses:
+        '200':
+          description: The organization with its notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: A field is too long or the contact e-mail is not valid
           content:
             application/json:
               schema:
@@ -4305,7 +4367,7 @@ components:
           format: date-time
     PlatformTenant:
       type: object
-      required: [id, slug, name, createdAt, suspendedAt, users, admins, modules]
+      required: [id, slug, name, createdAt, suspendedAt, users, admins, modules, health, notes]
       properties:
         modules:
           $ref: '#/components/schemas/OrganizationModules'
@@ -4325,6 +4387,76 @@ components:
           type: integer
         admins:
           type: integer
+        health:
+          $ref: '#/components/schemas/PlatformTenantHealth'
+        notes:
+          $ref: '#/components/schemas/PlatformTenantNotes'
+    PlatformTenantHealth:
+      type: object
+      description: Activity at a glance. Counts and dates only; never customer, user or work-order records.
+      required: [lastLoginAt, activeUsers7d, activeUsers30d, workOrdersCreated30d, openWorkOrders, dormant]
+      properties:
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Newest recorded sign-in (impersonation is not a sign-in).
+        activeUsers7d:
+          type: integer
+          description: Distinct users who signed in within 7 days or hold a live, non-impersonated session.
+        activeUsers30d:
+          type: integer
+          description: Same, within 30 days.
+        workOrdersCreated30d:
+          type: integer
+        openWorkOrders:
+          type: integer
+          description: Work orders not completed, cancelled or invoiced.
+        dormant:
+          type: boolean
+          description: >-
+            No active user in 30 days (`activeUsers30d` is 0) and the organization is older than 30 days.
+    PlatformTenantNotes:
+      type: object
+      description: Superadmin-only internal notes; empty strings until first saved.
+      required: [contactName, contactEmail, contactPhone, plan, notes, updatedAt, updatedBy]
+      properties:
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        contactPhone:
+          type: string
+        plan:
+          type: string
+        notes:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedBy:
+          type: string
+          nullable: true
+          description: Username of the superadmin who saved them last.
+    PlatformTenantNotesInput:
+      type: object
+      properties:
+        contactName:
+          type: string
+          maxLength: 200
+        contactEmail:
+          type: string
+          maxLength: 200
+        contactPhone:
+          type: string
+          maxLength: 200
+        plan:
+          type: string
+          maxLength: 200
+        notes:
+          type: string
+          maxLength: 10000
     PlatformCreateTenantInput:
       type: object
       required: [name, slug, adminUsername, adminPassword]
@@ -4374,7 +4506,7 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, tenant.notes, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
         tenantSlug:
           type: string
           description: As it was at the time.

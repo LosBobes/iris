@@ -167,6 +167,7 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/suspend", s.handlePlatformSuspendTenant(true))
 	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/modules", s.handlePlatformSetTenantModules)
+	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/notes", s.handlePlatformSetTenantNotes)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/reactivate", s.handlePlatformSuspendTenant(false))
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/users/{id}/password", s.handlePlatformResetPassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)

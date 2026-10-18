@@ -44,6 +44,7 @@ import type {
   PlatformAuditLog,
   PlatformTenant,
   PlatformCreateTenantInput,
+  PlatformTenantNotesInput,
   PlatformUpdateTenantInput,
 } from '@/types/platform'
 import type {
@@ -152,6 +153,8 @@ declare global {
       setPlatformTenantSuspended: (slug: string, suspended: boolean) => Promise<PlatformTenant>
       /** Switches an organization's optional modules (Backoffice superadmin only). */
       setPlatformTenantModules: (slug: string, modules: OrganizationModules) => Promise<PlatformTenant>
+      /** Replaces the superadmins' internal notes about the organization. */
+      setPlatformTenantNotes: (slug: string, notes: PlatformTenantNotesInput) => Promise<PlatformTenant>
       resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
       getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
       listUsers: () => Promise<ManagedUser[]>
