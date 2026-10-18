@@ -13,10 +13,15 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
-// isUniqueConstraintError reports whether err is a SQLite UNIQUE constraint
-// violation. modernc.org/sqlite surfaces these via the error message.
+// isUniqueConstraintError reports whether err is a unique-constraint violation
+// on either engine. Both drivers surface it via the error message:
+// modernc.org/sqlite says "UNIQUE constraint failed", pgx carries SQLSTATE 23505.
 func isUniqueConstraintError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "UNIQUE constraint failed") || strings.Contains(message, "(SQLSTATE 23505)")
 }
 
 // customEnums loads the admin-created values into a fast lookup set used during

@@ -56,7 +56,7 @@ type workOrder struct {
 // Seed loads the Čobanović data set from <dir>/seed.json into the SQLite store:
 // ~2657 client firms, ~3575 catalog items, and a few demo work orders. It also
 // creates the login accounts the shop signs in with. Upserts make it re-runnable.
-func Seed(ctx context.Context, sqliteStore *store.SQLiteStore, dir string) error {
+func Seed(ctx context.Context, dataStore *store.SQLStore, dir string) error {
 	// All Čobanović data belongs to the production tenant, which the tenant
 	// isolation migration already created. Scope every write below to it.
 	ctx = store.ContextWithTenant(ctx, store.ProductionTenantID)
@@ -79,32 +79,32 @@ func Seed(ctx context.Context, sqliteStore *store.SQLiteStore, dir string) error
 	}
 
 	// Login accounts: admin (manages catalog/customers) + a regular operator.
-	if err := sqliteStore.CreateUser(ctx, "user-admin", "admin", "admin123", domain.RoleAdmin, true); err != nil {
+	if err := dataStore.CreateUser(ctx, "user-admin", "admin", "admin123", domain.RoleAdmin, true); err != nil {
 		return fmt.Errorf("seed admin user: %w", err)
 	}
-	if err := sqliteStore.CreateUser(ctx, "user-operater", "operater", "operater123", domain.RoleUser, true); err != nil {
+	if err := dataStore.CreateUser(ctx, "user-operater", "operater", "operater123", domain.RoleUser, true); err != nil {
 		return fmt.Errorf("seed operator user: %w", err)
 	}
 
 	for _, customer := range seed.Customers {
-		if _, err := sqliteStore.UpsertCustomer(ctx, customer); err != nil {
+		if _, err := dataStore.UpsertCustomer(ctx, customer); err != nil {
 			return fmt.Errorf("seed customer %s: %w", customer.ID, err)
 		}
 	}
 	// Locations reference their parent customer, so they must be upserted after
 	// the customers above (UpsertLocation rejects an unknown/other-tenant client).
 	for _, location := range seed.Locations {
-		if _, err := sqliteStore.UpsertLocation(ctx, location); err != nil {
+		if _, err := dataStore.UpsertLocation(ctx, location); err != nil {
 			return fmt.Errorf("seed location %s: %w", location.ID, err)
 		}
 	}
 	for _, item := range seed.CatalogItems {
-		if _, err := sqliteStore.UpsertCatalogItem(ctx, item, ""); err != nil {
+		if _, err := dataStore.UpsertCatalogItem(ctx, item, ""); err != nil {
 			return fmt.Errorf("seed catalog item %s: %w", item.ID, err)
 		}
 	}
 	for _, raw := range seed.WorkOrders {
-		if err := sqliteStore.PutWorkOrder(ctx, expandWorkOrder(raw)); err != nil {
+		if err := dataStore.PutWorkOrder(ctx, expandWorkOrder(raw)); err != nil {
 			return fmt.Errorf("seed work order %s: %w", raw.ID, err)
 		}
 	}

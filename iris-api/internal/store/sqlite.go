@@ -19,10 +19,19 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type SQLiteStore struct {
-	db     *sql.DB
-	caches metaCaches
+// SQLStore is the shared SQL-backed store. It serves both SQLite and Postgres:
+// the statements are written once, in the SQLite dialect, and translated for
+// Postgres inside the driver (see postgres_driver.go). Only the handful of
+// genuinely engine-specific behaviours branch on the dialect field.
+type SQLStore struct {
+	db      *sql.DB
+	dialect dialect
+	caches  metaCaches
 }
+
+// SQLiteStore is the original name of this type, kept as an alias so existing
+// call sites and tests keep compiling.
+type SQLiteStore = SQLStore
 
 func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 	if strings.TrimSpace(path) == "" {
@@ -58,7 +67,7 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("sqlite optimize: %w", err)
 	}
 
-	return &SQLiteStore{db: db}, nil
+	return &SQLStore{db: db, dialect: dialectSQLite}, nil
 }
 
 // Connection-pool sizing. WAL lets readers run concurrently, so pinning the pool
@@ -871,6 +880,9 @@ func (s *SQLiteStore) CreateWorkOrder(
 		return nil, fmt.Errorf("begin create work order: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.lockNumbering(ctx, tx); err != nil {
+		return nil, err
+	}
 
 	sequence, err := nextFreeSequence(ctx, tx)
 	if err != nil {
@@ -1277,6 +1289,11 @@ func (s *SQLiteStore) HasUserPassword(ctx context.Context, username string, pass
 }
 
 func (s *SQLiteStore) Backup(ctx context.Context, path string) error {
+	if s.dialect == dialectPostgres {
+		// VACUUM INTO has no Postgres equivalent, and a logical dump belongs to
+		// the server's own tooling rather than a half-copy from the API process.
+		return fmt.Errorf("backup is not supported on postgres: use pg_dump (see deploy/POSTGRES.md)")
+	}
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("backup path is required")
 	}
@@ -1286,6 +1303,26 @@ func (s *SQLiteStore) Backup(ctx context.Context, path string) error {
 	escaped := strings.ReplaceAll(path, "'", "''")
 	if _, err := s.db.ExecContext(ctx, `VACUUM INTO '`+escaped+`'`); err != nil {
 		return fmt.Errorf("backup sqlite database: %w", err)
+	}
+	return nil
+}
+
+// numberingLockKey is the Postgres advisory-lock key serializing work-order id
+// and order-number allocation.
+const numberingLockKey = 7210001
+
+// lockNumbering serializes the "read the highest number, then insert the next"
+// allocation in CreateWorkOrder and ReserveOrderNumber. SQLite gets this for
+// free from its single writer (_txlock=immediate); under Postgres' default READ
+// COMMITTED two concurrent creates would otherwise compute the same id and the
+// second ON CONFLICT upsert would silently overwrite the first work order. The
+// transaction-scoped advisory lock is released on commit or rollback.
+func (s *SQLStore) lockNumbering(ctx context.Context, tx *sql.Tx) error {
+	if s.dialect != dialectPostgres {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(?)`, numberingLockKey); err != nil {
+		return fmt.Errorf("lock work-order numbering: %w", err)
 	}
 	return nil
 }
@@ -1315,7 +1352,10 @@ func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year 
 	if err := db.QueryRowContext(
 		ctx,
 		`SELECT COALESCE(MAX(seq), 0) + 1 FROM (
-		   SELECT CAST(substr(order_number, ?) AS INTEGER) AS seq
+		   SELECT CASE WHEN substr(order_number, ?) <> ''
+		                 AND substr(order_number, ?) NOT GLOB '*[^0-9]*'
+		                 AND length(substr(order_number, ?)) <= 9
+		               THEN CAST(substr(order_number, ?) AS INTEGER) END AS seq
 		     FROM work_orders
 		     WHERE tenant_id = ? AND order_number >= ? AND order_number < ?
 		   UNION ALL
@@ -1324,6 +1364,9 @@ func nextOrderNumber(ctx context.Context, db sqlExecutor, tenantID string, year 
 		     WHERE tenant_id = ? AND year = ? AND expires_at > ?
 		 )`,
 		len(prefix)+1, // substr is 1-indexed: start just past the "RN-<year>-" prefix
+		len(prefix)+1,
+		len(prefix)+1,
+		len(prefix)+1,
 		tenantID,
 		prefix,
 		prefixEnd,
@@ -1366,6 +1409,9 @@ func (s *SQLiteStore) ReserveOrderNumber(ctx context.Context, reservedBy string)
 		return domain.ReservedOrderNumber{}, fmt.Errorf("begin reserve order number: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.lockNumbering(ctx, tx); err != nil {
+		return domain.ReservedOrderNumber{}, err
+	}
 
 	nowTime := time.Now().UTC()
 	now := nowTime.Format(time.RFC3339)

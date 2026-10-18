@@ -5,7 +5,9 @@ lifecycle, customers/locations, dashboard reporting, public tracking, and
 admin-configurable organization settings. The system is **multi-tenant** — every
 row is scoped to a tenant (organization) and login requires an organization slug.
 
-Two deployable surfaces share **one Go REST API** and **one SQLite database**:
+Two deployable surfaces share **one Go REST API** and **one database** —
+SQLite or PostgreSQL, selected at startup by `DATABASE_URL` (see
+[deploy/POSTGRES.md](deploy/POSTGRES.md)):
 
 | Surface | Path | Role |
 | --- | --- | --- |
@@ -41,7 +43,8 @@ A domain/shape change (e.g. a `WorkOrder` field) must be applied together across
 
 1. `iris-api/openapi.yaml` — the public HTTP contract (source of truth)
 2. `iris-api/internal/domain/types.go` — Go structs
-3. `iris-api/internal/store/` — SQLite store + `migrations.go` if persisted
+3. `iris-api/internal/store/` — the shared SQL store + `migrations.go` if persisted
+   (one set of statements serves both engines; see the dialect note below)
 4. `apps/web/src/types/work-order.ts`
 5. Fixtures and tests (`iris-api/testdata/fixtures/`, app fixtures)
 

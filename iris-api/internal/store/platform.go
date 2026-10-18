@@ -345,7 +345,7 @@ func (s *SQLiteStore) PlatformMetrics(ctx context.Context, now time.Time, rangeD
 	}
 
 	if err := each(
-		`SELECT tenant_id, COUNT(*), COALESCE(SUM(role = 'admin'), 0) FROM users GROUP BY tenant_id`, nil,
+		`SELECT tenant_id, COUNT(*), COALESCE(SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END), 0) FROM users GROUP BY tenant_id`, nil,
 		func(t *domain.PlatformTenantMetrics, r *sql.Rows) error { return r.Scan(&t.ID, &t.Users, &t.Admins) },
 	); err != nil {
 		return metrics, fmt.Errorf("count users: %w", err)
@@ -364,7 +364,7 @@ func (s *SQLiteStore) PlatformMetrics(ctx context.Context, now time.Time, rangeD
 	}
 	if err := each(
 		`SELECT tenant_id, status, COUNT(*),
-		        COALESCE(SUM(substr(created_at, 1, 10) >= ?), 0),
+		        COALESCE(SUM(CASE WHEN substr(created_at, 1, 10) >= ? THEN 1 ELSE 0 END), 0),
 		        MAX(updated_at)
 		 FROM work_orders GROUP BY tenant_id, status`,
 		[]any{since},
@@ -391,7 +391,7 @@ func (s *SQLiteStore) PlatformMetrics(ctx context.Context, now time.Time, rangeD
 	}
 	if err := each(
 		`SELECT tenant_id,
-		        COALESCE(SUM(substr(at, 1, 10) >= ?), 0),
+		        COALESCE(SUM(CASE WHEN substr(at, 1, 10) >= ? THEN 1 ELSE 0 END), 0),
 		        COUNT(DISTINCT CASE WHEN substr(at, 1, 10) >= ? THEN user_id END),
 		        MAX(at)
 		 FROM login_events GROUP BY tenant_id`,
@@ -490,14 +490,11 @@ func (s *SQLiteStore) PlatformMetrics(ctx context.Context, now time.Time, rangeD
 		return metrics, fmt.Errorf("login series: %w", err)
 	}
 
-	var pageCount, pageSize int64
-	if err := s.db.QueryRowContext(ctx, `PRAGMA page_count`).Scan(&pageCount); err != nil {
-		return metrics, fmt.Errorf("page count: %w", err)
+	databaseBytes, err := s.databaseSizeBytes(ctx)
+	if err != nil {
+		return metrics, err
 	}
-	if err := s.db.QueryRowContext(ctx, `PRAGMA page_size`).Scan(&pageSize); err != nil {
-		return metrics, fmt.Errorf("page size: %w", err)
-	}
-	metrics.Totals.DatabaseBytes = pageCount * pageSize
+	metrics.Totals.DatabaseBytes = databaseBytes
 
 	for _, id := range order {
 		tenant := *byID[id]
@@ -618,4 +615,24 @@ func platformDefaultAdminMigration(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("seed default platform admin: %w", err)
 	}
 	return nil
+}
+
+// databaseSizeBytes reports the on-disk size of the database: page count times
+// page size for SQLite, pg_database_size for Postgres.
+func (s *SQLiteStore) databaseSizeBytes(ctx context.Context) (int64, error) {
+	if s.dialect == dialectPostgres {
+		var size int64
+		if err := s.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {
+			return 0, fmt.Errorf("database size: %w", err)
+		}
+		return size, nil
+	}
+	var pageCount, pageSize int64
+	if err := s.db.QueryRowContext(ctx, `PRAGMA page_count`).Scan(&pageCount); err != nil {
+		return 0, fmt.Errorf("page count: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `PRAGMA page_size`).Scan(&pageSize); err != nil {
+		return 0, fmt.Errorf("page size: %w", err)
+	}
+	return pageCount * pageSize, nil
 }

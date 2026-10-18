@@ -180,7 +180,7 @@ func matchStockImport(lines []stockCSVLine, articles []domain.CatalogItem) (know
 
 // importStock reads the CSV and either prints what a count would post
 // (apply=false, nothing is written) or posts it as a stock count by "irisctl".
-func importStock(ctx context.Context, sqliteStore *store.SQLiteStore, path string, apply bool) (string, error) {
+func importStock(ctx context.Context, sqliteStore *store.SQLStore, path string, apply bool) (string, error) {
 	lines, err := readStockCSV(path)
 	if err != nil {
 		return "", err

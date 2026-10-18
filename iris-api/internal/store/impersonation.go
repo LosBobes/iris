@@ -60,17 +60,14 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 	); err != nil {
 		return "", nil, fmt.Errorf("sweep expired sessions: %w", err)
 	}
-	result, err := tx.ExecContext(
+	var impersonationID int64
+	err = tx.QueryRowContext(
 		ctx,
 		`INSERT INTO impersonation_events(admin_id, admin_username, tenant_id, user_id, username, ip, at, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		input.AdminID, input.AdminUsername, input.TenantID, user.ID, user.Username, input.IP,
 		now.Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339),
-	)
-	if err != nil {
-		return "", nil, fmt.Errorf("record impersonation: %w", err)
-	}
-	impersonationID, err := result.LastInsertId()
+	).Scan(&impersonationID)
 	if err != nil {
 		return "", nil, fmt.Errorf("record impersonation: %w", err)
 	}
@@ -107,11 +104,12 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 // markImpersonationsEnded stamps ended_at on the impersonations behind the
 // sessions matched by where (a condition on sessions) before they are deleted.
 func (s *SQLiteStore) markImpersonationsEnded(ctx context.Context, where string, args ...any) error {
-	args = append([]any{time.Now().UTC().Format(time.RFC3339)}, args...)
+	now := time.Now().UTC().Format(time.RFC3339)
+	args = append([]any{now, now}, args...)
 	if _, err := s.db.ExecContext(
 		ctx,
 		// A session found expired only on a later lookup ended at its expiry.
-		`UPDATE impersonation_events SET ended_at = MIN(?, expires_at)
+		`UPDATE impersonation_events SET ended_at = CASE WHEN expires_at < ? THEN expires_at ELSE ? END
 		 WHERE ended_at IS NULL AND id IN (SELECT impersonation_id FROM sessions WHERE impersonation_id IS NOT NULL AND `+where+`)`,
 		args...,
 	); err != nil {

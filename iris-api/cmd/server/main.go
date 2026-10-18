@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/api"
@@ -46,22 +48,23 @@ func main() {
 		}
 	}
 
+	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
 	dbPath, explicitDBPath := databasePathFromEnv(env)
-	if env == "production" && !explicitDBPath {
-		log.Fatal("DATABASE_PATH is required in production")
+	if env == "production" && databaseURL == "" && !explicitDBPath {
+		log.Fatal("DATABASE_URL (postgres) or DATABASE_PATH (sqlite) is required in production")
 	}
 	// IRIS_SESSION_SECRET is not used: session tokens are random and stored
 	// hashed, so nothing is signed with it. Older deployments still set it,
 	// which is harmless; it is accepted and ignored.
 
 	var persistence store.Store
-	sqliteStore, err := store.OpenSQLite(ctx, dbPath)
+	dataStore, err := openStore(ctx, databaseURL, dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer sqliteStore.Close()
+	defer dataStore.Close()
 	if env == "production" {
-		hasDemoAdmin, err := sqliteStore.HasUserPassword(ctx, "admin", "admin123")
+		hasDemoAdmin, err := dataStore.HasUserPassword(ctx, "admin", "admin123")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -69,7 +72,7 @@ func main() {
 			log.Fatal("refusing production startup with demo admin credentials")
 		}
 	}
-	persistence = sqliteStore
+	persistence = dataStore
 
 	server := api.NewServer(persistence, api.Config{
 		AllowedOrigins:    splitCSV(os.Getenv("IRIS_ALLOWED_ORIGINS")),
@@ -104,9 +107,42 @@ func main() {
 	}
 
 	log.Printf("iris-api listening on %s", addr)
-	if err := httpServer.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	// Serve until SIGINT/SIGTERM (docker stop sends SIGTERM), then drain in-flight
+	// requests and fall through to the deferred store Close so SQLite checkpoints
+	// its WAL instead of being killed mid-write.
+	stop, cancelSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer cancelSignals()
+
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- httpServer.ListenAndServe() }()
+
+	select {
+	case err := <-serveErr:
+		// ListenAndServe only returns on failure here (e.g. the port is taken).
+		log.Printf("server stopped: %v", err)
+		dataStore.Close()
+		os.Exit(1)
+	case <-stop.Done():
 	}
+
+	log.Printf("shutting down")
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown: %v", err)
+	}
+}
+
+// openStore picks the storage engine. DATABASE_URL selects Postgres and wins
+// when both are set; otherwise the SQLite file at dbPath is used. Both return
+// the same store type, so nothing downstream depends on the choice.
+func openStore(ctx context.Context, databaseURL string, dbPath string) (*store.SQLStore, error) {
+	if databaseURL != "" {
+		log.Printf("using postgres storage")
+		return store.OpenPostgres(ctx, databaseURL)
+	}
+	log.Printf("using sqlite storage at %s", dbPath)
+	return store.OpenSQLite(ctx, dbPath)
 }
 
 func databasePathFromEnv(env string) (string, bool) {
