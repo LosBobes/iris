@@ -2,6 +2,21 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.5.0 — 2026-10-18
+
+### Minor
+
+- Backoffice superadmins can post announcements (info, warning or maintenance) to all or chosen organizations, with a start and optional end; organization users see them as a banner at the top of the app and on the sign-in page, and can dismiss info ones.
+- The Backoffice has a System tab with the app version, database engine, schema version and size, and SQLite backups: take one on demand, list recent copies, optional automatic backups, and a dashboard warning when the last backup is too old.
+- The Backoffice can download a full JSON export of an organization's data and permanently delete a suspended organization after its slug is typed again (both recorded in the activity log); irisctl gains export-tenant and delete-tenant.
+- The Backoffice organization list shows each organization's activity (last sign-in, active users, recent and open work orders), marks dormant organizations, sorts and filters by activity, and keeps superadmin-only internal notes (contact, plan, notes) per organization.
+- Backoffice superadmins can turn on two-factor sign-in (authenticator app plus one-time recovery codes; irisctl reset-platform-2fa resets it), failed Backoffice sign-ins are logged under Aktivnost, superadmins can be added with a temporary password and disabled from the new Superadmini tab, and signing in as an organization user now requires a short reason shown in the activity log.
+- Two-factor sign-in is now mandatory for Backoffice superadmins.
+
+### Patch
+
+- Deleting an organization keeps its impersonation history.
+
 ## 2.4.0 — 2026-10-18
 
 ### Minor
