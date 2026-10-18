@@ -76,14 +76,6 @@ type Result struct {
 // ErrInvalidHours is returned for an unknown time zone or malformed shifts.
 var ErrInvalidHours = errors.New("planner: invalid working hours")
 
-// ValidateWorkingHours checks a working-hours setting: a loadable IANA time
-// zone, weekdays 1-7 at most once each, "HH:MM" times with start < end, and
-// breaks inside their shift that do not overlap. It returns a user-facing
-// Serbian message, or "" when valid.
-func ValidateWorkingHours(hours domain.WorkingHours) string {
-	panic("not implemented")
-}
-
 // Plan schedules the open steps of Input.Orders.
 //
 // Rules (D-026):
@@ -122,7 +114,7 @@ func ValidateWorkingHours(hours domain.WorkingHours) string {
 // DueDate; Unplannable (and EstimatedFinish nil) when any of its steps has an
 // issue other than PlanIssueMissingDuration.
 func Plan(in Input) (Result, error) {
-	panic("not implemented")
+	return plan(in)
 }
 
 // CheckDraft returns the conflicts in hand-edited assignments of one day:
@@ -132,7 +124,7 @@ func Plan(in Input) (Result, error) {
 // step's crew size, or a step starting before an upstream step's block ends.
 // Each conflict is a domain.PlanIssueConflict with a Serbian message.
 func CheckDraft(in Input, assignments []domain.PlanAssignment) []domain.PlanIssue {
-	panic("not implemented")
+	return checkDraft(in, assignments)
 }
 
 // Drift compares today's published plan with the orders' current step
@@ -142,5 +134,5 @@ func CheckDraft(in Input, assignments []domain.PlanAssignment) []domain.PlanIssu
 // step is in progress without any block of today covering now. Reasons are
 // short Serbian sentences naming the order number and step.
 func Drift(plan domain.ProductionPlan, orders []Order, now time.Time) domain.PlanDrift {
-	panic("not implemented")
+	return drift(plan, orders, now)
 }
