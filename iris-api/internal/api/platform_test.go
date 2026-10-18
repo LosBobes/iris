@@ -286,3 +286,48 @@ func TestOverlongPasswordsGetAClearError(t *testing.T) {
 		t.Fatalf("72-byte password = %d %s, want 200", rec.Code, rec.Body.String())
 	}
 }
+
+func TestPlatformMetricsReportBuildAndDatabaseEngine(t *testing.T) {
+	server, adminToken, _ := newServerWithRoles(t)
+	platform := server.store.(store.PlatformStore)
+	if err := platform.UpsertPlatformAdmin(context.Background(), "ops", "correct-horse-battery"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only a superadmin's platform session reads the build details; an
+	// organization admin's session is refused like any other metrics request.
+	tenantCookie := &http.Cookie{Name: server.config.SessionCookieName, Value: adminToken}
+	if rec := platformRequest(t, server, tenantCookie, http.MethodGet, "/platform/metrics", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("metrics with tenant session = %d, want 401", rec.Code)
+	}
+
+	login := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", `{"username":"ops","password":"correct-horse-battery"}`)
+	cookie := platformCookie(login, server.config.PlatformSessionCookieName)
+	if cookie == nil {
+		t.Fatalf("login = %s", login.Body.String())
+	}
+	enrollPlatformTwoFactor(t, server, cookie)
+	system := func() domain.PlatformSystem {
+		t.Helper()
+		rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("metrics = %d %s", rec.Code, rec.Body.String())
+		}
+		var metrics domain.PlatformMetrics
+		if err := json.Unmarshal(rec.Body.Bytes(), &metrics); err != nil {
+			t.Fatal(err)
+		}
+		return metrics.System
+	}
+
+	// A source build (no ldflags) reports "dev" and no commit.
+	if got := system(); got.Version != "dev" || got.Commit != "" || got.DatabaseEngine != "sqlite" {
+		t.Fatalf("source build system = %+v, want version dev, no commit, sqlite", got)
+	}
+
+	server.config.Version = "2.3.0"
+	server.config.Commit = "de3a569"
+	if got := system(); got.Version != "2.3.0" || got.Commit != "de3a569" || got.DatabaseEngine != "sqlite" {
+		t.Fatalf("release build system = %+v", got)
+	}
+}

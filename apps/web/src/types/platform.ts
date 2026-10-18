@@ -242,14 +242,22 @@ export interface PlatformTotals {
   databaseBytes: number
 }
 
+export type PlatformDatabaseEngine = 'sqlite' | 'postgres'
+
 export interface PlatformSystem {
+  /** The API's app version (VERSION file baked in at build time), or "dev". */
+  version: string
+  /** Git commit the API was built from; empty when unknown. */
+  commit: string
+  /** Storage engine the API runs on. */
+  databaseEngine: PlatformDatabaseEngine | ''
+  /** IRIS_RELEASE (free-form deployment label, also the Sentry release). */
   release: string
   goVersion: string
   startedAt: string
   uptimeSeconds: number
   goroutines: number
   heapBytes: number
-  engine: 'sqlite' | 'postgres'
   /** Highest applied schema migration. */
   schemaVersion: number
   backup: PlatformBackupStatus

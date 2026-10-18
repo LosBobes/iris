@@ -18,12 +18,22 @@ COPY iris-api/go.mod iris-api/go.sum ./
 RUN go mod download
 
 COPY iris-api/ ./
+# The app version is the repository-root VERSION file (the same one the web
+# build embeds; the release job bumps it before any image is built). It and
+# the commit are linked into internal/buildinfo so the Backoffice can show
+# which API build is running. IRIS_COMMIT comes from
+# .github/workflows/build.yml; a local build without it leaves it empty.
+ARG IRIS_COMMIT=""
+COPY VERSION /VERSION
 # The server is the entrypoint; irisctl ships alongside it so operators can run
 # migrations, seeding and backups inside the container (docker compose run
 # --entrypoint irisctl …) without a separately built or hand-copied binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+RUN version="$(tr -d ' \r\n' < /VERSION)" \
+    && pkg="github.com/LosBobes/iris/iris-api/internal/buildinfo" \
+    && ldflags="-s -w -X ${pkg}.Version=${version:-dev} -X ${pkg}.Commit=${IRIS_COMMIT}" \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="${ldflags}" \
         -o /out/iris-api ./cmd/server \
-    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="${ldflags}" \
         -o /out/irisctl ./cmd/irisctl
 
 # --- Final stage ------------------------------------------------------------

@@ -12,6 +12,7 @@ import (
 
 	"github.com/LosBobes/iris/iris-api/internal/api"
 	"github.com/LosBobes/iris/iris-api/internal/backups"
+	"github.com/LosBobes/iris/iris-api/internal/buildinfo"
 	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
 	"github.com/getsentry/sentry-go"
@@ -99,6 +100,8 @@ func main() {
 		WebDir:            os.Getenv("IRIS_WEB_DIR"),
 		Release:           os.Getenv("IRIS_RELEASE"),
 		Backups:           backupManager,
+		Version:           buildinfo.Version,
+		Commit:            buildinfo.Commit,
 	})
 
 	addr := os.Getenv("IRIS_API_ADDR")
@@ -124,7 +127,7 @@ func main() {
 		log.Printf("warning: PDF printing is unavailable: %v", err)
 	}
 
-	log.Printf("iris-api listening on %s", addr)
+	log.Printf("iris-api %s listening on %s", buildinfo.Version, addr)
 	// Serve until SIGINT/SIGTERM (docker stop sends SIGTERM), then drain in-flight
 	// requests and fall through to the deferred store Close so SQLite checkpoints
 	// its WAL instead of being killed mid-write.

@@ -88,7 +88,7 @@ func TestPlatformBackups(t *testing.T) {
 		t.Fatalf("metrics = %d %s", rec.Code, rec.Body.String())
 	}
 	system := metrics.System
-	if system.Engine != "sqlite" || system.SchemaVersion < 25 || !system.Backup.Supported || system.Backup.Stale || system.Backup.LastBackupAt == nil {
+	if system.DatabaseEngine != "sqlite" || system.SchemaVersion < 25 || !system.Backup.Supported || system.Backup.Stale || system.Backup.LastBackupAt == nil {
 		t.Fatalf("system = %+v", system)
 	}
 	if _, err := os.Stat(dir); err != nil {

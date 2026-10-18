@@ -24,6 +24,7 @@ import type { OrganizationModules } from "@/types/settings";
 import { IrisMark } from "@/components/brand/IrisMark";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import { APP_VERSION, formatVersion } from "@/lib/app-version";
 import {
   Tooltip,
   TooltipContent,
@@ -492,6 +493,19 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                   <LogOut size={NAV_ICON_SIZE - 2} className="shrink-0" />
                 </button>
               </SidebarTooltip>
+            </div>
+            {/* The running version, for support questions ("which Iris do you
+                have?"). Same source as the sign-in screen: the VERSION file. */}
+            <div
+              data-testid="app-version"
+              title={t("shell.appVersion")}
+              className={cn(
+                "px-2 pt-1 text-[10px] tabular-nums tracking-[0.3px] whitespace-nowrap text-[color:var(--iris-ink-faint)]",
+                isSidebarCollapsed ? "lg:px-0 lg:text-center" : "",
+              )}
+            >
+              <span className={isSidebarCollapsed ? "lg:hidden" : undefined}>Iris </span>
+              {formatVersion(APP_VERSION)}
             </div>
           </div>
         </aside>

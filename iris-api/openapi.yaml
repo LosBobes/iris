@@ -5500,6 +5500,20 @@ components:
         system:
           type: object
           properties:
+            version:
+              type: string
+              description: >-
+                The API's app version (the repository VERSION file, baked in at
+                build time); "dev" for a source build. The Backoffice compares it
+                with the web app's own version to spot a stale frontend.
+              example: 2.3.0
+            commit:
+              type: string
+              description: Git commit the API binary was built from; empty when unknown.
+            databaseEngine:
+              type: string
+              enum: [sqlite, postgres]
+              description: Storage engine the API runs on.
             release:
               type: string
             goVersion:
@@ -5513,9 +5527,6 @@ components:
               type: integer
             heapBytes:
               type: integer
-            engine:
-              type: string
-              enum: [sqlite, postgres]
             schemaVersion:
               type: integer
               description: Highest applied schema migration.

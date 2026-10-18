@@ -1431,7 +1431,14 @@ export const sr = {
     },
     system: {
       title: 'Sistem',
-      release: 'Verzija',
+      webVersion: 'Veb aplikacija',
+      apiVersion: 'API',
+      database: 'Baza podataka',
+      databaseSqlite: 'SQLite',
+      databasePostgres: 'PostgreSQL',
+      versionMismatch:
+        'Veb aplikacija ({{web}}) i API ({{api}}) nisu iste verzije. Osvežite stranicu — pregledač verovatno prikazuje stariju, keširanu verziju.',
+      release: 'Oznaka izdanja',
       go: 'Go',
       started: 'Pokrenut',
       goroutines: 'Gorutine',
@@ -1440,7 +1447,7 @@ export const sr = {
       appVersion: 'Verzija aplikacije',
       engine: 'Baza podataka',
       schema: 'Verzija šeme',
-      database: 'Veličina baze',
+      databaseSize: 'Veličina baze',
       uptime: 'Radi',
     },
     backups: {
@@ -1694,6 +1701,7 @@ export const sr = {
     },
   },
   shell: {
+    appVersion: 'Verzija aplikacije',
     collapse: 'Skupi meni',
     expand: 'Proširi meni',
     logout: 'Odjava',

@@ -153,3 +153,98 @@ func TestProductionLoginLogoMigration(t *testing.T) {
 		t.Fatalf("logo after re-seed = %+v, %v; want the admin's upload kept", logo, err)
 	}
 }
+
+// TestTenantIsolationMigrationOnAPooledDatabase runs the rebuild the way the
+// store does today: a pool of connections that each enforce foreign keys (the
+// DSN pragma). The migration must switch keys off on the very connection that
+// rebuilds the tables, or DROP TABLE users / catalog_items would cascade-delete
+// sessions and price history; and it must not hand a connection with keys off
+// back to the pool, where later deletes would skip ON DELETE CASCADE and leave
+// orphans (the rows that broke the Postgres cutover).
+func TestTenantIsolationMigrationOnAPooledDatabase(t *testing.T) {
+	ctx := context.Background()
+	const poolSize = 4
+	db, err := sql.Open("sqlite", buildDSN(filepath.Join(t.TempDir(), "pooled.db")))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(poolSize)
+	db.SetMaxIdleConns(poolSize)
+
+	// Fill the pool so the migration has several idle connections to pick from.
+	conns := make([]*sql.Conn, poolSize)
+	for i := range conns {
+		if conns[i], err = db.Conn(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, conn := range conns {
+		_ = conn.Close()
+	}
+
+	if _, err := db.ExecContext(ctx, `CREATE TABLE schema_migrations (
+		version INTEGER PRIMARY KEY,
+		applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatalf("create schema_migrations: %v", err)
+	}
+	for _, migration := range sqliteMigrations {
+		if migration.fn != nil {
+			break
+		}
+		if err := applyMigration(ctx, db, migration.version, migration.sql); err != nil {
+			t.Fatalf("apply migration %d: %v", migration.version, err)
+		}
+	}
+	for _, statement := range []string{
+		`INSERT INTO users(id, username, password_hash, role) VALUES ('u1', 'admin', 'hash', 'admin')`,
+		`INSERT INTO sessions(token, user_id, expires_at) VALUES ('tok', 'u1', '2099-01-01')`,
+		`INSERT INTO catalog_items(id, code, name, kind) VALUES ('cat1', 'SIF-1', 'Štampa', 'service')`,
+		`INSERT INTO catalog_item_price_history(id, catalog_item_id, purchase_price, sale_price, effective_from) VALUES ('cph-cat1', 'cat1', 1, 2, '2024-01-01')`,
+	} {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("seed %q: %v", statement, err)
+		}
+	}
+	countRows := func(table string) int {
+		t.Helper()
+		var n int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		return n
+	}
+	historyBefore := countRows("catalog_item_price_history")
+
+	if err := tenantIsolationMigration(ctx, db); err != nil {
+		t.Fatalf("tenantIsolationMigration: %v", err)
+	}
+
+	if got := countRows("sessions"); got != 1 {
+		t.Fatalf("sessions after migration = %d, want 1 (rebuild cascaded?)", got)
+	}
+	if got := countRows("catalog_item_price_history"); got != historyBefore || got == 0 {
+		t.Fatalf("price history after migration = %d, want %d (rebuild cascaded?)", got, historyBefore)
+	}
+
+	// Every pooled connection enforces foreign keys again: hold them all at
+	// once so each one is asked, not just the most recently used.
+	for i := range conns {
+		if conns[i], err = db.Conn(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, conn := range conns {
+		var foreignKeys int
+		if err := conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys); err != nil {
+			t.Fatal(err)
+		}
+		if foreignKeys != 1 {
+			t.Fatalf("pooled connection %d has foreign_keys = %d after the migration, want 1", i, foreignKeys)
+		}
+	}
+	for _, conn := range conns {
+		_ = conn.Close()
+	}
+}

@@ -635,13 +635,15 @@ function fixturePlatformMetrics(days: PlatformRangeDays): PlatformMetrics {
       databaseBytes: 0,
     },
     system: {
+      version: APP_VERSION,
+      commit: '',
+      databaseEngine: '',
       release: 'fixtures',
       goVersion: '—',
       startedAt: now.toISOString(),
       uptimeSeconds: 0,
       goroutines: 0,
       heapBytes: 0,
-      engine: 'sqlite',
       schemaVersion: 0,
       // Fixture mode has no database file to copy.
       backup: { supported: false, lastBackupAt: null, stale: false, staleAfterHours: 24, intervalSeconds: 0 },

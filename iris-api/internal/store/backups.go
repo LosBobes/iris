@@ -28,13 +28,6 @@ const (
 	EnginePostgres = "postgres"
 )
 
-func (s *SQLStore) DatabaseEngine() string {
-	if s.dialect == dialectPostgres {
-		return EnginePostgres
-	}
-	return EngineSQLite
-}
-
 // BackupSupported reports whether Backup can copy this database in-process.
 func (s *SQLStore) BackupSupported() bool { return s.dialect != dialectPostgres }
 

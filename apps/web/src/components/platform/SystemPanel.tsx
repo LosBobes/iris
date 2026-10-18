@@ -139,9 +139,9 @@ export function SystemPanel(): React.JSX.Element {
             items={[
               [t("platform.system.appVersion"), APP_VERSION],
               [t("platform.system.release"), info.release || "—"],
-              [t("platform.system.engine"), engineLabel(info.engine)],
+              [t("platform.system.engine"), engineLabel(info.databaseEngine)],
               [t("platform.system.schema"), info.schemaVersion ? String(info.schemaVersion) : "—"],
-              [t("platform.system.database"), formatBytes(system.totals.databaseBytes)],
+              [t("platform.system.databaseSize"), formatBytes(system.totals.databaseBytes)],
               [t("platform.system.started"), formatDateTime(info.startedAt) ?? "—"],
               [t("platform.system.uptime"), formatDuration(info.uptimeSeconds)],
               [t("platform.system.go"), info.goVersion],

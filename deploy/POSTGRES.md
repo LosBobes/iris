@@ -117,11 +117,14 @@ Each section prints its own "expect" line. In short:
 - no order numbers with a non-digit suffix (such as `RN-2026-12/A`);
 - every money/quantity `bad` is 0 (more than 4 decimals or >= 1e10 would be
   rounded or rejected by `NUMERIC(14,4)`);
+- no rows whose foreign key points at a missing parent (empty list; see
+  [Orphaned rows](#orphaned-rows-sqlstate-23503) below);
 - no tables outside the migration (empty list);
 - row counts: write them down for step 7.
 
-`irisctl` runs the same checks from the code, and also lists tables the migration
-does not know about. It needs no PostgreSQL:
+`irisctl` runs the same checks from the code (foreign keys included, via
+`PRAGMA foreign_key_check`), and also lists tables the migration does not know
+about. It needs no PostgreSQL:
 
 ```bash
 $C run --rm --entrypoint irisctl backend migrate-to-postgres -check -from /data/iris.db
@@ -137,7 +140,10 @@ Provera izvora je prošla: 3912 redova, nema upozorenja.
 ```
 
 Every `UPOZORENJE:` line, and the closing `provera izvora je pronašla probleme`,
-must be understood and fixed (or consciously accepted) before going on.
+must be understood and fixed (or consciously accepted) before going on. A
+foreign-key line (`UPOZORENJE: strani ključ: ...`) cannot be accepted: the copy
+in step 5 refuses to start until it is fixed, because PostgreSQL would reject
+those rows.
 Clean up with `rm preflight.db preflight.sql`; the copy inside the data volume
 (`/data/preflight.db`) is small and harmless.
 
@@ -228,7 +234,11 @@ What the command guarantees:
   commit. A mismatch rolls everything back (`provera nije uspela, migracija je
   poništena: <tabela>: ...`) and leaves PostgreSQL empty;
 - it refuses a target that already holds data
-  (`target table users already holds 6 rows: ...`).
+  (`target table users already holds 6 rows: ...`);
+- it refuses, before connecting to PostgreSQL, a source with orphaned rows
+  (`izvorna baza ima redove koji krše strane ključeve; ... SQLSTATE 23503 ...`),
+  listing each table with its fix. Older builds started the copy and failed
+  halfway; see [Orphaned rows](#orphaned-rows-sqlstate-23503).
 
 **If it fails**, a clean failure leaves PostgreSQL empty: fix the cause and
 re-run. If you are unsure what state the target is in (the shell died halfway,
@@ -292,6 +302,49 @@ Browser checklist, on the real URL:
 - sign in to `/backoffice`; the dashboard counts load.
 
 Only now re-enable the "Deploy to Hetzner" workflow and unfreeze merges.
+
+## Troubleshooting
+
+### Orphaned rows (SQLSTATE 23503)
+
+A cutover in October 2026 failed in step 5 with
+`insert row ... into catalog_item_price_history: ... (SQLSTATE 23503)`: 365
+price-history rows pointed at catalog items that no longer existed. They had
+been deleted while SQLite was not enforcing foreign keys, so their
+`ON DELETE CASCADE` never ran. SQLite enforces foreign keys per connection.
+The most likely path: builds before September 2026 (b613dd9) switched them on
+with a one-off `PRAGMA` on the store's single connection; when the driver
+discarded that connection (it does after a query is interrupted, e.g. by a
+cancelled request), its replacement came up with foreign keys off until the
+next restart, so catalog deletions (such as the catalog cleanup) left their
+price history behind. Since then every connection gets `foreign_keys(ON)` from
+the DSN. PostgreSQL always
+enforces them. `-check` passed because it did not look at foreign keys then; it
+does now, and the copy refuses to start on such a source. A manual `sqlite3`
+session also has foreign keys off unless it runs `PRAGMA foreign_keys=ON`.
+
+To fix it, on a **stopped** backend, after `irisctl backup`:
+
+```bash
+$C run --rm --entrypoint irisctl backend migrate-to-postgres -check -from /data/iris.db
+# UPOZORENJE: strani ključ: 365 redova u catalog_item_price_history (catalog_item_id) upućuje na nepostojeće redove u catalog_items (id)
+#   ispravka (isto što bi uradio ON DELETE CASCADE): DELETE FROM catalog_item_price_history WHERE catalog_item_id NOT IN (SELECT id FROM catalog_items);
+```
+
+Apply the printed statement to the SQLite file (it does exactly what the
+cascade would have done), then re-run `-check` until it passes:
+
+```bash
+VOL="$(basename "$PWD")_iris_sqlite_data"   # run from DEPLOY_PATH; see step 0
+docker run --rm -v "$VOL:/data" alpine:3.21 sh -c "apk add -q sqlite \
+  && sqlite3 /data/iris.db 'DELETE FROM catalog_item_price_history WHERE catalog_item_id NOT IN (SELECT id FROM catalog_items);' \
+  && chown 65532:65532 /data/iris.db*"
+```
+
+(The `chown` keeps the files writable for the backend's `nonroot` user, which
+the SQLite rollback needs.) Lines without a statement need a decision rather
+than a script; orphaned `stock_movements` in particular are never deleted
+(append-only ledger): restore the missing catalog items from a backup.
 
 ## Rolling back
 

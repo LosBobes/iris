@@ -23,6 +23,7 @@ const metrics: PlatformMetrics = {
     activeSessions: 2, databaseBytes: 5 * 1024 * 1024,
   },
   system: {
+    version: "2.3.0", commit: "de3a5691c0ffee", databaseEngine: "postgres",
     release: "git-abc1234", goVersion: "go1.26", startedAt: "2026-10-16T10:00:00Z",
     uptimeSeconds: 7200, goroutines: 12, heapBytes: 8 * 1024 * 1024,
   },

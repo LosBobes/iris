@@ -184,17 +184,26 @@ func main() {
 		for _, problem := range report.Problems {
 			log.Printf("UPOZORENJE: %s", problem)
 		}
+		for _, violation := range report.ForeignKeyViolations {
+			log.Printf("UPOZORENJE: %s", violation)
+			log.Printf("  %s", violation.Hint())
+		}
 		if *check {
 			total := 0
 			for _, count := range report.Counts {
 				fmt.Printf("  %-32s %6d\n", count.Table, count.Rows)
 				total += count.Rows
 			}
-			if len(report.Uncovered) > 0 || len(report.Problems) > 0 {
+			if len(report.Uncovered) > 0 || len(report.Problems) > 0 || len(report.ForeignKeyViolations) > 0 {
 				log.Fatalf("provera izvora je pronašla probleme (%d redova ukupno)", total)
 			}
 			fmt.Printf("Provera izvora je prošla: %d redova, nema upozorenja.\n", total)
 			return
+		}
+		// Unlike the warnings above, a foreign-key violation cannot be copied:
+		// Postgres would abort mid-copy. Refuse before connecting to it.
+		if len(report.ForeignKeyViolations) > 0 {
+			log.Fatal(&store.ForeignKeyViolationsError{Violations: report.ForeignKeyViolations})
 		}
 
 		target, err := store.OpenPostgres(ctx, targetURL)

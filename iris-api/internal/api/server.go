@@ -70,6 +70,11 @@ type Config struct {
 	// Backups takes and lists SQLite backup copies for the Backoffice
 	// (backups.go); nil on PostgreSQL, where backups are managed externally.
 	Backups *backups.Manager
+	// Version and Commit identify the build (internal/buildinfo); the
+	// Backoffice shows them beside the web app's own version. An empty
+	// Version reads as "dev".
+	Version string
+	Commit  string
 }
 
 func DefaultConfig() Config {

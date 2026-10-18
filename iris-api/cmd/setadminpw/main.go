@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
-	_ "modernc.org/sqlite"
 	"golang.org/x/crypto/bcrypt"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
