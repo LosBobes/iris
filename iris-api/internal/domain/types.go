@@ -483,6 +483,51 @@ type PlatformTenant struct {
 	Admins      int     `json:"admins"`
 	// Modules are the organization's optional feature modules (both off by default).
 	Modules OrganizationModules `json:"modules"`
+	// Health is the organization's activity at a glance (counts and dates only).
+	Health PlatformTenantHealth `json:"health"`
+	// Notes are the superadmins' internal notes; the organization never sees them.
+	Notes PlatformTenantNotes `json:"notes"`
+}
+
+// PlatformTenantHealth summarizes an organization's recent activity for the
+// Backoffice list. Aggregates only — never customer, user or work-order records.
+type PlatformTenantHealth struct {
+	// LastLoginAt is the newest recorded sign-in (impersonation is not one).
+	LastLoginAt *string `json:"lastLoginAt"`
+	// ActiveUsers7d / ActiveUsers30d count distinct users who signed in within
+	// the window or hold a live, non-impersonated session.
+	ActiveUsers7d        int `json:"activeUsers7d"`
+	ActiveUsers30d       int `json:"activeUsers30d"`
+	WorkOrdersCreated30d int `json:"workOrdersCreated30d"`
+	OpenWorkOrders       int `json:"openWorkOrders"`
+	// Dormant: nobody signed in for TenantDormantDays and the organization is
+	// older than that (a brand-new one is not dormant yet).
+	Dormant bool `json:"dormant"`
+}
+
+// TenantDormantDays is the sign-in silence after which an organization counts
+// as dormant.
+const TenantDormantDays = 30
+
+// PlatformTenantNotes are superadmin-only internal notes about an organization.
+type PlatformTenantNotes struct {
+	ContactName  string `json:"contactName"`
+	ContactEmail string `json:"contactEmail"`
+	ContactPhone string `json:"contactPhone"`
+	Plan         string `json:"plan"`
+	Notes        string `json:"notes"`
+	// UpdatedAt / UpdatedBy are set once the notes have been saved.
+	UpdatedAt *string `json:"updatedAt"`
+	UpdatedBy *string `json:"updatedBy"`
+}
+
+// PlatformTenantNotesInput replaces an organization's internal notes.
+type PlatformTenantNotesInput struct {
+	ContactName  string `json:"contactName"`
+	ContactEmail string `json:"contactEmail"`
+	ContactPhone string `json:"contactPhone"`
+	Plan         string `json:"plan"`
+	Notes        string `json:"notes"`
 }
 
 // PlatformCreateTenantInput creates an organization with its first admin.
@@ -512,6 +557,7 @@ const (
 	AuditTenantSuspend      = "tenant.suspend"
 	AuditTenantReactivate   = "tenant.reactivate"
 	AuditTenantModules      = "tenant.modules"
+	AuditTenantNotes        = "tenant.notes"
 	AuditUserPasswordReset  = "user.password_reset"
 	AuditImpersonationStart = "impersonate"
 

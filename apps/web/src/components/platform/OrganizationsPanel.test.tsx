@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/errors";
 import { sr } from "@/i18n/locales/sr";
 import type { PlatformTenant } from "@/types/platform";
 import "@/i18n";
+import { emptyHealth, emptyNotes } from "./test-tenants";
 
 const strings = sr.platform.orgs;
 
@@ -21,6 +22,8 @@ const demo: PlatformTenant = {
   users: 2,
   admins: 1,
   modules: { processes: false, stock: false },
+  health: emptyHealth,
+  notes: emptyNotes,
 };
 
 afterEach(() => {

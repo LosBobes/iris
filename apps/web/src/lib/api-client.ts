@@ -43,6 +43,7 @@ import type {
   PlatformAuditLog,
   PlatformTenant,
   PlatformCreateTenantInput,
+  PlatformTenantNotesInput,
   PlatformUpdateTenantInput,
   PlatformTwoFactorSetup,
   PlatformTwoFactorEnabled,
@@ -855,6 +856,14 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/modules`),
         jsonRequest('PUT', { processes: modules.processes, stock: modules.stock }),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async setPlatformTenantNotes(slug: string, notes: PlatformTenantNotesInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/notes`),
+        jsonRequest('PUT', notes),
       )
       return readJSON<PlatformTenant>(response)
     },

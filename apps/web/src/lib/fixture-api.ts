@@ -50,7 +50,14 @@ import {
   type PublicOrganization,
   normalizeOrganizationModules,
 } from '@/types/settings'
-import type { PlatformAdminSummary, PlatformMetrics, PlatformRangeDays, PlatformTenant } from '@/types/platform'
+import type {
+  PlatformAdminSummary,
+  PlatformMetrics,
+  PlatformRangeDays,
+  PlatformTenant,
+  PlatformTenantHealth,
+  PlatformTenantNotes,
+} from '@/types/platform'
 import { PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
 import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
@@ -711,7 +718,31 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
     users: users.length,
     admins: users.filter((user) => user.role === 'admin').length,
     modules: { ...modules },
+    health: fixtureTenantHealth(),
+    notes: { ...tenantNotes },
   })
+  // Superadmin-only internal notes of the single fixture organization.
+  let tenantNotes: PlatformTenantNotes = {
+    contactName: '',
+    contactEmail: '',
+    contactPhone: '',
+    plan: '',
+    notes: '',
+    updatedAt: null,
+    updatedBy: null,
+  }
+  const fixtureTenantHealth = (): PlatformTenantHealth => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const closed = new Set(['completed', 'cancelled', 'invoiced'])
+    return {
+      lastLoginAt: sessionUser ? new Date().toISOString() : null,
+      activeUsers7d: sessionUser ? 1 : 0,
+      activeUsers30d: sessionUser ? 1 : 0,
+      workOrdersCreated30d: workOrders.filter((order) => (order.createdAt ?? '') >= since).length,
+      openWorkOrders: workOrders.filter((order) => !closed.has(order.status)).length,
+      dormant: false,
+    }
+  }
   const currentFixtureUser = () => sessionUser ?? users.find((user) => user.role === 'admin') ?? null
   // The ledger and the process store reference each other (automatic posting
   // reads order graphs, the process store validates article links), so the
@@ -1245,6 +1276,21 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
         })
       }
       modules = normalizeOrganizationModules(next)
+      return fixtureTenant()
+    },
+
+    async setPlatformTenantNotes(slug, input) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (slug !== FIXTURE_ORGANIZATION.slug) throw new Error('Organizacija ne postoji.')
+      tenantNotes = {
+        contactName: input.contactName.trim(),
+        contactEmail: input.contactEmail.trim(),
+        contactPhone: input.contactPhone.trim(),
+        plan: input.plan.trim(),
+        notes: input.notes.trim(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'operater',
+      }
       return fixtureTenant()
     },
 

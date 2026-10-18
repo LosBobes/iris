@@ -522,6 +522,9 @@ func newSQLiteStoreForTest(t *testing.T, ctx context.Context, path string) *SQLi
 	if err != nil {
 		t.Fatalf("OpenSQLite() returned error: %v", err)
 	}
+	// Close before t.TempDir's cleanup removes the file (Windows refuses to
+	// delete an open database).
+	t.Cleanup(func() { _ = sqliteStore.Close() })
 	// Tests operate as the demo tenant; ensure it exists so tenant_id foreign keys
 	// and per-tenant scoping resolve (SeedDemoFromFixtures also writes to it).
 	if err := sqliteStore.EnsureTenant(ctx, DemoTenantID, DemoTenantSlug, DemoTenantName); err != nil {

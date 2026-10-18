@@ -229,4 +229,15 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
+## D-0xx (tbd): Organization health is computed on read; internal notes live outside the tenant's data
+- **Status**: `accepted`
+- **Context**: Superadmins need to see at a glance which organizations are in use and which have gone quiet, and to keep account-management notes (contact person, plan, remarks) next to each organization — without the organization ever seeing those notes and without the Backoffice reading tenant records.
+- **Decision**: `GET /platform/tenants` returns a `health` object per organization, computed on every read with one grouped query per source across all organizations (`login_events`, live `sessions`, `work_orders`): last sign-in, distinct active users in 7 / 30 days, work orders created in 30 days, open work orders — counts and dates only, like `/platform/metrics`. A user counts as active when they signed in within the window **or** hold a live, non-impersonated session (a remembered device that never signs in again is still in use; a live session's idle expiry is at most 7 days out, so its holder was active within both windows). An organization is **dormant** when nobody was active in 30 days **and** it is older than 30 days (a just-created one is not flagged); the UI shows the badge only when it is not also suspended. Internal notes are a separate `tenant_notes` table (migration v27, one row per organization, `ON DELETE CASCADE`), edited via `PUT /platform/tenants/{slug}/notes` and audited as `tenant.notes` with the **names** of the changed fields only, never their contents. They are deliberately not in `app_settings`, which the organization's own `GET /settings` reads.
+- **Consequences**:
+  - No denormalized counters to keep in sync; the cost is a few indexed aggregate queries per list load, fine for the expected number of organizations.
+  - Sorting and filtering (name, last sign-in, active users, creation date; active / dormant / suspended) happen in the browser on the full list.
+  - `login_events` retention (400 days) bounds how far back "last sign-in" can reach.
+
+---
+
 *Last verified against the checked-in repository state on 2026-10-18.*

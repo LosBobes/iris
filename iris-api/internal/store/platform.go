@@ -62,6 +62,10 @@ type PlatformStore interface {
 	// PlatformSetTenantModules switches the organization's optional modules and
 	// audits the change; nil when no organization has that slug.
 	PlatformSetTenantModules(ctx context.Context, actor AuditActor, slug string, modules domain.OrganizationModules) (*domain.PlatformTenant, error)
+	// PlatformSetTenantNotes replaces the superadmins' internal notes about the
+	// organization (platform_tenant_health.go); nil when no organization has
+	// that slug.
+	PlatformSetTenantNotes(ctx context.Context, actor AuditActor, slug string, input domain.PlatformTenantNotesInput) (*domain.PlatformTenant, error)
 	PlatformResetUserPassword(ctx context.Context, actor AuditActor, slug, userID, password string) (*domain.User, error)
 	PlatformAuditLog(ctx context.Context, limit, offset int) (domain.PlatformAuditLog, error)
 

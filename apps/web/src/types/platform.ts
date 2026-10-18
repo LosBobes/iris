@@ -84,7 +84,42 @@ export interface PlatformTenant {
   admins: number
   /** Optional modules switched on for the organization (both off by default). */
   modules: OrganizationModules
+  /** Activity at a glance (counts and dates only). */
+  health: PlatformTenantHealth
+  /** Superadmin-only internal notes; the organization never sees them. */
+  notes: PlatformTenantNotes
 }
+
+/** An organization's recent activity (GET /platform/tenants → health). */
+export interface PlatformTenantHealth {
+  /** Newest recorded sign-in; impersonation is not one. */
+  lastLoginAt: string | null
+  /** Distinct users who signed in within the window or hold a live session. */
+  activeUsers7d: number
+  activeUsers30d: number
+  workOrdersCreated30d: number
+  /** Not completed, cancelled or invoiced. */
+  openWorkOrders: number
+  /** No active user in 30 days, and the organization is older than that. */
+  dormant: boolean
+}
+
+/** Superadmin-only notes about an organization (PUT /platform/tenants/{slug}/notes). */
+export interface PlatformTenantNotes {
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  plan: string
+  notes: string
+  /** Set once saved. */
+  updatedAt: string | null
+  updatedBy: string | null
+}
+
+export type PlatformTenantNotesInput = Pick<
+  PlatformTenantNotes,
+  'contactName' | 'contactEmail' | 'contactPhone' | 'plan' | 'notes'
+>
 
 export interface PlatformCreateTenantInput {
   name: string
@@ -104,6 +139,7 @@ export type PlatformAuditAction =
   | 'tenant.suspend'
   | 'tenant.reactivate'
   | 'tenant.modules'
+  | 'tenant.notes'
   | 'user.password_reset'
   | 'impersonate'
   | 'process_template.create'

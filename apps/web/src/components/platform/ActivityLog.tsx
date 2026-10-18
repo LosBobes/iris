@@ -15,6 +15,7 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "tenant.suspend": "platform.activity.kinds.tenantSuspend",
   "tenant.reactivate": "platform.activity.kinds.tenantReactivate",
   "tenant.modules": "platform.activity.kinds.tenantModules",
+  "tenant.notes": "platform.activity.kinds.tenantNotes",
   "user.password_reset": "platform.activity.kinds.passwordReset",
   impersonate: "platform.activity.kinds.impersonate",
   "process_template.create": "platform.activity.kinds.processTemplateCreate",
@@ -75,6 +76,14 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
         processes: state(event.detail.processes),
       }),
     );
+  }
+  if (event.action === "tenant.notes" && event.detail?.fields) {
+    // Only the names of the changed fields are logged, never their contents.
+    const fields = event.detail.fields
+      .split(",")
+      .map((field) => t(`platform.activity.noteField.${field}`, { defaultValue: field }))
+      .join(", ");
+    lines.push(t("platform.activity.noteFields", { fields }));
   }
   const session = event.impersonation;
   if (session?.reason) {

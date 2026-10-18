@@ -128,6 +128,30 @@ func (s *Server) handlePlatformSetTenantModules(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, tenant)
 }
 
+// handlePlatformSetTenantNotes replaces the superadmins' internal notes about
+// an organization (contact, plan, free text). The organization never sees them.
+func (s *Server) handlePlatformSetTenantNotes(w http.ResponseWriter, r *http.Request) {
+	platform, ok := s.platformStore()
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	var input domain.PlatformTenantNotesInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	tenant, err := platform.PlatformSetTenantNotes(r.Context(), auditActor(r), chi.URLParam(r, "slug"), input)
+	if err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	if tenant == nil {
+		writeAPIError(w, r, http.StatusNotFound, tenantNotFoundMessage, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, tenant)
+}
+
 func (s *Server) handlePlatformResetPassword(w http.ResponseWriter, r *http.Request) {
 	platform, ok := s.platformStore()
 	if !ok {
