@@ -22,11 +22,11 @@ import type { WorkOrder } from "@/types/work-order";
 import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 
 function WorkOrdersPage(): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const {
     orders,
-    filteredSortedOrders,
+    exportFilters,
     totalFiltered,
     allOrdersCount,
     loading,
@@ -52,17 +52,26 @@ function WorkOrdersPage(): React.JSX.Element {
   const [deleteTarget, setDeleteTarget] = useState<WorkOrder | null>(null);
   const [completeTarget, setCompleteTarget] = useState<WorkOrder | null>(null);
 
-  const handleExportCsv = useCallback(() => {
-    if (filteredSortedOrders.length === 0) {
+  const handleExportCsv = useCallback(async () => {
+    if (totalFiltered === 0) {
       toast.info(t("workOrders.toast.nothingToExport"));
       return;
     }
-    // The exported price is the selling price, which every role may see.
-    downloadWorkOrdersCsv(filteredSortedOrders, visibleColumnSet);
-    toast.success(
-      t("workOrders.toast.exported", { count: filteredSortedOrders.length }),
-    );
-  }, [filteredSortedOrders, visibleColumnSet, t]);
+    // The API exports every matching order (all pages) with the visible
+    // columns; the exported price is the selling price, which every role may see.
+    try {
+      const blob = await window.api.exportWorkOrdersCsv({
+        ...exportFilters,
+        columns: [...visibleColumnSet],
+        lang: i18n.resolvedLanguage?.startsWith("en") ? "en" : "sr",
+      });
+      downloadWorkOrdersCsv(blob);
+      toast.success(t("workOrders.toast.exported", { count: totalFiltered }));
+    } catch (error: unknown) {
+      reportUnexpectedError("WorkOrdersPage.exportCsv", error);
+      toast.error(formatActionError(t("workOrders.toast.exportError"), error));
+    }
+  }, [exportFilters, totalFiltered, visibleColumnSet, t, i18n]);
 
   const advanceStatus = useCallback(
     async (order: WorkOrder) => {
@@ -223,7 +232,7 @@ function WorkOrdersPage(): React.JSX.Element {
               )}
               <button
                 type="button"
-                onClick={handleExportCsv}
+                onClick={() => void handleExportCsv()}
                 disabled={totalFiltered === 0}
                 className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               >

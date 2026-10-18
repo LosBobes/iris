@@ -55,7 +55,7 @@ Cobanovic.
 
 - `cmd/server` is SQLite-backed at `DATABASE_PATH` (`IRIS_DB_PATH` is a legacy
   fallback). Fixtures are for tests and `seed-demo`, not the runtime.
-- Production requires persistent storage and a session secret.
+- Production requires persistent storage (an explicit database path).
 - **Multi-tenant:** login takes `{ orgSlug, username, password }`; the tenant is
   resolved by slug and attached to the request context, and all store queries
   filter by `tenant_id`.

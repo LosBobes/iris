@@ -20,12 +20,35 @@ const (
 )
 
 // OrganizationSettings returns the shop-wide settings, falling back to defaults
-// when a row is missing (e.g. a pre-migration database).
+// when a row is missing (e.g. a pre-migration database). The shop settings
+// come from the per-tenant cache; modules are always read fresh, so the
+// settings a client sees never disagree with requireModule (which reads them
+// uncached), even when another process (irisctl) switched a module.
 func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.OrganizationSettings, error) {
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return domain.OrganizationSettings{}, err
 	}
+	settings, ok := s.caches.settings.get(tenantID)
+	if ok {
+		settings = cloneSettings(settings)
+	} else {
+		gen := s.caches.settings.generation(tenantID)
+		settings, err = loadOrganizationSettings(ctx, s.db, tenantID)
+		if err != nil {
+			return domain.OrganizationSettings{}, err
+		}
+		s.caches.settings.put(tenantID, gen, cloneSettings(settings))
+	}
+	modules, err := readModules(ctx, s.db, tenantID)
+	if err != nil {
+		return domain.OrganizationSettings{}, err
+	}
+	settings.Modules = modules
+	return settings, nil
+}
+
+func loadOrganizationSettings(ctx context.Context, q dbExecQuerier, tenantID string) (domain.OrganizationSettings, error) {
 	settings := domain.OrganizationSettings{
 		FirmName:            domain.DefaultFirmName,
 		PDFSections:         domain.DefaultPDFSections(),
@@ -35,7 +58,7 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 		ShowShippingOptions: false,
 	}
 
-	rows, err := s.db.QueryContext(
+	rows, err := q.QueryContext(
 		ctx,
 		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?, ?, ?)`,
 		tenantID,
@@ -104,25 +127,43 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 }
 
 // UpdateOrganizationSettings merges the provided fields onto the current settings
-// and persists them. Nil fields are left untouched.
+// and persists them. Nil fields are left untouched. The merge starts from a
+// fresh read inside the write transaction (never the cache), and only the keys
+// the update sets are written, so a concurrent change to another key survives.
 func (s *SQLiteStore) UpdateOrganizationSettings(
 	ctx context.Context,
 	update domain.OrganizationSettingsUpdate,
 ) (domain.OrganizationSettings, error) {
-	current, err := s.OrganizationSettings(ctx)
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return domain.OrganizationSettings{}, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.OrganizationSettings{}, fmt.Errorf("begin update organization settings: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	current, err := loadOrganizationSettings(ctx, tx, tenantID)
 	if err != nil {
 		return domain.OrganizationSettings{}, err
 	}
 
+	writes := map[string]string{}
 	if update.FirmName != nil {
 		firmName := strings.TrimSpace(*update.FirmName)
 		if firmName == "" {
 			return domain.OrganizationSettings{}, newValidationError("Naziv firme je obavezan.")
 		}
 		current.FirmName = firmName
+		writes[firmNameSettingKey] = firmName
 	}
 	if update.PDFSections != nil {
 		current.PDFSections = *update.PDFSections
+		encoded, err := json.Marshal(current.PDFSections)
+		if err != nil {
+			return domain.OrganizationSettings{}, fmt.Errorf("marshal pdf sections: %w", err)
+		}
+		writes[pdfSectionsSettingKey] = string(encoded)
 	}
 	if update.BillingDefaults != nil {
 		defaults, err := normalizeBillingDefaults(*update.BillingDefaults)
@@ -130,6 +171,11 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 			return domain.OrganizationSettings{}, err
 		}
 		current.BillingDefaults = defaults
+		encoded, err := json.Marshal(defaults)
+		if err != nil {
+			return domain.OrganizationSettings{}, fmt.Errorf("marshal billing defaults: %w", err)
+		}
+		writes[billingDefaultsSettingKey] = string(encoded)
 	}
 	if update.PriorityDefaults != nil {
 		defaults, err := normalizePriorityDefaults(*update.PriorityDefaults)
@@ -137,6 +183,11 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 			return domain.OrganizationSettings{}, err
 		}
 		current.PriorityDefaults = defaults
+		encoded, err := json.Marshal(defaults)
+		if err != nil {
+			return domain.OrganizationSettings{}, fmt.Errorf("marshal priority defaults: %w", err)
+		}
+		writes[priorityDefaultsSettingKey] = string(encoded)
 	}
 	if update.PrintItemColumns != nil {
 		columns, err := normalizePrintItemColumns(*update.PrintItemColumns)
@@ -144,46 +195,26 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 			return domain.OrganizationSettings{}, err
 		}
 		current.PrintItemColumns = columns
+		encoded, err := json.Marshal(columns)
+		if err != nil {
+			return domain.OrganizationSettings{}, fmt.Errorf("marshal print item columns: %w", err)
+		}
+		writes[printItemColumnsSettingKey] = string(encoded)
 	}
 	if update.ShowShippingOptions != nil {
 		current.ShowShippingOptions = *update.ShowShippingOptions
+		writes[showShippingOptionsSettingKey] = strconv.FormatBool(current.ShowShippingOptions)
 	}
 
-	sectionsJSON, err := json.Marshal(current.PDFSections)
-	if err != nil {
-		return domain.OrganizationSettings{}, fmt.Errorf("marshal pdf sections: %w", err)
+	for key, value := range writes {
+		if err := upsertSettingTx(ctx, tx, tenantID, key, value); err != nil {
+			return domain.OrganizationSettings{}, err
+		}
 	}
-	billingJSON, err := json.Marshal(current.BillingDefaults)
-	if err != nil {
-		return domain.OrganizationSettings{}, fmt.Errorf("marshal billing defaults: %w", err)
+	if err := tx.Commit(); err != nil {
+		return domain.OrganizationSettings{}, fmt.Errorf("commit organization settings: %w", err)
 	}
-	priorityJSON, err := json.Marshal(current.PriorityDefaults)
-	if err != nil {
-		return domain.OrganizationSettings{}, fmt.Errorf("marshal priority defaults: %w", err)
-	}
-	printColumnsJSON, err := json.Marshal(current.PrintItemColumns)
-	if err != nil {
-		return domain.OrganizationSettings{}, fmt.Errorf("marshal print item columns: %w", err)
-	}
-
-	if err := s.upsertSetting(ctx, firmNameSettingKey, current.FirmName); err != nil {
-		return domain.OrganizationSettings{}, err
-	}
-	if err := s.upsertSetting(ctx, pdfSectionsSettingKey, string(sectionsJSON)); err != nil {
-		return domain.OrganizationSettings{}, err
-	}
-	if err := s.upsertSetting(ctx, billingDefaultsSettingKey, string(billingJSON)); err != nil {
-		return domain.OrganizationSettings{}, err
-	}
-	if err := s.upsertSetting(ctx, priorityDefaultsSettingKey, string(priorityJSON)); err != nil {
-		return domain.OrganizationSettings{}, err
-	}
-	if err := s.upsertSetting(ctx, printItemColumnsSettingKey, string(printColumnsJSON)); err != nil {
-		return domain.OrganizationSettings{}, err
-	}
-	if err := s.upsertSetting(ctx, showShippingOptionsSettingKey, strconv.FormatBool(current.ShowShippingOptions)); err != nil {
-		return domain.OrganizationSettings{}, err
-	}
+	s.invalidateSettings(tenantID)
 	return current, nil
 }
 
@@ -255,7 +286,15 @@ func (s *SQLiteStore) upsertSetting(ctx context.Context, key, value string) erro
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.ExecContext(
+	if err := upsertSettingTx(ctx, s.db, tenantID, key, value); err != nil {
+		return err
+	}
+	s.invalidateSettings(tenantID)
+	return nil
+}
+
+func upsertSettingTx(ctx context.Context, q dbExecQuerier, tenantID, key, value string) error {
+	if _, err := q.ExecContext(
 		ctx,
 		`INSERT INTO app_settings(tenant_id, key, value) VALUES (?, ?, ?)
 		 ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value`,

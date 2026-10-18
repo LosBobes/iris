@@ -372,7 +372,8 @@ func TestDeleteTenantCascades(t *testing.T) {
 	// Tables with a tenant_id must hold nothing for the deleted tenant; child
 	// tables without one (sessions, locations, history, ...) must be empty. The
 	// platform-level tables are not tenant data.
-	skip := map[string]bool{"platform_admins": true, "platform_sessions": true, "platform_audit_events": true}
+	skip := map[string]bool{"platform_admins": true, "platform_sessions": true, "platform_audit_events": true,
+		"work_order_id_counter": true} // global id sequence, not tenant data
 	for _, table := range tables {
 		if skip[table] {
 			continue

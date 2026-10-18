@@ -1,6 +1,9 @@
 // CSV export for the Work Orders list. Exports the currently visible columns
-// (so the file matches what the user sees) using their displayed/plain values.
-// Values are emitted in the same Serbian formatting as the table.
+// (so the file matches what the user sees) using their displayed/plain values,
+// with headers and labels in the current UI language (the API takes it as
+// `lang`). The API
+// builds the real export (iris-api store.WriteWorkOrdersCSV) over every
+// matching order; workOrdersToCsv is its in-browser twin for fixture mode.
 
 import type { WorkOrder } from "@/types/work-order";
 import {
@@ -44,6 +47,15 @@ function exportCellValue(order: WorkOrder, key: WorkOrderColumnKey): string {
   }
 }
 
+/**
+ * Neutralizes a text cell a spreadsheet would run as a formula (CSV/formula
+ * injection): a leading =, +, -, @, tab or CR gets a leading apostrophe. Same
+ * rule as the API's csvFormulaSafe; the numeric price column is exempt.
+ */
+export function csvFormulaSafe(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 /** Escapes a value per RFC 4180 (quote fields containing quotes/commas/newlines). */
 function escapeCsv(value: string): string {
   if (/[",\n\r]/.test(value)) {
@@ -62,21 +74,22 @@ export function workOrdersToCsv(
   const header = columns.map((column) => escapeCsv(columnLabel(column))).join(",");
   const rows = orders.map((order) =>
     columns
-      .map((column) => escapeCsv(exportCellValue(order, column.key)))
+      .map((column) => {
+        const value = exportCellValue(order, column.key);
+        return escapeCsv(column.key === "price" ? value : csvFormulaSafe(value));
+      })
       .join(","),
   );
   return [header, ...rows].join("\r\n");
 }
 
-/** Triggers a client-side download of the CSV. Prefixed with a UTF-8 BOM so
- *  Excel renders Serbian characters correctly. */
+/** Triggers a browser download of an exported CSV file (the API's
+ *  `GET /work-orders/export.csv`, already prefixed with a UTF-8 BOM so Excel
+ *  renders Serbian characters correctly). */
 export function downloadWorkOrdersCsv(
-  orders: WorkOrder[],
-  visibleColumns: ReadonlySet<WorkOrderColumnKey>,
+  blob: Blob,
   filename = `radni-nalozi-${new Date().toISOString().slice(0, 10)}.csv`,
 ): void {
-  const csv = "﻿" + workOrdersToCsv(orders, visibleColumns);
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

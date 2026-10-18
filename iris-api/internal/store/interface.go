@@ -7,16 +7,30 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
+// WorkOrderListQuery filters, sorts and pages the work-order list. Empty
+// fields mean "no filter"; Limit <= 0 means "no limit" (internal callers such
+// as the dashboard and the CSV export read every match — the HTTP list handler
+// always sets a capped limit).
 type WorkOrderListQuery struct {
-	Search          string
-	Status          domain.WorkOrderStatus
-	AssignedTo      string
+	// Search is matched, diacritic-folded, against the search_text haystack.
+	Search              string
+	Status              domain.WorkOrderStatus
+	AssignedTo          string
+	CustomerID          string
+	BillingDocumentType string
+	DeliveryMethod      string
+	// Queue is one of the WorkOrderQueue* buckets (or empty); Today is the
+	// caller's local YYYY-MM-DD for the due-date buckets (default: UTC today).
+	Queue           string
+	Today           string
 	DateFrom        string
 	DateTo          string
 	NeedsCostReview bool
 	Limit           int
 	Offset          int
 	Sort            string
+	// Summary selects the slim list projection (no history collections).
+	Summary bool
 }
 
 type WorkOrderListResult struct {
@@ -32,6 +46,9 @@ type CatalogItemQuery struct {
 	ActiveOnly bool
 	Limit      int
 	Offset     int
+	// IDs, when non-empty, restricts results to these catalog item ids (batch
+	// lookup). Ids from another tenant are never returned.
+	IDs []string
 }
 
 // CatalogCleanupMissing names which price a catalog item must be missing to be
@@ -81,15 +98,31 @@ type CustomerListResult struct {
 type Store interface {
 	TenantBySlug(ctx context.Context, slug string) (*domain.Tenant, error)
 	AuthenticateUser(ctx context.Context, tenantID string, username string, password string) (*domain.User, error)
+	// CreateSession starts a session with a fixed expiry (never extended);
+	// StartSession is the sign-in path with a sliding expiry under a cap.
 	CreateSession(ctx context.Context, userID string, expiresAt time.Time) (string, error)
+	StartSession(ctx context.Context, input NewSession) (string, error)
 	UserBySessionToken(ctx context.Context, token string) (*domain.User, error)
+	SessionByToken(ctx context.Context, token string) (*Session, error)
+	// ExtendSession slides an ordinary session's idle expiry forward, never
+	// past its absolute expiry.
+	ExtendSession(ctx context.Context, token string, expiresAt time.Time) error
 	DeleteSession(ctx context.Context, token string) error
+	// EndUserSessions ends every session of a user (in the context tenant)
+	// except the one behind exceptToken ("" ends all).
+	EndUserSessions(ctx context.Context, userID string, exceptToken string) error
 
 	Customers(ctx context.Context, query CustomerQuery) (CustomerListResult, error)
 	CustomerByID(ctx context.Context, id string) (*domain.Customer, error)
 	// Locations returns customer locations for the tenant. When customerID is
 	// non-empty, only that customer's locations are returned; empty returns all.
 	Locations(ctx context.Context, customerID string) ([]domain.Location, error)
+	// LocationByID returns one location of the tenant, or nil when it does not
+	// exist. A non-empty customerID additionally requires the location to belong
+	// to that customer (mirroring Locations(customerID)).
+	LocationByID(ctx context.Context, customerID, id string) (*domain.Location, error)
+	// DashboardOrders returns the (pruned) work orders the dashboard aggregates.
+	DashboardOrders(ctx context.Context, query DashboardOrdersQuery) (DashboardOrders, error)
 	UpsertCustomer(ctx context.Context, customer domain.Customer) (*domain.Customer, error)
 	UpsertLocation(ctx context.Context, location domain.Location) (*domain.Location, error)
 	DeleteCustomer(ctx context.Context, id string) error

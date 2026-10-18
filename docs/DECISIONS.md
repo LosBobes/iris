@@ -68,7 +68,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 - **Decision**: Store the authenticated operator role in React application state and block dashboard navigation unless `currentUser.role === 'admin'`.
 - **Consequences**:
   - Simple, zero-latency dashboard authorization gates in the UI.
-  - Not a hard cryptographic boundary. API hardening and signed cookie-based route guards are designated for Phase 2 implementation.
+  - Not a hard cryptographic boundary. The API now enforces session + admin checks itself; sessions are opaque random tokens stored hashed, not signed cookies, so there is no signing secret ([D-020](#d-020-sliding-organization-sessions-with-an-absolute-cap-stored-hashed)).
 
 ---
 
@@ -197,6 +197,17 @@ This document records the project-level architectural decisions (ADRs) that shap
   - Switching Magacin off switches Procesi rada off too; the API rejects processes without stock (422). A work-order process created while Magacin was off is never stock-tracked (`work_order_processes.stock_tracked`, migration v22), so switching Magacin on never posts material for past work. Switching it off and on again resumes tracked processes, and their next save posts the difference.
   - Backoffice can prepare process templates before the module is switched on.
   - Data is kept when a module is switched off; switching it back on shows it again.
+
+---
+
+## D-020: Sliding organization sessions with an absolute cap, stored hashed
+- **Status**: `accepted`
+- **Context**: Organization sessions had a fixed 12 h lifetime that was never extended (an operator was signed out mid-shift however active they were), tokens were stored in plaintext (a copied database or backup handed out live sessions), and the login form's "Zapamti uređaj" only remembered the username.
+- **Decision**: Sessions are opaque random tokens; `sessions.token_hash` keeps only their SHA-256 (as `platform_sessions` already did). Each session has an idle expiry (`expires_at`) that authenticated requests slide forward — rewritten at most once per hour per session, to spare the single SQLite writer — and an `absolute_expires_at` cap that never moves. Ordinary sign-in: 12 h idle, 24 h cap, browser-session cookie. "Zapamti me na ovom uređaju" (`remember: true`): 7 days idle, 30 days cap, persistent cookie whose expiry always equals the server-side expiry (re-sent when the session slides). Impersonation (1 h) and Backoffice (2 h) sessions keep fixed lifetimes. Migration v25 ended all existing sessions (their raw tokens can no longer be matched). A password change via `PUT /users/{id}` ends that user's sessions (impersonations included), except the admin's own current session when they change their own password. There is no signing secret: `IRIS_SESSION_SECRET` is unused and only tolerated for older deployments.
+- **Consequences**:
+  - An active operator stays signed in; an idle or remembered session still ends at its cap, and a stolen database is useless for signing in.
+  - Sign-in failures are throttled per client IP and per organization + username (429). The client IP is taken only from `X-Real-IP`, which nginx sets (its realip module trusts `X-Forwarded-For` only from the local Caddy).
+  - State-changing requests whose `Origin` is neither the API's own host nor on the CORS allow-list are refused (403), in addition to the `SameSite=Lax` cookie.
 
 ---
 

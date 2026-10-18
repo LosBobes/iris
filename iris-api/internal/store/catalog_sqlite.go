@@ -18,7 +18,7 @@ import (
 // balance is computed from the movement ledger for articles and NULL for services.
 const catalogSelectColumns = `id, code, name, kind, unit, purchase_price, sale_price, barcode, tax_group, description, is_active,
 	min_stock,
-	CASE WHEN kind = 'article' THEN COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.catalog_item_id = catalog_items.id), 0) END,
+	CASE WHEN kind = 'article' THEN COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.catalog_item_id = catalog_items.id AND sm.tenant_id = catalog_items.tenant_id), 0) END,
 	created_at, updated_at`
 
 // CatalogItems lists catalog items, optionally filtered by kind, a name/code
@@ -46,6 +46,13 @@ func (s *SQLiteStore) CatalogItems(
 	}
 	if query.ActiveOnly {
 		conditions = append(conditions, "is_active = 1")
+	}
+	if len(query.IDs) > 0 {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(query.IDs)), ",")
+		conditions = append(conditions, "id IN ("+placeholders+")")
+		for _, id := range query.IDs {
+			args = append(args, id)
+		}
 	}
 
 	where := ""
@@ -343,7 +350,7 @@ func catalogCleanupWhere(tenantID string, filter CatalogCleanupFilter) (string, 
 	where := ` WHERE tenant_id = ?
 		     AND kind IN (` + strings.Join(placeholders, ",") + `)
 		     AND ` + missingPriceCondition(filter.Missing) + `
-	     AND NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.catalog_item_id = catalog_items.id)`
+	     AND NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.catalog_item_id = catalog_items.id AND sm.tenant_id = catalog_items.tenant_id)`
 	return where, args
 }
 

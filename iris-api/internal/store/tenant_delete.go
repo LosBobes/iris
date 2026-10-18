@@ -27,5 +27,7 @@ func (s *SQLiteStore) DeleteTenant(ctx context.Context, slug string) (bool, erro
 	if err != nil {
 		return false, fmt.Errorf("delete tenant: %w", err)
 	}
+	s.caches.settings.invalidateAll()
+	s.caches.enums.invalidateAll()
 	return affected > 0, nil
 }

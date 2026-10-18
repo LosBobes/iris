@@ -1232,10 +1232,10 @@ func TestParseWorkOrderListQueryClampsLimit(t *testing.T) {
 		query string
 		want  int
 	}{
-		{name: "absent limit stays unbounded", query: "", want: 0},
-		{name: "negative limit floors to zero", query: "?limit=-5", want: 0},
+		{name: "absent limit uses the default page", query: "", want: defaultWorkOrderListLimit},
+		{name: "negative limit uses the default page", query: "?limit=-5", want: defaultWorkOrderListLimit},
 		{name: "limit within range is kept", query: "?limit=25", want: 25},
-		{name: "limit at the cap is kept", query: "?limit=500", want: maxWorkOrderListLimit},
+		{name: "limit at the cap is kept", query: "?limit=200", want: maxWorkOrderListLimit},
 		{name: "oversized limit is clamped", query: "?limit=100000", want: maxWorkOrderListLimit},
 	}
 

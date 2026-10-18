@@ -2,6 +2,17 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.2.0 — 2026-10-18
+
+### Minor
+
+- Work-order list filters, sorts and pages on the server (CSV export via GET /work-orders/export.csv); search ignores diacritics (č/ć/š/ž/đ); the web app caches API data with TanStack Query.
+- Sign-in sessions now stay alive while in use (12 h idle, 24 h at most) and "Zapamti me na ovom uređaju" keeps you signed in for up to 30 days. Session tokens are stored hashed (everyone signs in once more after the upgrade), failed sign-ins are rate limited, a password change signs that user out elsewhere, cross-site write requests are refused, and IRIS_SESSION_SECRET is no longer required.
+
+### Patch
+
+- Sign-in limits can no longer be used to lock someone else out (5 failed attempts per account from one address, 20 per address, 50 per account overall), nginx trusts forwarded client addresses only from configured proxies (IRIS_TRUSTED_PROXY), new work orders can never overwrite an existing one, CSV export neutralizes formula-like cells and follows the UI language, client name sort handles č/ć/š/ž/đ, empty due dates no longer count as overdue, and other tabs follow a sign-in or sign-out.
+
 ## 2.1.2 — 2026-10-18
 
 ### Patch

@@ -83,4 +83,25 @@ describe("workOrdersToCsv", () => {
 
     expect(row).toBe('RN-2,"Plakat, A2 ""veliki"""');
   });
+
+  it("neutralizes formula-looking text cells but keeps negative prices numeric", () => {
+    const orders = [
+      makeOrder({
+        orderNumber: "-RN-3",
+        clientName: '=HYPERLINK("http://x")',
+        jobDescription: "@SUM(A1)",
+        price: -150.5,
+      }),
+    ];
+    const visible = new Set<WorkOrderColumnKey>([
+      "orderNumber",
+      "clientName",
+      "jobDescription",
+      "price",
+    ]);
+
+    const row = workOrdersToCsv(orders, visible).split("\r\n")[1];
+
+    expect(row).toBe(`'-RN-3,"'=HYPERLINK(""http://x"")",'@SUM(A1),-150.5`);
+  });
 });

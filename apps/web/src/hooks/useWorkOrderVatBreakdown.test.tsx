@@ -22,11 +22,12 @@ function order(
 }
 
 function stubCatalog(taxGroups: Record<string, string | null>) {
-  const getCatalogItemById = vi.fn(async (id: string) =>
-    id in taxGroups ? { id, taxGroup: taxGroups[id] } : null,
-  );
-  vi.stubGlobal("api", { getCatalogItemById });
-  return getCatalogItemById;
+  const getCatalogItems = vi.fn(async ({ ids = [] }: { ids?: string[] } = {}) => {
+    const items = ids.filter((id) => id in taxGroups).map((id) => ({ id, taxGroup: taxGroups[id] }));
+    return { items, total: items.length };
+  });
+  vi.stubGlobal("api", { getCatalogItems });
+  return getCatalogItems;
 }
 
 afterEach(() => {
@@ -57,9 +58,26 @@ describe("useWorkOrderVatBreakdown", () => {
         total: 2420,
       }),
     );
-    expect(lookup).toHaveBeenCalledTimes(2);
+    // One batch request for all catalog lines, not one per line.
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledWith({ ids: ["book", "print"] });
     expect(result.current.rateFor("book")).toBe(0.1);
     expect(result.current.rateFor(null)).toBe(0.2);
+  });
+
+  it("uses the general rate for ids the batch lookup does not return", async () => {
+    stubCatalog({ book: "E" });
+    const { result } = renderHook(() =>
+      useWorkOrderVatBreakdown(
+        order("invoice", [
+          { catalogItemId: "book", quantity: 1, unitPrice: 1000 },
+          { catalogItemId: "gone", quantity: 1, unitPrice: 1000 },
+        ]),
+      ),
+    );
+
+    await waitFor(() => expect(result.current.rateFor("book")).toBe(0.1));
+    expect(result.current.rateFor("gone")).toBe(0.2);
   });
 
   it("takes PDV out of otkup prices", async () => {

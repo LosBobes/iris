@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { EnumField, EnumValue, EnumValueInput } from '@/types/work-order'
 import i18n from '@/i18n'
+import { queryKeys, REFERENCE_STALE_TIME_MS } from '@/lib/query-client'
 
 export interface EnumOption {
   value: string
@@ -22,36 +24,29 @@ export interface UseEnumValuesResult {
   deleteValue: (id: string) => Promise<void>
 }
 
+const EMPTY: EnumValue[] = []
+
+/**
+ * The managed enum values (built-ins + admin-added). Cached for 5 minutes and
+ * shared by every caller, so the work-order form and print sheet using it
+ * several times cost one request.
+ */
 export function useEnumValues(): UseEnumValuesResult {
-  const [values, setValues] = useState<EnumValue[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: queryKeys.enumValues,
+    queryFn: () => window.api.getEnumValues(),
+    staleTime: REFERENCE_STALE_TIME_MS,
+  })
+  const values = query.data ?? EMPTY
+  let error: string | null = null
+  if (query.error) {
+    error = query.error instanceof Error ? query.error.message : i18n.t('common.loadEnumsError')
+  }
 
   const reload = useCallback(async () => {
-    const next = await window.api.getEnumValues()
-    setValues(next)
-  }, [])
-
-  useEffect(() => {
-    let active = true
-    setLoading(true)
-    window.api
-      .getEnumValues()
-      .then((next) => {
-        if (active) setValues(next)
-      })
-      .catch((err: unknown) => {
-        if (active) {
-          setError(err instanceof Error ? err.message : i18n.t('common.loadEnumsError'))
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [])
+    await queryClient.invalidateQueries({ queryKey: queryKeys.enumValues })
+  }, [queryClient])
 
   const optionsFor = useCallback(
     (field: EnumField): EnumOption[] =>
@@ -74,6 +69,8 @@ export function useEnumValues(): UseEnumValuesResult {
     [values],
   )
 
+  // Each mutation refreshes the shared cache before resolving, so callers that
+  // await it see the new list.
   const createValue = useCallback(
     async (input: EnumValueInput) => {
       await window.api.createEnumValue(input)
@@ -101,7 +98,7 @@ export function useEnumValues(): UseEnumValuesResult {
   return useMemo(
     () => ({
       values,
-      loading,
+      loading: query.isPending,
       error,
       optionsFor,
       labelFor,
@@ -110,6 +107,6 @@ export function useEnumValues(): UseEnumValuesResult {
       updateValue,
       deleteValue,
     }),
-    [values, loading, error, optionsFor, labelFor, reload, createValue, updateValue, deleteValue],
+    [values, query.isPending, error, optionsFor, labelFor, reload, createValue, updateValue, deleteValue],
   )
 }

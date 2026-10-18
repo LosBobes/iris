@@ -28,6 +28,18 @@ func (s *Server) handleCatalogItems(w http.ResponseWriter, r *http.Request) {
 		Limit:      limit,
 		Offset:     offset,
 	}
+	if raw := values.Get("ids"); raw != "" {
+		ids, ok := parseCatalogIDs(raw)
+		if !ok {
+			writeAPIError(w, r, http.StatusUnprocessableEntity, "Previše stavki kataloga u jednom zahtevu.", nil)
+			return
+		}
+		if len(ids) == 0 {
+			writeJSON(w, http.StatusOK, store.CatalogItemListResult{Items: []domain.CatalogItem{}})
+			return
+		}
+		query.IDs = ids
+	}
 	switch kind := domain.CatalogItemKind(values.Get("kind")); kind {
 	case domain.CatalogItemKindService, domain.CatalogItemKindArticle:
 		query.Kind = kind
@@ -51,6 +63,30 @@ func (s *Server) handleCatalogItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// maxCatalogBatchIDs caps the ?ids= batch lookup so one request cannot build an
+// unbounded IN list.
+const maxCatalogBatchIDs = 200
+
+// parseCatalogIDs splits a comma-separated ?ids= value, trimming blanks and
+// dropping duplicates. ok is false when more than maxCatalogBatchIDs distinct
+// ids are requested.
+func parseCatalogIDs(raw string) (ids []string, ok bool) {
+	seen := make(map[string]bool)
+	ids = make([]string, 0)
+	for _, part := range strings.Split(raw, ",") {
+		id := strings.TrimSpace(part)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+		if len(ids) > maxCatalogBatchIDs {
+			return nil, false
+		}
+	}
+	return ids, true
 }
 
 // hideStockIfOff nulls stockOnHand while the organization's stock module is off:

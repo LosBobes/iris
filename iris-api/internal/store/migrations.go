@@ -400,6 +400,9 @@ var sqliteMigrations = []struct {
 	{version: 20, sql: processGraphMigration},
 	{version: 21, sql: stockMigration},
 	{version: 22, sql: workOrderProcessStockTrackedMigration},
+	{version: 23, sql: perfIndexesAndSequenceMigration},
+	{version: 24, fn: workOrderListColumnsMigration},
+	{version: 25, fn: sessionTokenHashMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {
@@ -658,3 +661,17 @@ func tenantIsolationMigration(ctx context.Context, db *sql.DB) error {
 	}
 	return rows.Err()
 }
+
+// perfIndexesAndSequenceMigration (v23) adds the indexes behind the stock history
+// ordering and expired-session sweep, plus the single-row work-order id counter
+// (see work_order_sequence.go), seeded from the current highest numeric id. The
+// (tenant_id, catalog_item_id, created_at) index supersedes the older
+// (tenant_id, catalog_item_id) one, which is dropped.
+const perfIndexesAndSequenceMigration = `
+DROP INDEX IF EXISTS idx_stock_movements_item;
+CREATE INDEX IF NOT EXISTS idx_stock_movements_tenant_created
+	ON stock_movements(tenant_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_tenant_item_created
+	ON stock_movements(tenant_id, catalog_item_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+` + workOrderIDCounterSQL

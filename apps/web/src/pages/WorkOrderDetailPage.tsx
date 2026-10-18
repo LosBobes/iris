@@ -21,6 +21,7 @@ import { CancelWorkOrderDialog } from "@/components/WorkOrders/CancelWorkOrderDi
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
 import { DeleteWorkOrderDialog } from "@/components/WorkOrders/DeleteWorkOrderDialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkOrder } from "@/hooks/useWorkOrder";
 import { useWorkOrderVatBreakdown } from "@/hooks/useWorkOrderVatBreakdown";
 import { splitLineVat } from "@/shared/utils/vat";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
@@ -134,13 +135,13 @@ function WorkOrderDetailPage(): React.JSX.Element {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<WorkOrder | null>(null);
+  const { order, setOrder, loading, error } = useWorkOrder(id, {
+    context: "WorkOrderDetailPage.load",
+  });
   const [locations, setLocations] = useState<Location[]>([]);
   // The registry client behind the order, so the printed nalog can show its
   // PIB and matični broj next to the address.
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -252,47 +253,6 @@ function WorkOrderDetailPage(): React.JSX.Element {
       toast.error(formatActionError(t("workOrders.toast.deleteUnexpected"), error));
     }
   };
-
-  useEffect(() => {
-    if (!id) {
-      setOrder(null);
-      setError(t("workOrders.detail.notFound"));
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async (): Promise<void> => {
-      setLoading(true);
-      setError(null);
-      setOrder(null);
-
-      try {
-        const data = await window.api.getWorkOrderById(id);
-        if (cancelled) return;
-        if (!data) {
-          setOrder(null);
-          setError(t("workOrders.detail.notFound"));
-          return;
-        }
-        setOrder(data);
-      } catch (error: unknown) {
-        reportUnexpectedError("WorkOrderDetailPage.load", error);
-        if (!cancelled) {
-          setOrder(null);
-          setError(formatActionError(t("workOrders.detail.loadError"), error));
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id, t]);
 
   // Locations only enrich the printout's delivery address, so failing to load
   // them costs a line on the page rather than the page itself. Before this had

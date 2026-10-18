@@ -61,7 +61,7 @@ a shared shape inconsistent.
 # Backend (from iris-api/)
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/server
 go test ./...                      # or narrow: go test ./internal/api
 
 # Web (from apps/web/)

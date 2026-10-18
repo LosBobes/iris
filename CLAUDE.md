@@ -70,7 +70,7 @@ leave a shared shape inconsistent.
 # Backend (from iris-api/)
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/server
 go test ./...                      # or narrow: go test ./internal/api
 
 # Web (from apps/web/)
@@ -152,6 +152,13 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   `app_settings` key `modules`; read-only `modules` in `GET /settings`). Disabled
   module routes return 403; gate every new process/stock UI surface on
   `useOrganization().modules` and never call a disabled module's endpoints.
+- **Org sessions** (D-020): login takes optional `remember`; tokens are stored
+  only as SHA-256 (`sessions.token_hash`, migration v25). Idle expiry slides on
+  use (written at most hourly) under an absolute cap — 12 h / 24 h with a
+  browser-session cookie, or 7 d / 30 d with a persistent one ("Zapamti me na
+  ovom uređaju"). Sign-in failures are throttled (429); a password change ends
+  the user's other sessions; mutating requests with a foreign `Origin` get 403.
+  `IRIS_SESSION_SECRET` is unused (ignored if set).
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

@@ -860,6 +860,10 @@ type LoginRequest struct {
 	OrgSlug  string `json:"orgSlug"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Remember asks to stay signed in on this device: a persistent cookie and
+	// the longer session lifetimes (7 days idle, 30 days at most) instead of a
+	// browser-session cookie (12 hours idle, 24 hours at most).
+	Remember bool `json:"remember,omitempty"`
 }
 
 type LoginResponse struct {

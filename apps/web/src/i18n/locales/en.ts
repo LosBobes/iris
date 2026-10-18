@@ -1272,7 +1272,9 @@ export const en: typeof sr = {
     showPassword: 'Show password',
     hidePassword: 'Hide password',
     submit: 'Sign in',
-    rememberDevice: 'Remember this device',
+    rememberDevice: 'Keep me signed in on this device',
+    rememberDeviceHint:
+      'You will stay signed in for up to 30 days. Do not turn this on for shared computers.',
     resetNotice: 'To reset your password, contact the system administrator.',
     loginError: 'Sign-in failed.',
     backendError: 'Error communicating with the backend service.{{details}}',
@@ -1571,6 +1573,7 @@ export const en: typeof sr = {
     toast: {
       nothingToExport: 'No orders to export',
       exported: 'Exported {{count}} orders',
+      exportError: 'Error exporting work orders',
       statusNotFromList: 'Order {{order}} status cannot be changed from the list',
       notFound: 'Work order not found.',
       statusChanged: 'Order {{order}}: {{status}}',

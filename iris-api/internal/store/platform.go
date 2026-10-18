@@ -2,9 +2,7 @@ package store
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -97,17 +95,6 @@ const (
 // dashboard's longest range is a year.
 const loginEventRetention = 400 * 24 * time.Hour
 
-// dummyPlatformHash is compared against when the username is unknown, so a
-// failed login takes the same time whether or not the account exists.
-var dummyPlatformHash, _ = bcrypt.GenerateFromPassword([]byte("iris-platform-dummy"), bcrypt.DefaultCost)
-
-// hashPlatformToken stores session tokens hashed: a leaked database copy (a
-// backup, say) must not hand out live operator sessions.
-func hashPlatformToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
-}
-
 func (s *SQLiteStore) UpsertPlatformAdmin(ctx context.Context, username, password string) error {
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -144,7 +131,7 @@ func (s *SQLiteStore) AuthenticatePlatformAdmin(ctx context.Context, username, p
 		strings.TrimSpace(username),
 	).Scan(&admin.ID, &admin.Username, &hash, &admin.MustChangePassword, &admin.Role)
 	if errors.Is(err, sql.ErrNoRows) {
-		_ = bcrypt.CompareHashAndPassword(dummyPlatformHash, []byte(password))
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		return nil, nil
 	}
 	if err != nil {
@@ -171,7 +158,7 @@ func (s *SQLiteStore) CreatePlatformSession(ctx context.Context, adminID string,
 	if _, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO platform_sessions(token_hash, admin_id, expires_at) VALUES (?, ?, ?)`,
-		hashPlatformToken(token), adminID, expiresAt.UTC().Format(time.RFC3339),
+		hashSessionToken(token), adminID, expiresAt.UTC().Format(time.RFC3339),
 	); err != nil {
 		return "", fmt.Errorf("create platform session: %w", err)
 	}
@@ -191,7 +178,7 @@ func (s *SQLiteStore) PlatformAdminBySession(ctx context.Context, token string) 
 		 FROM platform_sessions
 		 JOIN platform_admins ON platform_admins.id = platform_sessions.admin_id
 		 WHERE platform_sessions.token_hash = ?`,
-		hashPlatformToken(token),
+		hashSessionToken(token),
 	).Scan(&admin.ID, &admin.Username, &admin.MustChangePassword, &admin.Role, &expiresAtRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -211,7 +198,7 @@ func (s *SQLiteStore) DeletePlatformSession(ctx context.Context, token string) e
 	if _, err := s.db.ExecContext(
 		ctx,
 		`DELETE FROM platform_sessions WHERE token_hash = ?`,
-		hashPlatformToken(token),
+		hashSessionToken(token),
 	); err != nil {
 		return fmt.Errorf("delete platform session: %w", err)
 	}
@@ -262,7 +249,7 @@ func (s *SQLiteStore) ChangePlatformAdminPassword(
 	if _, err := tx.ExecContext(
 		ctx,
 		`DELETE FROM platform_sessions WHERE admin_id = ? AND token_hash <> ?`,
-		adminID, hashPlatformToken(keepToken),
+		adminID, hashSessionToken(keepToken),
 	); err != nil {
 		return fmt.Errorf("end other platform sessions: %w", err)
 	}

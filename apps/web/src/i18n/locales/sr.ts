@@ -1271,7 +1271,9 @@ export const sr = {
     showPassword: 'Prikaži lozinku',
     hidePassword: 'Sakrij lozinku',
     submit: 'Prijavite se',
-    rememberDevice: 'Zapamti uređaj',
+    rememberDevice: 'Zapamti me na ovom uređaju',
+    rememberDeviceHint:
+      'Ostaćete prijavljeni do 30 dana. Ne uključujte na deljenim računarima.',
     resetNotice: 'Za reset lozinke obratite se administratoru sistema.',
     loginError: 'Greška pri prijavljivanju.',
     backendError: 'Greška u komunikaciji sa backend servisom.{{details}}',
@@ -1571,6 +1573,7 @@ export const sr = {
     toast: {
       nothingToExport: 'Nema naloga za izvoz',
       exported: 'Izvezeno {{count}} naloga',
+      exportError: 'Greška pri izvozu naloga',
       statusNotFromList: 'Status naloga {{order}} se ne menja iz liste',
       notFound: 'Radni nalog nije pronađen.',
       statusChanged: 'Nalog {{order}}: {{status}}',

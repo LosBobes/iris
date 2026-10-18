@@ -93,8 +93,17 @@ Web client
 
 - `POST /auth/login` takes **`{ orgSlug, username, password }`** → resolves the
   tenant by slug, authenticates the user within it, then issues an HTTP-only
-  **`iris_session`** cookie (12h default). Unknown org and bad credentials return
+  **`iris_session`** cookie. Unknown org and bad credentials return
   the **same** generic Serbian error, so the form never reveals which orgs exist.
+  Failed sign-ins are throttled per 15 min (429): 5 per org+username from one IP,
+  20 per IP, 50 per org+username overall (`orgLoginKeys`, `login_limiter.go`).
+- Sessions (D-020, migration v25): tokens stored only as SHA-256
+  (`sessions.token_hash`); the idle expiry slides on use (written at most hourly)
+  under an absolute cap — 12 h idle / 24 h cap with a browser-session cookie, or
+  7 d / 30 d with a persistent cookie when the login form's "Zapamti me na ovom
+  uređaju" sends `remember: true`. Impersonation (1 h) and Backoffice (2 h)
+  sessions are fixed. Changing a user's password ends their other sessions.
+  Mutating requests from a foreign `Origin` are refused (403).
 - Protected routes use `requireAuth`; admin-only routes use `requireAdmin`
 - No OAuth / SSO - username/password in the database
 
@@ -192,7 +201,7 @@ Web client
 cd iris-api
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/server
 ```
 
 | Task | Command |
@@ -214,7 +223,7 @@ npm run preview                             # production build preview
 ### Docker (API + embedded web)
 
 ```bash
-# repo root; optional root .env for IRIS_SESSION_SECRET, IRIS_ALLOWED_ORIGINS
+# repo root; optional root .env for IRIS_ALLOWED_ORIGINS
 docker compose up -d --build
 docker compose run --rm --entrypoint irisctl iris-api seed-demo
 curl http://localhost:8080/healthz
@@ -244,8 +253,8 @@ curl http://localhost:8080/healthz
 | `DATABASE_URL` | PostgreSQL connection string. When set, it wins over `DATABASE_PATH` |
 | `DATABASE_PATH` | **Primary** SQLite path (default dev: `./data/iris.db`) |
 | `IRIS_DB_PATH` | Legacy fallback if `DATABASE_PATH` unset |
-| `IRIS_ENV` | `development` \| `production` - production requires explicit DB path + session secret; blocks demo `admin`/`admin123` |
-| `IRIS_SESSION_SECRET` | Session signing (required in production) |
+| `IRIS_ENV` | `development` \| `production` - production requires explicit DB path; blocks demo `admin`/`admin123`; `Secure` cookies; no localhost CORS fallback |
+| `IRIS_SESSION_SECRET` | Unused (reserved; ignored if set). Session tokens are random and stored hashed |
 | `IRIS_API_ADDR` | Listen address (default `:8080`) |
 | `IRIS_ALLOWED_ORIGINS` | CORS allowlist (comma-separated) |
 | `IRIS_WEB_DIR` | Serve built SPA + fallback routing (Docker: `/app/web`) |

@@ -15,7 +15,13 @@ the web client.
   takes `{ orgSlug, username, password }`, resolves the tenant by slug, and
   authenticates within it. `requireAuth` attaches the tenant to the request context
   (`store.ContextWithTenant`), and every store query filters by `tenant_id`.
-- Sessions: HTTP-only `iris_session` cookie created by `POST /auth/login`.
+- Sessions: HTTP-only `iris_session` cookie created by `POST /auth/login`. The
+  token is stored only as a SHA-256 hash. Idle expiry slides on use (rewritten at
+  most hourly) under an absolute cap: 12 h idle / 24 h cap with a browser-session
+  cookie, or 7 days / 30 days with a persistent cookie when the request has
+  `remember: true`. Failed sign-ins are rate limited per 15 min (429): 5 per
+  organization + username from one client IP, 20 per IP, 50 per account overall. State-changing requests with a foreign `Origin`
+  header are rejected (403).
 - Operations CLI: `cmd/irisctl` for migrations, demo seeding, tenant/user creation,
   CSV import, and database backup.
 
@@ -88,8 +94,8 @@ iris-api/
 | `DATABASE_URL` | PostgreSQL connection string. When set, Postgres is used and `DATABASE_PATH` is ignored. See `deploy/POSTGRES.md`. | empty |
 | `DATABASE_PATH` | SQLite database path. Docker uses `/data/iris.db`. | `./data/iris.db` outside production |
 | `IRIS_DB_PATH` | Legacy SQLite database path fallback when `DATABASE_PATH` is empty. | empty |
-| `IRIS_ENV` | Runtime environment. `production` requires explicit database path and session secret. | `development` |
-| `IRIS_SESSION_SECRET` | Required production secret for session-capable runtime. | empty |
+| `IRIS_ENV` | Runtime environment. `production` requires an explicit database path, sets `Secure` cookies and turns off the dev-only localhost CORS fallback. | `development` |
+| `IRIS_SESSION_SECRET` | Unused (reserved). Session tokens are random and stored hashed, so nothing is signed; a value left by older deployments is accepted and ignored. | empty |
 | `IRIS_ALLOWED_ORIGINS` | Comma-separated CORS origins. Empty allows local dev origins. | empty |
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary used to render work-order PDFs (`GET /work-orders/{id}/report`). When empty the usual names (`chromium`, `chromium-browser`, `google-chrome`, …) are searched on `$PATH`; when nothing is found the endpoint answers `503` instead of rendering. | empty |
@@ -109,7 +115,7 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
 # is large and NOT committed — generate it first from the legacy export (see
 # internal/seed/cobanovic/), then load it:
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-cobanovic
-DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/server
 ```
 
 Operational commands:
@@ -198,8 +204,8 @@ named volume, so recreating the `iris-api` container does not delete the DB.
 Removing the volume deletes the DB.
 
 Compose reads server-local variables from a root `.env` file automatically. Do
-not commit that file; keep production values such as `IRIS_SESSION_SECRET` only
-on the server.
+not commit that file; keep production values such as `IRIS_ALLOWED_ORIGINS` or
+the demo passwords only on the server.
 
 The Docker image also builds `apps/web/dist` and serves it from the API process
 with `IRIS_WEB_DIR=/app/web`, so `http://localhost:8080/` is the same-origin web
