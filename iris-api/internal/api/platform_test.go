@@ -83,6 +83,12 @@ func TestPlatformConsoleAccess(t *testing.T) {
 	if res := decodePlatformLogin(t, platformRequest(t, server, cookie, http.MethodGet, "/platform/auth/session", "")); !res.Success {
 		t.Fatal("session not recognised")
 	}
+	// Two-factor sign-in is mandatory: nothing but enrollment until it is on.
+	if rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics", ""); rec.Code != http.StatusForbidden ||
+		!strings.Contains(rec.Body.String(), platformTwoFactorRequiredMsg) {
+		t.Fatalf("metrics before 2FA = %d %s, want 403", rec.Code, rec.Body.String())
+	}
+	enrollPlatformTwoFactor(t, server, cookie)
 
 	rec = platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics?days=7", "")
 	if rec.Code != http.StatusOK {
@@ -138,6 +144,7 @@ func TestTenantLoginIsRecordedForPlatformMetrics(t *testing.T) {
 	}
 	login := platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", `{"username":"ops","password":"correct-horse-battery"}`)
 	cookie := platformCookie(login, server.config.PlatformSessionCookieName)
+	enrollPlatformTwoFactor(t, server, cookie)
 	var metrics domain.PlatformMetrics
 	if err := json.Unmarshal(platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics", "").Body.Bytes(), &metrics); err != nil {
 		t.Fatal(err)
@@ -181,8 +188,13 @@ func TestDefaultPlatformAdminMustChangePassword(t *testing.T) {
 	if res := decodePlatformLogin(t, rec); !res.Success || res.Admin.MustChangePassword {
 		t.Fatalf("change = %s", rec.Body.String())
 	}
+	// Then two-factor sign-in, before anything else.
+	if rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("metrics after change, before 2FA = %d, want 403", rec.Code)
+	}
+	enrollPlatformTwoFactor(t, server, cookie)
 	if rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/metrics", ""); rec.Code != http.StatusOK {
-		t.Fatalf("metrics after change = %d, want 200", rec.Code)
+		t.Fatalf("metrics after change and 2FA = %d, want 200", rec.Code)
 	}
 	if res := decodePlatformLogin(t, platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login",
 		`{"username":"admin","password":"admin123321"}`)); res.Success {

@@ -41,6 +41,7 @@ func TestPlatformImpersonation(t *testing.T) {
 	if platformSession == nil {
 		t.Fatalf("login = %s", login.Body.String())
 	}
+	enrollPlatformTwoFactor(t, server, platformSession)
 
 	rec := platformRequest(t, server, platformSession, http.MethodGet, "/platform/tenants/demo/users", "")
 	var listed domain.PlatformTenantUsers
@@ -111,7 +112,8 @@ func TestPlatformImpersonation(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &log); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("log = %d %s", rec.Code, rec.Body.String())
 	}
-	if log.Total != 1 || len(log.Items) != 1 {
+	// The impersonation, newest first, after the mandatory 2FA enrollment.
+	if log.Total != 2 || len(log.Items) != 2 || log.Items[1].Action != domain.AuditAdminTwoFactorOn {
 		t.Fatalf("log = %+v", log)
 	}
 	entry := log.Items[0]

@@ -184,7 +184,7 @@ Web client
   `tenant_notes` — never shown to the organization or exported — and JSON export /
   delete: suspend first, retype the slug), **Aktivnost** (`platform_audit_events`,
   impersonation trails), **Obaveštenja**, **Superadmini** (add / disable accounts;
-  optional TOTP 2FA with recovery codes, D-021, v26) and **Sistem** (SQLite backups).
+  mandatory TOTP 2FA with recovery codes, D-021, v26) and **Sistem** (SQLite backups).
   See D-021–D-025.
 - Deleting an organization removes every `tenantDataTables` table in one audited
   transaction but keeps the activity log and impersonation history

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PlatformDashboard } from "./PlatformDashboard";
 import { PlatformLogin } from "./PlatformLogin";
 import { PlatformChangePassword } from "./PlatformChangePassword";
+import { PlatformTwoFactorDialog } from "./PlatformTwoFactorDialog";
 import { BackofficeScreen } from "./BackofficeScreen";
 import type { PlatformAdmin } from "@/types/platform";
 
@@ -29,6 +30,16 @@ type ConsoleState = { kind: "checking" } | { kind: "signedOut" } | { kind: "sign
 export function PlatformConsole(): React.JSX.Element {
   const { t } = useTranslation();
   const [state, setState] = useState<ConsoleState>({ kind: "checking" });
+  // Set once a required enrollment is confirmed; closing the dialog after
+  // that opens the console, closing it before signs out.
+  const enrolled = useRef(false);
+
+  const logout = (): void => {
+    void window.api
+      .platformLogout()
+      .catch(() => undefined)
+      .finally(() => setState({ kind: "signedOut" }));
+  };
 
   useEffect(() => {
     let active = true;
@@ -71,17 +82,28 @@ export function PlatformConsole(): React.JSX.Element {
             onChanged={(admin) => setState({ kind: "signedIn", admin })}
           />
         </BackofficeScreen>
+      ) : !state.admin.twoFactorEnabled ? (
+        // Two-factor sign-in is mandatory for superadmins: the API answers
+        // 403 to everything but enrollment until it is on.
+        <BackofficeScreen>
+          <PlatformTwoFactorDialog
+            enabled={false}
+            required
+            onEnabled={() => {
+              enrolled.current = true;
+            }}
+            onClose={() => {
+              if (enrolled.current) setState({ kind: "signedIn", admin: { ...state.admin, twoFactorEnabled: true } });
+              else logout();
+            }}
+          />
+        </BackofficeScreen>
       ) : (
         <PlatformDashboard
           username={state.admin.username}
           role={state.admin.role}
           twoFactorEnabled={state.admin.twoFactorEnabled}
-          onLogout={() => {
-            void window.api
-              .platformLogout()
-              .catch(() => undefined)
-              .finally(() => setState({ kind: "signedOut" }));
-          }}
+          onLogout={logout}
         />
       )}
     </div>

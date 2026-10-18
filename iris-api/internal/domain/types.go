@@ -374,7 +374,8 @@ type PlatformAdmin struct {
 	// nothing but a password change.
 	MustChangePassword bool `json:"mustChangePassword"`
 	// TwoFactorEnabled is set once the account has enrolled an authenticator
-	// app (TOTP); sign-in then needs a code as a second step.
+	// app (TOTP); sign-in then needs a code as a second step. It is mandatory:
+	// until it is set, the console allows nothing but enrolling.
 	TwoFactorEnabled bool `json:"twoFactorEnabled"`
 }
 

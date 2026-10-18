@@ -1896,7 +1896,10 @@ paths:
         Generates a new secret, kept as pending until confirmed (calling it again
         replaces it). Returns the secret, the `otpauth://` URI and the URI as a
         QR code PNG data URL. 422 when two-factor sign-in is already on (only
-        `irisctl reset-platform-2fa` turns it off).
+        `irisctl reset-platform-2fa` resets it). Two-factor sign-in is
+        mandatory for superadmins: until it is on (and after a reset), every
+        other operator route answers 403, except the session, sign-out and
+        password routes.
       operationId: setupPlatformTwoFactor
       security:
         - PlatformSession: []
@@ -2001,7 +2004,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2036,7 +2039,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2079,7 +2082,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2124,7 +2127,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2238,7 +2241,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2277,7 +2280,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2335,7 +2338,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2386,7 +2389,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2424,7 +2427,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2456,7 +2459,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2504,7 +2507,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2563,7 +2566,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2617,7 +2620,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2660,7 +2663,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2710,7 +2713,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2768,7 +2771,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2813,7 +2816,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2865,7 +2868,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2909,7 +2912,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2938,7 +2941,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2991,7 +2994,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3025,7 +3028,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3076,7 +3079,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3139,7 +3142,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3185,7 +3188,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3219,7 +3222,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3259,7 +3262,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3313,7 +3316,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3347,7 +3350,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -3388,7 +3391,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -5049,7 +5052,9 @@ components:
               description: True until the account replaces its initial password.
             twoFactorEnabled:
               type: boolean
-              description: True once the account has enrolled an authenticator app.
+              description: >
+                True once the account has enrolled an authenticator app.
+                Mandatory: while false, the console allows only enrollment.
         error:
           type: string
         twoFactorRequired:

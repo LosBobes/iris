@@ -118,10 +118,12 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   `admin` / `admin123321`, which must change its password before anything shows
   (in-app "Lozinka"; `irisctl create-platform-admin` or the "Superadmini" tab adds
   more, the tab with a temporary password changed at first sign-in). **Hardening**
-  (D-021, migration v26): optional TOTP two-factor sign-in, required once enrolled
-  (menu → "Dvofaktorska prijava"; password step returns a 5-min `challenge`, then
-  `POST /platform/auth/login/verify` with a TOTP or one-time recovery code;
-  `irisctl reset-platform-2fa` turns it off); password and code steps are rate
+  (D-021, migration v26): TOTP two-factor sign-in is **mandatory** for superadmins
+  (organization users have none): until enrolled, `/platform/*` answers 403 except
+  session/password/enrollment and the console shows only the enrollment; then the
+  password step returns a 5-min `challenge`, finished by
+  `POST /platform/auth/login/verify` with a TOTP or one-time recovery code
+  (`irisctl reset-platform-2fa` clears it, forcing a new enrollment); password and code steps are rate
   limited and failures audited (`admin.login_failed`); superadmins can be disabled
   (not yourself, not the last one), which ends their sessions and impersonations. The dashboard
   reads aggregate counts from `GET /platform/metrics`; tenant logins are recorded

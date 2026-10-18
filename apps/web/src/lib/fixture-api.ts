@@ -1188,12 +1188,13 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
         credentials.username === FIXTURE_PLATFORM_ADMIN.username &&
         credentials.password === fixturePlatformPassword
       return platformSignedIn
-        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const, twoFactorEnabled: true } }
         : { success: false, error: 'Neispravno korisničko ime ili lozinka.' }
     },
 
     async platformLoginVerify() {
-      // Fixture superadmins have no two-factor sign-in, so there is never a challenge.
+      // Two-factor sign-in is mandatory but cannot be set up in demo mode: the
+      // fixture superadmin counts as enrolled and is never challenged.
       return { success: false, error: 'Prijava je istekla. Prijavite se ponovo.' }
     },
 
@@ -1213,7 +1214,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
           username: FIXTURE_PLATFORM_ADMIN.username,
           createdAt: '2026-01-01 00:00:00',
           lastLoginAt: new Date().toISOString(),
-          twoFactorEnabled: false,
+          twoFactorEnabled: true,
           mustChangePassword: false,
           disabledAt: null,
         },
@@ -1230,7 +1231,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
 
     async getPlatformSession() {
       return platformSignedIn
-        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const, twoFactorEnabled: true } }
         : { success: false }
     },
 
@@ -1244,7 +1245,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       if (change.newPassword.length < 12) throw new Error('Nova lozinka je prekratka: potrebno je najmanje 12 znakova.')
       if (isPasswordTooLong(change.newPassword)) throw new Error('Nova lozinka je preduga: najviše 72 znaka.')
       fixturePlatformPassword = change.newPassword
-      return { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
+      return { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, twoFactorEnabled: true } }
     },
 
     async getPlatformMetrics(days) {

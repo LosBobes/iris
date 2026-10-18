@@ -72,7 +72,9 @@ out required web follow-up rather than leaving drift.
   `twoFactorRequired` + a 5-min `challenge` (stored hashed in
   `platform_login_challenges`) and `POST /platform/auth/login/verify` finishes it
   (TOTP step used once via `totp_last_step`, or a SHA-256-hashed recovery code),
-  throttled per account. Failures go to `platform_audit_events`
+  throttled per account. 2FA is mandatory: without it `requirePlatformAdmin`
+  answers 403 and only `requirePlatformEnrollment` routes (2FA setup/confirm)
+  plus session/logout/password are open. Failures go to `platform_audit_events`
   (`admin.login_failed`); never log secrets, codes or challenges. Disabled
   superadmins (`disabled_at`) cannot authenticate and lose their sessions.
 - **Sessions** (`internal/api/sessions.go`, `internal/store/sessions.go`, D-020):

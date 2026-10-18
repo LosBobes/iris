@@ -32,14 +32,17 @@ type Step =
  * Two-factor sign-in for the signed-in superadmin: start an enrollment (QR
  * code and key for the authenticator app), confirm it with a code, then show
  * the one-time recovery codes once. Turning it off is server-side only
- * (`irisctl reset-platform-2fa`).
+ * (`irisctl reset-platform-2fa`). With `required` it is the mandatory step
+ * before the console opens, and says that closing it signs out.
  */
 export function PlatformTwoFactorDialog({
   enabled,
+  required = false,
   onEnabled,
   onClose,
 }: {
   enabled: boolean;
+  required?: boolean;
   onEnabled: () => void;
   onClose: () => void;
 }): React.JSX.Element {
@@ -95,7 +98,13 @@ export function PlatformTwoFactorDialog({
   return (
     <BackofficeDialog
       title={step.kind === "codes" ? t("platform.twoFactor.recoveryTitle") : t("platform.twoFactor.title")}
-      description={step.kind === "codes" ? t("platform.twoFactor.recoveryIntro") : t("platform.twoFactor.intro")}
+      description={
+        step.kind === "codes"
+          ? t("platform.twoFactor.recoveryIntro")
+          : required
+            ? `${t("platform.twoFactor.requiredIntro")} ${t("platform.twoFactor.intro")}`
+            : t("platform.twoFactor.intro")
+      }
       // The recovery codes are shown only once: closing goes through "done".
       onClose={step.kind === "codes" ? () => undefined : onClose}
     >

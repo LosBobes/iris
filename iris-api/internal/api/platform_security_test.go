@@ -27,6 +27,26 @@ func signInPlatform(t *testing.T, server *Server, username, password string) *ht
 	return cookie
 }
 
+// enrollPlatformTwoFactor turns on two-factor sign-in for the session's
+// account (mandatory before any operator route) and returns the TOTP secret.
+// The session stays signed in.
+func enrollPlatformTwoFactor(t *testing.T, server *Server, cookie *http.Cookie) string {
+	t.Helper()
+	rec := platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/2fa/setup", "")
+	var setup domain.PlatformTwoFactorSetup
+	if err := json.Unmarshal(rec.Body.Bytes(), &setup); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("2fa setup = %d %s", rec.Code, rec.Body.String())
+	}
+	code, err := totp.GenerateCode(setup.Secret, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := platformRequest(t, server, cookie, http.MethodPost, "/platform/auth/2fa/confirm", `{"code":"`+code+`"}`); rec.Code != http.StatusOK {
+		t.Fatalf("2fa confirm = %d %s", rec.Code, rec.Body.String())
+	}
+	return setup.Secret
+}
+
 func platformAudit(t *testing.T, server *Server, cookie *http.Cookie) []domain.PlatformAuditEvent {
 	t.Helper()
 	rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/audit?limit=200", "")
@@ -173,6 +193,7 @@ func TestPlatformAdminManagement(t *testing.T) {
 		t.Fatal(err)
 	}
 	cookie := signInPlatform(t, server, "ops", "correct-horse-battery")
+	enrollPlatformTwoFactor(t, server, cookie)
 
 	// A failed password sign-in is audited, with the username as typed.
 	platformRequest(t, server, nil, http.MethodPost, "/platform/auth/login", `{"username":"nobody","password":"guess-guess-guess"}`)

@@ -116,8 +116,8 @@ func main() {
 		fmt.Printf("Superadmin %s je sačuvan.\n", strings.TrimSpace(*username))
 	case "reset-platform-2fa":
 		// For a superadmin who lost the authenticator app and recovery codes:
-		// turns two-factor sign-in off (they can enroll again) and signs the
-		// account out. Recorded in the Backoffice activity log as "irisctl".
+		// clears two-factor sign-in (mandatory, so they enroll again at the next
+		// sign-in) and signs the account out. Recorded in the Backoffice activity log as "irisctl".
 		cmd := flag.NewFlagSet("reset-platform-2fa", flag.ExitOnError)
 		username := cmd.String("username", "", "korisničko ime superadmina")
 		_ = cmd.Parse(os.Args[2:])
@@ -133,7 +133,7 @@ func main() {
 			os.Exit(1)
 		}
 		must(err)
-		fmt.Printf("Dvofaktorska prijava za %s je isključena; nalog je odjavljen.\n", strings.TrimSpace(*username))
+		fmt.Printf("Dvofaktorska prijava za %s je poništena; nalog je odjavljen i pri sledećoj prijavi je ponovo podešava.\n", strings.TrimSpace(*username))
 	case "backup":
 		cmd := flag.NewFlagSet("backup", flag.ExitOnError)
 		out := cmd.String("out", "", "putanja izlazne .db kopije")
