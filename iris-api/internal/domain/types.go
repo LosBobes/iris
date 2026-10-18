@@ -306,6 +306,8 @@ type OrganizationSettings struct {
 type OrganizationModules struct {
 	Processes bool `json:"processes"`
 	Stock     bool `json:"stock"`
+	// Planning ("Planiranje", D-026) requires Processes.
+	Planning bool `json:"planning"`
 }
 
 // OrganizationModulesUpdate is a partial module switch used by irisctl
@@ -313,6 +315,7 @@ type OrganizationModules struct {
 type OrganizationModulesUpdate struct {
 	Processes *bool
 	Stock     *bool
+	Planning  *bool
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
@@ -1239,7 +1242,14 @@ type ProcessNode struct {
 	Start bool `json:"start,omitempty"`
 	// Final marks a product/byproduct as an output of the process even when a
 	// later step also consumes it; product and byproduct nodes only.
-	Final          bool              `json:"final,omitempty"`
+	Final bool `json:"final,omitempty"`
+	// Planning fields (D-026), step nodes only: the machine type the step
+	// runs on (empty = no machine), the people it needs (nil = 1), and its
+	// duration = SetupMinutes + MinutesPerUnit × the order's quantity.
+	MachineTypeID  string            `json:"machineTypeId,omitempty"`
+	CrewSize       *int              `json:"crewSize,omitempty"`
+	SetupMinutes   *float64          `json:"setupMinutes,omitempty"`
+	MinutesPerUnit *float64          `json:"minutesPerUnit,omitempty"`
 	Status         ProcessStepStatus `json:"status,omitempty"`
 	ActualQuantity *float64          `json:"actualQuantity,omitempty"`
 }

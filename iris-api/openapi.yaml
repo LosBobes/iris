@@ -21,6 +21,11 @@ tags:
       Warehouse stock (magacin). Stock is an append-only movement ledger per catalog article (on-hand is the sum of
       its movements; services never carry stock). Goods receipts and counts post movements here; work-order
       processes post consumption/production automatically. A single warehouse per organization; negative stock is allowed.
+  - name: Planning
+    description: >-
+      Production planning (Planiranje, D-026): machine types and units, worker qualifications, attendance, working
+      hours, and day plans the planner proposes, admins edit and publish, and operators follow. Behind the
+      `planning` module (off by default; requires `processes`).
   - name: Platform
     description: Backoffice (/backoffice in the web app). Superadmin accounts stored apart from organization users (own table, sessions and cookie); aggregate metrics only.
 paths:
@@ -3402,6 +3407,840 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /machine-types:
+    get:
+      tags: [Planning]
+      summary: List machine types
+      operationId: listMachineTypes
+      responses:
+        '200':
+          description: Machine types sorted by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MachineType'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+    post:
+      tags: [Planning]
+      summary: Create a machine type (admin only)
+      operationId: createMachineType
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineTypeInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineType'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Name already used (`Tip mašine sa tim nazivom već postoji.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Empty name or longer than 120 characters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /machine-types/{id}:
+    put:
+      tags: [Planning]
+      summary: Rename a machine type (admin only)
+      operationId: updateMachineType
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineTypeInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineType'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Name already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Planning]
+      summary: Delete a machine type (admin only)
+      operationId: deleteMachineType
+      description: >-
+        Removes the type and every worker qualification for it. Refused while machine units of the type exist.
+        Process steps that still reference it are reported by the planner (`unknown_machine_type`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Machines of this type exist (`Tip mašine se koristi za mašine.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /machines:
+    get:
+      tags: [Planning]
+      summary: List machine units
+      operationId: listMachines
+      responses:
+        '200':
+          description: Machines sorted by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Machine'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+    post:
+      tags: [Planning]
+      summary: Create a machine unit (admin only)
+      operationId: createMachine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Machine'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Name already used (`Mašina sa tim nazivom već postoji.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown machine type (`Tip mašine nije pronađen.`), empty/long name or note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /machines/{id}:
+    put:
+      tags: [Planning]
+      summary: Update a machine unit (admin only)
+      operationId: updateMachine
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Machine'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Name already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Planning]
+      summary: Delete a machine unit (admin only)
+      operationId: deleteMachine
+      description: >-
+        Plans already made keep their blocks (with the machine name); the next plan no longer uses it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/qualifications:
+    get:
+      tags: [Planning]
+      summary: List every organization user's machine-type qualifications
+      operationId: listQualifications
+      responses:
+        '200':
+          description: One entry per user, sorted by username
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkerQualifications'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/qualifications/{userId}:
+    put:
+      tags: [Planning]
+      summary: Replace one user's qualifications (admin only)
+      operationId: setQualifications
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerQualificationsInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerQualifications'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown machine type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/attendance:
+    get:
+      tags: [Planning]
+      summary: Attendance of every organization user on a date
+      operationId: listAttendance
+      description: >-
+        `signedIn` is true when the user signed in that local day (impersonated sessions do not count); an admin
+        override wins. The planner uses `present` for the plan date.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: One entry per user, sorted by username
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceEntry'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/attendance/{userId}:
+    put:
+      tags: [Planning]
+      summary: Set or clear one user's attendance override (admin only)
+      operationId: setAttendance
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceInput'
+      responses:
+        '200':
+          description: The resulting entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceEntry'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/working-hours:
+    get:
+      tags: [Planning]
+      summary: Organization working hours
+      operationId: getWorkingHours
+      description: >-
+        Defaults to Monday-Friday 07:00-15:00 with a break 11:00-11:30, Europe/Belgrade, until an admin saves them.
+      responses:
+        '200':
+          description: Working hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkingHours'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+    put:
+      tags: [Planning]
+      summary: Replace the working hours (admin only)
+      operationId: setWorkingHours
+      description: >-
+        Stored in `app_settings` (`working_hours`); no migration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkingHours'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkingHours'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Unknown time zone, repeated weekday, malformed time, start not before end, or a break outside its shift / overlapping another
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/plan:
+    get:
+      tags: [Planning]
+      summary: Draft, published plan and drift of a date
+      operationId: getPlanDay
+      description: >-
+        `draft` is returned to admins only (null for operators). `drift` is computed for today's published plan only.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The plan day
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDay'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/plan/generate:
+    post:
+      tags: [Planning]
+      summary: Generate a draft plan (admin only)
+      operationId: generatePlan
+      description: >-
+        Runs the planner over all open work orders that have a process (not completed, cancelled or invoiced),
+        replacing the date's draft. Uses machine units in service, qualifications, attendance for the date (others
+        present on later days), working hours and each step's machine type, crew size and duration. With `replan`
+        (date must be today) planning starts now and the published plan's locked blocks stay. A date that is not a
+        working day returns an empty plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanGenerateInput'
+      responses:
+        '201':
+          description: The new draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionPlan'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed date, a date in the past, or `replan` for a date other than today
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/plan/draft:
+    put:
+      tags: [Planning]
+      summary: Save a hand-edited draft (admin only)
+      operationId: updatePlanDraft
+      description: >-
+        Replaces the draft's assignments; `issues` are recomputed (conflicts are reported, not rejected).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanDraftInput'
+      responses:
+        '200':
+          description: The saved draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionPlan'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No draft for that date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed date or more than 2000 assignments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Planning]
+      summary: Discard the draft of a date (admin only)
+      operationId: deletePlanDraft
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '204':
+          description: Discarded (also when there was none)
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/plan/publish:
+    post:
+      tags: [Planning]
+      summary: Publish the draft of a date (admin only)
+      operationId: publishPlan
+      description: >-
+        Replaces the date's published plan with the draft and removes the draft. Operators see their blocks in `GET /planning/my-queue`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanPublishInput'
+      responses:
+        '200':
+          description: The published plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionPlan'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No draft for that date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/my-queue:
+    get:
+      tags: [Planning]
+      summary: The signed-in user's blocks of the published plan
+      operationId: getMyQueue
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The queue (empty items when nothing is published)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyQueue'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/forecast:
+    get:
+      tags: [Planning]
+      summary: Estimated finish of every open work order with a process
+      operationId: getPlanningForecast
+      description: >-
+        Computed on read by a planner run from now over the next 14 working days (nothing is stored).
+      responses:
+        '200':
+          description: Forecasts sorted by estimated finish (unplannable last)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderForecast'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
 components:
   securitySchemes:
     IrisSession:
@@ -3435,6 +4274,14 @@ components:
       description: >-
         The organization has not enabled the "Magacin" module (Backoffice-controlled, off by default).
         Body: `{"error":"Modul „Magacin“ nije uključen za ovu organizaciju."}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PlanningModuleDisabled:
+      description: >-
+        The organization has not enabled the "Planiranje" module (Backoffice-controlled, off by default; it also
+        counts as off while "Procesi rada" is off). Body: `{"error":"Modul „Planiranje“ nije uključen za ovu organizaciju."}`.
       content:
         application/json:
           schema:
@@ -3558,6 +4405,262 @@ components:
         type: string
         example: -orderNumber
   schemas:
+    MachineType:
+      type: object
+      required: [id, name, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        name: {type: string, maxLength: 120}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    MachineTypeInput:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 120}
+    Machine:
+      type: object
+      required: [id, machineTypeId, name, inService, createdAt, updatedAt]
+      description: One physical unit of a machine type; units out of service are never planned.
+      properties:
+        id: {type: string}
+        machineTypeId: {type: string}
+        name: {type: string, maxLength: 120}
+        inService: {type: boolean}
+        note: {type: string, maxLength: 500}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    MachineInput:
+      type: object
+      required: [machineTypeId, name, inService]
+      properties:
+        machineTypeId: {type: string}
+        name: {type: string, minLength: 1, maxLength: 120}
+        inService: {type: boolean}
+        note: {type: string, maxLength: 500}
+    WorkerQualifications:
+      type: object
+      required: [userId, username, machineTypeIds]
+      description: Machine types a user may run (lead a step on). Users without any can still help on a crew.
+      properties:
+        userId: {type: string}
+        username: {type: string}
+        machineTypeIds:
+          type: array
+          items: {type: string}
+    WorkerQualificationsInput:
+      type: object
+      required: [machineTypeIds]
+      properties:
+        machineTypeIds:
+          type: array
+          items: {type: string}
+    AttendanceEntry:
+      type: object
+      required: [userId, username, date, signedIn, override, present]
+      properties:
+        userId: {type: string}
+        username: {type: string}
+        date: {type: string, format: date}
+        signedIn: {type: boolean}
+        override:
+          type: boolean
+          nullable: true
+        present: {type: boolean, description: '`override` when set, else `signedIn`.'}
+    AttendanceInput:
+      type: object
+      required: [date, present]
+      properties:
+        date: {type: string, format: date}
+        present:
+          type: boolean
+          nullable: true
+          description: true/false sets the override, null clears it.
+    WorkingBreak:
+      type: object
+      required: [start, end]
+      properties:
+        start: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        end: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+    WorkingDay:
+      type: object
+      required: [weekday, start, end, breaks]
+      properties:
+        weekday: {type: integer, minimum: 1, maximum: 7, description: 'ISO weekday, 1 = Monday.'}
+        start: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        end: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        breaks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkingBreak'
+    WorkingHours:
+      type: object
+      required: [timeZone, days]
+      description: Organization-wide shifts; weekdays not listed are days off. No shift crosses midnight.
+      properties:
+        timeZone: {type: string, description: 'IANA time zone, e.g. Europe/Belgrade.'}
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkingDay'
+    PlanAssignment:
+      type: object
+      required: [id, workOrderId, orderNumber, clientName, stepNodeId, stepLabel, machineId, machineName, leadUserId, userIds, start, end, minutes, part, parts, locked]
+      description: >-
+        One block of a step on one day. A step carried over to later days has one block per day (`part` of
+        `parts`). `start`/`end` are local "YYYY-MM-DDTHH:MM"; `minutes` excludes breaks. `userIds` is the crew,
+        lead first. `locked` blocks (in progress or done when planned) stay put when re-planning.
+      properties:
+        id: {type: string}
+        workOrderId: {type: string}
+        orderNumber: {type: string}
+        clientName: {type: string}
+        stepNodeId: {type: string}
+        stepLabel: {type: string}
+        machineId:
+          type: string
+          nullable: true
+        machineName: {type: string}
+        leadUserId: {type: string}
+        userIds:
+          type: array
+          items: {type: string}
+        start: {type: string}
+        end: {type: string}
+        minutes: {type: integer, minimum: 0}
+        part: {type: integer, minimum: 1}
+        parts: {type: integer, minimum: 1}
+        locked: {type: boolean}
+    PlanIssue:
+      type: object
+      required: [code, workOrderId, orderNumber, message]
+      properties:
+        code:
+          type: string
+          enum: [unknown_machine_type, no_machine, no_workers, no_capacity, missing_duration, conflict]
+        workOrderId: {type: string}
+        orderNumber: {type: string}
+        stepNodeId: {type: string}
+        stepLabel: {type: string}
+        message: {type: string, description: User-facing Serbian text.}
+    OrderForecast:
+      type: object
+      required: [workOrderId, orderNumber, clientName, dueDate, priority, estimatedFinish, late, unplannable]
+      properties:
+        workOrderId: {type: string}
+        orderNumber: {type: string}
+        clientName: {type: string}
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        priority: {type: string}
+        estimatedFinish:
+          type: string
+          format: date
+          nullable: true
+        late: {type: boolean}
+        unplannable: {type: boolean}
+    ProductionPlan:
+      type: object
+      required: [id, date, status, generatedAt, generatedBy, updatedAt, updatedBy, publishedAt, publishedBy, assignments, issues, lateOrders]
+      properties:
+        id: {type: string}
+        date: {type: string, format: date}
+        status:
+          type: string
+          enum: [draft, published]
+        generatedAt: {type: string, format: date-time}
+        generatedBy: {type: string}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string}
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        publishedBy:
+          type: string
+          nullable: true
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanAssignment'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanIssue'
+        lateOrders:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderForecast'
+    PlanDrift:
+      type: object
+      required: [suggested, reasons]
+      properties:
+        suggested: {type: boolean}
+        reasons:
+          type: array
+          items: {type: string}
+    PlanDay:
+      type: object
+      required: [date, draft, published, drift]
+      properties:
+        date: {type: string, format: date}
+        draft:
+          allOf:
+            - $ref: '#/components/schemas/ProductionPlan'
+          nullable: true
+        published:
+          allOf:
+            - $ref: '#/components/schemas/ProductionPlan'
+          nullable: true
+        drift:
+          allOf:
+            - $ref: '#/components/schemas/PlanDrift'
+          nullable: true
+    PlanGenerateInput:
+      type: object
+      required: [date]
+      properties:
+        date: {type: string, format: date}
+        replan: {type: boolean, default: false}
+    PlanDraftInput:
+      type: object
+      required: [date, assignments]
+      properties:
+        date: {type: string, format: date}
+        assignments:
+          type: array
+          maxItems: 2000
+          items:
+            $ref: '#/components/schemas/PlanAssignment'
+    PlanPublishInput:
+      type: object
+      required: [date]
+      properties:
+        date: {type: string, format: date}
+    MyQueueItem:
+      allOf:
+        - $ref: '#/components/schemas/PlanAssignment'
+        - type: object
+          required: [stepStatus, isLead]
+          properties:
+            stepStatus:
+              $ref: '#/components/schemas/ProcessStepStatus'
+            isLead: {type: boolean}
+    MyQueue:
+      type: object
+      required: [date, publishedAt, items]
+      properties:
+        date: {type: string, format: date}
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyQueueItem'
     ProcessNode:
       type: object
       required: [id, kind, label, x, y]
@@ -3608,6 +4711,27 @@ components:
             Marks a product or byproduct as an output of the process even when a later step also consumes it
             (an item without outgoing edges is an output anyway). Product and byproduct nodes only; dropped on
             steps and inputs. Structural, like `start`.
+        machineTypeId:
+          type: string
+          description: >-
+            Planning (D-026): the machine type a step runs on. Step nodes only; dropped on items. Must reference an
+            existing machine type of the organization when set or changed (422 `Tip mašine nije pronađen.`).
+            Structural.
+        crewSize:
+          type: integer
+          minimum: 1
+          maximum: 50
+          description: "Planning, step nodes only: people the step needs (absent = 1). Structural."
+        setupMinutes:
+          type: number
+          minimum: 0
+          maximum: 100000
+          description: "Planning, step nodes only. Duration = setupMinutes + minutesPerUnit × the order's `jobDetails.quantity` (at least 1). Structural."
+        minutesPerUnit:
+          type: number
+          minimum: 0
+          maximum: 100000
+          description: Planning, step nodes only. Structural.
         status:
           $ref: '#/components/schemas/ProcessStepStatus'
         actualQuantity:
@@ -4452,9 +5576,10 @@ components:
             signature, insurance). Off by default.
     OrganizationModules:
       type: object
-      required: [processes, stock]
+      required: [processes, stock, planning]
       description: >-
-        Optional per-organization modules, both off by default and switched only by Backoffice superadmins
+        Optional per-organization modules, all off by default. `planning` ("Planiranje", D-026: machines,
+        qualifications, attendance, day plans) requires `processes` and counts as off while it is off. The others are and switched only by Backoffice superadmins
         (`PUT /platform/tenants/{slug}/modules`); organization admins cannot change them. `processes`
         ("Procesi rada": process templates, work-order processes, simulator) requires `stock` ("Magacin":
         stock ledger, receipts, counts, catalog stock). Valid combinations: both off, stock only, both on;
@@ -4466,6 +5591,8 @@ components:
         processes:
           type: boolean
         stock:
+          type: boolean
+        planning:
           type: boolean
     OrganizationSettingsUpdate:
       type: object
