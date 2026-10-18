@@ -139,7 +139,9 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   **Organization management** ("Organizacije" tab, `/platform/tenants…`): create
   (with first admin), rename / change slug, suspend / reactivate (`tenants.suspended_at`:
   ordinary sessions end and sign-in is refused, impersonation still works), and
-  reset a user's password. Every superadmin operation, impersonations included,
+  reset a user's password, export all its data (JSON download) and delete it
+  (only once suspended, slug typed again; see D-0xx offboarding — a new tenant
+  table must be added to `tenantDataTables`). Every superadmin operation, impersonations included,
   is written to `platform_audit_events` in the same transaction and shown in the
   "Aktivnost" tab (`GET /platform/audit`; trails at `/platform/impersonations/{id}/actions`).
 - **Work-order processes** (D-017): per-tenant `process_templates` (graph of

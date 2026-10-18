@@ -179,6 +179,8 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Get("/platform/tenants", s.handlePlatformTenants)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants", s.handlePlatformCreateTenant)
 	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)
+	r.With(s.requirePlatformAdmin).Delete("/platform/tenants/{slug}", s.handlePlatformDeleteTenant)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/export", s.handlePlatformExportTenant)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/suspend", s.handlePlatformSuspendTenant(true))
 	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/modules", s.handlePlatformSetTenantModules)
 	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/notes", s.handlePlatformSetTenantNotes)

@@ -38,6 +38,8 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantDeletion,
+  PlatformTenantExportFile,
   PlatformTenantUsers,
   PlatformImpersonationResponse,
   PlatformImpersonationAction,
@@ -172,6 +174,10 @@ declare global {
       setPlatformTenantModules: (slug: string, modules: OrganizationModules) => Promise<PlatformTenant>
       /** Replaces the superadmins' internal notes about the organization. */
       setPlatformTenantNotes: (slug: string, notes: PlatformTenantNotesInput) => Promise<PlatformTenant>
+      /** Downloads the organization's full data export as a JSON file. */
+      platformExportTenant: (slug: string) => Promise<PlatformTenantExportFile>
+      /** Permanently deletes a suspended organization; `confirmSlug` must equal its slug. */
+      platformDeleteTenant: (slug: string, confirmSlug: string) => Promise<PlatformTenantDeletion>
       resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
       getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
       getPlatformBackups: () => Promise<PlatformBackups>

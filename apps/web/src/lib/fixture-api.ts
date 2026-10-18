@@ -1319,6 +1319,14 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
     },
 
+    async platformExportTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async platformDeleteTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
     async resetPlatformUserPassword() {
       throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
     },

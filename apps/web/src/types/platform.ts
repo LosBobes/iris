@@ -133,7 +133,27 @@ export interface PlatformUpdateTenantInput {
   slug?: string
 }
 
+/** Result of DELETE /platform/tenants/{slug}: what was removed. */
+export interface PlatformTenantDeletion {
+  slug: string
+  name: string
+  /** RFC 3339 timestamp. */
+  deletedAt: string
+  totalRows: number
+  /** Deleted row count per table. */
+  rows: Record<string, number>
+}
+
+/** A downloaded organization export (GET /platform/tenants/{slug}/export). */
+export interface PlatformTenantExportFile {
+  blob: Blob
+  /** From Content-Disposition, else `iris-<slug>.json`. */
+  filename: string
+}
+
 export type PlatformAuditAction =
+  | 'tenant.export'
+  | 'tenant.delete'
   | 'tenant.create'
   | 'tenant.update'
   | 'tenant.suspend'

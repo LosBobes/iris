@@ -251,6 +251,23 @@ func main() {
 		report, err := importStock(mustTenantContext(ctx, dataStore, *tenantSlug), dataStore, *file, *apply)
 		must(err)
 		fmt.Print(report)
+	case "export-tenant":
+		cmd := flag.NewFlagSet("export-tenant", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		out := cmd.String("out", "", "putanja izlaznog .json fajla")
+		_ = cmd.Parse(os.Args[2:])
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(exportTenant(ctx, dataStore, *tenantSlug, *out))
+	case "delete-tenant":
+		cmd := flag.NewFlagSet("delete-tenant", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		confirm := cmd.String("confirm", "", "ponovljena oznaka organizacije (potvrda)")
+		suspend := cmd.Bool("suspend", false, "prvo suspenduj organizaciju ako nije suspendovana")
+		_ = cmd.Parse(os.Args[2:])
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(deleteTenant(ctx, dataStore, *tenantSlug, *confirm, *suspend))
 	default:
 		usage()
 		os.Exit(2)
@@ -593,6 +610,12 @@ func usage() {
   irisctl reset-platform-2fa -username ime
   irisctl backup [-out backups/iris.db]   (bez -out: IRIS_BACKUP_DIR, podrazumevano backups/ pored baze)
   irisctl migrate-to-postgres [-check] [-from ./data/iris.db] [-to postgres://...]
+  irisctl export-tenant -tenant oznaka [-out iris-oznaka.json]
+  irisctl delete-tenant -tenant oznaka -confirm oznaka [-suspend]
+
+export-tenant upisuje sve podatke organizacije u jedan JSON fajl (bez lozinki i sesija).
+delete-tenant trajno briše suspendovanu organizaciju i sve njene podatke (-suspend je prvo
+suspenduje); Backoffice aktivnost zadržava zapis. Oba se beleže u aktivnost kao "irisctl".
 
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
 a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
