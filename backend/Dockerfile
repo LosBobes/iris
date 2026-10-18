@@ -18,13 +18,13 @@ COPY iris-api/go.mod iris-api/go.sum ./
 RUN go mod download
 
 COPY iris-api/ ./
+# The server is the entrypoint; irisctl ships alongside it so operators can run
+# migrations, seeding and backups inside the container (docker compose run
+# --entrypoint irisctl …) without a separately built or hand-copied binary.
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
-    -o /out/iris-api ./cmd/server
-# irisctl ships alongside the server so migrations, backups and the SQLite ->
-# Postgres data migration can be run on the box (docker compose run --rm
-# backend irisctl ...) without a Go toolchain there.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
-    -o /out/irisctl ./cmd/irisctl
+        -o /out/iris-api ./cmd/server \
+    && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+        -o /out/irisctl ./cmd/irisctl
 
 # --- Final stage ------------------------------------------------------------
 # alpine (not distroless) so the compose healthcheck can use the bundled
@@ -59,7 +59,8 @@ RUN chrome="$(command -v chromium-browser || command -v chromium)" \
     && test -x "$chrome" \
     && ln -sf "$chrome" /usr/local/bin/iris-chrome
 
-# Copy the compiled binaries from the build stage.
+# Copy the compiled binaries from the build stage: the server (entrypoint) and
+# the irisctl operations CLI (run on demand via a one-off container).
 COPY --from=build /out/iris-api /usr/local/bin/iris-api
 COPY --from=build /out/irisctl /usr/local/bin/irisctl
 
@@ -70,9 +71,7 @@ COPY --from=build /out/irisctl /usr/local/bin/irisctl
 ARG SENTRY_DSN=""
 
 # The SQLite database lives under /data, which is backed by a named volume so
-# it survives container recreation (see docker-compose.yml). Setting
-# DATABASE_URL at runtime switches the API to Postgres and leaves this file
-# untouched as a rollback target.
+# it survives container recreation (see docker-compose.yml).
 ENV IRIS_API_ADDR=":8080" \
     DATABASE_PATH="/data/iris.db" \
     SENTRY_DSN="${SENTRY_DSN}" \

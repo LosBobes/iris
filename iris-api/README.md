@@ -231,6 +231,15 @@ For a non-demo user, run:
 docker compose run --rm --entrypoint irisctl iris-api create-user -tenant demo -username milica -password '<secret>' -role admin
 ```
 
+The image ships both binaries — the server (`iris-api`, the entrypoint) and the
+`irisctl` operations CLI — so the same `--entrypoint irisctl` form works against
+the production compose file too (migrations, seeding, backups), reusing the
+backend's `/data` volume and environment:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm --entrypoint irisctl backend seed-demo -id-prefix demo-
+```
+
 Migrations run idempotently on startup before the API begins serving. A fresh
 PostgreSQL database is created at the consolidated v12 schema and stamped as
 such; migrations 13+ are shared by both engines.
