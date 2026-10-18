@@ -93,47 +93,49 @@ func (s *Server) sessionFromCookie(r *http.Request) (string, *store.Session, err
 	return cookie.Value, session, err
 }
 
-// Organization sign-in throttling: failures are counted per client IP and per
-// organization + username, each in its own window (a shared office behind one
-// NAT address gets more room than one account). There is deliberately no
-// global budget here, unlike the Backoffice: one guesser could otherwise lock
-// every organization out at once.
-func newOrgLoginLimiters() (ip, account *loginLimiter) {
-	return newLoginLimiter(15*time.Minute, 20, 0), newLoginLimiter(15*time.Minute, 5, 0)
+// Organization sign-in throttling, all in a 15-minute window and counted
+// before the credentials are checked (reserve):
+//   - 5 failures per organization + username from one client IP: the limit a
+//     guesser actually meets;
+//   - 20 per client IP across all usernames (a shared office behind one NAT
+//     address gets that much room);
+//   - 50 per organization + username from anywhere: a much looser account-wide
+//     ceiling against a distributed guesser. A single address cannot reach it
+//     (it is blocked at 5), so locking someone out takes at least ten addresses.
+//
+// There is deliberately no global budget, unlike the Backoffice: one guesser
+// could otherwise lock every organization out at once.
+const (
+	orgLoginWindow     = 15 * time.Minute
+	orgLoginPerPair    = 5
+	orgLoginPerIP      = 20
+	orgLoginPerAccount = 50
+)
+
+func newOrgLoginLimiter() *loginLimiter {
+	return newLoginLimiter(orgLoginWindow, orgLoginPerPair, 0)
 }
 
-type orgLoginKeys struct{ ip, account string }
-
-func newOrgLoginKeys(r *http.Request, req domain.LoginRequest) orgLoginKeys {
-	return orgLoginKeys{
-		ip: "ip:" + clientIP(r),
-		account: "account:" + strings.ToLower(strings.TrimSpace(req.OrgSlug)) +
-			":" + strings.ToLower(strings.TrimSpace(req.Username)),
+func orgLoginKeys(r *http.Request, req domain.LoginRequest) []limiterKey {
+	ip := clientIP(r)
+	account := strings.ToLower(strings.TrimSpace(req.OrgSlug)) + ":" +
+		strings.ToLower(strings.TrimSpace(req.Username))
+	return []limiterKey{
+		{key: "pair:" + ip + "|" + account, max: orgLoginPerPair},
+		{key: "ip:" + ip, max: orgLoginPerIP},
+		{key: "account:" + account, max: orgLoginPerAccount},
 	}
-}
-
-func (s *Server) orgLoginAllowed(keys orgLoginKeys) bool {
-	return s.orgLoginIPLimiter.allow(keys.ip) && s.orgLoginAccountLimiter.allow(keys.account)
-}
-
-func (s *Server) orgLoginFailed(keys orgLoginKeys) {
-	s.orgLoginIPLimiter.fail(keys.ip)
-	s.orgLoginAccountLimiter.fail(keys.account)
-}
-
-func (s *Server) orgLoginSucceeded(keys orgLoginKeys) {
-	s.orgLoginIPLimiter.succeed(keys.ip)
-	s.orgLoginAccountLimiter.succeed(keys.account)
 }
 
 // proxyRealIP replaces chi's middleware.RealIP. That one trusts, in order,
 // True-Client-IP, X-Real-IP and the first X-Forwarded-For entry — all of which
 // a browser can send, and frontend/nginx.conf passes True-Client-IP and
 // X-Forwarded-For through untouched, so the sign-in limiter's IP key would be
-// whatever the client claimed. Only X-Real-IP is used here: nginx overwrites
-// it with the address it resolved (its realip module accepts the
-// X-Forwarded-For only from the local Caddy). Without it (dev, tests) the TCP
-// peer address stands.
+// whatever the client claimed. Only X-Real-IP is used here: nginx always
+// overwrites it with the address it resolved, which is its TCP peer unless
+// that peer is a proxy listed in IRIS_TRUSTED_PROXY (frontend/iris-real-ip.sh;
+// only the Hetzner deploy sets it, to the compose gateway Caddy arrives from).
+// Without it (dev, tests) the TCP peer address stands.
 func proxyRealIP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" && net.ParseIP(ip) != nil {

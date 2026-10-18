@@ -57,23 +57,24 @@ func (s *Server) handlePlatformLogin(w http.ResponseWriter, r *http.Request) {
 		"ip:" + clientIP(r),
 		"user:" + strings.ToLower(strings.TrimSpace(req.Username)),
 	}
-	if !s.platformLimiter.allow(keys...) {
+	attempt, ok := s.platformLimiter.reserve(s.platformLimiter.keys(keys...)...)
+	if !ok {
 		writeAPIError(w, r, http.StatusTooManyRequests, "Previše neuspešnih pokušaja. Pokušajte ponovo kasnije.", nil)
 		return
 	}
 
 	admin, err := platform.AuthenticatePlatformAdmin(r.Context(), req.Username, req.Password)
 	if err != nil {
+		attempt.cancel()
 		writeServerError(w, r, err)
 		return
 	}
 	if admin == nil {
-		s.platformLimiter.fail(keys...)
 		log.Printf("platform login failed from %s", clientIP(r))
 		writeJSON(w, http.StatusOK, domain.PlatformLoginResponse{Success: false, Error: platformInvalidCredentials})
 		return
 	}
-	s.platformLimiter.succeed(keys...)
+	attempt.succeeded()
 
 	expiresAt := time.Now().UTC().Add(s.config.PlatformSessionDuration)
 	token, err := platform.CreatePlatformSession(r.Context(), admin.ID, expiresAt)
@@ -175,22 +176,23 @@ func (s *Server) handlePlatformChangePassword(w http.ResponseWriter, r *http.Req
 	}
 	// Guessing the current password through this form is throttled like login.
 	keys := []string{"password:" + admin.ID, "ip:" + clientIP(r)}
-	if !s.platformLimiter.allow(keys...) {
+	attempt, ok := s.platformLimiter.reserve(s.platformLimiter.keys(keys...)...)
+	if !ok {
 		writeAPIError(w, r, http.StatusTooManyRequests, "Previše neuspešnih pokušaja. Pokušajte ponovo kasnije.", nil)
 		return
 	}
 	cookie, _ := r.Cookie(s.config.PlatformSessionCookieName)
 	err = platform.ChangePlatformAdminPassword(r.Context(), admin.ID, cookie.Value, req.CurrentPassword, req.NewPassword)
 	if errors.Is(err, store.ErrWrongPassword) {
-		s.platformLimiter.fail(keys...)
 		writeValidationError(w, r, "Trenutna lozinka nije ispravna.")
 		return
 	}
 	if err != nil {
+		attempt.cancel()
 		writeStoreError(w, r, err)
 		return
 	}
-	s.platformLimiter.succeed(keys...)
+	attempt.succeeded()
 	log.Printf("platform password changed for %q from %s", admin.Username, clientIP(r))
 	admin.MustChangePassword = false
 	writeJSON(w, http.StatusOK, domain.PlatformLoginResponse{Success: true, Admin: admin})

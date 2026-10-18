@@ -162,6 +162,21 @@ Start-ScheduledTask -TaskName IrisAutoUpdate
 Either way, the latest images are pulled and the containers are recreated. The
 `iris_sqlite_data` volume is untouched, so no data is lost.
 
+## Client addresses behind a proxy
+
+Browsers connect straight to nginx on port 80 here, so nginx trusts no
+`X-Forwarded-For` (`IRIS_TRUSTED_PROXY` is empty): a LAN client cannot choose
+the address the sign-in rate limits count. With Docker Desktop's port proxy
+the backend may see every LAN client as the same internal address; the limits
+then apply to the office as a whole (5 failed attempts per account and 20 in
+total per 15 minutes) rather than per machine. That was already the case
+before trust became explicit, and is acceptable on a small trusted LAN.
+
+If you ever put a reverse proxy in front of this stack, set
+`IRIS_TRUSTED_PROXY` (in the deploy directory's `.env`) to that proxy's address
+as nginx sees it, space- or comma-separated CIDRs allowed — never a whole
+range LAN clients can also connect from.
+
 ## Rollback
 
 Every build publishes immutable version tags alongside `:latest`

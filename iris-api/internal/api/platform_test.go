@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -145,25 +144,6 @@ func TestTenantLoginIsRecordedForPlatformMetrics(t *testing.T) {
 	}
 	if metrics.Totals.LoginsInRange != 1 || metrics.Totals.ActiveUsersInRange != 1 {
 		t.Fatalf("logins = %d, active users = %d; want 1, 1", metrics.Totals.LoginsInRange, metrics.Totals.ActiveUsersInRange)
-	}
-}
-
-func TestLoginLimiterWindow(t *testing.T) {
-	limiter := newLoginLimiter(15*time.Minute, 2, 3)
-	if !limiter.allow("a") {
-		t.Fatal("fresh key refused")
-	}
-	limiter.fail("a")
-	limiter.fail("a")
-	if limiter.allow("a") {
-		t.Fatal("key allowed past per-key limit")
-	}
-	if !limiter.allow("b") {
-		t.Fatal("other key refused before global limit")
-	}
-	limiter.fail("b")
-	if limiter.allow("c") {
-		t.Fatal("global limit not enforced")
 	}
 }
 

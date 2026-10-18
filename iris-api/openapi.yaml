@@ -52,9 +52,13 @@ paths:
           cookie whose `Expires`/`Max-Age` always equals the server-side expiry
           (it is re-sent whenever the session slides).
 
-        Failed attempts are rate limited per client IP and per organization +
-        username (successful sign-in clears them); while limited every attempt,
-        right password included, gets 429. A request whose `Origin` header is
+        Failed attempts are rate limited in a 15-minute window, counted before
+        the credentials are checked: 5 per organization + username from one
+        client IP, 20 per client IP across usernames, and 50 per organization +
+        username from all addresses together (so one address cannot lock an
+        account out for everyone). A successful sign-in clears its counters;
+        while any limit is reached every attempt, right password included,
+        gets 429. A request whose `Origin` header is
         neither the API's own host nor allow-listed is refused with 403, like
         every other state-changing request.
       operationId: login

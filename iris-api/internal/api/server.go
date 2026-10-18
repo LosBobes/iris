@@ -36,8 +36,7 @@ type Server struct {
 	startedAt       time.Time
 	platformLimiter *loginLimiter
 	// Organization sign-in throttling (sessions.go).
-	orgLoginIPLimiter      *loginLimiter
-	orgLoginAccountLimiter *loginLimiter
+	orgLoginLimiter *loginLimiter
 }
 
 type Config struct {
@@ -112,15 +111,13 @@ func NewServer(store store.Store, configs ...Config) *Server {
 	if config.ImpersonationDuration == 0 {
 		config.ImpersonationDuration = time.Hour
 	}
-	orgLoginIPLimiter, orgLoginAccountLimiter := newOrgLoginLimiters()
 	return &Server{
 		store:     store,
 		config:    config,
 		startedAt: time.Now(),
 		// 5 failures per IP or username, 50 overall, per 15 minutes.
-		platformLimiter:        newLoginLimiter(15*time.Minute, 5, 50),
-		orgLoginIPLimiter:      orgLoginIPLimiter,
-		orgLoginAccountLimiter: orgLoginAccountLimiter,
+		platformLimiter: newLoginLimiter(15*time.Minute, 5, 50),
+		orgLoginLimiter: newOrgLoginLimiter(),
 	}
 }
 
@@ -449,37 +446,39 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Resolve the organization first. A missing or unknown org yields the same
 	// generic error as bad credentials, so the form never reveals which orgs exist.
 	const invalidCredentials = "Neispravna organizacija, korisničko ime ili lozinka."
-	keys := newOrgLoginKeys(r, req)
-	if !s.orgLoginAllowed(keys) {
+	attempt, ok := s.orgLoginLimiter.reserve(orgLoginKeys(r, req)...)
+	if !ok {
 		writeAPIError(w, r, http.StatusTooManyRequests, loginRateLimitedMessage, nil)
 		return
 	}
+	// The attempt already counts as a failure; only a success or a store
+	// error (credentials never judged) changes that.
 	tenant, err := s.store.TenantBySlug(r.Context(), req.OrgSlug)
 	if err != nil {
+		attempt.cancel()
 		writeServerError(w, r, err)
 		return
 	}
 	if tenant == nil {
-		s.orgLoginFailed(keys)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: invalidCredentials})
 		return
 	}
 
 	user, err := s.store.AuthenticateUser(r.Context(), tenant.ID, req.Username, req.Password)
 	if err != nil {
+		attempt.cancel()
 		writeServerError(w, r, err)
 		return
 	}
 
 	if user == nil {
-		s.orgLoginFailed(keys)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{
 			Success: false,
 			Error:   invalidCredentials,
 		})
 		return
 	}
-	s.orgLoginSucceeded(keys)
+	attempt.succeeded()
 	// Said only after the credentials check out, so it reveals nothing to
 	// someone guessing.
 	if tenant.Suspended {

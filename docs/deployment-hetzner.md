@@ -39,6 +39,21 @@ Caddy and start a second stack.
 Iris containers are named `iris-backend-1` and `iris-frontend-1`; its database
 volume is `iris_iris_sqlite_data`. None of these collide with gamgee's.
 
+**Client addresses (sign-in rate limits, audit logs):** the backend believes
+only the `X-Real-IP` header nginx sets, and nginx takes the client address
+from `X-Forwarded-For` only when the request comes from an address listed in
+`IRIS_TRUSTED_PROXY` (rendered at container start by
+`frontend/iris-real-ip.sh`). Caddy's loopback connection to `127.0.0.1:3001`
+reaches nginx from the Iris compose network's gateway, so
+`docker-compose.prod.yml` pins that network to `172.31.253.0/24` (gateway
+`172.31.253.1`) and trusts exactly `172.31.253.1`. If that subnet collides
+with another Docker network on the host, change the subnet, the gateway and
+`IRIS_TRUSTED_PROXY` together (an `IRIS_TRUSTED_PROXY` in `.env` overrides the
+default). To check: after a sign-in, the backend log / Backoffice audit shows
+your public IP, not `172.31.253.1`. Unset, nothing is trusted and every
+request would carry the gateway address, so all users would share one
+rate-limit bucket.
+
 **How Iris differs from gamgee internally:** Iris is a Go API with an embedded
 **SQLite** database, not Python + Postgres. So the stack is only two services
 (a Go backend and an nginx frontend), and the database is a file in a named

@@ -51,8 +51,9 @@ out required web follow-up rather than leaving drift.
 - `POST /auth/login` takes `{ orgSlug, username, password }`, resolves the tenant
   via `TenantBySlug`, authenticates within it, then issues an HTTP-only
   `iris_session` cookie. Unknown org and bad credentials return the
-  **same** generic Serbian error; failures are rate limited per IP and per
-  org+username (429). Protected routes use `requireAuth`; admin-only
+  **same** generic Serbian error; failures are rate limited per 15 min: 5 per
+  org+username from one IP, 20 per IP, 50 per org+username overall (429;
+  `orgLoginKeys` in `sessions.go`, atomic `loginLimiter.reserve`). Protected routes use `requireAuth`; admin-only
   routes use `requireAdmin`.
 - **Sessions** (`internal/api/sessions.go`, `internal/store/sessions.go`, D-020):
   tokens are stored only as SHA-256 (`sessions.token_hash`). The idle expiry

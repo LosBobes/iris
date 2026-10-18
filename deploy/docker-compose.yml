@@ -59,6 +59,12 @@ services:
     # (for image pulls) is independent and needs no inbound publishing.
     ports:
       - "80:80"
+    environment:
+      # Browsers connect straight to this nginx, so no X-Forwarded-For is
+      # trusted (empty): a LAN client must not be able to pick the address the
+      # sign-in limits count. Set only if a reverse proxy is put in front, to
+      # that proxy's address as nginx sees it. See deploy/README.md.
+      IRIS_TRUSTED_PROXY: "${IRIS_TRUSTED_PROXY:-}"
     depends_on:
       backend:
         condition: service_healthy

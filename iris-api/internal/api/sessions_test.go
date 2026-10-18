@@ -327,22 +327,37 @@ func TestOrgLoginRateLimit(t *testing.T) {
 		}
 	}
 
-	// The fifth failure in a row locks this account out, even with the right
-	// password and from another address.
-	if code := attempt("Operater", "wrong", "10.0.0.2"); code != http.StatusOK {
+	// The fifth failure in a row from one address locks this account out for
+	// that address only, even with the right password.
+	if code := attempt("Operater", "wrong", "10.0.0.1"); code != http.StatusOK {
 		t.Fatalf("fifth failure = %d", code)
 	}
 	req := loginRequest(t, "operater", "operater123", false)
-	req.Header.Set("X-Real-IP", "10.0.0.3")
+	req.Header.Set("X-Real-IP", "10.0.0.1")
 	rec := env.do(t, req)
 	var body map[string]string
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
 	if rec.Code != http.StatusTooManyRequests || body["error"] != loginRateLimitedMessage {
 		t.Fatalf("locked account = %d %s, want 429", rec.Code, rec.Body.String())
 	}
-	// Other accounts are unaffected.
-	if code := attempt("admin", "admin123", "10.0.0.3"); code != http.StatusOK {
+	// The owner signs in from another address; other accounts are unaffected.
+	if code := attempt("operater", "operater123", "10.0.0.3"); code != http.StatusOK {
+		t.Fatalf("same account, other address = %d, want 200", code)
+	}
+	if code := attempt("admin", "admin123", "10.0.0.1"); code != http.StatusOK {
 		t.Fatalf("other account = %d", code)
+	}
+
+	// Account-wide: 50 failures, spread so no address hits its own limits,
+	// lock the account everywhere.
+	for i := 0; i < orgLoginPerAccount; i++ {
+		ip := fmt.Sprintf("10.1.%d.1", i/orgLoginPerPair)
+		if code := attempt("operater", "wrong", ip); code != http.StatusOK {
+			t.Fatalf("distributed failure %d = %d", i, code)
+		}
+	}
+	if code := attempt("operater", "operater123", "10.2.0.1"); code != http.StatusTooManyRequests {
+		t.Fatalf("account after %d distributed failures = %d, want 429", orgLoginPerAccount, code)
 	}
 
 	// Per address: 20 failures across many usernames block that address only.

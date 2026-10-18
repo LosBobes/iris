@@ -19,8 +19,8 @@ the web client.
   token is stored only as a SHA-256 hash. Idle expiry slides on use (rewritten at
   most hourly) under an absolute cap: 12 h idle / 24 h cap with a browser-session
   cookie, or 7 days / 30 days with a persistent cookie when the request has
-  `remember: true`. Failed sign-ins are rate limited per client IP and per
-  organization + username (429). State-changing requests with a foreign `Origin`
+  `remember: true`. Failed sign-ins are rate limited per 15 min (429): 5 per
+  organization + username from one client IP, 20 per IP, 50 per account overall. State-changing requests with a foreign `Origin`
   header are rejected (403).
 - Operations CLI: `cmd/irisctl` for migrations, demo seeding, tenant/user creation,
   CSV import, and database backup.

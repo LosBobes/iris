@@ -44,5 +44,8 @@ FROM nginx:1.27-alpine
 # Vite emits the production build into dist/.
 COPY --from=build /src/apps/web/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Renders the trusted-proxy (real IP) settings from IRIS_TRUSTED_PROXY at
+# container start; the image's entrypoint runs /docker-entrypoint.d/*.sh.
+COPY --chmod=0755 frontend/iris-real-ip.sh /docker-entrypoint.d/15-iris-real-ip.sh
 
 EXPOSE 80

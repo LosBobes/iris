@@ -94,7 +94,8 @@ Web client
   tenant by slug, authenticates the user within it, then issues an HTTP-only
   **`iris_session`** cookie. Unknown org and bad credentials return
   the **same** generic Serbian error, so the form never reveals which orgs exist.
-  Failed sign-ins are throttled per client IP and per org+username (429).
+  Failed sign-ins are throttled per 15 min (429): 5 per org+username from one IP,
+  20 per IP, 50 per org+username overall (`orgLoginKeys`, `login_limiter.go`).
 - Sessions (D-020, migration v25): tokens stored only as SHA-256
   (`sessions.token_hash`); the idle expiry slides on use (written at most hourly)
   under an absolute cap — 12 h idle / 24 h cap with a browser-session cookie, or
