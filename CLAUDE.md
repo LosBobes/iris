@@ -192,11 +192,14 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`
   need `-tenant <slug>`; `create-tenant` provisions a new organization.
-- Demo seed (`irisctl seed-demo`): one `demo` org with both modules **on**.
+- Demo seed (`irisctl seed-demo`): one `demo` org with all three modules **on**
+  (stock, processes, planning).
   Logins `admin` / `admin123` (+ four fixture operators) and `operater` /
   `operater123`. It loads the `testdata/fixtures` work orders (no process) first,
   then adds process- and stock-driven content (4 templates, 8 orders, warehouse
-  stock) that takes the next order numbers after the fixtures. Idempotent: the
+  stock) that takes the next order numbers after the fixtures, plus planning
+  resources (7 machine types, 8 machines, qualifications for every demo user;
+  template steps carry machine type, crew and times; default working hours). Idempotent: the
   content is added once (a re-run reports it already present). In production the
   server refuses to start on the demo `admin`/`admin123` login, so `seed-demo`
   requires `IRIS_DEMO_ADMIN_PASSWORD` / `IRIS_DEMO_OPERATOR_PASSWORD` (12+ chars)

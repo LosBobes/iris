@@ -82,6 +82,8 @@ type DemoSeedResult struct {
 	BrochureOrder    string
 	BrochureTemplate string
 	CancelledOrder   string
+	MachineTypes     int // planning: machine types and units added
+	Machines         int
 }
 
 type demoArticle struct {
@@ -117,8 +119,9 @@ var demoServices = []struct {
 	{"USL-KNJIGOVEZ", "Knjigovezivanje", "kom", 45},
 }
 
-// seedDemoContent turns on both modules for the demo tenant (already in ctx) and
-// adds the curated catalog, warehouse stock, process templates and
+// seedDemoContent turns on all three modules for the demo tenant (already in
+// ctx) and adds the curated catalog, warehouse stock, machines with worker
+// qualifications, process templates (steps timed for planning) and
 // process-driven work orders. It assumes the fixture seed has already run, so it
 // creates only the operater login (the admin login comes from the fixtures) and
 // its orders take the next free order numbers. now anchors the order dates; zero
@@ -143,10 +146,11 @@ func seedDemoContent(ctx context.Context, s *SQLiteStore, slug, operatorPassword
 	}
 	b := &demoContentBuilder{
 		s: s, slug: slug, ctx: ctx, now: now, operatorPassword: operatorPw,
-		articles:  map[string]domain.CatalogItem{},
-		customers: map[string]domain.Customer{},
-		locations: map[string]domain.Location{},
-		templates: map[string]*domain.ProcessTemplate{},
+		articles:     map[string]domain.CatalogItem{},
+		customers:    map[string]domain.Customer{},
+		locations:    map[string]domain.Location{},
+		templates:    map[string]*domain.ProcessTemplate{},
+		machineTypes: map[string]string{},
 	}
 	var result DemoSeedResult
 	if err := b.build(&result); err != nil {
@@ -165,18 +169,24 @@ type demoContentBuilder struct {
 	customers        map[string]domain.Customer
 	locations        map[string]domain.Location
 	templates        map[string]*domain.ProcessTemplate
+	machineTypes     map[string]string // demo key -> machine type ID
+	machineCount     int
 }
 
 func (b *demoContentBuilder) build(result *DemoSeedResult) error {
 	steps := []func() error{
-		b.users, b.modules, b.customersAndLocations, b.catalog, b.stock, b.processTemplates,
+		b.users, b.modules, b.customersAndLocations, b.catalog, b.stock, b.machines, b.processTemplates,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
 		}
 	}
-	return b.workOrders(result)
+	if err := b.workOrders(result); err != nil {
+		return err
+	}
+	result.MachineTypes, result.Machines = len(b.machineTypes), b.machineCount
+	return nil
 }
 
 func (b *demoContentBuilder) users() error {
@@ -189,7 +199,7 @@ func (b *demoContentBuilder) users() error {
 
 func (b *demoContentBuilder) modules() error {
 	on := true
-	if _, err := b.s.SetTenantModules(b.ctx, b.slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on}); err != nil {
+	if _, err := b.s.SetTenantModules(b.ctx, b.slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &on}); err != nil {
 		return fmt.Errorf("demo modules: %w", err)
 	}
 	return nil
@@ -279,6 +289,66 @@ func (b *demoContentBuilder) stock() error {
 	return nil
 }
 
+// demoMachineTypes are the print shop's machine types (D-026) with their units.
+var demoMachineTypes = []struct {
+	key, name string
+	units     []string
+}{
+	{"ctp", "CTP (osvetljavanje ploča)", []string{"Kodak Magnus 400"}},
+	{"offset", "Offset štampa B2", []string{"Heidelberg SM52 #1", "Heidelberg SM52 #2"}},
+	{"digital", "Digitalna štampa", []string{"Konica Minolta C14000"}},
+	{"ploter", "Ploter velikog formata", []string{"Mimaki JV330"}},
+	{"sekac", "Sekač (giljotina)", []string{"Polar 78"}},
+	{"savijacica", "Savijačica", []string{"Horizon AF-406F"}},
+	{"povez", "Mašina za povez žicom", []string{"Müller Martini Presto"}},
+}
+
+// demoQualifications says which machine types each demo user may lead.
+var demoQualifications = map[string][]string{
+	demoAdminUsername:    {"ctp", "offset", "digital", "ploter", "sekac", "savijacica", "povez"},
+	demoOperatorUsername: {"offset", "digital", "sekac"},
+	"ana.jovic":          {"offset", "ctp"},
+	"marko.petrovic":     {"digital", "ploter", "sekac"},
+	"jelena.markovic":    {"savijacica", "povez", "sekac"},
+	"stefan.nikolic":     {"offset", "povez"},
+}
+
+// machines adds the machine types and units and the users' qualifications.
+// Working hours stay at the default (Mon–Fri 07:00–15:00, break 11:00).
+func (b *demoContentBuilder) machines() error {
+	for _, mt := range demoMachineTypes {
+		created, err := b.s.CreateMachineType(b.ctx, domain.MachineTypeInput{Name: mt.name})
+		if err != nil {
+			return fmt.Errorf("demo machine type %s: %w", mt.name, err)
+		}
+		b.machineTypes[mt.key] = created.ID
+		for _, unit := range mt.units {
+			if _, err := b.s.CreateMachine(b.ctx, domain.MachineInput{MachineTypeID: created.ID, Name: unit, InService: true}); err != nil {
+				return fmt.Errorf("demo machine %s: %w", unit, err)
+			}
+			b.machineCount++
+		}
+	}
+	workers, err := b.s.Qualifications(b.ctx)
+	if err != nil {
+		return err
+	}
+	for _, worker := range workers {
+		keys, ok := demoQualifications[worker.Username]
+		if !ok {
+			continue
+		}
+		ids := make([]string, 0, len(keys))
+		for _, key := range keys {
+			ids = append(ids, b.machineTypes[key])
+		}
+		if _, err := b.s.SetQualifications(b.ctx, worker.UserID, domain.WorkerQualificationsInput{MachineTypeIDs: ids}); err != nil {
+			return fmt.Errorf("demo qualifications %s: %w", worker.Username, err)
+		}
+	}
+	return nil
+}
+
 // graphBuilder lays a process out left to right: a step per column (300px
 // apart), its inputs above it (side by side when there are two, at col±0.37)
 // and its byproducts below, products one column after their step. The web
@@ -311,6 +381,21 @@ func (g *graphBuilder) item(kind domain.ProcessNodeKind, id, label, article stri
 	g.graph.Nodes = append(g.graph.Nodes, node)
 }
 
+// plan sets a step's planning fields: machine type (demo key, "" = none),
+// crew size, setup minutes and minutes per unit of the order's quantity.
+func (g *graphBuilder) plan(id, machineType string, crew int, setup, perUnit float64) {
+	for i := range g.graph.Nodes {
+		node := &g.graph.Nodes[i]
+		if node.ID != id || node.Kind != domain.ProcessNodeStep {
+			continue
+		}
+		node.MachineTypeID = g.b.machineTypes[machineType]
+		node.CrewSize, node.SetupMinutes, node.MinutesPerUnit = &crew, &setup, &perUnit
+		return
+	}
+	panic("demo graph: no step " + id)
+}
+
 func (g *graphBuilder) edges(pairs ...string) {
 	for i := 0; i+1 < len(pairs); i += 2 {
 		g.graph.Edges = append(g.graph.Edges, domain.ProcessEdge{ID: pairs[i] + "-" + pairs[i+1], Source: pairs[i], Target: pairs[i+1]})
@@ -339,6 +424,10 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.item(pr, "otisci", "Gotovi otisci", "", 0, 4, lane)
 			g.edges("priprema", "stampa", "stampa", "secenje", "secenje", "pakovanje", "pakovanje", "otisci",
 				"ploce", "priprema", "papir", "stampa", "boja", "stampa", "stampa", "mak-stampa", "secenje", "mak-secenje")
+			g.plan("priprema", "ctp", 1, 30, 0)
+			g.plan("stampa", "offset", 2, 30, 0.02)
+			g.plan("secenje", "sekac", 1, 15, 0.006)
+			g.plan("pakovanje", "", 1, 15, 0.004)
 		}},
 		{"digital", "Digitalna štampa", "Kratke serije na digitalnoj mašini.", false, func(g *graphBuilder) {
 			g.step("priprema", "Priprema fajla", 0, lane)
@@ -348,6 +437,9 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.item(in, "toner", "Toner", "toner", 1, 1.37, lane-demoInRow)
 			g.item(pr, "otisci", "Digitalni otisci", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "dorada", "dorada", "otisci", "papir", "stampa", "toner", "stampa")
+			g.plan("priprema", "", 1, 20, 0)
+			g.plan("stampa", "digital", 1, 10, 0.05)
+			g.plan("dorada", "sekac", 1, 10, 0.02)
 		}},
 		{"brosura", demoBrochureTemplate, "Brošura sa međuproizvodom (štampani tabaci) i paralelnom štampom korica.", false, func(g *graphBuilder) {
 			g.step("stampa-tabaka", "Štampa tabaka", 0, lane)
@@ -365,6 +457,11 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.edges("stampa-tabaka", "tabaci", "tabaci", "savijanje", "savijanje", "sivenje", "stampa-korica", "sivenje",
 				"sivenje", "obrezivanje", "obrezivanje", "brosure", "obrezivanje", "mak",
 				"papir", "stampa-tabaka", "boja", "stampa-tabaka", "karton", "stampa-korica", "zica", "sivenje")
+			g.plan("stampa-tabaka", "offset", 2, 40, 0.3)
+			g.plan("stampa-korica", "digital", 1, 15, 0.05)
+			g.plan("savijanje", "savijacica", 1, 20, 0.12)
+			g.plan("sivenje", "povez", 2, 30, 0.15)
+			g.plan("obrezivanje", "sekac", 1, 10, 0.03)
 		}},
 		{"baner", "Veliki format (baner)", "Štampa banera na PVC-u sa ojačanjem i ringlovanjem.", false, func(g *graphBuilder) {
 			g.step("priprema", "Priprema", 0, lane)
@@ -374,6 +471,9 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.item(by, "otpad", "Otpad bannera", "otpad", 1, 1, lane+demoRow)
 			g.item(pr, "gotov", "Baner", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "ojacanje", "ojacanje", "gotov", "baner", "stampa", "stampa", "otpad")
+			g.plan("priprema", "", 1, 30, 0)
+			g.plan("stampa", "ploter", 1, 15, 40)
+			g.plan("ojacanje", "", 2, 10, 25)
 		}},
 	}
 	for _, sp := range specs {
@@ -397,6 +497,7 @@ type demoOrder struct {
 	assignee                        string
 	priority                        domain.WorkOrderPriority
 	price                           float64
+	quantity                        int // jobDetails.quantity; drives planned step durations
 	// scale overrides planned quantities of nodes (after the process is attached).
 	scale map[string]float64
 	// status path after creation, e.g. assigned, inProgress.
@@ -420,17 +521,17 @@ func (b *demoContentBuilder) workOrders(result *DemoSeedResult) error {
 	offsetAll := []demoDone{{steps: []string{"priprema"}}, {steps: []string{"stampa"}}, {steps: []string{"secenje"}}, {steps: []string{"pakovanje"}}}
 	orders := []demoOrder{
 		{ // 1: new, untouched -> reserved stock
-			customer: "pekara", description: "Flajeri A5, 5.000 kom, 4+4", template: "offset", daysAgo: 2,
+			customer: "pekara", description: "Flajeri A5, 5.000 kom, 4+4", quantity: 5000, template: "offset", daysAgo: 2,
 			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 38000,
 			scale: map[string]float64{"papir": 650, "boja": 2, "ploce": 4},
 		},
 		{ // 2: new digital
-			customer: "pixel", description: "Vizit karte, 500 kom, kunstdruk 350g", template: "digital", daysAgo: 1,
+			customer: "pixel", description: "Vizit karte, 500 kom, kunstdruk 350g", quantity: 500, template: "digital", daysAgo: 1,
 			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 7800,
 			scale: map[string]float64{"papir": 40, "toner": 1},
 		},
 		{ // 3: in progress, actual paper above plan
-			customer: "opstina", description: "Obrasci A4 u tri primerka, 10.000 kom", template: "offset", daysAgo: 9,
+			customer: "opstina", description: "Obrasci A4 u tri primerka, 10.000 kom", quantity: 10000, template: "offset", daysAgo: 9,
 			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 112000,
 			scale:    map[string]float64{"papir": 2500, "boja": 6, "ploce": 8, "mak-stampa": 40, "mak-secenje": 25},
 			statuses: progress,
@@ -440,20 +541,20 @@ func (b *demoContentBuilder) workOrders(result *DemoSeedResult) error {
 			},
 		},
 		{ // 4: in progress brochure, two parallel steps done
-			customer: "slovo", description: "Katalog izdanja, 24 strane, 500 kom", template: "brosura", daysAgo: 6,
+			customer: "slovo", description: "Katalog izdanja, 24 strane, 500 kom", quantity: 500, template: "brosura", daysAgo: 6,
 			assignee: demoAdminUsername, priority: domain.WorkOrderPriorityHigh, price: 96000,
 			scale:    map[string]float64{"papir": 600, "boja": 6, "karton": 150, "zica": 2, "mak": 12},
 			statuses: progress,
 			done:     []demoDone{{steps: []string{"stampa-tabaka", "stampa-korica"}}},
 		},
 		{ // 5: completed offset
-			customer: "volan", description: "Brošure i uputstva A4, 3.000 kom", template: "offset", daysAgo: 20,
+			customer: "volan", description: "Brošure i uputstva A4, 3.000 kom", quantity: 3000, template: "offset", daysAgo: 20,
 			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 54000,
 			scale:    map[string]float64{"papir": 1100, "boja": 4, "ploce": 4, "mak-stampa": 18, "mak-secenje": 9},
 			statuses: progress, done: offsetAll, finish: completed,
 		},
 		{ // 6: completed banner
-			customer: "pixel", description: "Baner 4x2 m za sajam", template: "baner", daysAgo: 15,
+			customer: "pixel", description: "Baner 4x2 m za sajam", quantity: 1, template: "baner", daysAgo: 15,
 			assignee: demoAdminUsername, priority: domain.WorkOrderPriorityUrgent, price: 9800,
 			scale:    map[string]float64{"baner": 8, "otpad": 0.5},
 			statuses: progress,
@@ -461,13 +562,13 @@ func (b *demoContentBuilder) workOrders(result *DemoSeedResult) error {
 			finish:   completed,
 		},
 		{ // 7: big order, planned inputs exceed stock
-			customer: "slovo", description: "Zbirka priča, 320 strana, tiraž 2.000", template: "offset", daysAgo: 3,
+			customer: "slovo", description: "Zbirka priča, 320 strana, tiraž 2.000", quantity: 2000, template: "offset", daysAgo: 3,
 			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 640000,
 			scale:    map[string]float64{"papir": 8000, "boja": 30, "ploce": 24, "mak-stampa": 120, "mak-secenje": 60},
 			statuses: assigned,
 		},
 		{ // 8: cancelled, must not reserve stock
-			customer: "opstina", description: "Plakati A3, 200 kom", template: "digital", daysAgo: 12,
+			customer: "opstina", description: "Plakati A3, 200 kom", quantity: 200, template: "digital", daysAgo: 12,
 			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityLow, price: 6400,
 			scale:    map[string]float64{"papir": 400, "toner": 1},
 			statuses: []domain.WorkOrderStatus{domain.WorkOrderStatusCancelled},
@@ -511,9 +612,11 @@ func (b *demoContentBuilder) createOrder(o demoOrder) (string, error) {
 	due := issue.AddDate(0, 0, 10).Format("2006-01-02")
 	assignee, price := o.assignee, o.price
 	customerID, locationID := customer.ID, location.ID
+	quantity := o.quantity
 	order, err := b.s.CreateWorkOrder(b.ctx, domain.CreateWorkOrderInput{
 		CustomerID: &customerID, LocationID: &locationID, ClientName: customer.Name, ContactPerson: customer.ContactName,
 		JobDescription: o.description, IssuedBy: demoAdminUsername, IssueDate: issue.Format("2006-01-02"), DueDate: &due,
+		JobDetails: &domain.JobDetails{Quantity: &quantity},
 		Assignment: domain.Assignment{AssignedTo: &assignee, Priority: o.priority}, Price: &price,
 	})
 	if err != nil {

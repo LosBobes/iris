@@ -319,9 +319,10 @@ func printDemoSummary(result store.DemoSeedResult, production bool) {
 Prijava:    /login/demo
   admin     %s
   operater  %s
-Moduli:     Magacin i Procesi rada uključeni
+Moduli:     Magacin, Procesi rada i Planiranje uključeni
 Sadržaj:    fiksni radni nalozi iz testdata/fixtures + %d šablona procesa i
-            %d radnih naloga sa procesima, magacin sa početnim stanjem i 3 prijema
+            %d radnih naloga sa procesima, magacin sa početnim stanjem i 3 prijema,
+            %d tipova mašina sa %d mašina i kvalifikacije korisnika
 
 Šta pogledati
   Magacin:         nizak lager (ispod minimuma): %s
@@ -329,11 +330,12 @@ Sadržaj:    fiksni radni nalozi iz testdata/fixtures + %d šablona procesa i
   U toku:          nalog %s (stvarna količina papira veća od planirane); nalog %s je brošura sa dva paralelna koraka
   Otkazan:         nalog %s ne rezerviše zalihe
   Simulator:       šablon %q (međuproizvod "Štampani tabaci", dva koraka u istom talasu)
+  Planiranje:      /planning -> "Generiši plan" (danas su prisutni samo prijavljeni; ostali dani svi)
 Backoffice:  /backoffice, podrazumevani nalog admin / admin123321 se pravi pri prvom pokretanju servera
              (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju.
 `,
 		adminCreds, operatorCreds,
-		result.Templates, result.Orders,
+		result.Templates, result.Orders, result.MachineTypes, result.Machines,
 		strings.Join(result.LowArticles, ", "),
 		result.ShortageOrder, result.InProgressOrder, result.BrochureOrder, result.CancelledOrder, result.BrochureTemplate)
 }
