@@ -141,9 +141,19 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   ordinary sessions end and sign-in is refused, impersonation still works), and
   reset a user's password, export all its data (JSON download) and delete it
   (only once suspended, slug typed again; see D-025 — a new tenant
-  table must be added to `tenantDataTables`). Every superadmin operation, impersonations included,
+  table must be added to `tenantDataTables`; the activity log and impersonation
+  history outlive it, v30). Each row shows **health** computed on read (last
+  sign-in, active users, open orders, "dormant"; D-022) and superadmin-only
+  **notes** (`tenant_notes`, `PUT …/notes`: never shown to the organization,
+  never exported). Every superadmin operation, impersonations included,
   is written to `platform_audit_events` in the same transaction and shown in the
   "Aktivnost" tab (`GET /platform/audit`; trails at `/platform/impersonations/{id}/actions`).
+  **Sistem** (D-023): SQLite backups are `VACUUM INTO` copies in `IRIS_BACKUP_DIR`
+  (`IRIS_BACKUP_*`: retention, schedule, staleness), listed but never served —
+  no download route; on PostgreSQL use `pg_dump`. **Obaveštenja** (D-024):
+  announcements to all or chosen organizations, shown in the app and on the
+  org's sign-in page via public `GET /public/organizations/{slug}/announcements`
+  — anyone knowing a slug can read them, so never put anything confidential in one.
 - **Work-order processes** (D-017): per-tenant `process_templates` (graph of
   `step`/`input`/`product`/`byproduct` nodes, JSON, acyclic) and a per-order copy in
   `work_order_processes` (`/process-templates`, `/work-orders/{id}/process`). Not part

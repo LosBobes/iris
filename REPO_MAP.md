@@ -56,7 +56,7 @@ iris/
 │           └── types/             TypeScript domain types
 ├── iris-api/
 │   ├── cmd/server/                HTTP server wiring
-│   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup
+│   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup, platform admins/2FA, export-/delete-tenant
 │   ├── internal/api/            Routes, auth middleware, handlers
 │   ├── internal/domain/         Go structs (contract with OpenAPI)
 │   ├── internal/store/          SQL store (SQLite/Postgres) + fixture store
@@ -175,6 +175,24 @@ Web client
   (`modules`). The API returns 403 on disabled module routes; the web hides dependent
   UI. Stock posting only applies to processes created while Magacin was
   on (`stock_tracked`, migration v22). See [D-019](docs/DECISIONS.md).
+
+### Backoffice (superadmins, `/platform/*`)
+
+- Separate `platform_admins` accounts and `iris_platform_session` (2 h). Tabs:
+  **Organizacije** (create / rename / suspend, modules, users and impersonation
+  with a required reason, health computed on read, superadmin-only notes in
+  `tenant_notes` — never shown to the organization or exported — and JSON export /
+  delete: suspend first, retype the slug), **Aktivnost** (`platform_audit_events`,
+  impersonation trails), **Obaveštenja**, **Superadmini** (add / disable accounts;
+  optional TOTP 2FA with recovery codes, D-021, v26) and **Sistem** (SQLite backups).
+  See D-021–D-025.
+- Deleting an organization removes every `tenantDataTables` table in one audited
+  transaction but keeps the activity log and impersonation history
+  (`impersonation_events.tenant_id` → NULL with slug/name on the row, v30).
+- Backups (D-023) are `VACUUM INTO` copies in `IRIS_BACKUP_DIR`, listed but never
+  served over HTTP; PostgreSQL deployments use `pg_dump` instead.
+- Announcements (D-024, v29) also reach the sign-in page through the public
+  `GET /public/organizations/{slug}/announcements`: never put confidential text in one.
 
 ### Organization settings
 
