@@ -10,6 +10,7 @@ import { staggerStyle } from "@/lib/motion";
 import { PlatformChangePassword } from "./PlatformChangePassword";
 import { OrganizationsPanel } from "./OrganizationsPanel";
 import { ActivityLog } from "./ActivityLog";
+import { PlatformSystemPanel } from "./PlatformSystemPanel";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -434,23 +435,7 @@ export function PlatformDashboard({
               </p>
             </Panel>
 
-            <Panel title={t("platform.system.title")}>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-4 px-4 py-4 text-[13px] sm:grid-cols-3 lg:grid-cols-6">
-                {[
-                  [t("platform.system.release"), metrics.system.release || "—"],
-                  [t("platform.system.go"), metrics.system.goVersion],
-                  [t("platform.system.started"), formatDateTime(metrics.system.startedAt) ?? "—"],
-                  [t("platform.system.goroutines"), formatCount(metrics.system.goroutines)],
-                  [t("platform.system.heap"), formatBytes(metrics.system.heapBytes)],
-                  [t("platform.system.range"), `${formatDate(metrics.rangeStart)} – ${formatDate(metrics.generatedAt)}`],
-                ].map(([label, value]) => (
-                  <div key={label} className="min-w-0">
-                    <dt className="text-[11px] text-[color:var(--pf-muted)]">{label}</dt>
-                    <dd className="truncate tabular-nums text-[color:var(--pf-text)]">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </Panel>
+            <PlatformSystemPanel metrics={metrics} />
           </>
         )}
         </>

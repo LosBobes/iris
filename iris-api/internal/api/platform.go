@@ -257,13 +257,24 @@ func (s *Server) handlePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
+	version := s.config.Version
+	if version == "" {
+		version = "dev"
+	}
+	engine := ""
+	if engineStore, ok := s.store.(interface{ DatabaseEngine() string }); ok {
+		engine = engineStore.DatabaseEngine()
+	}
 	metrics.System = domain.PlatformSystem{
-		Release:       s.config.Release,
-		GoVersion:     runtime.Version(),
-		StartedAt:     s.startedAt.UTC().Format(time.RFC3339),
-		UptimeSeconds: int64(now.Sub(s.startedAt).Seconds()),
-		Goroutines:    runtime.NumGoroutine(),
-		HeapBytes:     mem.HeapAlloc,
+		Version:        version,
+		Commit:         s.config.Commit,
+		DatabaseEngine: engine,
+		Release:        s.config.Release,
+		GoVersion:      runtime.Version(),
+		StartedAt:      s.startedAt.UTC().Format(time.RFC3339),
+		UptimeSeconds:  int64(now.Sub(s.startedAt).Seconds()),
+		Goroutines:     runtime.NumGoroutine(),
+		HeapBytes:      mem.HeapAlloc,
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, metrics)

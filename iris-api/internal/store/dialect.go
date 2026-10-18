@@ -14,6 +14,12 @@ const (
 	dialectPostgres
 )
 
+// DatabaseEngine names the storage engine this store runs on: "sqlite" or
+// "postgres" (shown on the Backoffice's system panel).
+func (s *SQLStore) DatabaseEngine() string {
+	return s.dialect.String()
+}
+
 func (d dialect) String() string {
 	if d == dialectPostgres {
 		return "postgres"

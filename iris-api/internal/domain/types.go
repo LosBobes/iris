@@ -526,12 +526,20 @@ type PlatformTotals struct {
 }
 
 type PlatformSystem struct {
-	Release       string `json:"release"`
-	GoVersion     string `json:"goVersion"`
-	StartedAt     string `json:"startedAt"`
-	UptimeSeconds int64  `json:"uptimeSeconds"`
-	Goroutines    int    `json:"goroutines"`
-	HeapBytes     uint64 `json:"heapBytes"`
+	// Version is the API's app version (the VERSION file baked in at build
+	// time, "dev" for a source build); Commit is the git commit it was built
+	// from, empty when unknown.
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	// DatabaseEngine is the storage engine the API runs on: "sqlite" or
+	// "postgres".
+	DatabaseEngine string `json:"databaseEngine"`
+	Release        string `json:"release"`
+	GoVersion      string `json:"goVersion"`
+	StartedAt      string `json:"startedAt"`
+	UptimeSeconds  int64  `json:"uptimeSeconds"`
+	Goroutines     int    `json:"goroutines"`
+	HeapBytes      uint64 `json:"heapBytes"`
 }
 
 type PlatformTenantMetrics struct {

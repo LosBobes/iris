@@ -19,54 +19,59 @@ export function LoginShell({
   const appVersion = useAppVersion();
 
   return (
-    <div className="iris-screen flex items-center justify-center bg-background px-5 py-6 text-foreground sm:px-8 sm:py-8 lg:px-10">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse at 30% 20%, rgba(120,100,70,0.04) 0%, transparent 60%)",
-        }}
-      />
-
-      <div className="relative flex max-h-full min-h-0 w-full max-w-5xl flex-col items-stretch gap-6 overflow-hidden sm:gap-8 lg:flex-row lg:items-center lg:justify-center lg:gap-20">
-        {/* Masthead */}
+    // The screen scrolls; the min-h-full frame centers the content while it
+    // fits and simply grows (and scrolls) on a short or keyboard-covered
+    // viewport, instead of clipping the form.
+    <div data-testid="login-screen" className="iris-screen bg-background text-foreground">
+      <div className="relative flex min-h-full items-center justify-center px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
         <div
-          className="w-full max-w-[340px] self-center text-center sm:max-w-[420px] lg:w-80 lg:self-auto lg:text-left"
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
           style={{
-            animation:
-              "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both",
+            background:
+              "radial-gradient(ellipse at 30% 20%, rgba(120,100,70,0.04) 0%, transparent 60%)",
           }}
-        >
-          {organization ? (
-            <OrganizationMasthead organization={organization} />
-          ) : (
-            <IrisWordmark />
-          )}
+        />
+
+        <div className="relative flex w-full max-w-5xl flex-col items-stretch gap-6 sm:gap-8 lg:flex-row lg:items-center lg:justify-center lg:gap-20">
+          {/* Masthead */}
           <div
-            className="mx-auto my-4 h-0.5 w-8 origin-left bg-[color:var(--iris-accent)] sm:my-5 lg:mx-0"
+            className="w-full max-w-[340px] self-center text-center sm:max-w-[420px] lg:w-80 lg:self-auto lg:text-left"
             style={{
               animation:
-                "iris-rule-grow 520ms var(--iris-ease-out-decisive) both 180ms",
+                "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both",
             }}
-          />
-          <p className="mx-auto max-w-[300px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)] lg:mx-0 lg:max-w-[260px]">
-            {organization ? t("auth.poweredBy") : t("app.tagline")}
-          </p>
-          <div className="mt-6 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)] sm:mt-10">
-            {appVersion ? `${t("app.version")} ${appVersion}` : t("app.version")}
+          >
+            {organization ? (
+              <OrganizationMasthead organization={organization} />
+            ) : (
+              <IrisWordmark />
+            )}
+            <div
+              className="mx-auto my-4 h-0.5 w-8 origin-left bg-[color:var(--iris-accent)] sm:my-5 lg:mx-0"
+              style={{
+                animation:
+                  "iris-rule-grow 520ms var(--iris-ease-out-decisive) both 180ms",
+              }}
+            />
+            <p className="mx-auto max-w-[300px] text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)] lg:mx-0 lg:max-w-[260px]">
+              {organization ? t("auth.poweredBy") : t("app.tagline")}
+            </p>
+            <div className="mt-6 text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-faint)] sm:mt-10">
+              {appVersion ? `${t("app.version")} ${appVersion}` : t("app.version")}
+            </div>
           </div>
-        </div>
 
-        {/* Form */}
-        <div
-          className="w-full max-w-[380px] self-center border border-border bg-card px-6 py-7 shadow-[0_24px_70px_rgba(52,43,31,0.08)] sm:px-9 sm:pt-9 sm:pb-7 lg:w-[340px] lg:self-auto"
-          style={{
-            animation:
-              "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both 120ms",
-          }}
-        >
-          {children}
+          {/* Form */}
+          <div
+            className="w-full max-w-[380px] self-center border border-border bg-card px-6 py-7 shadow-[0_24px_70px_rgba(52,43,31,0.08)] sm:px-9 sm:pt-9 sm:pb-7 lg:w-[340px] lg:self-auto"
+            style={{
+              animation:
+                "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both 120ms",
+            }}
+          >
+            {children}
+          </div>
         </div>
       </div>
     </div>

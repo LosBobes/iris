@@ -627,6 +627,9 @@ function fixturePlatformMetrics(days: PlatformRangeDays): PlatformMetrics {
       databaseBytes: 0,
     },
     system: {
+      version: APP_VERSION,
+      commit: '',
+      databaseEngine: '',
       release: 'fixtures',
       goVersion: '—',
       startedAt: now.toISOString(),

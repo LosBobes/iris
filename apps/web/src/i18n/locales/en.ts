@@ -1219,7 +1219,14 @@ export const en: typeof sr = {
     },
     system: {
       title: 'System',
-      release: 'Release',
+      webVersion: 'Web app',
+      apiVersion: 'API',
+      database: 'Database',
+      databaseSqlite: 'SQLite',
+      databasePostgres: 'PostgreSQL',
+      versionMismatch:
+        'The web app ({{web}}) and the API ({{api}}) are different versions. Reload the page — the browser is probably showing an older, cached version.',
+      release: 'Release label',
       go: 'Go',
       started: 'Started',
       goroutines: 'Goroutines',
@@ -1432,6 +1439,7 @@ export const en: typeof sr = {
     },
   },
   shell: {
+    appVersion: 'App version',
     collapse: 'Collapse menu',
     expand: 'Expand menu',
     logout: 'Log out',

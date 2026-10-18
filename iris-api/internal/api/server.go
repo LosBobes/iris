@@ -66,6 +66,11 @@ type Config struct {
 	ImpersonationDuration time.Duration
 	// Release is shown on the operator dashboard (IRIS_RELEASE).
 	Release string
+	// Version and Commit identify the build (internal/buildinfo); the
+	// Backoffice shows them beside the web app's own version. An empty
+	// Version reads as "dev".
+	Version string
+	Commit  string
 }
 
 func DefaultConfig() Config {

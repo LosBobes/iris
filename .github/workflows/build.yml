@@ -148,7 +148,12 @@ jobs:
           # so every event arrived with an empty release: Sentry could not say
           # which deploy first produced an issue, or whether one still happens
           # on the current build.
+          #
+          # IRIS_COMMIT is the commit actually built (the release commit when
+          # one was made); the backend links it, with the VERSION file, into
+          # its build info for the Backoffice "Sistem" panel.
           build-args: |
+            IRIS_COMMIT=${{ needs.release.outputs.ref || github.sha }}
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             VITE_SENTRY_DSN=${{ secrets.SENTRY_DSN_FRONTEND }}
             VITE_SENTRY_RELEASE=${{ github.sha }}

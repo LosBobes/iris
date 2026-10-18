@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 
@@ -489,16 +490,32 @@ func applyMigration(ctx context.Context, db *sql.DB, version int, migrationSQL s
 //
 // Dropping the old table-wide UNIQUE constraints requires the standard SQLite
 // table rebuild, which must run with foreign keys disabled (a PRAGMA that is a
-// no-op inside a transaction). The store opens SQLite with a single connection,
-// so toggling the PRAGMA here is safe.
+// no-op inside a transaction, and that binds to one connection). The store's
+// pool holds several connections, so the PRAGMA, the rebuild and the check all
+// run on one pinned connection: on the pool, the rebuild could land on a
+// connection still enforcing keys (DROP TABLE would then cascade-delete child
+// rows), and the connection left with keys off would go back to the pool and
+// later delete parents without their ON DELETE CASCADE.
 func tenantIsolationMigration(ctx context.Context, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("pin connection: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
 		return fmt.Errorf("disable foreign keys: %w", err)
 	}
-	// Always restore enforcement, even on an error path.
-	defer func() { _, _ = db.ExecContext(ctx, `PRAGMA foreign_keys = ON`) }()
+	// Always restore enforcement, even on an error path, before the
+	// connection returns to the pool. If that fails, discard the connection
+	// rather than pool one that ignores foreign keys.
+	defer func() {
+		if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
+	}()
 
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
 	}
@@ -651,7 +668,7 @@ func tenantIsolationMigration(ctx context.Context, db *sql.DB) error {
 	}
 
 	// Confirm the rebuild left no dangling foreign keys before re-enabling them.
-	rows, err := db.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
 	if err != nil {
 		return fmt.Errorf("foreign key check: %w", err)
 	}

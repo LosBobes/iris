@@ -496,14 +496,22 @@
     transform: translate3d(0, 1px, 0);
   }
 
-  /* Full-viewport shell that stays within the visible area when root zoom scales UI. */
+  /* Full-viewport screen (sign-in, start-up and error pages) that stays within
+     the visible area when root zoom scales the UI. It is its own scroll
+     container: the font-scale wrapper clips document scrolling, and a small
+     phone (or one with the on-screen keyboard open) must still reach every
+     field. Put the content in a `min-h-full` child and center it there, so a
+     taller-than-viewport form grows and scrolls instead of being clipped. */
   .iris-screen {
     position: fixed;
     top: 0;
     left: 0;
     width: calc(100vw / var(--iris-font-scale, 1));
     height: calc(100dvh / var(--iris-font-scale, 1));
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
