@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.6.0 — 2026-10-18
+
+### Minor
+
+- Process flows: item nodes can switch between input, product and byproduct in place, steps can be marked as starting steps and products/byproducts as final outputs, so a flow can clearly have several starts and several outputs.
+
 ## 2.5.0 — 2026-10-18
 
 ### Minor
