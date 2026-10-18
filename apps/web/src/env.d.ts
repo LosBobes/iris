@@ -38,13 +38,22 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantDeletion,
+  PlatformTenantExportFile,
   PlatformTenantUsers,
   PlatformImpersonationResponse,
   PlatformImpersonationAction,
   PlatformAuditLog,
+  PlatformBackup,
+  PlatformBackups,
   PlatformTenant,
   PlatformCreateTenantInput,
+  PlatformTenantNotesInput,
   PlatformUpdateTenantInput,
+  PlatformTwoFactorSetup,
+  PlatformTwoFactorEnabled,
+  PlatformAdminSummary,
+  PlatformCreateAdminInput,
 } from '@/types/platform'
 import type {
   ProcessTemplate,
@@ -137,13 +146,24 @@ declare global {
       deleteLoginLogo: () => Promise<void>
       /** Backoffice (superadmin accounts and cookie, separate from organization users; see iris-api platform.go). */
       platformLogin: (credentials: { username: string; password: string }) => Promise<PlatformLoginResponse>
+      /** Second sign-in step for an account with two-factor sign-in: a TOTP or recovery code. */
+      platformLoginVerify: (input: { challenge: string; code: string }) => Promise<PlatformLoginResponse>
       getPlatformSession: () => Promise<PlatformLoginResponse>
+      /** Starts (or restarts) the signed-in superadmin's TOTP enrollment. */
+      setupPlatformTwoFactor: () => Promise<PlatformTwoFactorSetup>
+      /** Confirms the enrollment with a code; returns the one-time recovery codes. */
+      confirmPlatformTwoFactor: (code: string) => Promise<PlatformTwoFactorEnabled>
+      getPlatformAdmins: () => Promise<PlatformAdminSummary[]>
+      /** Adds a superadmin with a temporary password (changed at first sign-in). */
+      createPlatformAdmin: (input: PlatformCreateAdminInput) => Promise<PlatformAdminSummary>
+      /** Disables (true) or re-enables (false) a superadmin. */
+      setPlatformAdminDisabled: (id: string, disabled: boolean) => Promise<PlatformAdminSummary>
       platformLogout: () => Promise<void>
       changePlatformPassword: (change: PlatformPasswordChange) => Promise<PlatformLoginResponse>
       getPlatformMetrics: (days: PlatformRangeDays) => Promise<PlatformMetrics>
       getPlatformTenantUsers: (slug: string) => Promise<PlatformTenantUsers>
       /** Replaces this browser's organization session with one as the chosen user. */
-      platformImpersonate: (slug: string, userId: string) => Promise<PlatformImpersonationResponse>
+      platformImpersonate: (slug: string, userId: string, reason: string) => Promise<PlatformImpersonationResponse>
       getPlatformAudit: (query: { limit: number; offset: number }) => Promise<PlatformAuditLog>
       getPlatformTenants: () => Promise<PlatformTenant[]>
       createPlatformTenant: (input: PlatformCreateTenantInput) => Promise<PlatformTenant>
@@ -152,8 +172,31 @@ declare global {
       setPlatformTenantSuspended: (slug: string, suspended: boolean) => Promise<PlatformTenant>
       /** Switches an organization's optional modules (Backoffice superadmin only). */
       setPlatformTenantModules: (slug: string, modules: OrganizationModules) => Promise<PlatformTenant>
+      /** Replaces the superadmins' internal notes about the organization. */
+      setPlatformTenantNotes: (slug: string, notes: PlatformTenantNotesInput) => Promise<PlatformTenant>
+      /** Downloads the organization's full data export as a JSON file. */
+      platformExportTenant: (slug: string) => Promise<PlatformTenantExportFile>
+      /** Permanently deletes a suspended organization; `confirmSlug` must equal its slug. */
+      platformDeleteTenant: (slug: string, confirmSlug: string) => Promise<PlatformTenantDeletion>
       resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
       getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
+      getPlatformBackups: () => Promise<PlatformBackups>
+      /** Takes a SQLite backup copy now (audited); refused on PostgreSQL. */
+      createPlatformBackup: () => Promise<PlatformBackup>
+      /** Platform announcements: the session organization's active ones, and the sign-in page's. */
+      getAnnouncements: () => Promise<import('@/types/announcement').Announcement[]>
+      getPublicAnnouncements: (slug: string) => Promise<import('@/types/announcement').Announcement[]>
+      /** Backoffice announcement management (every change is audited). */
+      getPlatformAnnouncements: () => Promise<import('@/types/announcement').PlatformAnnouncement[]>
+      createPlatformAnnouncement: (
+        input: import('@/types/announcement').PlatformAnnouncementInput,
+      ) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      updatePlatformAnnouncement: (
+        id: string,
+        input: import('@/types/announcement').PlatformAnnouncementInput,
+      ) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      endPlatformAnnouncement: (id: string) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      deletePlatformAnnouncement: (id: string) => Promise<void>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

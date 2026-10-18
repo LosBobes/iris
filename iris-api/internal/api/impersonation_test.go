@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestPlatformImpersonation(t *testing.T) {
 	if rec := platformRequest(t, server, tenantCookie, http.MethodGet, "/platform/tenants/demo/users", ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("users with tenant session = %d, want 401", rec.Code)
 	}
-	if rec := platformRequest(t, server, tenantCookie, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-1"}`); rec.Code != http.StatusUnauthorized {
+	if rec := platformRequest(t, server, tenantCookie, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-1","reason":"Podrška: prijava greške"}`); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("impersonate with tenant session = %d, want 401", rec.Code)
 	}
 
@@ -40,6 +41,7 @@ func TestPlatformImpersonation(t *testing.T) {
 	if platformSession == nil {
 		t.Fatalf("login = %s", login.Body.String())
 	}
+	enrollPlatformTwoFactor(t, server, platformSession)
 
 	rec := platformRequest(t, server, platformSession, http.MethodGet, "/platform/tenants/demo/users", "")
 	var listed domain.PlatformTenantUsers
@@ -52,11 +54,17 @@ func TestPlatformImpersonation(t *testing.T) {
 	if rec := platformRequest(t, server, platformSession, http.MethodGet, "/platform/tenants/missing/users", ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown tenant users = %d, want 404", rec.Code)
 	}
-	if rec := platformRequest(t, server, platformSession, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-other"}`); rec.Code != http.StatusNotFound {
+	// A reason is required (and bounded).
+	for _, body := range []string{`{"userId":"user-1"}`, `{"userId":"user-1","reason":"   "}`, `{"userId":"user-1","reason":"` + strings.Repeat("x", 201) + `"}`} {
+		if rec := platformRequest(t, server, platformSession, http.MethodPost, "/platform/tenants/demo/impersonate", body); rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("impersonate with bad reason = %d, want 422", rec.Code)
+		}
+	}
+	if rec := platformRequest(t, server, platformSession, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-other","reason":"Podrška: prijava greške"}`); rec.Code != http.StatusNotFound {
 		t.Fatalf("impersonate user of another tenant = %d, want 404", rec.Code)
 	}
 
-	rec = platformRequest(t, server, platformSession, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-1"}`)
+	rec = platformRequest(t, server, platformSession, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-1","reason":"Podrška: prijava greške"}`)
 	var started domain.PlatformImpersonationResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &started); err != nil || !started.Success || started.OrgSlug != "demo" ||
 		started.User == nil || started.User.Username != "operater" || started.User.ImpersonatedBy == nil || *started.User.ImpersonatedBy != "ops" {
@@ -104,13 +112,15 @@ func TestPlatformImpersonation(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &log); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("log = %d %s", rec.Code, rec.Body.String())
 	}
-	if log.Total != 1 || len(log.Items) != 1 {
+	// The impersonation, newest first, after the mandatory 2FA enrollment.
+	if log.Total != 2 || len(log.Items) != 2 || log.Items[1].Action != domain.AuditAdminTwoFactorOn {
 		t.Fatalf("log = %+v", log)
 	}
 	entry := log.Items[0]
 	if entry.Action != domain.AuditImpersonationStart || entry.AdminUsername != "ops" || entry.TargetUsername != "operater" ||
 		entry.TenantSlug != "demo" || entry.Impersonation == nil || entry.Impersonation.ActionCount != 2 ||
-		entry.Impersonation.EndedAt != nil || entry.Impersonation.ExpiresAt == "" {
+		entry.Impersonation.EndedAt != nil || entry.Impersonation.ExpiresAt == "" ||
+		entry.Impersonation.Reason != "Podrška: prijava greške" {
 		t.Fatalf("log entry = %+v", entry)
 	}
 	rec = platformRequest(t, server, platformSession, http.MethodGet, fmt.Sprintf("/platform/impersonations/%d/actions", entry.Impersonation.ID), "")

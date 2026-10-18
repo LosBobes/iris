@@ -62,8 +62,16 @@ type PlatformStore interface {
 	// PlatformSetTenantModules switches the organization's optional modules and
 	// audits the change; nil when no organization has that slug.
 	PlatformSetTenantModules(ctx context.Context, actor AuditActor, slug string, modules domain.OrganizationModules) (*domain.PlatformTenant, error)
+	// PlatformSetTenantNotes replaces the superadmins' internal notes about the
+	// organization (platform_tenant_health.go); nil when no organization has
+	// that slug.
+	PlatformSetTenantNotes(ctx context.Context, actor AuditActor, slug string, input domain.PlatformTenantNotesInput) (*domain.PlatformTenant, error)
 	PlatformResetUserPassword(ctx context.Context, actor AuditActor, slug, userID, password string) (*domain.User, error)
 	PlatformAuditLog(ctx context.Context, limit, offset int) (domain.PlatformAuditLog, error)
+	// Offboarding (tenant_offboarding.go): an audited full export, and the
+	// deletion of a suspended organization once confirmSlug matches its slug.
+	PlatformExportTenant(ctx context.Context, actor AuditActor, slug string) (*domain.PlatformTenantExport, error)
+	PlatformDeleteTenant(ctx context.Context, actor AuditActor, slug, confirmSlug string) (*domain.PlatformTenantDeletion, error)
 
 	// Process templates of any organization (platform_processes.go). Mutations
 	// write a platform_audit_events row. ErrTenantNotFound means no organization
@@ -72,6 +80,28 @@ type PlatformStore interface {
 	PlatformCreateProcessTemplate(ctx context.Context, actor AuditActor, slug string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
 	PlatformUpdateProcessTemplate(ctx context.Context, actor AuditActor, slug, id string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
 	PlatformDeleteProcessTemplate(ctx context.Context, actor AuditActor, slug, id string) error
+
+	// Two-factor sign-in and superadmin accounts (platform_security.go).
+	SetPlatformTOTPPending(ctx context.Context, adminID, secret string) error
+	EnablePlatformTOTP(ctx context.Context, actor AuditActor, code string, now time.Time) ([]string, error)
+	ResetPlatformAdminTOTP(ctx context.Context, actor AuditActor, username string) error
+	RemainingRecoveryCodes(ctx context.Context, adminID string) (int, error)
+	CreatePlatformLoginChallenge(ctx context.Context, adminID string, expiresAt time.Time) (string, error)
+	PlatformLoginChallengeAdmin(ctx context.Context, challenge string, now time.Time) (string, error)
+	VerifyPlatformLoginChallenge(ctx context.Context, challenge, code string, now time.Time) (*domain.PlatformAdmin, string, error)
+	RecordPlatformLogin(ctx context.Context, actor AuditActor, method string, at time.Time) error
+	RecordPlatformLoginFailure(ctx context.Context, username, adminID, ip, stage string) error
+	PlatformAdmins(ctx context.Context) ([]domain.PlatformAdminSummary, error)
+	PlatformCreateAdmin(ctx context.Context, actor AuditActor, input domain.PlatformCreateAdminInput) (*domain.PlatformAdminSummary, error)
+	PlatformSetAdminDisabled(ctx context.Context, actor AuditActor, id string, disabled bool) (*domain.PlatformAdminSummary, error)
+
+	// Announcements (announcements.go). Mutations write a
+	// platform_audit_events row; ErrAnnouncementNotFound means an unknown id.
+	PlatformAnnouncements(ctx context.Context, now time.Time) ([]domain.PlatformAnnouncement, error)
+	PlatformCreateAnnouncement(ctx context.Context, actor AuditActor, input domain.PlatformAnnouncementInput, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformUpdateAnnouncement(ctx context.Context, actor AuditActor, id string, input domain.PlatformAnnouncementInput, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformEndAnnouncement(ctx context.Context, actor AuditActor, id string, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformDeleteAnnouncement(ctx context.Context, actor AuditActor, id string, now time.Time) error
 }
 
 var _ PlatformStore = (*SQLiteStore)(nil)
@@ -127,9 +157,10 @@ func (s *SQLiteStore) AuthenticatePlatformAdmin(ctx context.Context, username, p
 	var hash string
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, username, password_hash, must_change_password, role FROM platform_admins WHERE username = ?`,
+		`SELECT id, username, password_hash, must_change_password, role, totp_enabled_at IS NOT NULL
+		 FROM platform_admins WHERE username = ? AND disabled_at IS NULL`,
 		strings.TrimSpace(username),
-	).Scan(&admin.ID, &admin.Username, &hash, &admin.MustChangePassword, &admin.Role)
+	).Scan(&admin.ID, &admin.Username, &hash, &admin.MustChangePassword, &admin.Role, &admin.TwoFactorEnabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		return nil, nil
@@ -174,12 +205,12 @@ func (s *SQLiteStore) PlatformAdminBySession(ctx context.Context, token string) 
 	err := s.db.QueryRowContext(
 		ctx,
 		`SELECT platform_admins.id, platform_admins.username, platform_admins.must_change_password,
-		        platform_admins.role, platform_sessions.expires_at
+		        platform_admins.role, platform_admins.totp_enabled_at IS NOT NULL, platform_sessions.expires_at
 		 FROM platform_sessions
 		 JOIN platform_admins ON platform_admins.id = platform_sessions.admin_id
-		 WHERE platform_sessions.token_hash = ?`,
+		 WHERE platform_sessions.token_hash = ? AND platform_admins.disabled_at IS NULL`,
 		hashSessionToken(token),
-	).Scan(&admin.ID, &admin.Username, &admin.MustChangePassword, &admin.Role, &expiresAtRaw)
+	).Scan(&admin.ID, &admin.Username, &admin.MustChangePassword, &admin.Role, &admin.TwoFactorEnabled, &expiresAtRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

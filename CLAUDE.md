@@ -116,10 +116,20 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   organization `users` (own sessions, `iris_platform_session` cookie, 2 h; neither
   side's credentials or sessions work on the other). A database with none gets
   `admin` / `admin123321`, which must change its password before anything shows
-  (in-app "Lozinka"; `irisctl create-platform-admin` adds more). The dashboard
+  (in-app "Lozinka"; `irisctl create-platform-admin` or the "Superadmini" tab adds
+  more, the tab with a temporary password changed at first sign-in). **Hardening**
+  (D-021, migration v26): TOTP two-factor sign-in is **mandatory** for superadmins
+  (organization users have none): until enrolled, `/platform/*` answers 403 except
+  session/password/enrollment and the console shows only the enrollment; then the
+  password step returns a 5-min `challenge`, finished by
+  `POST /platform/auth/login/verify` with a TOTP or one-time recovery code
+  (`irisctl reset-platform-2fa` clears it, forcing a new enrollment); password and code steps are rate
+  limited and failures audited (`admin.login_failed`); superadmins can be disabled
+  (not yourself, not the last one), which ends their sessions and impersonations. The dashboard
   reads aggregate counts from `GET /platform/metrics`; tenant logins are recorded
   in `login_events` for those counts. **Impersonation** ("Uđi kao…" per
   organization) is its only way into records: `POST /platform/tenants/{slug}/impersonate`
+  (with a required `reason`, kept on `impersonation_events` and shown in "Aktivnost")
   issues an ordinary `iris_session` (1 h) for the chosen user, marked
   `sessions.impersonated_by` and audited in `impersonation_events`; `/auth/session`
   reports `impersonatedBy`, which drives the app's top banner ("Prekini
@@ -131,9 +141,21 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   **Organization management** ("Organizacije" tab, `/platform/tenants…`): create
   (with first admin), rename / change slug, suspend / reactivate (`tenants.suspended_at`:
   ordinary sessions end and sign-in is refused, impersonation still works), and
-  reset a user's password. Every superadmin operation, impersonations included,
+  reset a user's password, export all its data (JSON download) and delete it
+  (only once suspended, slug typed again; see D-025 — a new tenant
+  table must be added to `tenantDataTables`; the activity log and impersonation
+  history outlive it, v30). Each row shows **health** computed on read (last
+  sign-in, active users, open orders, "dormant"; D-022) and superadmin-only
+  **notes** (`tenant_notes`, `PUT …/notes`: never shown to the organization,
+  never exported). Every superadmin operation, impersonations included,
   is written to `platform_audit_events` in the same transaction and shown in the
   "Aktivnost" tab (`GET /platform/audit`; trails at `/platform/impersonations/{id}/actions`).
+  **Sistem** (D-023): SQLite backups are `VACUUM INTO` copies in `IRIS_BACKUP_DIR`
+  (`IRIS_BACKUP_*`: retention, schedule, staleness), listed but never served —
+  no download route; on PostgreSQL use `pg_dump`. **Obaveštenja** (D-024):
+  announcements to all or chosen organizations, shown in the app and on the
+  org's sign-in page via public `GET /public/organizations/{slug}/announcements`
+  — anyone knowing a slug can read them, so never put anything confidential in one.
 - **Work-order processes** (D-017): per-tenant `process_templates` (graph of
   `step`/`input`/`product`/`byproduct` nodes, JSON, acyclic) and a per-order copy in
   `work_order_processes` (`/process-templates`, `/work-orders/{id}/process`). Not part

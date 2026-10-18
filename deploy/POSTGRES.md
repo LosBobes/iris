@@ -36,7 +36,10 @@ A fresh PostgreSQL database is created directly at the consolidated v12 schema
 and stamped as such, rather than replaying the twelve SQLite migrations (several
 of which are SQLite table rebuilds). **Migration 13 and later are shared**: add
 them to `sqliteMigrations` only, never to `postgresSchema`, or existing
-PostgreSQL databases will skip them.
+PostgreSQL databases will skip them. A shared migration that changes a column's
+constraints (SQLite has no `ALTER COLUMN`) is an `fn` migration that branches on
+the driver: a table rebuild on SQLite, `ALTER TABLE` on PostgreSQL — see v30,
+`impersonationHistoryMigration`.
 
 ## Migrating the production database
 
@@ -376,7 +379,9 @@ state at the moment of the stop in step 3.
 ## Backups
 
 `irisctl backup` is SQLite-only (`VACUUM INTO`) and does not work with
-`DATABASE_URL` set. After the cutover, dump with `pg_dump`.
+`DATABASE_URL` set. After the cutover, dump with `pg_dump`. The Backoffice
+"Sistem" tab then reports backups as managed outside the app (no "back up now"
+button, no stale-backup warning) and `IRIS_BACKUP_*` are ignored.
 
 Nightly cron on the box (`crontab -e`), plus an off-box sync of `backups/`
 (rsync/rclone to another host; a backup on the database's own disk is not a

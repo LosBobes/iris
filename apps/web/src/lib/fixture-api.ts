@@ -50,7 +50,15 @@ import {
   type PublicOrganization,
   normalizeOrganizationModules,
 } from '@/types/settings'
-import type { PlatformMetrics, PlatformRangeDays, PlatformTenant } from '@/types/platform'
+import type {
+  PlatformAdminSummary,
+  PlatformMetrics,
+  PlatformRangeDays,
+  PlatformTenant,
+  PlatformTenantHealth,
+  PlatformTenantNotes,
+} from '@/types/platform'
+import { createAnnouncementFixtureStore } from '@/lib/announcements-fixture'
 import { PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
 import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
@@ -636,6 +644,9 @@ function fixturePlatformMetrics(days: PlatformRangeDays): PlatformMetrics {
       uptimeSeconds: 0,
       goroutines: 0,
       heapBytes: 0,
+      schemaVersion: 0,
+      // Fixture mode has no database file to copy.
+      backup: { supported: false, lastBackupAt: null, stale: false, staleAfterHours: 24, intervalSeconds: 0 },
     },
     tenants: [tenant],
     daily,
@@ -714,7 +725,31 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
     users: users.length,
     admins: users.filter((user) => user.role === 'admin').length,
     modules: { ...modules },
+    health: fixtureTenantHealth(),
+    notes: { ...tenantNotes },
   })
+  // Superadmin-only internal notes of the single fixture organization.
+  let tenantNotes: PlatformTenantNotes = {
+    contactName: '',
+    contactEmail: '',
+    contactPhone: '',
+    plan: '',
+    notes: '',
+    updatedAt: null,
+    updatedBy: null,
+  }
+  const fixtureTenantHealth = (): PlatformTenantHealth => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const closed = new Set(['completed', 'cancelled', 'invoiced'])
+    return {
+      lastLoginAt: sessionUser ? new Date().toISOString() : null,
+      activeUsers7d: sessionUser ? 1 : 0,
+      activeUsers30d: sessionUser ? 1 : 0,
+      workOrdersCreated30d: workOrders.filter((order) => (order.createdAt ?? '') >= since).length,
+      openWorkOrders: workOrders.filter((order) => !closed.has(order.status)).length,
+      dormant: false,
+    }
+  }
   const currentFixtureUser = () => sessionUser ?? users.find((user) => user.role === 'admin') ?? null
   // The ledger and the process store reference each other (automatic posting
   // reads order graphs, the process store validates article links), so the
@@ -766,9 +801,15 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       ? { ...item, stockOnHand: stockStore.onHand(item.id), minStock: item.minStock ?? null }
       : { ...item, stockOnHand: null, minStock: item.kind === 'article' ? (item.minStock ?? null) : null }
 
+  const announcementStore = createAnnouncementFixtureStore({
+    platformSignedIn: () => platformSignedIn,
+    tenant: FIXTURE_ORGANIZATION,
+  })
+
   return {
     ...processStore.api,
     ...stockStore.api,
+    ...announcementStore.api,
     async getAppVersion() {
       return APP_VERSION
     },
@@ -1149,13 +1190,50 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
         credentials.username === FIXTURE_PLATFORM_ADMIN.username &&
         credentials.password === fixturePlatformPassword
       return platformSignedIn
-        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const, twoFactorEnabled: true } }
         : { success: false, error: 'Neispravno korisničko ime ili lozinka.' }
+    },
+
+    async platformLoginVerify() {
+      // Two-factor sign-in is mandatory but cannot be set up in demo mode: the
+      // fixture superadmin counts as enrolled and is never challenged.
+      return { success: false, error: 'Prijava je istekla. Prijavite se ponovo.' }
+    },
+
+    async setupPlatformTwoFactor() {
+      throw new Error('Dvofaktorska prijava nije dostupna u demo režimu.')
+    },
+
+    async confirmPlatformTwoFactor() {
+      throw new Error('Dvofaktorska prijava nije dostupna u demo režimu.')
+    },
+
+    async getPlatformAdmins(): Promise<PlatformAdminSummary[]> {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return [
+        {
+          id: `platform-${FIXTURE_PLATFORM_ADMIN.username}`,
+          username: FIXTURE_PLATFORM_ADMIN.username,
+          createdAt: '2026-01-01 00:00:00',
+          lastLoginAt: new Date().toISOString(),
+          twoFactorEnabled: true,
+          mustChangePassword: false,
+          disabledAt: null,
+        },
+      ]
+    },
+
+    async createPlatformAdmin() {
+      throw new Error('Upravljanje superadminima nije dostupno u demo režimu.')
+    },
+
+    async setPlatformAdminDisabled() {
+      throw new Error('Upravljanje superadminima nije dostupno u demo režimu.')
     },
 
     async getPlatformSession() {
       return platformSignedIn
-        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const } }
+        ? { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, role: 'superadmin' as const, twoFactorEnabled: true } }
         : { success: false }
     },
 
@@ -1169,7 +1247,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       if (change.newPassword.length < 12) throw new Error('Nova lozinka je prekratka: potrebno je najmanje 12 znakova.')
       if (isPasswordTooLong(change.newPassword)) throw new Error('Nova lozinka je preduga: najviše 72 znaka.')
       fixturePlatformPassword = change.newPassword
-      return { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username } }
+      return { success: true, admin: { username: FIXTURE_PLATFORM_ADMIN.username, twoFactorEnabled: true } }
     },
 
     async getPlatformMetrics(days) {
@@ -1215,6 +1293,21 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       return fixtureTenant()
     },
 
+    async setPlatformTenantNotes(slug, input) {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      if (slug !== FIXTURE_ORGANIZATION.slug) throw new Error('Organizacija ne postoji.')
+      tenantNotes = {
+        contactName: input.contactName.trim(),
+        contactEmail: input.contactEmail.trim(),
+        contactPhone: input.contactPhone.trim(),
+        plan: input.plan.trim(),
+        notes: input.notes.trim(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'operater',
+      }
+      return fixtureTenant()
+    },
+
     // Organization management needs the real API: fixture mode has a single,
     // fixed organization.
     async createPlatformTenant() {
@@ -1229,12 +1322,40 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
     },
 
+    async platformExportTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
+    async platformDeleteTenant() {
+      throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
+    },
+
     async resetPlatformUserPassword() {
       throw new Error('Upravljanje organizacijama nije dostupno u demo režimu.')
     },
 
     async getPlatformImpersonationActions() {
       throw new Error('Impersonacija ne postoji.')
+    },
+
+    async getPlatformBackups() {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return {
+        supported: false,
+        lastBackupAt: null,
+        stale: false,
+        staleAfterHours: 24,
+        intervalSeconds: 0,
+        engine: 'sqlite',
+        directory: '',
+        keep: 0,
+        total: 0,
+        items: [],
+      }
+    },
+
+    async createPlatformBackup() {
+      throw new Error('Rezervne kopije nisu dostupne u demo režimu.')
     },
 
     async getWorkOrders(query) {

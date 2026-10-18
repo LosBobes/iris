@@ -15,11 +15,26 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "tenant.suspend": "platform.activity.kinds.tenantSuspend",
   "tenant.reactivate": "platform.activity.kinds.tenantReactivate",
   "tenant.modules": "platform.activity.kinds.tenantModules",
+  "tenant.notes": "platform.activity.kinds.tenantNotes",
+  "tenant.export": "platform.activity.kinds.tenantExport",
+  "tenant.delete": "platform.activity.kinds.tenantDelete",
   "user.password_reset": "platform.activity.kinds.passwordReset",
   impersonate: "platform.activity.kinds.impersonate",
   "process_template.create": "platform.activity.kinds.processTemplateCreate",
   "process_template.update": "platform.activity.kinds.processTemplateUpdate",
   "process_template.delete": "platform.activity.kinds.processTemplateDelete",
+  "admin.create": "platform.activity.kinds.adminCreate",
+  "admin.disable": "platform.activity.kinds.adminDisable",
+  "admin.enable": "platform.activity.kinds.adminEnable",
+  "admin.2fa_enable": "platform.activity.kinds.adminTwoFactorOn",
+  "admin.2fa_reset": "platform.activity.kinds.adminTwoFactorReset",
+  "admin.login_failed": "platform.activity.kinds.adminLoginFailed",
+  "admin.recovery_login": "platform.activity.kinds.adminRecoveryLogin",
+  "backup.create": "platform.activity.kinds.backupCreate",
+  "announcement.create": "platform.activity.kinds.announcementCreate",
+  "announcement.update": "platform.activity.kinds.announcementUpdate",
+  "announcement.end": "platform.activity.kinds.announcementEnd",
+  "announcement.delete": "platform.activity.kinds.announcementDelete",
 };
 
 type Trail =
@@ -31,15 +46,38 @@ type Trail =
 function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }): React.JSX.Element {
   const { t } = useTranslation();
   const lines: React.ReactNode[] = [];
-  if (event.targetUsername) {
+  const adminEvent = event.action.startsWith("admin.");
+  // On the admin's own two-factor enrollment the target is the actor.
+  if (event.targetUsername && !(event.action === "admin.2fa_enable" && event.targetUsername === event.adminUsername)) {
     lines.push(
-      t(event.action === "tenant.create" ? "platform.activity.firstAdmin" : "platform.activity.targetUser", {
-        username: event.targetUsername,
-      }),
+      t(
+        event.action === "tenant.create"
+          ? "platform.activity.firstAdmin"
+          : adminEvent
+            ? "platform.activity.targetAdmin"
+            : "platform.activity.targetUser",
+        { username: event.targetUsername },
+      ),
+    );
+  }
+  if (event.action === "admin.login_failed") {
+    lines.push(
+      t(event.detail?.stage === "2fa" ? "platform.activity.stageTwoFactor" : "platform.activity.stagePassword"),
     );
   }
   if (event.action.startsWith("process_template.") && event.detail?.name) {
     lines.push(t("platform.activity.processTemplate", { name: event.detail.name }));
+  }
+  if (event.action === "backup.create" && event.detail?.name) {
+    lines.push(t("platform.activity.backupFile", { name: event.detail.name }));
+  }
+  if (event.action.startsWith("announcement.") && event.detail?.message) {
+    lines.push(t("platform.activity.announcement", { message: event.detail.message }));
+    lines.push(
+      t("platform.activity.announcementTarget", {
+        target: event.detail.target === "all" ? t("platform.activity.announcementAll") : event.detail.target,
+      }),
+    );
   }
   if (event.detail?.toName) {
     lines.push(t("platform.activity.renamed", { from: event.detail.fromName, to: event.detail.toName }));
@@ -57,7 +95,35 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
       }),
     );
   }
+  if (event.action === "tenant.notes" && event.detail?.fields) {
+    // Only the names of the changed fields are logged, never their contents.
+    const fields = event.detail.fields
+      .split(",")
+      .map((field) => t(`platform.activity.noteField.${field}`, { defaultValue: field }))
+      .join(", ");
+    lines.push(t("platform.activity.noteFields", { fields }));
+  }
+  if (event.action === "tenant.export" && event.detail?.totalRows) {
+    lines.push(t("platform.activity.exportedRows", { total: event.detail.totalRows }));
+  }
+  if (event.action === "tenant.delete" && event.detail?.totalRows) {
+    lines.push(t("platform.activity.deletedRows", { total: event.detail.totalRows }));
+    if (event.detail.users !== undefined) {
+      lines.push(
+        t("platform.activity.deletedBreakdown", {
+          users: event.detail.users,
+          customers: event.detail.customers ?? "0",
+          workOrders: event.detail.workOrders ?? "0",
+        }),
+      );
+    }
+  }
   const session = event.impersonation;
+  if (session?.reason) {
+    lines.push(
+      <span className="text-[color:var(--pf-text)]">{t("platform.activity.reason", { reason: session.reason })}</span>,
+    );
+  }
   if (session) {
     const state = session.endedAt ? (
       t("platform.activity.sessionEnded", { time: formatDateTime(session.endedAt) })

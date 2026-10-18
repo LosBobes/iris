@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LosBobes/iris/iris-api/internal/backups"
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -66,6 +67,9 @@ type Config struct {
 	ImpersonationDuration time.Duration
 	// Release is shown on the operator dashboard (IRIS_RELEASE).
 	Release string
+	// Backups takes and lists SQLite backup copies for the Backoffice
+	// (backups.go); nil on PostgreSQL, where backups are managed externally.
+	Backups *backups.Manager
 	// Version and Commit identify the build (internal/buildinfo); the
 	// Backoffice shows them beside the web app's own version. An empty
 	// Version reads as "dev".
@@ -158,20 +162,33 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/public/work-orders/{token}", s.handlePublicWorkOrderStatus)
 	r.Get("/public/organizations/{slug}", s.handlePublicOrganization)
 	r.Get("/public/organizations/{slug}/logo", s.handlePublicOrganizationLogo)
+	r.Get("/public/organizations/{slug}/announcements", s.handlePublicAnnouncements)
 
 	r.Post("/platform/auth/login", s.handlePlatformLogin)
 	r.Get("/platform/auth/session", s.handlePlatformSession)
 	r.Post("/platform/auth/logout", s.handlePlatformLogout)
 	r.Post("/platform/auth/password", s.handlePlatformChangePassword)
+	r.Post("/platform/auth/login/verify", s.handlePlatformLoginVerify)
+	r.With(s.requirePlatformEnrollment).Post("/platform/auth/2fa/setup", s.handlePlatformTwoFactorSetup)
+	r.With(s.requirePlatformEnrollment).Post("/platform/auth/2fa/confirm", s.handlePlatformTwoFactorConfirm)
+	r.With(s.requirePlatformAdmin).Get("/platform/admins", s.handlePlatformAdmins)
+	r.With(s.requirePlatformAdmin).Post("/platform/admins", s.handlePlatformCreateAdmin)
+	r.With(s.requirePlatformAdmin).Post("/platform/admins/{id}/disable", s.handlePlatformSetAdminDisabled(true))
+	r.With(s.requirePlatformAdmin).Post("/platform/admins/{id}/enable", s.handlePlatformSetAdminDisabled(false))
 	r.With(s.requirePlatformAdmin).Get("/platform/metrics", s.handlePlatformMetrics)
 	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/users", s.handlePlatformTenantUsers)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/impersonate", s.handlePlatformImpersonate)
 	r.With(s.requirePlatformAdmin).Get("/platform/audit", s.handlePlatformAudit)
+	r.With(s.requirePlatformAdmin).Get("/platform/backups", s.handlePlatformBackups)
+	r.With(s.requirePlatformAdmin).Post("/platform/backups", s.handlePlatformCreateBackup)
 	r.With(s.requirePlatformAdmin).Get("/platform/tenants", s.handlePlatformTenants)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants", s.handlePlatformCreateTenant)
 	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)
+	r.With(s.requirePlatformAdmin).Delete("/platform/tenants/{slug}", s.handlePlatformDeleteTenant)
+	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/export", s.handlePlatformExportTenant)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/suspend", s.handlePlatformSuspendTenant(true))
 	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/modules", s.handlePlatformSetTenantModules)
+	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/notes", s.handlePlatformSetTenantNotes)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/reactivate", s.handlePlatformSuspendTenant(false))
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/users/{id}/password", s.handlePlatformResetPassword)
 	r.With(s.requirePlatformAdmin).Get("/platform/impersonations/{id}/actions", s.handlePlatformImpersonationActions)
@@ -179,6 +196,11 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/process-templates", s.handlePlatformCreateProcessTemplate)
 	r.With(s.requirePlatformAdmin).Put("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformUpdateProcessTemplate)
 	r.With(s.requirePlatformAdmin).Delete("/platform/tenants/{slug}/process-templates/{id}", s.handlePlatformDeleteProcessTemplate)
+	r.With(s.requirePlatformAdmin).Get("/platform/announcements", s.handlePlatformAnnouncements)
+	r.With(s.requirePlatformAdmin).Post("/platform/announcements", s.handlePlatformCreateAnnouncement)
+	r.With(s.requirePlatformAdmin).Put("/platform/announcements/{id}", s.handlePlatformUpdateAnnouncement)
+	r.With(s.requirePlatformAdmin).Post("/platform/announcements/{id}/end", s.handlePlatformEndAnnouncement)
+	r.With(s.requirePlatformAdmin).Delete("/platform/announcements/{id}", s.handlePlatformDeleteAnnouncement)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(s.requireAuth)
@@ -241,6 +263,7 @@ func (s *Server) Routes() http.Handler {
 		stock.Get("/stock/movements", s.handleStockMovements)
 		stock.Post("/stock/receipts", s.handlePostStockReceipt)
 		stock.Post("/stock/counts", s.requireAdmin(s.handlePostStockCount))
+		protected.Get("/announcements", s.handleAnnouncements)
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
 		protected.Get("/settings/login-logo", s.handleLoginLogo)

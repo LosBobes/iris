@@ -55,6 +55,22 @@ describe("ActivityLog", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels organization exports and deletions with their row counts", async () => {
+    const items: PlatformAuditEvent[] = [
+      { ...base, id: 9, action: "tenant.delete", detail: { totalRows: "120", users: "3", customers: "10", workOrders: "40" } },
+      { ...base, id: 8, action: "tenant.export", detail: { totalRows: "120" } },
+    ];
+    vi.stubGlobal("api", { getPlatformAudit: vi.fn(async () => ({ items, total: 2 })) });
+
+    render(<ActivityLog />);
+    const rows = await screen.findAllByRole("row");
+    expect(within(rows[1]).getByText(strings.kinds.tenantDelete)).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Obrisano redova: 120")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Korisnika: 3 · Klijenata: 10 · Radnih naloga: 40")).toBeInTheDocument();
+    expect(within(rows[2]).getByText(strings.kinds.tenantExport)).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Izvezeno redova: 120")).toBeInTheDocument();
+  });
+
   it("opens an impersonation into the changes made during it", async () => {
     const getPlatformImpersonationActions = vi.fn(async () => [
       { at: "2026-10-17T06:05:00Z", method: "PATCH" as const, route: "/work-orders/{id}", path: "/work-orders/wo-7", status: 200 },
@@ -68,7 +84,7 @@ describe("ActivityLog", () => {
             id: 1,
             action: "impersonate",
             targetUsername: "operater",
-            impersonation: { id: 9, expiresAt: "2026-10-17T07:00:00Z", endedAt: "2026-10-17T06:20:00Z", actionCount: 2 },
+            impersonation: { id: 9, expiresAt: "2026-10-17T07:00:00Z", endedAt: "2026-10-17T06:20:00Z", actionCount: 2, reason: "Prijava greške na nalogu 7" },
           },
         ],
         total: 1,
@@ -108,5 +124,38 @@ describe("impersonation action labels", () => {
   it("extracts the record id from the path", () => {
     expect(actionTarget({ route: "/work-orders/{id}", path: "/work-orders/wo%201" })).toBe("wo 1");
     expect(actionTarget({ route: "/settings", path: "/settings" })).toBeNull();
+  });
+});
+
+describe("ActivityLog superadmin events", () => {
+  it("shows superadmin account changes, failed sign-ins and impersonation reasons", async () => {
+    const admin = { ...base, tenantSlug: "", tenantName: "" };
+    const items: PlatformAuditEvent[] = [
+      { ...admin, id: 14, action: "admin.login_failed", adminUsername: "nobody", detail: { stage: "password" } },
+      { ...admin, id: 13, action: "admin.login_failed", detail: { stage: "2fa" } },
+      { ...admin, id: 12, action: "admin.disable", targetUsername: "ana" },
+      { ...admin, id: 11, action: "admin.2fa_enable", targetUsername: "ops" },
+      {
+        ...base,
+        id: 10,
+        action: "impersonate",
+        targetUsername: "operater",
+        impersonation: { id: 3, expiresAt: "2026-10-17T07:00:00Z", endedAt: "2026-10-17T06:10:00Z", actionCount: 0, reason: "Podrška" },
+      },
+    ];
+    vi.stubGlobal("api", { getPlatformAudit: vi.fn(async () => ({ items, total: items.length })) });
+
+    render(<ActivityLog />);
+    const rows = await screen.findAllByRole("row");
+    expect(within(rows[1]).getByText(strings.kinds.adminLoginFailed)).toBeInTheDocument();
+    expect(within(rows[1]).getByText("nobody")).toBeInTheDocument();
+    expect(within(rows[1]).getByText(strings.stagePassword)).toBeInTheDocument();
+    expect(within(rows[2]).getByText(strings.stageTwoFactor)).toBeInTheDocument();
+    expect(within(rows[3]).getByText(strings.kinds.adminDisable)).toBeInTheDocument();
+    expect(within(rows[3]).getByText("Superadmin: ana")).toBeInTheDocument();
+    // Enrolling yourself names no separate target.
+    expect(within(rows[4]).getByText(strings.kinds.adminTwoFactorOn)).toBeInTheDocument();
+    expect(within(rows[4]).queryByText("Superadmin: ops")).not.toBeInTheDocument();
+    expect(within(rows[5]).getByText("Razlog: Podrška")).toBeInTheDocument();
   });
 });

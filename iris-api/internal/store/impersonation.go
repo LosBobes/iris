@@ -2,7 +2,10 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
@@ -24,6 +27,8 @@ type ImpersonationInput struct {
 	UserID        string
 	IP            string
 	ExpiresAt     time.Time
+	// Reason is the superadmin's note on why (required by the API).
+	Reason string
 }
 
 func (s *SQLiteStore) PlatformTenantUsers(ctx context.Context, slug string) (*domain.PlatformTenantUsers, error) {
@@ -60,13 +65,17 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 	); err != nil {
 		return "", nil, fmt.Errorf("sweep expired sessions: %w", err)
 	}
+	tenant := domain.Tenant{ID: input.TenantID}
+	if err := tx.QueryRowContext(ctx, `SELECT slug, name FROM tenants WHERE id = ?`, input.TenantID).Scan(&tenant.Slug, &tenant.Name); err != nil {
+		return "", nil, fmt.Errorf("load tenant: %w", err)
+	}
 	var impersonationID int64
 	err = tx.QueryRowContext(
 		ctx,
-		`INSERT INTO impersonation_events(admin_id, admin_username, tenant_id, user_id, username, ip, at, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		input.AdminID, input.AdminUsername, input.TenantID, user.ID, user.Username, input.IP,
-		now.Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339),
+		`INSERT INTO impersonation_events(admin_id, admin_username, tenant_id, tenant_slug, tenant_name, user_id, username, ip, at, expires_at, reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		input.AdminID, input.AdminUsername, input.TenantID, tenant.Slug, tenant.Name, user.ID, user.Username, input.IP,
+		now.Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339), input.Reason,
 	).Scan(&impersonationID)
 	if err != nil {
 		return "", nil, fmt.Errorf("record impersonation: %w", err)
@@ -79,10 +88,6 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 		hashSessionToken(token), user.ID, input.ExpiresAt.UTC().Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339), input.AdminID, impersonationID,
 	); err != nil {
 		return "", nil, fmt.Errorf("create impersonation session: %w", err)
-	}
-	tenant := domain.Tenant{ID: input.TenantID}
-	if err := tx.QueryRowContext(ctx, `SELECT slug, name FROM tenants WHERE id = ?`, input.TenantID).Scan(&tenant.Slug, &tenant.Name); err != nil {
-		return "", nil, fmt.Errorf("load tenant: %w", err)
 	}
 	if err := writeAudit(ctx, tx, AuditActor{AdminID: input.AdminID, AdminUsername: input.AdminUsername, IP: input.IP}, auditEntry{
 		action:          domain.AuditImpersonationStart,
@@ -170,8 +175,8 @@ func (s *SQLiteStore) ImpersonationActions(ctx context.Context, impersonationID 
 
 // platformImpersonationMigration adds the impersonation audit log and its
 // per-request trail, and links impersonation sessions to them. The log keeps
-// the superadmin's username as text, so it outlives the account; it goes with
-// the organization when that is deleted.
+// the superadmin's username as text, so it outlives the account. (Its tenant
+// reference became ON DELETE SET NULL in v30, impersonationHistoryMigration.)
 const platformImpersonationMigration = `
 CREATE TABLE IF NOT EXISTS impersonation_events (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -206,3 +211,137 @@ ALTER TABLE sessions ADD COLUMN impersonation_id INTEGER REFERENCES impersonatio
 
 CREATE INDEX IF NOT EXISTS idx_sessions_impersonated_by ON sessions(impersonated_by);
 `
+
+// impersonationHistoryMigration (v30) lets impersonation history outlive the
+// organization: impersonation_events.tenant_id becomes nullable with ON DELETE
+// SET NULL (it was NOT NULL ... ON DELETE CASCADE, which also took the
+// per-request trail in impersonation_actions with it), and the organization's
+// slug and name are stored on each row as they were when it started, so a row
+// stays readable once its organization is gone. Existing rows are backfilled
+// from tenants. impersonation_actions (ON DELETE CASCADE from its event) and
+// sessions.impersonation_id need no change: events are no longer deleted, and
+// a deleted organization's sessions go with its users.
+//
+// SQLite cannot alter a column's constraints, so there the table is rebuilt
+// with foreign keys off (DROP TABLE would otherwise cascade into
+// impersonation_actions); Postgres alters it in place. Either way it is one
+// transaction that also records the version.
+func impersonationHistoryMigration(ctx context.Context, db *sql.DB) error {
+	if _, ok := db.Driver().(translatingDriver); ok {
+		return impersonationHistoryMigrationPostgres(ctx, db)
+	}
+	// PRAGMA foreign_keys is per connection and a no-op inside a transaction,
+	// so pin one connection for the pragma, the rebuild and the restore.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("impersonation history migration: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("disable foreign keys: %w", err)
+	}
+	// Always restore enforcement, even on an error path.
+	defer func() { _, _ = conn.ExecContext(context.Background(), `PRAGMA foreign_keys = ON`) }()
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin impersonation history migration: %w", err)
+	}
+	defer tx.Rollback()
+	var sequence sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT seq FROM sqlite_sequence WHERE name = 'impersonation_events'`).Scan(&sequence); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("read impersonation sequence: %w", err)
+	}
+	statements := []string{
+		`CREATE TABLE impersonation_events_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			admin_id TEXT NOT NULL,
+			admin_username TEXT NOT NULL,
+			tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL,
+			tenant_slug TEXT NOT NULL DEFAULT '',
+			tenant_name TEXT NOT NULL DEFAULT '',
+			user_id TEXT NOT NULL,
+			username TEXT NOT NULL,
+			ip TEXT,
+			at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			ended_at TEXT,
+			reason TEXT NOT NULL DEFAULT ''
+		)`,
+		`INSERT INTO impersonation_events_new (id, admin_id, admin_username, tenant_id, tenant_slug, tenant_name,
+			user_id, username, ip, at, expires_at, ended_at, reason)
+		 SELECT e.id, e.admin_id, e.admin_username, e.tenant_id, COALESCE(t.slug, ''), COALESCE(t.name, ''),
+			e.user_id, e.username, e.ip, e.at, e.expires_at, e.ended_at, e.reason
+		 FROM impersonation_events e LEFT JOIN tenants t ON t.id = e.tenant_id`,
+		`DROP TABLE impersonation_events`,
+		`ALTER TABLE impersonation_events_new RENAME TO impersonation_events`,
+		`CREATE INDEX idx_impersonation_events_tenant_at ON impersonation_events(tenant_id, at)`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("impersonation history migration: %w", err)
+		}
+	}
+	// Keep the id sequence where it was, so an id freed by an earlier cascade
+	// is never handed out again.
+	if sequence.Valid {
+		if _, err := tx.ExecContext(ctx, `UPDATE sqlite_sequence SET seq = ? WHERE name = 'impersonation_events' AND seq < ?`, sequence.Int64, sequence.Int64); err != nil {
+			return fmt.Errorf("restore impersonation sequence: %w", err)
+		}
+	}
+	if err := sqliteForeignKeyCheck(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version) VALUES (?)`, 30); err != nil {
+		return fmt.Errorf("record migration 30: %w", err)
+	}
+	return tx.Commit()
+}
+
+// sqliteForeignKeyCheck fails when a table rebuild left a dangling reference.
+func sqliteForeignKeyCheck(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("foreign key check: %w", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return fmt.Errorf("foreign key check failed after rebuilding impersonation_events")
+	}
+	return rows.Err()
+}
+
+func impersonationHistoryMigrationPostgres(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin impersonation history migration: %w", err)
+	}
+	defer tx.Rollback()
+	// The constraint got a generated name when v18 created the table; look it
+	// up rather than assume it.
+	var constraint string
+	if err := tx.QueryRowContext(ctx, `SELECT conname FROM pg_constraint
+		WHERE conrelid = 'impersonation_events'::regclass AND confrelid = 'tenants'::regclass AND contype = 'f'`).Scan(&constraint); err != nil {
+		return fmt.Errorf("find impersonation tenant constraint: %w", err)
+	}
+	statements := []string{
+		`ALTER TABLE impersonation_events ADD COLUMN tenant_slug TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE impersonation_events ADD COLUMN tenant_name TEXT NOT NULL DEFAULT ''`,
+		`UPDATE impersonation_events SET
+			tenant_slug = COALESCE((SELECT t.slug FROM tenants t WHERE t.id = impersonation_events.tenant_id), ''),
+			tenant_name = COALESCE((SELECT t.name FROM tenants t WHERE t.id = impersonation_events.tenant_id), '')`,
+		`ALTER TABLE impersonation_events ALTER COLUMN tenant_id DROP NOT NULL`,
+		`ALTER TABLE impersonation_events DROP CONSTRAINT "` + strings.ReplaceAll(constraint, `"`, `""`) + `"`,
+		`ALTER TABLE impersonation_events ADD CONSTRAINT impersonation_events_tenant_id_fkey
+			FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL`,
+	}
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("impersonation history migration: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version) VALUES (?)`, 30); err != nil {
+		return fmt.Errorf("record migration 30: %w", err)
+	}
+	return tx.Commit()
+}

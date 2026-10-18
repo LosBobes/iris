@@ -211,4 +211,72 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-*Last verified against the checked-in repository state on 2026-10-17.*
+## D-021: Harden superadmin access: TOTP, throttling, account management, impersonation reasons
+- **Status**: `accepted`
+- **Context**: A Backoffice superadmin can open any organization's records (impersonation) and change its configuration, yet sign-in was a password only, superadmins could be added only from the server and never disabled, and an impersonation recorded who and when but not why.
+- **Decision**:
+  - **Two-factor sign-in (TOTP, RFC 6238)** via `github.com/pquerna/otp` (secret generation, codes, and the QR code PNG, so the web app needs no QR library). **Mandatory for every superadmin**: an account without it (new, the seeded default after its password change, or after a reset) reaches nothing but the session, sign-out, password and enrollment routes — every other `/platform/*` route answers 403 (`requirePlatformAdmin`; enrollment uses `requirePlatformEnrollment`) and the console shows only the enrollment. Organization users have no 2FA. There is no self-service off switch: `irisctl reset-platform-2fa -username …` (audited as `admin.2fa_reset` by `irisctl`) is the recovery path. Enrollment is two-step (pending secret, then a confirming code) and returns 10 one-time recovery codes shown once. A correct password on an enrolled account returns a 5-minute single-use `challenge` instead of a session; `POST /platform/auth/login/verify` takes the challenge plus a TOTP code (±1 step for drift, each step accepted once via `totp_last_step`) or a recovery code (spent).
+  - **Storage**: recovery codes and challenge tokens are stored only as SHA-256 (high-entropy random values, so a fast hash is enough). TOTP secrets are stored as-is: the server must compute codes and Iris has no key to encrypt them with (`IRIS_SESSION_SECRET` is unused). A stolen database therefore yields TOTP secrets but still not passwords (bcrypt) or sessions (hashed).
+  - **Throttling** reuses the existing `platformLimiter` (the `loginLimiter` behind D-020): the password step already had per-IP, per-username and global limits; the code step adds per-account (`2fa:<id>`) and per-IP keys, and enrollment confirmation `2fa-setup:<id>`. Failed sign-ins at either step are written to `platform_audit_events` as `admin.login_failed` (username as typed, `detail.stage`), bounded by the limiter. Successful sign-ins only set `platform_admins.last_login_at` (auditing each would bury the log); a sign-in with a recovery code is audited (`admin.recovery_login`).
+  - **Superadmin management** in the Backoffice ("Superadmini" tab, `/platform/admins`): list, add with a temporary password (`must_change_password`, as the seeded default), disable / enable (`disabled_at`). You cannot disable yourself or the last enabled account. Disabling ends the account's Backoffice sessions, pending challenges and every impersonation session it opened. All audited (`admin.create`, `admin.disable`, `admin.enable`, `admin.2fa_enable`).
+  - **Impersonation reason**: `POST /platform/tenants/{slug}/impersonate` requires `reason` (1–200 characters), stored on `impersonation_events.reason` and shown in "Aktivnost".
+  - All schema changes are one migration, **v26** (`platformSecurityMigration`), shared by SQLite and Postgres. `platform_recovery_codes` is copied by `migrate-to-postgres`; `platform_login_challenges` is deliberately not (five-minute state).
+- **Consequences**:
+  - A leaked superadmin password alone no longer opens the Backoffice. On upgrade, existing superadmins must enroll at their next visit before they see anything.
+  - Losing both the authenticator and the recovery codes needs server access (`irisctl`), by design.
+  - Superadmin audit rows have no organization (`tenant_*` empty); the activity log shows "—" there.
+  - Older impersonations show no reason (`reason` defaults to empty).
+
+---
+
+## D-022: Organization health is computed on read; internal notes live outside the tenant's data
+- **Status**: `accepted`
+- **Context**: Superadmins need to see at a glance which organizations are in use and which have gone quiet, and to keep account-management notes (contact person, plan, remarks) next to each organization — without the organization ever seeing those notes and without the Backoffice reading tenant records.
+- **Decision**: `GET /platform/tenants` returns a `health` object per organization, computed on every read with one grouped query per source across all organizations (`login_events`, live `sessions`, `work_orders`): last sign-in, distinct active users in 7 / 30 days, work orders created in 30 days, open work orders — counts and dates only, like `/platform/metrics`. A user counts as active when they signed in within the window **or** hold a live, non-impersonated session (a remembered device that never signs in again is still in use; a live session's idle expiry is at most 7 days out, so its holder was active within both windows). An organization is **dormant** when nobody was active in 30 days **and** it is older than 30 days (a just-created one is not flagged); the UI shows the badge only when it is not also suspended. Internal notes are a separate `tenant_notes` table (migration v27, one row per organization, `ON DELETE CASCADE`), edited via `PUT /platform/tenants/{slug}/notes` and audited as `tenant.notes` with the **names** of the changed fields only, never their contents. They are deliberately not in `app_settings`, which the organization's own `GET /settings` reads.
+- **Consequences**:
+  - No denormalized counters to keep in sync; the cost is a few indexed aggregate queries per list load, fine for the expected number of organizations.
+  - Sorting and filtering (name, last sign-in, active users, creation date; active / dormant / suspended) happen in the browser on the full list.
+  - `login_events` retention (400 days) bounds how far back "last sign-in" can reach.
+
+---
+
+## D-023: Backoffice backups are SQLite file copies, listed but never served
+- **Status**: `accepted`
+- **Context**: Superadmins had no way to see whether the database was being backed up, or to take a copy without shell access to `irisctl backup`. The API runs on SQLite or PostgreSQL.
+- **Decision**: On SQLite the server owns a backup folder (`IRIS_BACKUP_DIR`, default `backups/` next to the database). `POST /platform/backups` takes a `VACUUM INTO` copy under a server-generated name (`iris-YYYYMMDD-HHMMSS[-N].db`, written as `.partial` then renamed), prunes to the newest `IRIS_BACKUP_KEEP` (default 14) and writes a `backup.create` audit row; `GET /platform/backups` lists them. No route takes a file name and no route serves a copy: a download endpoint would put the whole multi-tenant database one cookie away. An optional in-process schedule (`IRIS_BACKUP_INTERVAL`) takes a copy when the newest one, from any source, is that old. On PostgreSQL there is no in-process backup: the API reports `supported: false` and points to `pg_dump`. Backup status, database engine and schema version extend the existing `system` block of `GET /platform/metrics` rather than a new endpoint; the dashboard warns when the newest copy is older than `IRIS_BACKUP_STALE_HOURS` (24).
+- **Consequences**:
+  - Copies live on the same disk as the database until someone syncs them off the machine; the Backoffice says so.
+  - Scheduled copies are not audited (no superadmin acted); only Backoffice-triggered ones are. The audit row is written after the file is in place, since a file write cannot share the database transaction.
+  - `irisctl backup` without `-out` now writes to the same folder, so its copies are listed and count toward retention.
+
+---
+
+## D-024: Platform announcements are platform-level rows targeted by tenant id
+- **Status**: `accepted`
+- **Context**: Superadmins need to tell organizations about maintenance windows and changes (a banner in the app), either everyone or a chosen few, without impersonating anyone or touching tenant data.
+- **Decision**: Announcements live in `platform_announcements` (migration v29) with no `tenant_id`: message (plain text, ≤ 500 characters), severity (`info` / `warning` / `maintenance`), `starts_at`, optional `ends_at` (UTC `YYYY-MM-DDTHH:MM:SSZ`, compared as text on both engines) and `all_tenants`. A chosen set of organizations is stored in `platform_announcement_tenants` by tenant **id** (FK `ON DELETE CASCADE`), so renaming a slug keeps the target and deleting an organization drops it. Status (active / scheduled / ended) is computed when read, never stored. Superadmins manage them under `/platform/announcements` (create, edit, end now, delete), each change audited in `platform_audit_events` in the same transaction. Organizations read only what is active now for them: `GET /announcements` (session tenant) and, for the sign-in page, `GET /public/organizations/{slug}/announcements` — message, severity and window only. The web app polls lightly (TanStack Query: on focus and every 5 min while visible) and shows them as strips under the impersonation banner; info ones can be dismissed per device (localStorage, ids only), warning and maintenance ones cannot.
+- **Consequences**:
+  - The public endpoint reveals active announcement text to anyone who knows an organization slug; announcements must not contain anything confidential.
+  - A banner can lag its end time by at most one poll interval server-side; the client also hides strips whose `endsAt` has passed.
+  - A dismissed info announcement reappears on another device or after clearing site data.
+
+---
+
+## D-025: Organization offboarding — audited export, two-phase deletion
+- **Status**: `accepted`
+- **Context**: An organization leaving Iris needs its data handed over and then removed. Deletion existed only as a bare store helper (cascade test); there was no export at all.
+- **Decision**: Backoffice superadmins get `GET /platform/tenants/{slug}/export` and `DELETE /platform/tenants/{slug}` (also `irisctl export-tenant` / `delete-tenant`, audited as admin `irisctl`).
+  - **Export** is one JSON document (`format: iris-tenant-export`, `formatVersion: 1`, `exportedAt`, `schemaVersion`, per-table `counts` and `tables` of column → value rows), downloaded as `iris-<slug>-<timestamp>.json`. It is a raw, table-level copy rather than domain objects, so nothing is lost and no field needs mapping; JSON columns (work-order payloads, process graphs) are embedded as JSON. Secrets and platform-side rows are left out: no `users.password_hash`, no `sessions`, no `tenant_notes` (superadmin-internal, [D-022](#d-022-organization-health-is-computed-on-read-internal-notes-live-outside-the-tenants-data)) and no `platform_announcement_tenants` (platform targeting); deletion still removes them (`noExport` in `tenantDataTables`). It is read in one transaction together with its `tenant.export` audit row (a sensitive read is never unaudited), then written out; the document is built in memory because the single SQLite connection must not be held while a slow client downloads.
+  - **Deletion** is two-phase: the organization must be suspended first (which already ends its sessions), and the body must repeat its slug exactly (`confirmSlug`, case-sensitive). Every tenant-owned table is deleted explicitly, children first, in one transaction with the per-table row counts, instead of relying on `ON DELETE CASCADE` alone. A `tenant.delete` audit row (name, slug, totals) is written in the same transaction.
+  - `tenantDataTables` (`internal/store/tenant_offboarding.go`) is the single list both use; a test fails when the schema has a table that is neither in it nor in `platformOnlyTables`, so a new tenant table cannot be silently missed.
+  - **Activity log survives**: `platform_audit_events` already keeps the tenant slug/name denormalized and its `tenant_id` is `ON DELETE SET NULL`, so every earlier event (including each `impersonate` start with superadmin, target user, time and IP) stays.
+  - **Impersonation history survives too** (migration **v30**, `impersonationHistoryMigration`): `impersonation_events.tenant_id` is nullable with `ON DELETE SET NULL` (it was `NOT NULL … ON DELETE CASCADE`), and each row stores the organization's `tenant_slug` / `tenant_name` as they were when it started (existing rows backfilled). Deletion therefore leaves `impersonation_events` and their trail (`impersonation_actions`, which cascades only from its event) in place, detached: "Aktivnost" still shows each session's reason, status and action count, and `/platform/impersonations/{id}/actions` still answers. They remain part of the export (`keepOnDelete` in `tenantDataTables`). SQLite rebuilds the table with foreign keys off on a pinned connection (and keeps its id sequence); Postgres alters it in place — the one migration that branches on the engine, since SQLite has no `ALTER COLUMN`.
+- **Consequences**:
+  - Deletion cannot be undone; the dialog says so, offers the export, and keeps the confirm button disabled until the slug is typed.
+  - What a superadmin did inside the organization stays auditable after it is gone; the kept rows hold user ids and usernames of the deleted organization's users (no other tenant data).
+  - A future restore/import can consume the export by `formatVersion` + `schemaVersion`; none exists yet.
+  - Values are exported as the driver returns them (on Postgres, `NUMERIC` money columns may appear as strings).
+
+---
+
+*Last verified against the checked-in repository state on 2026-10-18.*

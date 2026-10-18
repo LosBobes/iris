@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LosBobes/iris/iris-api/internal/backups"
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/seed/cobanovic"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -112,12 +114,34 @@ func main() {
 		defer dataStore.Close()
 		must(dataStore.UpsertPlatformAdmin(ctx, *username, *password))
 		fmt.Printf("Superadmin %s je sačuvan.\n", strings.TrimSpace(*username))
+	case "reset-platform-2fa":
+		// For a superadmin who lost the authenticator app and recovery codes:
+		// clears two-factor sign-in (mandatory, so they enroll again at the next
+		// sign-in) and signs the account out. Recorded in the Backoffice activity log as "irisctl".
+		cmd := flag.NewFlagSet("reset-platform-2fa", flag.ExitOnError)
+		username := cmd.String("username", "", "korisničko ime superadmina")
+		_ = cmd.Parse(os.Args[2:])
+		if strings.TrimSpace(*username) == "" {
+			fmt.Fprintln(os.Stderr, "-username je obavezan")
+			os.Exit(2)
+		}
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		err := dataStore.ResetPlatformAdminTOTP(ctx, store.AuditActor{AdminUsername: "irisctl"}, *username)
+		if errors.Is(err, store.ErrPlatformAdminNotFound) {
+			fmt.Fprintf(os.Stderr, "Superadmin %s ne postoji.\n", strings.TrimSpace(*username))
+			os.Exit(1)
+		}
+		must(err)
+		fmt.Printf("Dvofaktorska prijava za %s je poništena; nalog je odjavljen i pri sledećoj prijavi je ponovo podešava.\n", strings.TrimSpace(*username))
 	case "backup":
 		cmd := flag.NewFlagSet("backup", flag.ExitOnError)
 		out := cmd.String("out", "", "putanja izlazne .db kopije")
 		_ = cmd.Parse(os.Args[2:])
 		if *out == "" {
-			*out = filepath.Join("backups", "iris-"+time.Now().UTC().Format("20060102-150405")+".db")
+			// Same directory and naming as the Backoffice backups, so the copy
+			// shows up in its list (IRIS_BACKUP_DIR, default next to the database).
+			*out = filepath.Join(backups.FromEnv(dbPathFromEnv()).Dir, "iris-"+time.Now().UTC().Format("20060102-150405")+".db")
 		}
 		dataStore := mustOpenStore(ctx)
 		defer dataStore.Close()
@@ -236,6 +260,23 @@ func main() {
 		report, err := importStock(mustTenantContext(ctx, dataStore, *tenantSlug), dataStore, *file, *apply)
 		must(err)
 		fmt.Print(report)
+	case "export-tenant":
+		cmd := flag.NewFlagSet("export-tenant", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		out := cmd.String("out", "", "putanja izlaznog .json fajla")
+		_ = cmd.Parse(os.Args[2:])
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(exportTenant(ctx, dataStore, *tenantSlug, *out))
+	case "delete-tenant":
+		cmd := flag.NewFlagSet("delete-tenant", flag.ExitOnError)
+		tenantSlug := cmd.String("tenant", "", "oznaka organizacije")
+		confirm := cmd.String("confirm", "", "ponovljena oznaka organizacije (potvrda)")
+		suspend := cmd.Bool("suspend", false, "prvo suspenduj organizaciju ako nije suspendovana")
+		_ = cmd.Parse(os.Args[2:])
+		dataStore := mustOpenStore(ctx)
+		defer dataStore.Close()
+		must(deleteTenant(ctx, dataStore, *tenantSlug, *confirm, *suspend))
 	default:
 		usage()
 		os.Exit(2)
@@ -575,8 +616,15 @@ func usage() {
   irisctl import-stock -tenant oznaka --file stanje.csv --apply
   irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
   irisctl create-platform-admin -username ime -password lozinka
-  irisctl backup [-out backups/iris.db]
+  irisctl reset-platform-2fa -username ime
+  irisctl backup [-out backups/iris.db]   (bez -out: IRIS_BACKUP_DIR, podrazumevano backups/ pored baze)
   irisctl migrate-to-postgres [-check] [-from ./data/iris.db] [-to postgres://...]
+  irisctl export-tenant -tenant oznaka [-out iris-oznaka.json]
+  irisctl delete-tenant -tenant oznaka -confirm oznaka [-suspend]
+
+export-tenant upisuje sve podatke organizacije u jedan JSON fajl (bez lozinki i sesija).
+delete-tenant trajno briše suspendovanu organizaciju i sve njene podatke (-suspend je prvo
+suspenduje); Backoffice aktivnost zadržava zapis. Oba se beleže u aktivnost kao "irisctl".
 
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
 a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).

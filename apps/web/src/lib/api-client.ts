@@ -37,14 +37,24 @@ import type {
   PlatformMetrics,
   PlatformPasswordChange,
   PlatformRangeDays,
+  PlatformTenantDeletion,
+  PlatformTenantExportFile,
   PlatformTenantUsers,
   PlatformImpersonationResponse,
   PlatformImpersonationAction,
   PlatformAuditLog,
+  PlatformBackup,
+  PlatformBackups,
   PlatformTenant,
   PlatformCreateTenantInput,
+  PlatformTenantNotesInput,
   PlatformUpdateTenantInput,
+  PlatformTwoFactorSetup,
+  PlatformTwoFactorEnabled,
+  PlatformAdminSummary,
+  PlatformCreateAdminInput,
 } from '@/types/platform'
+import type { Announcement, PlatformAnnouncement, PlatformAnnouncementInput } from '@/types/announcement'
 import type {
   ProcessGraph,
   ProcessTemplate,
@@ -744,6 +754,39 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       return readJSON<PlatformLoginResponse>(response)
     },
 
+    async platformLoginVerify(input: { challenge: string; code: string }) {
+      const response = await fetchImpl(url('/platform/auth/login/verify'), jsonRequest('POST', input))
+      return readJSON<PlatformLoginResponse>(response)
+    },
+
+    async setupPlatformTwoFactor() {
+      const response = await fetchImpl(url('/platform/auth/2fa/setup'), credentialedRequest({ method: 'POST' }))
+      return readJSON<PlatformTwoFactorSetup>(response)
+    },
+
+    async confirmPlatformTwoFactor(code: string) {
+      const response = await fetchImpl(url('/platform/auth/2fa/confirm'), jsonRequest('POST', { code }))
+      return readJSON<PlatformTwoFactorEnabled>(response)
+    },
+
+    async getPlatformAdmins() {
+      const response = await fetchImpl(url('/platform/admins'), credentialedRequest())
+      return readJSON<PlatformAdminSummary[]>(response)
+    },
+
+    async createPlatformAdmin(input: PlatformCreateAdminInput) {
+      const response = await fetchImpl(url('/platform/admins'), jsonRequest('POST', input))
+      return readJSON<PlatformAdminSummary>(response)
+    },
+
+    async setPlatformAdminDisabled(id: string, disabled: boolean) {
+      const response = await fetchImpl(
+        url(`/platform/admins/${encodeURIComponent(id)}/${disabled ? 'disable' : 'enable'}`),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<PlatformAdminSummary>(response)
+    },
+
     async getPlatformSession() {
       const response = await fetchImpl(url('/platform/auth/session'), credentialedRequest())
       return readJSON<PlatformLoginResponse>(response)
@@ -775,10 +818,10 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       return readJSON<PlatformTenantUsers>(response)
     },
 
-    async platformImpersonate(slug: string, userId: string) {
+    async platformImpersonate(slug: string, userId: string, reason: string) {
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/impersonate`),
-        jsonRequest('POST', { userId }),
+        jsonRequest('POST', { userId, reason }),
       )
       return readJSON<PlatformImpersonationResponse>(response)
     },
@@ -822,6 +865,34 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       return readJSON<PlatformTenant>(response)
     },
 
+    async setPlatformTenantNotes(slug: string, notes: PlatformTenantNotesInput) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/notes`),
+        jsonRequest('PUT', notes),
+      )
+      return readJSON<PlatformTenant>(response)
+    },
+
+    async platformExportTenant(slug: string): Promise<PlatformTenantExportFile> {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}/export`),
+        credentialedRequest(),
+      )
+      if (!response.ok) await readJSON<never>(response)
+      const disposition = response.headers.get('Content-Disposition') ?? ''
+      const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)
+      const filename = match?.[1] ? decodeURIComponent(match[1]) : `iris-${slug}.json`
+      return { blob: await response.blob(), filename }
+    },
+
+    async platformDeleteTenant(slug: string, confirmSlug: string) {
+      const response = await fetchImpl(
+        url(`/platform/tenants/${encodeURIComponent(slug)}`),
+        jsonRequest('DELETE', { confirmSlug }),
+      )
+      return readJSON<PlatformTenantDeletion>(response)
+    },
+
     async resetPlatformUserPassword(slug: string, userId: string, password: string) {
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/users/${encodeURIComponent(userId)}/password`),
@@ -833,6 +904,16 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlatformImpersonationActions(id: number) {
       const response = await fetchImpl(url(`/platform/impersonations/${id}/actions`), credentialedRequest())
       return readJSON<PlatformImpersonationAction[]>(response)
+    },
+
+    async getPlatformBackups() {
+      const response = await fetchImpl(url('/platform/backups'), credentialedRequest())
+      return readJSON<PlatformBackups>(response)
+    },
+
+    async createPlatformBackup() {
+      const response = await fetchImpl(url('/platform/backups'), credentialedRequest({ method: 'POST' }))
+      return readJSON<PlatformBackup>(response)
     },
 
     async listUsers() {
@@ -1111,6 +1192,53 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async deletePlatformProcessTemplate(slug: string, id: string) {
       const response = await fetchImpl(
         url(`/platform/tenants/${encodeURIComponent(slug)}/process-templates/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async getAnnouncements() {
+      const response = await fetchImpl(url('/announcements'), credentialedRequest())
+      return readArray(await readJSON<Announcement[]>(response))
+    },
+
+    async getPublicAnnouncements(slug: string) {
+      const response = await fetchImpl(
+        url(`/public/organizations/${encodeURIComponent(slug)}/announcements`),
+        credentialedRequest(),
+      )
+      return readArray(await readJSON<Announcement[]>(response))
+    },
+
+    async getPlatformAnnouncements() {
+      const response = await fetchImpl(url('/platform/announcements'), credentialedRequest())
+      return readArray(await readJSON<PlatformAnnouncement[]>(response))
+    },
+
+    async createPlatformAnnouncement(input: PlatformAnnouncementInput) {
+      const response = await fetchImpl(url('/platform/announcements'), jsonRequest('POST', input))
+      return readJSON<PlatformAnnouncement>(response)
+    },
+
+    async updatePlatformAnnouncement(id: string, input: PlatformAnnouncementInput) {
+      const response = await fetchImpl(
+        url(`/platform/announcements/${encodeURIComponent(id)}`),
+        jsonRequest('PUT', input),
+      )
+      return readJSON<PlatformAnnouncement>(response)
+    },
+
+    async endPlatformAnnouncement(id: string) {
+      const response = await fetchImpl(
+        url(`/platform/announcements/${encodeURIComponent(id)}/end`),
+        credentialedRequest({ method: 'POST' }),
+      )
+      return readJSON<PlatformAnnouncement>(response)
+    },
+
+    async deletePlatformAnnouncement(id: string) {
+      const response = await fetchImpl(
+        url(`/platform/announcements/${encodeURIComponent(id)}`),
         credentialedRequest({ method: 'DELETE' }),
       )
       await readNoContent(response)

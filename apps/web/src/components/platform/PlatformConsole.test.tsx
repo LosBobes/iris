@@ -55,7 +55,7 @@ afterEach(() => {
 
 describe("PlatformConsole", () => {
   it("asks for an operator login, then shows the aggregate dashboard", async () => {
-    const platformLogin = vi.fn(async () => ({ success: true, admin: { username: "ops" } }));
+    const platformLogin = vi.fn(async () => ({ success: true, admin: { username: "ops", twoFactorEnabled: true } }));
     const getPlatformMetrics = vi.fn(async () => metrics);
     vi.stubGlobal("api", {
       getPlatformSession: vi.fn(async () => ({ success: false })),
@@ -85,7 +85,7 @@ describe("PlatformConsole", () => {
   it("refetches for a different range and remembers it", async () => {
     const getPlatformMetrics = vi.fn(async () => metrics);
     vi.stubGlobal("api", {
-      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops", role: "superadmin" } })),
+      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops", role: "superadmin", twoFactorEnabled: true } })),
       getPlatformMetrics,
     });
 
@@ -125,7 +125,7 @@ describe("PlatformConsole", () => {
 });
 
 describe("operator password", () => {
-  it("makes the seeded default account choose a password before any data loads", async () => {
+  it("makes the seeded default account choose a password, then enroll 2FA, before any data loads", async () => {
     const getPlatformMetrics = vi.fn(async () => metrics);
     const changePlatformPassword = vi.fn(async () => ({
       success: true,
@@ -183,9 +183,11 @@ describe("operator password", () => {
         newPassword: "a-much-better-password",
       }),
     );
-    expect((await screen.findAllByText(strings.tiles.tenants)).length).toBeGreaterThan(0);
-    expect(getPlatformMetrics).toHaveBeenCalled();
+    // Two-factor sign-in is next, still before any data.
+    expect(await screen.findByText(new RegExp(strings.twoFactor.requiredIntro.slice(0, 40)))).toBeInTheDocument();
+    expect(getPlatformMetrics).not.toHaveBeenCalled();
   });
+
 
   it("lets a signed-in operator change it from the toolbar", async () => {
     const changePlatformPassword = vi.fn(async () => {
@@ -196,7 +198,7 @@ describe("operator password", () => {
       });
     });
     vi.stubGlobal("api", {
-      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops" } })),
+      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops", twoFactorEnabled: true } })),
       getPlatformMetrics: vi.fn(async () => metrics),
       changePlatformPassword,
     });
@@ -219,6 +221,57 @@ describe("operator password", () => {
 
     await userEvent.click(screen.getByRole("button", { name: sr.common.cancel }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("mandatory two-factor sign-in", () => {
+  const signedInWithout2FA = { success: true, admin: { username: "ops", role: "superadmin", twoFactorEnabled: false } };
+
+  it("opens the console only after enrollment", async () => {
+    const getPlatformMetrics = vi.fn(async () => metrics);
+    vi.stubGlobal("api", {
+      getPlatformSession: vi.fn(async () => signedInWithout2FA),
+      setupPlatformTwoFactor: vi.fn(async () => ({
+        secret: "JBSWY3DPEHPK3PXP",
+        otpauthUri: "otpauth://totp/Iris:ops?secret=JBSWY3DPEHPK3PXP",
+        qrCode: "data:image/png;base64,AAAA",
+      })),
+      confirmPlatformTwoFactor: vi.fn(async () => ({ recoveryCodes: ["aaaa-bbbb", "cccc-dddd"] })),
+      getPlatformMetrics,
+    });
+    render(
+      <MemoryRouter>
+        <PlatformConsole />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(new RegExp(strings.twoFactor.requiredIntro.slice(0, 40)))).toBeInTheDocument();
+    expect(getPlatformMetrics).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: strings.twoFactor.start }));
+    await userEvent.type(await screen.findByLabelText(strings.twoFactor.code), "123456");
+    await userEvent.click(screen.getByRole("button", { name: strings.twoFactor.confirm }));
+    await userEvent.click(await screen.findByRole("button", { name: strings.twoFactor.done }));
+
+    expect((await screen.findAllByText(strings.tiles.tenants)).length).toBeGreaterThan(0);
+    expect(getPlatformMetrics).toHaveBeenCalled();
+  });
+
+  it("signs out when the enrollment is closed unfinished", async () => {
+    const platformLogout = vi.fn(async () => undefined);
+    vi.stubGlobal("api", {
+      getPlatformSession: vi.fn(async () => signedInWithout2FA),
+      platformLogout,
+    });
+    render(
+      <MemoryRouter>
+        <PlatformConsole />
+      </MemoryRouter>,
+    );
+    await screen.findByText(new RegExp(strings.twoFactor.requiredIntro.slice(0, 40)));
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() => expect(platformLogout).toHaveBeenCalled());
+    expect(await screen.findByLabelText(strings.login.username)).toBeInTheDocument();
   });
 });
 
@@ -246,7 +299,7 @@ describe("Backoffice language", () => {
 
   it("offers the switch in the dashboard menu too", async () => {
     vi.stubGlobal("api", {
-      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops", role: "superadmin" } })),
+      getPlatformSession: vi.fn(async () => ({ success: true, admin: { username: "ops", role: "superadmin", twoFactorEnabled: true } })),
       getPlatformMetrics: vi.fn(async () => metrics),
     });
     render(

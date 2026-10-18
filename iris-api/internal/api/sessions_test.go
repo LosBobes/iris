@@ -277,7 +277,8 @@ func TestImpersonationSessionIsHashedFixedAndTraced(t *testing.T) {
 	}
 	login := platformRequest(t, env.server, nil, http.MethodPost, "/platform/auth/login", `{"username":"ops","password":"correct-horse-battery"}`)
 	platformSession := platformCookie(login, env.server.config.PlatformSessionCookieName)
-	rec := platformRequest(t, env.server, platformSession, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-1"}`)
+	enrollPlatformTwoFactor(t, env.server, platformSession)
+	rec := platformRequest(t, env.server, platformSession, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"user-1","reason":"Podrška: prijava greške"}`)
 	session := platformCookie(rec, env.server.config.SessionCookieName)
 	if session == nil {
 		t.Fatalf("impersonate = %d %s", rec.Code, rec.Body.String())

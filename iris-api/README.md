@@ -99,6 +99,10 @@ iris-api/
 | `IRIS_ALLOWED_ORIGINS` | Comma-separated CORS origins. Empty allows local dev origins. | empty |
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary used to render work-order PDFs (`GET /work-orders/{id}/report`). When empty the usual names (`chromium`, `chromium-browser`, `google-chrome`, …) are searched on `$PATH`; when nothing is found the endpoint answers `503` instead of rendering. | empty |
+| `IRIS_BACKUP_DIR` | Folder for SQLite backup copies taken from the Backoffice ("Sistem" tab, `POST /platform/backups`), by the automatic schedule and by `irisctl backup` without `-out`. Copies are named `iris-YYYYMMDD-HHMMSS.db` and are only listed, never served over HTTP. Ignored on PostgreSQL. | `backups/` next to `DATABASE_PATH` (Docker: `/data/backups`) |
+| `IRIS_BACKUP_KEEP` | How many of the newest copies are kept after each new one; older `iris-*.db` copies in the folder are deleted. `0` keeps all. | `14` |
+| `IRIS_BACKUP_INTERVAL` | Turns on automatic backups in the server, as a Go duration (`24h`, `12h`; at least `15m`). A copy is taken when the newest one (from any source) is that old, never sooner than a minute after start. | empty (off) |
+| `IRIS_BACKUP_STALE_HOURS` | The Backoffice dashboard warns when the newest copy is older than this many hours (SQLite only). | `24` |
 | `IRIS_DEMO_ADMIN_PASSWORD`, `IRIS_DEMO_OPERATOR_PASSWORD` | Passwords for the demo organization's `admin` / operator logins, read by `irisctl seed-demo`. Required in production (12+ characters, not a public demo password); outside production the public demo passwords are kept. Nothing on server start reads them — the demo org is created only when you run `seed-demo`. | empty |
 | `IRIS_DEMO_ID_PREFIX` | Prefix added to the demo **fixture** record ids by `irisctl seed-demo` (same as `-id-prefix`). Set it (e.g. `demo-`) when the database already holds another tenant seeded from the same fixed ids (customers `cust-N`, work orders `1`…), such as a real Grafika Čobanović data set, so the demo org can coexist without an id collision. | empty |
 
@@ -128,13 +132,19 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-user -tenant grafika-co
 # first login. Superadmins can also impersonate any organization user from the
 # Backoffice (1 h session, audited in impersonation_events, every change traced in
 # impersonation_actions) and create, edit, suspend organizations and reset user
-# passwords from its "Organizacije" tab; all of it is logged under "Aktivnost". More accounts:
+# passwords from its "Organizacije" tab; all of it is logged under "Aktivnost". Impersonation
+# needs a short reason. Superadmins are listed, added (temporary password) and disabled in
+# the "Superadmini" tab, and can turn on TOTP two-factor sign-in from the menu. More accounts:
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl create-platform-admin -username ops -password '<long secret>'
+# Lost authenticator and recovery codes: turn two-factor sign-in off for that superadmin
+# (signs it out; it can enroll again). Recorded in "Aktivnost" as irisctl.
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl reset-platform-2fa -username ops
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --dry-run --dir ./imports
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-csv --apply -tenant grafika-cobanovic --dir ./imports
 # Optional per-organization modules (off by default; "processes" requires "stock"):
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl set-modules -tenant grafika-cobanovic -stock on -processes on
-DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup -out ./backups/iris.db
+# Consistent SQLite copy into IRIS_BACKUP_DIR (default ./data/backups), or -out <file>:
+DATABASE_PATH=./data/iris.db go run ./cmd/irisctl backup
 # Warehouse opening balance / stock count from a CSV (code,quantity[,note]):
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-cobanovic --file ./stock.csv --dry-run
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl import-stock -tenant grafika-cobanovic --file ./stock.csv --apply

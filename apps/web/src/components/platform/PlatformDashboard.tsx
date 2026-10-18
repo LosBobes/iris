@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Check, RefreshCw } from "lucide-react";
 import { BackofficeMenu } from "./BackofficeMenu";
 import { SectionTabs } from "./SectionTabs";
@@ -10,6 +10,10 @@ import { staggerStyle } from "@/lib/motion";
 import { PlatformChangePassword } from "./PlatformChangePassword";
 import { OrganizationsPanel } from "./OrganizationsPanel";
 import { ActivityLog } from "./ActivityLog";
+import { PlatformAdminsPanel } from "./PlatformAdminsPanel";
+import { PlatformTwoFactorDialog } from "./PlatformTwoFactorDialog";
+import { BackupWarning, SystemPanel } from "./SystemPanel";
+import { AnnouncementsPanel } from "./AnnouncementsPanel";
 import { PlatformSystemPanel } from "./PlatformSystemPanel";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
@@ -88,10 +92,13 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 export function PlatformDashboard({
   username,
   role,
+  twoFactorEnabled = false,
   onLogout,
 }: {
   username: string;
   role?: string;
+  /** Whether the signed-in superadmin has two-factor sign-in on. */
+  twoFactorEnabled?: boolean;
   onLogout: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -103,6 +110,8 @@ export function PlatformDashboard({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false);
+  const [twoFactorOn, setTwoFactorOn] = useState(twoFactorEnabled);
   const [notice, setNotice] = useState<string | null>(null);
   // Range and refresh sit in the header from tablet width up; on a phone the
   // range gets its own row and refresh moves into the menu.
@@ -110,11 +119,19 @@ export function PlatformDashboard({
   // Sections: the metrics overview at /backoffice, organization management
   // and the activity log below it.
   const pathname = useLocation().pathname;
-  const section: "overview" | "organizations" | "activity" = pathname.startsWith("/backoffice/organizations")
+  const section: "overview" | "organizations" | "announcements" | "admins" | "activity" | "system" = pathname.startsWith(
+    "/backoffice/organizations",
+  )
     ? "organizations"
-    : pathname.startsWith("/backoffice/activity")
-      ? "activity"
-      : "overview";
+    : pathname.startsWith("/backoffice/announcements")
+      ? "announcements"
+      : pathname.startsWith("/backoffice/admins")
+        ? "admins"
+        : pathname.startsWith("/backoffice/activity")
+          ? "activity"
+          : pathname.startsWith("/backoffice/system")
+            ? "system"
+            : "overview";
   const showLog = section !== "overview";
 
   const load = useCallback(async (): Promise<void> => {
@@ -229,7 +246,10 @@ export function PlatformDashboard({
   const sections = [
     { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
     { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
+    { to: "/backoffice/announcements", label: t("platform.nav.announcements"), current: section === "announcements" },
+    { to: "/backoffice/admins", label: t("platform.nav.admins"), current: section === "admins" },
     { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
+    { to: "/backoffice/system", label: t("platform.nav.system"), current: section === "system" },
   ];
   const navTabs = <SectionTabs tabs={sections} label={t("platform.nav.label")} />;
 
@@ -258,6 +278,8 @@ export function PlatformDashboard({
             sections={isWide ? undefined : sections}
             extra={isWide || showLog ? undefined : refreshControls}
             onChangePassword={() => setChangingPassword(true)}
+            twoFactorEnabled={twoFactorOn}
+            onTwoFactor={() => setTwoFactorOpen(true)}
             onLogout={onLogout}
           />
         </div>
@@ -281,6 +303,14 @@ export function PlatformDashboard({
         </div>
       ) : null}
 
+      {twoFactorOpen ? (
+        <PlatformTwoFactorDialog
+          enabled={twoFactorOn}
+          onEnabled={() => setTwoFactorOn(true)}
+          onClose={() => setTwoFactorOpen(false)}
+        />
+      ) : null}
+
       <main className="mx-auto max-w-[1600px] space-y-4 px-4 py-5 sm:px-6">
         {notice ? (
           <div role="status" className="rounded border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-4 py-2.5 text-[12px] text-[color:var(--pf-text)]">
@@ -291,9 +321,19 @@ export function PlatformDashboard({
         {showLog ? (
           <>
             <h1 className="text-[22px] font-medium tracking-[-0.3px]">
-              {section === "organizations" ? t("platform.nav.organizations") : t("platform.nav.activity")}
+              {t(`platform.nav.${section}`)}
             </h1>
-            {section === "organizations" ? <OrganizationsPanel /> : <ActivityLog />}
+            {section === "organizations" ? (
+              <OrganizationsPanel />
+            ) : section === "announcements" ? (
+              <AnnouncementsPanel />
+            ) : section === "admins" ? (
+              <PlatformAdminsPanel currentUsername={username} />
+            ) : section === "system" ? (
+              <SystemPanel />
+            ) : (
+              <ActivityLog />
+            )}
           </>
         ) : (
         <>
@@ -311,6 +351,15 @@ export function PlatformDashboard({
             {error}
           </div>
         ) : null}
+
+        <BackupWarning
+          status={metrics?.system.backup}
+          action={
+            <Link to="/backoffice/system" className="iris-focusable rounded font-medium underline underline-offset-2">
+              {t("platform.backups.open")}
+            </Link>
+          }
+        />
 
         {!metrics ? (
           <p className="py-24 text-center text-[13px] text-[color:var(--pf-muted)]">

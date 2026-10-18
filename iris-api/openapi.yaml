@@ -480,6 +480,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /announcements:
+    get:
+      tags: [Settings]
+      summary: Platform announcements active now for the session's organization
+      description: >-
+        Written by Backoffice superadmins (`/platform/announcements`). Only the
+        ones whose window includes now and that target every organization or
+        this one; maintenance first, then warning, then info. Shown as a banner
+        at the top of the app; info ones can be dismissed per device.
+      operationId: getAnnouncements
+      responses:
+        '200':
+          description: Active announcements (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Announcement'
+        '401':
+          description: No organization session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /settings:
     get:
       tags: [Settings]
@@ -1760,6 +1785,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /public/organizations/{slug}/announcements:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Auth]
+      summary: Platform announcements active now for an organization, for its sign-in page
+      description: |
+        Unauthenticated. Same list as `GET /announcements` for that
+        organization: message, severity and time window only.
+      operationId: getPublicAnnouncements
+      security: []
+      responses:
+        '200':
+          description: Active announcements (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Announcement'
+        '404':
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /platform/auth/login:
     post:
       tags: [Platform]
@@ -1771,7 +1826,12 @@ paths:
         gets `admin` / `admin123321`, which must change its password first;
         `irisctl create-platform-admin` adds more. Sets the `iris_platform_session` cookie
         (HttpOnly, SameSite=Strict, 2 h). Failed attempts are rate limited per
-        IP, per username and globally.
+        IP, per username and globally, and recorded in the activity log as
+        `admin.login_failed` (with the username as typed; never the password).
+        Disabled accounts cannot sign in (same generic error). For an account
+        with two-factor sign-in, a correct password returns `success: false`,
+        `twoFactorRequired: true` and a `challenge` (valid 5 min) instead of a
+        session: finish with `POST /platform/auth/login/verify`.
       operationId: platformLogin
       security: []
       requestBody:
@@ -1789,6 +1849,291 @@ paths:
                 $ref: '#/components/schemas/PlatformLoginResponse'
         '429':
           description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/login/verify:
+    post:
+      tags: [Platform]
+      summary: Second sign-in step for an account with two-factor sign-in
+      description: |
+        Takes the `challenge` from the password step and either a 6-digit TOTP
+        code from the authenticator app (each code is accepted once) or an
+        unused recovery code (then spent; recorded as `admin.recovery_login`).
+        On success sets the `iris_platform_session` cookie like a password-only
+        sign-in. A wrong code returns `success: false`, `twoFactorRequired: true`
+        and the same challenge to retry, and is recorded as `admin.login_failed`
+        (stage `2fa`); an unknown or expired challenge returns `success: false`
+        without `twoFactorRequired` (sign in again). Wrong codes are rate limited
+        per account and per IP (429).
+      operationId: platformLoginVerify
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformLoginVerifyRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformLoginResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/2fa/setup:
+    post:
+      tags: [Platform]
+      summary: Start two-factor (TOTP) enrollment for the signed-in superadmin
+      description: |
+        Generates a new secret, kept as pending until confirmed (calling it again
+        replaces it). Returns the secret, the `otpauth://` URI and the URI as a
+        QR code PNG data URL. 422 when two-factor sign-in is already on (only
+        `irisctl reset-platform-2fa` resets it). Two-factor sign-in is
+        mandatory for superadmins: until it is on (and after a reset), every
+        other operator route answers 403, except the session, sign-out and
+        password routes.
+      operationId: setupPlatformTwoFactor
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Pending enrollment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTwoFactorSetup'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Two-factor sign-in is already on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/auth/2fa/confirm:
+    post:
+      tags: [Platform]
+      summary: Confirm two-factor enrollment with a code from the app
+      description: |
+        Turns two-factor sign-in on and returns 10 one-time recovery codes, shown
+        only this once (stored hashed). Recorded as `admin.2fa_enable`. Wrong
+        codes return 422 and are rate limited (429).
+      operationId: confirmPlatformTwoFactor
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  example: '123456'
+      responses:
+        '200':
+          description: Two-factor sign-in is on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTwoFactorEnabled'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Wrong code, no enrollment started, or already on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many failed attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/admins:
+    get:
+      tags: [Platform]
+      summary: List superadmin accounts (operator only)
+      operationId: getPlatformAdmins
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Every superadmin, by username
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Add a superadmin with a temporary password (operator only)
+      description: |
+        The new account must change its password at first sign-in
+        (`mustChangePassword`). Passwords need at least 12 characters. Recorded
+        as `admin.create`.
+      operationId: createPlatformAdmin
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformCreateAdminInput'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Missing or taken username, or password too short/long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/admins/{id}/disable:
+    post:
+      tags: [Platform]
+      summary: Disable a superadmin (operator only)
+      description: |
+        Ends the account's Backoffice sessions and every organization session it
+        opened by impersonation; it can no longer sign in. You cannot disable
+        your own account or the last enabled one (422). Recorded as
+        `admin.disable`; repeating it changes nothing.
+      operationId: disablePlatformAdmin
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such superadmin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Your own account, or the last enabled one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/admins/{id}/enable:
+    post:
+      tags: [Platform]
+      summary: Re-enable a disabled superadmin (operator only)
+      description: Recorded as `admin.enable`; repeating it changes nothing.
+      operationId: enablePlatformAdmin
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAdminSummary'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such superadmin
           content:
             application/json:
               schema:
@@ -1896,7 +2241,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -1935,7 +2280,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -1955,9 +2300,10 @@ paths:
         organization session in this browser), valid for one hour and never
         extended (it does not slide like a signed-in session). The session
         reports `impersonatedBy` on `/auth/session`, is written to the
-        `impersonation_events` audit log (every change request made with it is
-        traced, see `/platform/audit`), is not counted as a login, and ends on
-        `/auth/logout` or when the superadmin signs out of the Backoffice.
+        `impersonation_events` audit log with the required `reason` (every
+        change request made with it is traced, see `/platform/audit`), is not
+        counted as a login, and ends on `/auth/logout`, when the superadmin
+        signs out of the Backoffice, or when the superadmin is disabled.
       operationId: platformImpersonate
       security:
         - PlatformSession: []
@@ -1992,7 +2338,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2004,7 +2350,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
-          description: No user chosen
+          description: No user chosen, or the reason is missing or over 200 characters
           content:
             application/json:
               schema:
@@ -2016,7 +2362,8 @@ paths:
       description: >
         Every POST/PUT/PATCH/DELETE made with the impersonated session: method,
         route pattern, path, response status and time. Request bodies are never
-        recorded; reads are not traced.
+        recorded; reads are not traced. Still available after the
+        organization is deleted.
       operationId: getPlatformImpersonationActions
       security:
         - PlatformSession: []
@@ -2042,7 +2389,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2057,6 +2404,10 @@ paths:
     get:
       tags: [Platform]
       summary: List organizations with status and account counts (operator only)
+      description: >-
+        Each organization carries `health` (activity counts and dates only; never customer, user or
+        work-order records — one grouped query per source, not per organization) and the superadmins'
+        internal `notes` (`PUT /platform/tenants/{slug}/notes`).
       operationId: getPlatformTenants
       security:
         - PlatformSession: []
@@ -2076,7 +2427,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2108,7 +2459,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2156,7 +2507,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2169,6 +2520,113 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Invalid name or slug, or the slug is taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Platform]
+      summary: Permanently delete a suspended organization and all its data (operator only)
+      description: >
+        Two-phase: the organization must be suspended first, and the body must
+        repeat its slug exactly. Deletes every row the organization owns in one
+        transaction (users, sessions, customers, work orders, catalog, stock,
+        processes, settings, login history, superadmin notes). Recorded as
+        `tenant.delete` with the name, slug and row counts; the activity log
+        keeps all earlier events of the organization, and its impersonation
+        history (each session's reason, status and request trail) is kept,
+        detached from the deleted organization. Cannot be undone — export
+        first.
+      operationId: deletePlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformDeleteTenantInput'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenantDeletion'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The organization is not suspended, or confirmSlug does not match its slug
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/export:
+    get:
+      tags: [Platform]
+      summary: Download a full export of one organization's data (operator only)
+      description: >
+        A single JSON document (attachment, `iris-<slug>-<YYYYMMDD-HHMMSS>.json`)
+        with every row the organization owns, without password hashes or
+        sessions. Platform-side rows about the organization (superadmin notes,
+        announcement targeting) are not part of it. A sensitive read, so it is
+        recorded as `tenant.export`.
+      operationId: exportPlatformTenant
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The export file
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenantExport'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
           content:
             application/json:
               schema:
@@ -2205,7 +2663,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2255,7 +2713,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2268,6 +2726,64 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: '`processes` without `stock`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/tenants/{slug}/notes:
+    put:
+      tags: [Platform]
+      summary: Replace an organization's internal notes (operator only)
+      description: >-
+        Contact person, contact e-mail/phone, plan (free text) and multiline notes, visible only in the
+        Backoffice (stored in `tenant_notes`, never in the organization's settings). Values are trimmed;
+        the four short fields take at most 200 characters, `notes` at most 10000, and a non-empty
+        `contactEmail` must look like an address (422 otherwise). Recorded as `tenant.notes` in the
+        activity log, in the same transaction, with detail `{"fields":"contactName,plan,..."}` — the
+        names of the changed fields, never their contents. Saving identical notes is a no-op: 200 and
+        no audit row.
+      operationId: setPlatformTenantNotes
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformTenantNotesInput'
+      responses:
+        '200':
+          description: The organization with its notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformTenant'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: A field is too long or the contact e-mail is not valid
           content:
             application/json:
               schema:
@@ -2300,7 +2816,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2352,7 +2868,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2365,6 +2881,73 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Password too short or too long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/backups:
+    get:
+      tags: [Platform]
+      summary: Backup status and the newest backup copies (operator only)
+      description: >
+        SQLite only: copies are written to `IRIS_BACKUP_DIR` (default a `backups`
+        folder next to the database) under generated names
+        `iris-YYYYMMDD-HHMMSS[-N].db`, newest first, at most 50 (`total` counts
+        all). Copies are listed, never served. On PostgreSQL `supported` is
+        false: backups are taken outside the API (pg_dump, deploy/POSTGRES.md).
+      operationId: getPlatformBackups
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Backups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformBackups'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Take a backup copy now (operator only)
+      description: >
+        Writes a consistent copy of the SQLite database (VACUUM INTO), then
+        prunes the directory to the newest `IRIS_BACKUP_KEEP` copies. Takes no
+        input. Recorded as `backup.create` with detail `{name, sizeBytes}`.
+      operationId: createPlatformBackup
+      security:
+        - PlatformSession: []
+      responses:
+        '201':
+          description: The new copy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformBackup'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Backups are not taken by the API on this database (PostgreSQL)
           content:
             application/json:
               schema:
@@ -2411,7 +2994,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2445,7 +3028,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2496,7 +3079,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2559,7 +3142,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
@@ -2605,13 +3188,216 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: The account must change its password first
+          description: The account must change its password or turn on two-factor sign-in first
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/announcements:
+    get:
+      tags: [Platform]
+      summary: Every announcement with its status and targets, latest start first (operator only)
+      operationId: getPlatformAnnouncements
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: All announcements (active, scheduled and ended)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformAnnouncement'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Create an announcement (operator only)
+      description: >-
+        Recorded as `announcement.create` with detail `{announcementId, severity, message, target}`
+        (message cut to 80 characters; target `all` or comma-joined slugs).
+      operationId: createPlatformAnnouncement
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformAnnouncementInput'
+      responses:
+        '201':
+          description: Created announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAnnouncement'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            Empty or too long message, unknown severity, invalid times (end not after start, or already
+            past), no target, or an unknown organization (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/announcements/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags: [Platform]
+      summary: Replace an announcement's message, severity, window and targets (operator only)
+      description: >-
+        Recorded as `announcement.update`. Unlike create, an end time in the past is accepted.
+      operationId: updatePlatformAnnouncement
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformAnnouncementInput'
+      responses:
+        '200':
+          description: Updated announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAnnouncement'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid input (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Platform]
+      summary: Delete an announcement (operator only)
+      description: Recorded as `announcement.delete`.
+      operationId: deletePlatformAnnouncement
+      security:
+        - PlatformSession: []
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/announcements/{id}/end:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Platform]
+      summary: End an announcement now (operator only)
+      description: >-
+        Sets `endsAt` to now (a scheduled one also gets `startsAt` = now). Recorded as
+        `announcement.end`; ending one that has already ended changes nothing and is not recorded.
+      operationId: endPlatformAnnouncement
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: The ended announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAnnouncement'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password or turn on two-factor sign-in first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such announcement
           content:
             application/json:
               schema:
@@ -4264,8 +5050,84 @@ components:
             mustChangePassword:
               type: boolean
               description: True until the account replaces its initial password.
+            twoFactorEnabled:
+              type: boolean
+              description: >
+                True once the account has enrolled an authenticator app.
+                Mandatory: while false, the console allows only enrollment.
         error:
           type: string
+        twoFactorRequired:
+          type: boolean
+          description: The password was right; send a code with `challenge` to `/platform/auth/login/verify`.
+        challenge:
+          type: string
+          description: Opaque, single-use, valid 5 minutes.
+    PlatformLoginVerifyRequest:
+      type: object
+      required: [challenge, code]
+      properties:
+        challenge:
+          type: string
+        code:
+          type: string
+          description: A 6-digit TOTP code, or a recovery code (case, spaces and dashes ignored).
+    PlatformTwoFactorSetup:
+      type: object
+      required: [secret, otpauthUri, qrCode]
+      properties:
+        secret:
+          type: string
+          description: Base32 secret, for typing into the app by hand.
+        otpauthUri:
+          type: string
+          example: otpauth://totp/Iris%20Backoffice:ops?algorithm=SHA1&digits=6&issuer=Iris%20Backoffice&period=30&secret=...
+        qrCode:
+          type: string
+          description: The URI as a QR code, a `data:image/png;base64,` URL.
+    PlatformTwoFactorEnabled:
+      type: object
+      required: [recoveryCodes]
+      properties:
+        recoveryCodes:
+          type: array
+          items:
+            type: string
+            example: abcde-fgh23
+    PlatformAdminSummary:
+      type: object
+      required: [id, username, createdAt, lastLoginAt, twoFactorEnabled, mustChangePassword, disabledAt]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        createdAt:
+          type: string
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        twoFactorEnabled:
+          type: boolean
+        mustChangePassword:
+          type: boolean
+          description: Still on a temporary password.
+        disabledAt:
+          type: string
+          format: date-time
+          nullable: true
+    PlatformCreateAdminInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+        password:
+          type: string
+          minLength: 12
+          description: Temporary; the new superadmin must change it at first sign-in.
     PlatformTenantUsers:
       type: object
       required: [tenant, users]
@@ -4286,10 +5148,15 @@ components:
             $ref: '#/components/schemas/User'
     PlatformImpersonationRequest:
       type: object
-      required: [userId]
+      required: [userId, reason]
       properties:
         userId:
           type: string
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Why the superadmin goes in; shown in the activity log.
     PlatformImpersonationResponse:
       type: object
       required: [success]
@@ -4305,7 +5172,7 @@ components:
           format: date-time
     PlatformTenant:
       type: object
-      required: [id, slug, name, createdAt, suspendedAt, users, admins, modules]
+      required: [id, slug, name, createdAt, suspendedAt, users, admins, modules, health, notes]
       properties:
         modules:
           $ref: '#/components/schemas/OrganizationModules'
@@ -4325,6 +5192,76 @@ components:
           type: integer
         admins:
           type: integer
+        health:
+          $ref: '#/components/schemas/PlatformTenantHealth'
+        notes:
+          $ref: '#/components/schemas/PlatformTenantNotes'
+    PlatformTenantHealth:
+      type: object
+      description: Activity at a glance. Counts and dates only; never customer, user or work-order records.
+      required: [lastLoginAt, activeUsers7d, activeUsers30d, workOrdersCreated30d, openWorkOrders, dormant]
+      properties:
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Newest recorded sign-in (impersonation is not a sign-in).
+        activeUsers7d:
+          type: integer
+          description: Distinct users who signed in within 7 days or hold a live, non-impersonated session.
+        activeUsers30d:
+          type: integer
+          description: Same, within 30 days.
+        workOrdersCreated30d:
+          type: integer
+        openWorkOrders:
+          type: integer
+          description: Work orders not completed, cancelled or invoiced.
+        dormant:
+          type: boolean
+          description: >-
+            No active user in 30 days (`activeUsers30d` is 0) and the organization is older than 30 days.
+    PlatformTenantNotes:
+      type: object
+      description: Superadmin-only internal notes; empty strings until first saved.
+      required: [contactName, contactEmail, contactPhone, plan, notes, updatedAt, updatedBy]
+      properties:
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        contactPhone:
+          type: string
+        plan:
+          type: string
+        notes:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedBy:
+          type: string
+          nullable: true
+          description: Username of the superadmin who saved them last.
+    PlatformTenantNotesInput:
+      type: object
+      properties:
+        contactName:
+          type: string
+          maxLength: 200
+        contactEmail:
+          type: string
+          maxLength: 200
+        contactPhone:
+          type: string
+          maxLength: 200
+        plan:
+          type: string
+          maxLength: 200
+        notes:
+          type: string
+          maxLength: 10000
     PlatformCreateTenantInput:
       type: object
       required: [name, slug, adminUsername, adminPassword]
@@ -4353,6 +5290,82 @@ components:
           pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
           minLength: 2
           maxLength: 64
+    PlatformTenantExport:
+      type: object
+      description: >
+        Every row the organization owns, table by table (column -> value).
+        users carry no password_hash; sessions, tenant_notes (superadmin-internal)
+        and platform_announcement_tenants (platform-side targeting) are not
+        exported, although deleting the organization removes them too. JSON
+        columns (work_orders.payload, process_templates.graph,
+        work_order_processes.graph) are embedded as JSON.
+      required: [format, formatVersion, exportedAt, schemaVersion, tenant, totalRows, counts, tables]
+      properties:
+        format:
+          type: string
+          enum: [iris-tenant-export]
+        formatVersion:
+          type: integer
+          description: Bumped when the layout changes incompatibly (currently 1).
+        exportedAt:
+          type: string
+          format: date-time
+        schemaVersion:
+          type: integer
+          description: Highest applied database migration.
+        tenant:
+          type: object
+          required: [id, slug, name, createdAt, suspendedAt]
+          properties:
+            id:
+              type: string
+            slug:
+              type: string
+            name:
+              type: string
+            createdAt:
+              type: string
+            suspendedAt:
+              type: string
+              nullable: true
+        totalRows:
+          type: integer
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+        tables:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              additionalProperties: true
+    PlatformDeleteTenantInput:
+      type: object
+      required: [confirmSlug]
+      properties:
+        confirmSlug:
+          type: string
+          description: The organization's slug, typed again exactly.
+    PlatformTenantDeletion:
+      type: object
+      required: [slug, name, deletedAt, totalRows, rows]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        deletedAt:
+          type: string
+          format: date-time
+        totalRows:
+          type: integer
+        rows:
+          type: object
+          description: Deleted rows per table.
+          additionalProperties:
+            type: integer
     PlatformPasswordReset:
       type: object
       required: [password]
@@ -4374,7 +5387,13 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, tenant.notes, tenant.export, tenant.delete, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete, admin.create, admin.disable, admin.enable, admin.2fa_enable, admin.2fa_reset, admin.login_failed, admin.recovery_login, backup.create, announcement.create, announcement.update, announcement.end, announcement.delete]
+          description: >
+            `admin.*` events concern superadmin accounts and have no organization
+            (empty tenantSlug/tenantName); targetUsername is the account acted
+            on. On `admin.login_failed` adminUsername is the username as typed
+            and detail.stage is `password` or `2fa`. `admin.2fa_reset` done from
+            the server has adminUsername `irisctl`.
         tenantSlug:
           type: string
           description: As it was at the time.
@@ -4387,13 +5406,19 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: For tenant.update, fromName/toName and fromSlug/toSlug of what changed.
+          description: >
+            For tenant.update, fromName/toName and fromSlug/toSlug of what changed.
+            For tenant.export, totalRows; for tenant.delete, totalRows, users,
+            customers and workOrders (deleted row counts).
         ip:
           type: string
         impersonation:
           type: object
-          required: [id, expiresAt, endedAt, actionCount]
+          required: [id, expiresAt, endedAt, actionCount, reason]
           properties:
+            reason:
+              type: string
+              description: Given when it was started (empty for impersonations from before it was required).
             id:
               type: integer
               format: int64
@@ -4502,6 +5527,11 @@ components:
               type: integer
             heapBytes:
               type: integer
+            schemaVersion:
+              type: integer
+              description: Highest applied schema migration.
+            backup:
+              $ref: '#/components/schemas/PlatformBackupStatus'
         tenants:
           type: array
           items:
@@ -4526,6 +5556,59 @@ components:
                 description: Sign-ins that day, keyed by organization slug.
                 additionalProperties:
                   type: integer
+    PlatformBackupStatus:
+      type: object
+      required: [supported, lastBackupAt, stale, staleAfterHours, intervalSeconds]
+      properties:
+        supported:
+          type: boolean
+          description: False on PostgreSQL, where backups are managed outside the API.
+        lastBackupAt:
+          type: [string, 'null']
+          format: date-time
+        stale:
+          type: boolean
+          description: Supported and the newest copy is missing or older than staleAfterHours.
+        staleAfterHours:
+          type: integer
+          description: IRIS_BACKUP_STALE_HOURS (default 24).
+        intervalSeconds:
+          type: integer
+          description: Automatic backup interval (IRIS_BACKUP_INTERVAL); 0 when off.
+    PlatformBackup:
+      type: object
+      required: [name, sizeBytes, createdAt]
+      properties:
+        name:
+          type: string
+          example: iris-20261018-080000.db
+        sizeBytes:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    PlatformBackups:
+      allOf:
+        - $ref: '#/components/schemas/PlatformBackupStatus'
+        - type: object
+          required: [engine, directory, keep, total, items]
+          properties:
+            engine:
+              type: string
+              enum: [sqlite, postgres]
+            directory:
+              type: string
+              description: Server path of the backup directory; empty when unsupported.
+            keep:
+              type: integer
+              description: Copies retained (IRIS_BACKUP_KEEP); 0 keeps all.
+            total:
+              type: integer
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlatformBackup'
     PlatformTenantMetrics:
       type: object
       properties:
@@ -4578,6 +5661,88 @@ components:
         logoVersion:
           type: [string, 'null']
           description: Content hash of the sign-in logo; null when none is set.
+    Announcement:
+      type: object
+      description: A platform announcement as an organization's users see it.
+      required: [id, message, severity, startsAt, endsAt]
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+          maxLength: 500
+          description: Plain text.
+        severity:
+          type: string
+          enum: [info, warning, maintenance]
+          description: Info banners can be dismissed by the user; warning and maintenance ones cannot.
+        startsAt:
+          type: string
+          format: date-time
+          description: UTC, `YYYY-MM-DDTHH:MM:SSZ`.
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+          description: UTC; null means until ended.
+    PlatformAnnouncement:
+      allOf:
+        - $ref: '#/components/schemas/Announcement'
+        - type: object
+          required: [status, allTenants, tenants, createdAt, createdBy, updatedAt]
+          properties:
+            status:
+              type: string
+              enum: [active, scheduled, ended]
+              description: At the time of the request.
+            allTenants:
+              type: boolean
+            tenants:
+              type: array
+              description: Targeted organizations (current slug and name); empty when allTenants.
+              items:
+                type: object
+                required: [slug, name]
+                properties:
+                  slug:
+                    type: string
+                  name:
+                    type: string
+            createdAt:
+              type: string
+              format: date-time
+            createdBy:
+              type: string
+              description: Superadmin username.
+            updatedAt:
+              type: string
+              format: date-time
+    PlatformAnnouncementInput:
+      type: object
+      required: [message, severity]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+        severity:
+          type: string
+          enum: [info, warning, maintenance]
+        startsAt:
+          type: [string, 'null']
+          format: date-time
+          description: RFC 3339; defaults to now.
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+          description: RFC 3339, after startsAt (and, on create, in the future); null keeps it up until ended.
+        allTenants:
+          type: boolean
+          default: false
+        tenantSlugs:
+          type: array
+          items:
+            type: string
+          description: Required (non-empty) unless allTenants; ignored when it is set.
     LoginLogoUpload:
       type: object
       required: [contentType, data]

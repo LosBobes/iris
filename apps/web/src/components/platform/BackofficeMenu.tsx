@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { KeyRound, LogOut, Menu, X } from "lucide-react";
+import { KeyRound, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { LanguageToggle } from "./LanguageToggle";
 
 /**
@@ -18,6 +18,8 @@ export function BackofficeMenu({
   sections,
   extra,
   onChangePassword,
+  twoFactorEnabled,
+  onTwoFactor,
   onLogout,
 }: {
   username: string;
@@ -25,6 +27,10 @@ export function BackofficeMenu({
   sections?: { to: string; label: string; current: boolean }[];
   extra?: ReactNode;
   onChangePassword: () => void;
+  /** Shown next to the two-factor item (on/off). */
+  twoFactorEnabled?: boolean;
+  /** Opens two-factor sign-in setup; the item is hidden without it. */
+  onTwoFactor?: () => void;
   onLogout: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
@@ -132,6 +138,22 @@ export function BackofficeMenu({
             <KeyRound className="h-[18px] w-[18px] text-[color:var(--pf-text-2)]" />
             {t("platform.password.title")}
           </button>
+          {onTwoFactor ? (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                onTwoFactor();
+              }}
+            >
+              <ShieldCheck className="h-[18px] w-[18px] text-[color:var(--pf-text-2)]" />
+              <span className="flex-1">{t("platform.twoFactor.menu")}</span>
+              <span className={`text-[12px] ${twoFactorEnabled ? "text-[#5fb88a]" : "text-[color:var(--pf-muted)]"}`}>
+                {twoFactorEnabled ? t("platform.admins.twoFactorOn") : t("platform.admins.twoFactorOff")}
+              </span>
+            </button>
+          ) : null}
           <button
             type="button"
             className={item}

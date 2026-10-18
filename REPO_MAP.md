@@ -56,7 +56,7 @@ iris/
 │           └── types/             TypeScript domain types
 ├── iris-api/
 │   ├── cmd/server/                HTTP server wiring
-│   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup
+│   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup, platform admins/2FA, export-/delete-tenant
 │   ├── internal/api/            Routes, auth middleware, handlers
 │   ├── internal/domain/         Go structs (contract with OpenAPI)
 │   ├── internal/store/          SQL store (SQLite/Postgres) + fixture store
@@ -176,6 +176,24 @@ Web client
   UI. Stock posting only applies to processes created while Magacin was
   on (`stock_tracked`, migration v22). See [D-019](docs/DECISIONS.md).
 
+### Backoffice (superadmins, `/platform/*`)
+
+- Separate `platform_admins` accounts and `iris_platform_session` (2 h). Tabs:
+  **Organizacije** (create / rename / suspend, modules, users and impersonation
+  with a required reason, health computed on read, superadmin-only notes in
+  `tenant_notes` — never shown to the organization or exported — and JSON export /
+  delete: suspend first, retype the slug), **Aktivnost** (`platform_audit_events`,
+  impersonation trails), **Obaveštenja**, **Superadmini** (add / disable accounts;
+  mandatory TOTP 2FA with recovery codes, D-021, v26) and **Sistem** (SQLite backups).
+  See D-021–D-025.
+- Deleting an organization removes every `tenantDataTables` table in one audited
+  transaction but keeps the activity log and impersonation history
+  (`impersonation_events.tenant_id` → NULL with slug/name on the row, v30).
+- Backups (D-023) are `VACUUM INTO` copies in `IRIS_BACKUP_DIR`, listed but never
+  served over HTTP; PostgreSQL deployments use `pg_dump` instead.
+- Announcements (D-024, v29) also reach the sign-in page through the public
+  `GET /public/organizations/{slug}/announcements`: never put confidential text in one.
+
 ### Organization settings
 
 - `GET`/`PUT /settings` back the admin **Settings** page. Values are stored per
@@ -210,7 +228,7 @@ DATABASE_PATH=./data/iris.db go run ./cmd/server
 | Create tenant | `go run ./cmd/irisctl create-tenant -slug … -name … [-admin-username … -admin-password …]` |
 | CLI user | `go run ./cmd/irisctl create-user -tenant <slug> -username … -password … -role admin` |
 | CSV import | `go run ./cmd/irisctl import-csv --dry-run\|--apply [-tenant <slug>] --dir ./imports` (`--apply` needs `-tenant`) |
-| Backup | `go run ./cmd/irisctl backup -out ./backups/iris.db` |
+| Backup | `go run ./cmd/irisctl backup` (into `IRIS_BACKUP_DIR`; or `-out <file>`) — also from the Backoffice "Sistem" tab |
 
 ### Web (`apps/web/`)
 
@@ -259,6 +277,10 @@ curl http://localhost:8080/healthz
 | `IRIS_ALLOWED_ORIGINS` | CORS allowlist (comma-separated) |
 | `IRIS_WEB_DIR` | Serve built SPA + fallback routing (Docker: `/app/web`) |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary for PDF rendering (Docker: `/usr/local/bin/iris-chrome`); unset = search `chromium`, `google-chrome`, … on `$PATH` |
+| `IRIS_BACKUP_DIR` | SQLite backup folder for the Backoffice "Sistem" tab and `irisctl backup` (default: `backups/` next to `DATABASE_PATH`, Docker `/data/backups`) |
+| `IRIS_BACKUP_KEEP` | Newest backup copies kept after each new one (default `14`; `0` keeps all) |
+| `IRIS_BACKUP_INTERVAL` | Automatic backup interval as a Go duration (`24h`, `6h`; min `15m`); empty = off |
+| `IRIS_BACKUP_STALE_HOURS` | Backoffice warns when the newest copy is older than this (default `24`) |
 
 Compose also sets `DATABASE_PATH=/data/iris.db`. Root **`.env`** is read by Compose (gitignored; do not commit secrets).
 
@@ -301,7 +323,7 @@ Demo seed credentials (non-production): `admin` / `admin123`.
 | **Doc drift** | Some docs still say `IRIS_DB_PATH` as primary; runtime prefers **`DATABASE_PATH`**. `docs/ARCHITECTURE.md` / `docs/CONTRIBUTING.md` partly predate the SQLite API and multi-tenancy - trust `REPO_MAP.md`, `openapi.yaml`, and the Go/web source when they conflict. |
 | **No monorepo CI** | Regressions rely on manual verification per package. |
 | **Legacy statuses** | API accepts/normalizes `draft` / `active` for old fixtures. |
-| **SQLite ops** | Single-file DB + volume backups - no replication or migration rollback story. On PostgreSQL, `irisctl backup` does not apply; use `pg_dump` (see `deploy/POSTGRES.md`). |
+| **SQLite ops** | Single-file DB + volume backups - no replication or migration rollback story. Backoffice "Sistem" takes/lists `VACUUM INTO` copies (optional `IRIS_BACKUP_INTERVAL` schedule) but they sit on the same volume: sync them off the box. On PostgreSQL, `irisctl backup` and the Backoffice backups do not apply; use `pg_dump` (see `deploy/POSTGRES.md`). |
 | **Contract discipline** | Several places must stay aligned on domain changes; easy to miss one in review. |
 
 ---

@@ -12,12 +12,50 @@ export interface PlatformAdmin {
   role?: 'superadmin'
   /** True until the account replaces its initial password (e.g. the seeded default). */
   mustChangePassword?: boolean
+  /** True once the account has enrolled an authenticator app (TOTP). */
+  twoFactorEnabled?: boolean
 }
 
 export interface PlatformLoginResponse {
   success: boolean
   admin?: PlatformAdmin
   error?: string
+  /** The password was right; finish with `platformLoginVerify(challenge, code)`. */
+  twoFactorRequired?: boolean
+  /** Single-use, valid 5 minutes. */
+  challenge?: string
+}
+
+/** POST /platform/auth/2fa/setup: a pending TOTP enrollment. */
+export interface PlatformTwoFactorSetup {
+  /** Base32 secret, for typing into the app by hand. */
+  secret: string
+  otpauthUri: string
+  /** The URI as a QR code, a `data:image/png;base64,` URL. */
+  qrCode: string
+}
+
+/** POST /platform/auth/2fa/confirm: shown once, stored hashed. */
+export interface PlatformTwoFactorEnabled {
+  recoveryCodes: string[]
+}
+
+/** A superadmin account (GET /platform/admins). */
+export interface PlatformAdminSummary {
+  id: string
+  username: string
+  createdAt: string
+  lastLoginAt: string | null
+  twoFactorEnabled: boolean
+  /** Still on a temporary password. */
+  mustChangePassword: boolean
+  disabledAt: string | null
+}
+
+export interface PlatformCreateAdminInput {
+  username: string
+  /** Temporary: the new superadmin must change it at first sign-in. */
+  password: string
 }
 
 /** GET /platform/tenants/{slug}/users: an organization and its accounts. */
@@ -46,7 +84,42 @@ export interface PlatformTenant {
   admins: number
   /** Optional modules switched on for the organization (both off by default). */
   modules: OrganizationModules
+  /** Activity at a glance (counts and dates only). */
+  health: PlatformTenantHealth
+  /** Superadmin-only internal notes; the organization never sees them. */
+  notes: PlatformTenantNotes
 }
+
+/** An organization's recent activity (GET /platform/tenants → health). */
+export interface PlatformTenantHealth {
+  /** Newest recorded sign-in; impersonation is not one. */
+  lastLoginAt: string | null
+  /** Distinct users who signed in within the window or hold a live session. */
+  activeUsers7d: number
+  activeUsers30d: number
+  workOrdersCreated30d: number
+  /** Not completed, cancelled or invoiced. */
+  openWorkOrders: number
+  /** No active user in 30 days, and the organization is older than that. */
+  dormant: boolean
+}
+
+/** Superadmin-only notes about an organization (PUT /platform/tenants/{slug}/notes). */
+export interface PlatformTenantNotes {
+  contactName: string
+  contactEmail: string
+  contactPhone: string
+  plan: string
+  notes: string
+  /** Set once saved. */
+  updatedAt: string | null
+  updatedBy: string | null
+}
+
+export type PlatformTenantNotesInput = Pick<
+  PlatformTenantNotes,
+  'contactName' | 'contactEmail' | 'contactPhone' | 'plan' | 'notes'
+>
 
 export interface PlatformCreateTenantInput {
   name: string
@@ -60,17 +133,50 @@ export interface PlatformUpdateTenantInput {
   slug?: string
 }
 
+/** Result of DELETE /platform/tenants/{slug}: what was removed. */
+export interface PlatformTenantDeletion {
+  slug: string
+  name: string
+  /** RFC 3339 timestamp. */
+  deletedAt: string
+  totalRows: number
+  /** Deleted row count per table. */
+  rows: Record<string, number>
+}
+
+/** A downloaded organization export (GET /platform/tenants/{slug}/export). */
+export interface PlatformTenantExportFile {
+  blob: Blob
+  /** From Content-Disposition, else `iris-<slug>.json`. */
+  filename: string
+}
+
 export type PlatformAuditAction =
+  | 'tenant.export'
+  | 'tenant.delete'
   | 'tenant.create'
   | 'tenant.update'
   | 'tenant.suspend'
   | 'tenant.reactivate'
   | 'tenant.modules'
+  | 'tenant.notes'
   | 'user.password_reset'
   | 'impersonate'
   | 'process_template.create'
   | 'process_template.update'
   | 'process_template.delete'
+  | 'admin.create'
+  | 'admin.disable'
+  | 'admin.enable'
+  | 'admin.2fa_enable'
+  | 'admin.2fa_reset'
+  | 'admin.login_failed'
+  | 'admin.recovery_login'
+  | 'backup.create'
+  | 'announcement.create'
+  | 'announcement.update'
+  | 'announcement.end'
+  | 'announcement.delete'
 
 /** One superadmin action in the Backoffice activity log (GET /platform/audit). */
 export interface PlatformAuditEvent {
@@ -78,14 +184,15 @@ export interface PlatformAuditEvent {
   at: string
   adminUsername: string
   action: PlatformAuditAction
-  /** Organization slug and name as they were at the time. */
+  /** Organization slug and name as they were at the time (empty on admin.* events). */
   tenantSlug: string
   tenantName: string
   targetUsername?: string
   /**
    * For tenant.update: fromName/toName, fromSlug/toSlug of what changed. For
    * tenant.modules: processes/stock = "on"|"off" (new values) and changed =
-   * comma-joined names of the modules that changed.
+   * comma-joined names of the modules that changed. For admin.login_failed:
+   * stage = "password" | "2fa" (adminUsername is the username as typed).
    */
   detail?: Record<string, string>
   ip: string
@@ -96,6 +203,8 @@ export interface PlatformAuditEvent {
     /** Set once signed out (or found expired); null while it may be active. */
     endedAt: string | null
     actionCount: number
+    /** Why it was started (empty for impersonations from before it was required). */
+    reason: string
   }
 }
 
@@ -149,6 +258,42 @@ export interface PlatformSystem {
   uptimeSeconds: number
   goroutines: number
   heapBytes: number
+  /** Highest applied schema migration. */
+  schemaVersion: number
+  backup: PlatformBackupStatus
+}
+
+/**
+ * Backup summary. `supported` is false on PostgreSQL, where backups are taken
+ * outside the API (pg_dump); `stale` is then always false.
+ */
+export interface PlatformBackupStatus {
+  supported: boolean
+  lastBackupAt: string | null
+  /** The newest copy is missing or older than `staleAfterHours`. */
+  stale: boolean
+  staleAfterHours: number
+  /** Automatic backup interval in seconds; 0 when off. */
+  intervalSeconds: number
+}
+
+/** One backup copy on the server (listed only, never downloadable). */
+export interface PlatformBackup {
+  name: string
+  sizeBytes: number
+  createdAt: string
+}
+
+/** GET /platform/backups. */
+export interface PlatformBackups extends PlatformBackupStatus {
+  engine: 'sqlite' | 'postgres'
+  /** Server path of the backup directory; empty when unsupported. */
+  directory: string
+  /** Copies retained; 0 keeps all. */
+  keep: number
+  total: number
+  /** Newest first, at most 50. */
+  items: PlatformBackup[]
 }
 
 export interface PlatformTenantMetrics {

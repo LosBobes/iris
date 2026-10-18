@@ -21,6 +21,7 @@ func signedInPlatform(t *testing.T, server *Server) *http.Cookie {
 	if cookie == nil {
 		t.Fatalf("platform login = %s", rec.Body.String())
 	}
+	enrollPlatformTwoFactor(t, server, cookie)
 	return cookie
 }
 
@@ -35,6 +36,8 @@ func tenantLogin(t *testing.T, server *Server, org, username, password string) d
 	return response
 }
 
+// auditActions lists the activity log without the two-factor enrollment that
+// signedInPlatform performs (mandatory before any operator route).
 func auditActions(t *testing.T, server *Server, cookie *http.Cookie) []domain.PlatformAuditEvent {
 	t.Helper()
 	rec := platformRequest(t, server, cookie, http.MethodGet, "/platform/audit", "")
@@ -42,7 +45,13 @@ func auditActions(t *testing.T, server *Server, cookie *http.Cookie) []domain.Pl
 	if err := json.Unmarshal(rec.Body.Bytes(), &log); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("audit = %d %s", rec.Code, rec.Body.String())
 	}
-	return log.Items
+	events := []domain.PlatformAuditEvent{}
+	for _, event := range log.Items {
+		if event.Action != domain.AuditAdminTwoFactorOn {
+			events = append(events, event)
+		}
+	}
+	return events
 }
 
 func TestPlatformTenantRoutesNeedSuperadmin(t *testing.T) {
@@ -155,7 +164,7 @@ func TestPlatformSuspendTenant(t *testing.T) {
 		t.Fatal("suspension revealed to wrong credentials")
 	}
 	// The Backoffice can still look inside.
-	rec = platformRequest(t, server, cookie, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"admin-1"}`)
+	rec = platformRequest(t, server, cookie, http.MethodPost, "/platform/tenants/demo/impersonate", `{"userId":"admin-1","reason":"Podrška: prijava greške"}`)
 	impersonation := platformCookie(rec, server.config.SessionCookieName)
 	if impersonation == nil {
 		t.Fatalf("impersonate suspended = %d %s", rec.Code, rec.Body.String())

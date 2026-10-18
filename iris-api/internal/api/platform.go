@@ -16,16 +16,18 @@ import (
 )
 
 // Backoffice (the "platform" routes). These sit outside every organization:
-// a platform admin is a separate account in platform_admins, created only from
-// the server with `irisctl create-platform-admin`, with its own cookie and a
-// short session. A fresh database gets one default account that must change
-// its password first. They read the aggregate metrics in store.PlatformMetrics
+// a platform admin is a separate account in platform_admins (created with
+// `irisctl create-platform-admin` or by another superadmin), with its own
+// cookie and a short session, and mandatory TOTP two-factor sign-in
+// (platform_security.go). A fresh database gets one default account that must
+// change its password first. They read the aggregate metrics in store.PlatformMetrics
 // and can impersonate an organization user (impersonation.go); that is their
 // only way into an organization's records.
 
 const (
 	platformInvalidCredentials     = "Neispravno korisničko ime ili lozinka."
 	platformPasswordChangeRequired = "Promenite lozinku pre nastavka."
+	platformTwoFactorRequiredMsg   = "Uključite dvofaktorsku prijavu pre nastavka."
 )
 
 var platformRangeDays = map[int]bool{7: true, 30: true, 90: true, 365: true}
@@ -71,28 +73,24 @@ func (s *Server) handlePlatformLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if admin == nil {
 		log.Printf("platform login failed from %s", clientIP(r))
+		s.recordPlatformLoginFailure(r, platform, req.Username, "", "password")
 		writeJSON(w, http.StatusOK, domain.PlatformLoginResponse{Success: false, Error: platformInvalidCredentials})
 		return
 	}
 	attempt.succeeded()
 
-	expiresAt := time.Now().UTC().Add(s.config.PlatformSessionDuration)
-	token, err := platform.CreatePlatformSession(r.Context(), admin.ID, expiresAt)
-	if err != nil {
-		writeServerError(w, r, err)
+	if admin.TwoFactorEnabled {
+		// The password is right; the session waits for a code
+		// (handlePlatformLoginVerify), throttled under its own keys.
+		challenge, err := platform.CreatePlatformLoginChallenge(r.Context(), admin.ID, time.Now().UTC().Add(store.PlatformLoginChallengeTTL))
+		if err != nil {
+			writeServerError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, domain.PlatformLoginResponse{Success: false, TwoFactorRequired: true, Challenge: challenge})
 		return
 	}
-	log.Printf("platform login succeeded for %q from %s", admin.Username, clientIP(r))
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.config.PlatformSessionCookieName,
-		Value:    token,
-		Path:     "/",
-		Expires:  expiresAt,
-		HttpOnly: true,
-		Secure:   s.config.SecureCookies,
-		SameSite: http.SameSiteStrictMode,
-	})
-	writeJSON(w, http.StatusOK, domain.PlatformLoginResponse{Success: true, Admin: admin})
+	s.startPlatformSession(w, r, platform, admin, "password")
 }
 
 func (s *Server) platformAdminFromRequest(r *http.Request) (*domain.PlatformAdmin, error) {
@@ -206,8 +204,20 @@ func currentPlatformAdmin(r *http.Request) *domain.PlatformAdmin {
 }
 
 // requirePlatformAdmin guards operator routes. A tenant session (iris_session)
-// is never accepted here, whatever its role.
+// is never accepted here, whatever its role. Two-factor sign-in is mandatory
+// for superadmins: an account without it reaches only the enrollment routes
+// (requirePlatformEnrollment) until it turns it on.
 func (s *Server) requirePlatformAdmin(next http.Handler) http.Handler {
+	return s.platformAdminGuard(true, next)
+}
+
+// requirePlatformEnrollment guards the two-factor enrollment routes: like
+// requirePlatformAdmin, but open to an account that has no two-factor yet.
+func (s *Server) requirePlatformEnrollment(next http.Handler) http.Handler {
+	return s.platformAdminGuard(false, next)
+}
+
+func (s *Server) platformAdminGuard(requireTwoFactor bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		admin, err := s.platformAdminFromRequest(r)
 		if err != nil {
@@ -225,6 +235,10 @@ func (s *Server) requirePlatformAdmin(next http.Handler) http.Handler {
 		// The seeded default account opens nothing until its password changes.
 		if admin.MustChangePassword {
 			writeAPIError(w, r, http.StatusForbidden, platformPasswordChangeRequired, nil)
+			return
+		}
+		if requireTwoFactor && !admin.TwoFactorEnabled {
+			writeAPIError(w, r, http.StatusForbidden, platformTwoFactorRequiredMsg, nil)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), platformAdminContextKey, admin)))
@@ -275,6 +289,13 @@ func (s *Server) handlePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		UptimeSeconds:  int64(now.Sub(s.startedAt).Seconds()),
 		Goroutines:     runtime.NumGoroutine(),
 		HeapBytes:      mem.HeapAlloc,
+		Backup:         s.backupStatus(),
+	}
+	if system, ok := s.systemStore(); ok {
+		if metrics.System.SchemaVersion, err = system.SchemaVersion(r.Context()); err != nil {
+			writeServerError(w, r, err)
+			return
+		}
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, metrics)

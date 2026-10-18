@@ -373,6 +373,54 @@ type PlatformAdmin struct {
 	// whose password was not chosen by its owner): the console then allows
 	// nothing but a password change.
 	MustChangePassword bool `json:"mustChangePassword"`
+	// TwoFactorEnabled is set once the account has enrolled an authenticator
+	// app (TOTP); sign-in then needs a code as a second step. It is mandatory:
+	// until it is set, the console allows nothing but enrolling.
+	TwoFactorEnabled bool `json:"twoFactorEnabled"`
+}
+
+// PlatformLoginVerifyRequest is the POST /platform/auth/login/verify payload:
+// the challenge from the password step and a TOTP or recovery code.
+type PlatformLoginVerifyRequest struct {
+	Challenge string `json:"challenge"`
+	Code      string `json:"code"`
+}
+
+// PlatformTwoFactorSetup is a pending TOTP enrollment: the secret to type in
+// (or scan) and the otpauth URI, also as a QR code PNG data URL.
+type PlatformTwoFactorSetup struct {
+	Secret     string `json:"secret"`
+	OtpauthURI string `json:"otpauthUri"`
+	QRCode     string `json:"qrCode"`
+}
+
+// PlatformTwoFactorConfirm confirms an enrollment with a code from the app.
+type PlatformTwoFactorConfirm struct {
+	Code string `json:"code"`
+}
+
+// PlatformTwoFactorEnabled reports a finished enrollment with its one-time
+// recovery codes, shown this once (only their hashes are stored).
+type PlatformTwoFactorEnabled struct {
+	RecoveryCodes []string `json:"recoveryCodes"`
+}
+
+// PlatformAdminSummary is a superadmin account as the Backoffice lists it.
+type PlatformAdminSummary struct {
+	ID                 string  `json:"id"`
+	Username           string  `json:"username"`
+	CreatedAt          string  `json:"createdAt"`
+	LastLoginAt        *string `json:"lastLoginAt"`
+	TwoFactorEnabled   bool    `json:"twoFactorEnabled"`
+	MustChangePassword bool    `json:"mustChangePassword"`
+	DisabledAt         *string `json:"disabledAt"`
+}
+
+// PlatformCreateAdminInput adds a superadmin with a temporary password that
+// must be changed at first sign-in.
+type PlatformCreateAdminInput struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // PlatformPasswordChange is the POST /platform/auth/password payload.
@@ -390,6 +438,11 @@ type PlatformLoginResponse struct {
 	Success bool           `json:"success"`
 	Admin   *PlatformAdmin `json:"admin,omitempty"`
 	Error   string         `json:"error,omitempty"`
+	// TwoFactorRequired (with Challenge) answers a correct password on an
+	// account with two-factor sign-in: send a code with the challenge to
+	// /platform/auth/login/verify.
+	TwoFactorRequired bool   `json:"twoFactorRequired,omitempty"`
+	Challenge         string `json:"challenge,omitempty"`
 }
 
 // PlatformTenantUsers lists one organization's accounts (id, username, role
@@ -403,7 +456,13 @@ type PlatformTenantUsers struct {
 // payload.
 type PlatformImpersonationRequest struct {
 	UserID string `json:"userId"`
+	// Reason is required: a short note on why the superadmin goes in, kept
+	// with the impersonation and shown in the activity log.
+	Reason string `json:"reason"`
 }
+
+// MaxImpersonationReasonLength bounds the impersonation reason (in characters).
+const MaxImpersonationReasonLength = 200
 
 // PlatformImpersonationResponse reports the organization session that was
 // opened (as the iris_session cookie) for the chosen user.
@@ -425,6 +484,51 @@ type PlatformTenant struct {
 	Admins      int     `json:"admins"`
 	// Modules are the organization's optional feature modules (both off by default).
 	Modules OrganizationModules `json:"modules"`
+	// Health is the organization's activity at a glance (counts and dates only).
+	Health PlatformTenantHealth `json:"health"`
+	// Notes are the superadmins' internal notes; the organization never sees them.
+	Notes PlatformTenantNotes `json:"notes"`
+}
+
+// PlatformTenantHealth summarizes an organization's recent activity for the
+// Backoffice list. Aggregates only — never customer, user or work-order records.
+type PlatformTenantHealth struct {
+	// LastLoginAt is the newest recorded sign-in (impersonation is not one).
+	LastLoginAt *string `json:"lastLoginAt"`
+	// ActiveUsers7d / ActiveUsers30d count distinct users who signed in within
+	// the window or hold a live, non-impersonated session.
+	ActiveUsers7d        int `json:"activeUsers7d"`
+	ActiveUsers30d       int `json:"activeUsers30d"`
+	WorkOrdersCreated30d int `json:"workOrdersCreated30d"`
+	OpenWorkOrders       int `json:"openWorkOrders"`
+	// Dormant: nobody signed in for TenantDormantDays and the organization is
+	// older than that (a brand-new one is not dormant yet).
+	Dormant bool `json:"dormant"`
+}
+
+// TenantDormantDays is the sign-in silence after which an organization counts
+// as dormant.
+const TenantDormantDays = 30
+
+// PlatformTenantNotes are superadmin-only internal notes about an organization.
+type PlatformTenantNotes struct {
+	ContactName  string `json:"contactName"`
+	ContactEmail string `json:"contactEmail"`
+	ContactPhone string `json:"contactPhone"`
+	Plan         string `json:"plan"`
+	Notes        string `json:"notes"`
+	// UpdatedAt / UpdatedBy are set once the notes have been saved.
+	UpdatedAt *string `json:"updatedAt"`
+	UpdatedBy *string `json:"updatedBy"`
+}
+
+// PlatformTenantNotesInput replaces an organization's internal notes.
+type PlatformTenantNotesInput struct {
+	ContactName  string `json:"contactName"`
+	ContactEmail string `json:"contactEmail"`
+	ContactPhone string `json:"contactPhone"`
+	Plan         string `json:"plan"`
+	Notes        string `json:"notes"`
 }
 
 // PlatformCreateTenantInput creates an organization with its first admin.
@@ -454,8 +558,18 @@ const (
 	AuditTenantSuspend      = "tenant.suspend"
 	AuditTenantReactivate   = "tenant.reactivate"
 	AuditTenantModules      = "tenant.modules"
+	AuditTenantNotes        = "tenant.notes"
 	AuditUserPasswordReset  = "user.password_reset"
 	AuditImpersonationStart = "impersonate"
+
+	// Superadmin accounts and sign-in (no organization).
+	AuditAdminRecoveryLogin  = "admin.recovery_login"
+	AuditAdminLoginFailed    = "admin.login_failed"
+	AuditAdminTwoFactorOn    = "admin.2fa_enable"
+	AuditAdminTwoFactorReset = "admin.2fa_reset"
+	AuditAdminCreate         = "admin.create"
+	AuditAdminDisable        = "admin.disable"
+	AuditAdminEnable         = "admin.enable"
 )
 
 // PlatformAuditEvent is one superadmin action in the Backoffice activity log.
@@ -481,6 +595,9 @@ type PlatformImpersonationStatus struct {
 	ExpiresAt   string  `json:"expiresAt"`
 	EndedAt     *string `json:"endedAt"`
 	ActionCount int     `json:"actionCount"`
+	// Reason is what the superadmin gave when starting it (empty for
+	// impersonations recorded before it was required).
+	Reason string `json:"reason"`
 }
 
 // PlatformAuditLog is a page of the activity log, newest first.
@@ -540,6 +657,41 @@ type PlatformSystem struct {
 	UptimeSeconds  int64  `json:"uptimeSeconds"`
 	Goroutines     int    `json:"goroutines"`
 	HeapBytes      uint64 `json:"heapBytes"`
+	// SchemaVersion is the highest applied migration.
+	SchemaVersion int                  `json:"schemaVersion"`
+	Backup        PlatformBackupStatus `json:"backup"`
+}
+
+// AuditBackupCreate is the audit action of a backup taken from the Backoffice.
+const AuditBackupCreate = "backup.create"
+
+// PlatformBackupStatus summarizes backups for the dashboard. On PostgreSQL
+// Supported is false: backups are managed outside the API (pg_dump).
+type PlatformBackupStatus struct {
+	Supported       bool    `json:"supported"`
+	LastBackupAt    *string `json:"lastBackupAt"`
+	Stale           bool    `json:"stale"`
+	StaleAfterHours int     `json:"staleAfterHours"`
+	// IntervalSeconds is the automatic backup interval; 0 when off.
+	IntervalSeconds int64 `json:"intervalSeconds"`
+}
+
+// PlatformBackup is one backup copy (listed only, never downloadable).
+type PlatformBackup struct {
+	Name      string `json:"name"`
+	SizeBytes int64  `json:"sizeBytes"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// PlatformBackups is GET /platform/backups: the status, where copies go and
+// the newest copies (at most 50; Total counts all).
+type PlatformBackups struct {
+	PlatformBackupStatus
+	Engine    string           `json:"engine"`
+	Directory string           `json:"directory"`
+	Keep      int              `json:"keep"`
+	Total     int              `json:"total"`
+	Items     []PlatformBackup `json:"items"`
 }
 
 type PlatformTenantMetrics struct {

@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/errors";
 import { sr } from "@/i18n/locales/sr";
 import type { PlatformTenant } from "@/types/platform";
 import "@/i18n";
+import { emptyHealth, emptyNotes } from "./test-tenants";
 
 const strings = sr.platform.orgs;
 
@@ -21,6 +22,8 @@ const demo: PlatformTenant = {
   users: 2,
   admins: 1,
   modules: { processes: false, stock: false },
+  health: emptyHealth,
+  notes: emptyNotes,
 };
 
 afterEach(() => {
@@ -112,6 +115,77 @@ describe("OrganizationsPanel", () => {
     expect(setPlatformTenantSuspended).toHaveBeenCalledWith("demo", true);
     expect(await screen.findByRole("button", { name: strings.reactivate })).toBeInTheDocument();
     expect(screen.getByText(/Suspendovana/)).toBeInTheDocument();
+  });
+
+  it("does not offer deleting an organization that is not suspended", async () => {
+    vi.stubGlobal("api", { getPlatformTenants: vi.fn(async () => [demo]) });
+    render(<OrganizationsPanel />);
+    expect(await screen.findByRole("button", { name: strings.deleteOrg })).toBeDisabled();
+  });
+
+  it("exports an organization's data", async () => {
+    const platformExportTenant = vi.fn(async () => ({ blob: new Blob(["{}"]), filename: "iris-demo.json" }));
+    vi.stubGlobal("api", { getPlatformTenants: vi.fn(async () => [demo]), platformExportTenant });
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    render(<OrganizationsPanel />);
+    await userEvent.click(await screen.findByRole("button", { name: strings.exportData }));
+    expect(platformExportTenant).toHaveBeenCalledWith("demo");
+    expect(await screen.findByRole("status")).toHaveTextContent("Demo Štamparija");
+    expect(click).toHaveBeenCalled();
+    click.mockRestore();
+  });
+
+  it("deletes a suspended organization only after the exact slug is typed", async () => {
+    const suspended = { ...demo, suspendedAt: "2026-10-17T08:00:00Z" };
+    const platformDeleteTenant = vi.fn(async () => ({
+      slug: "demo",
+      name: demo.name,
+      deletedAt: "2026-10-18T08:00:00Z",
+      totalRows: 42,
+      rows: { users: 2 },
+    }));
+    const getPlatformTenants = vi.fn().mockResolvedValueOnce([suspended]).mockResolvedValueOnce([]);
+    vi.stubGlobal("api", { getPlatformTenants, platformDeleteTenant });
+
+    render(<OrganizationsPanel />);
+    await userEvent.click(await screen.findByRole("button", { name: strings.deleteOrg }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(strings.deleteIrreversible);
+    const confirm = within(dialog).getByRole("button", { name: strings.deleteConfirm });
+    expect(confirm).toBeDisabled();
+
+    const input = within(dialog).getByRole("textbox");
+    await userEvent.type(input, "dem");
+    expect(confirm).toBeDisabled();
+    await userEvent.type(input, "o ");
+    expect(confirm).toBeDisabled();
+    await userEvent.clear(input);
+    await userEvent.type(input, "demo");
+    expect(confirm).toBeEnabled();
+
+    await userEvent.click(confirm);
+    expect(platformDeleteTenant).toHaveBeenCalledWith("demo", "demo");
+    expect(await screen.findByRole("status")).toHaveTextContent("42");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(getPlatformTenants).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the server's reason when deletion is refused", async () => {
+    const suspended = { ...demo, suspendedAt: "2026-10-17T08:00:00Z" };
+    vi.stubGlobal("api", {
+      getPlatformTenants: vi.fn(async () => [suspended]),
+      platformDeleteTenant: vi.fn(async () => {
+        throw new ApiError("Potvrda se ne poklapa.", { status: 422, url: "/platform/tenants/demo", method: "DELETE" });
+      }),
+    });
+    render(<OrganizationsPanel />);
+    await userEvent.click(await screen.findByRole("button", { name: strings.deleteOrg }));
+    const dialog = screen.getByRole("dialog");
+    await userEvent.type(within(dialog).getByRole("textbox"), "demo");
+    await userEvent.click(within(dialog).getByRole("button", { name: strings.deleteConfirm }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Potvrda se ne poklapa.");
   });
 });
 

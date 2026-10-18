@@ -92,6 +92,13 @@ services:
       IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-}"
       # Optional release identifier shown in Sentry (e.g. the git sha).
       IRIS_RELEASE: "${IRIS_RELEASE:-}"
+      # SQLite backups (ignored with DATABASE_URL) (Backoffice "Sistem" tab). Copies go to /data/backups on
+      # the data volume; empty values take the defaults (keep 14, warn after
+      # 24 h). IRIS_BACKUP_INTERVAL (e.g. 24h) turns on automatic copies.
+      IRIS_BACKUP_DIR: "${IRIS_BACKUP_DIR:-}"
+      IRIS_BACKUP_KEEP: "${IRIS_BACKUP_KEEP:-}"
+      IRIS_BACKUP_INTERVAL: "${IRIS_BACKUP_INTERVAL:-}"
+      IRIS_BACKUP_STALE_HOURS: "${IRIS_BACKUP_STALE_HOURS:-}"
       # Passwords for the optional demo organization (/login/demo), read by
       # `irisctl seed-demo` run inside this container. Required to seed it in
       # production (12+ characters, not the public demo passwords); the demo org
