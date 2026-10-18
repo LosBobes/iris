@@ -47,15 +47,12 @@ func main() {
 	}
 
 	dbPath, explicitDBPath := databasePathFromEnv(env)
-	sessionSecret := os.Getenv("IRIS_SESSION_SECRET")
-	if env == "production" {
-		if !explicitDBPath {
-			log.Fatal("DATABASE_PATH is required in production")
-		}
-		if sessionSecret == "" {
-			log.Fatal("IRIS_SESSION_SECRET is required in production")
-		}
+	if env == "production" && !explicitDBPath {
+		log.Fatal("DATABASE_PATH is required in production")
 	}
+	// IRIS_SESSION_SECRET is not used: session tokens are random and stored
+	// hashed, so nothing is signed with it. Older deployments still set it,
+	// which is harmless; it is accepted and ignored.
 
 	var persistence store.Store
 	sqliteStore, err := store.OpenSQLite(ctx, dbPath)
@@ -78,6 +75,7 @@ func main() {
 		AllowedOrigins:    splitCSV(os.Getenv("IRIS_ALLOWED_ORIGINS")),
 		SessionCookieName: "iris_session",
 		SecureCookies:     env == "production",
+		Production:        env == "production",
 		WebDir:            os.Getenv("IRIS_WEB_DIR"),
 		Release:           os.Getenv("IRIS_RELEASE"),
 	})

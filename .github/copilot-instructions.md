@@ -73,7 +73,7 @@ fixture-backed at runtime; fixtures are for tests/`seed-demo`).
 # from iris-api/
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/server
 go test ./...   # or narrow: go test ./internal/api
 ```
 

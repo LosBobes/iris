@@ -400,25 +400,59 @@ export interface WorkOrderRepository {
   getOperators(): Promise<string[]>
 }
 
-export interface WorkOrderListQuery {
+/** Dashboard-style due-date buckets (each leaves cancelled orders out). */
+export type WorkOrderQueue = 'unassigned' | 'overdue' | 'today' | 'thisWeek'
+
+/**
+ * Filters for `GET /work-orders` and `GET /work-orders/export.csv`. Filtering,
+ * sorting and paging are server-side. `search` is case- and
+ * diacritic-insensitive (č/ć→c, š→s, ž→z, đ→dj).
+ */
+export interface WorkOrderListFilters {
   search?: string
   status?: WorkOrderStatus
   assignedTo?: string
+  customerId?: string
+  billingDocumentType?: BillingDocumentType
+  deliveryMethod?: DeliveryMethod
+  queue?: WorkOrderQueue
+  /** The caller's local YYYY-MM-DD for the queue buckets. */
+  today?: string
   dateFrom?: string
   dateTo?: string
   /** Admin-only: when true, returns only orders awaiting cost entry. */
   needsCostReview?: boolean
+  /**
+   * `field` or `-field`: orderNumber (natural), clientName, jobDescription,
+   * assignedTo, priority (by rank), billingDocumentType, deliveryMethod,
+   * dueDate, price, status, issueDate. Missing values sort last.
+   */
+  sort?: string
+}
+
+export interface WorkOrderListQuery extends WorkOrderListFilters {
+  /** Page size; the API defaults to 50 and caps at 200. */
   limit?: number
   offset?: number
-  sort?: string
   /**
    * Response projection. 'summary' omits the per-order history collections
    * (statusHistory, notes, events, attachments, materialUsage, timeEntries)
-   * that only the detail page reads, keeping invoiceDraft for the dashboard
-   * profit widgets. Defaults to 'full' when omitted.
+   * that only the detail page reads, keeping invoiceDraft (duplicating from
+   * the list pre-fills from it). Defaults to 'full' when omitted.
    */
   view?: 'full' | 'summary'
 }
+
+export interface WorkOrderCsvExportQuery extends WorkOrderListFilters {
+  /** List column keys to export (orderNumber is always included). */
+  columns?: string[]
+  /** Header/label language; the API defaults to Serbian. */
+  lang?: 'sr' | 'en'
+}
+
+/** Page size the API uses when none is sent, and its cap on `limit`. */
+export const WORK_ORDER_LIST_DEFAULT_LIMIT = 50
+export const WORK_ORDER_LIST_MAX_LIMIT = 200
 
 export interface WorkOrderListResult {
   items: WorkOrder[]

@@ -122,9 +122,7 @@ DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
 
 # 3. Start the API server (listens on :8080)
-DATABASE_PATH=./data/iris.db \
-  IRIS_SESSION_SECRET=dev-secret-change-me \
-  go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/server
 ```
 
 Verify the server is healthy:
@@ -275,7 +273,7 @@ iris/
 | Variable | Description | Default |
 |----------|------------|---------|
 | `DATABASE_PATH` | SQLite database file path | `./data/iris.db` |
-| `IRIS_SESSION_SECRET` | Session signing secret (required in production) | — |
+| `IRIS_SESSION_SECRET` | Unused (reserved). Sessions are random tokens stored hashed, so nothing is signed; a value left set by older deployments is ignored | — |
 | `IRIS_API_ADDR` | Listen address | `:8080` |
 | `IRIS_ENV` | Runtime environment (`development` or `production`) | `development` |
 | `IRIS_ALLOWED_ORIGINS` | CORS origin allowlist | Local dev origins |

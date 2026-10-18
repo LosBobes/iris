@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+// Pages read cached queries, so each render gets a fresh QueryClient.
+import { renderWithQueryClient as render } from '@/test/query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import '@testing-library/jest-dom/vitest'
 import CatalogDetailPage from './CatalogDetailPage'

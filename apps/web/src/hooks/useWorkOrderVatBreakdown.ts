@@ -7,6 +7,9 @@ import {
 } from "@/shared/utils/vat";
 import type { InvoiceLineItemKind, WorkOrder } from "@/types/work-order";
 
+/** Matches the API's per-request cap on `GET /catalog-items?ids=`. */
+const CATALOG_BATCH_SIZE = 200;
+
 export interface WorkOrderVat {
   breakdown: VatBreakdown;
   /** PDV rate for a line, by its catalog item (general rate when ad hoc).
@@ -39,17 +42,25 @@ export function useWorkOrderVatBreakdown(order: WorkOrder): WorkOrderVat {
   useEffect(() => {
     if (catalogIds.length === 0) return;
     let active = true;
+    // One batch request per CATALOG_BATCH_SIZE ids instead of one per line.
+    const chunks: string[][] = [];
+    for (let i = 0; i < catalogIds.length; i += CATALOG_BATCH_SIZE) {
+      chunks.push(catalogIds.slice(i, i + CATALOG_BATCH_SIZE));
+    }
     void Promise.all(
-      catalogIds.map(async (id) => {
+      chunks.map(async (ids) => {
         try {
-          const item = await window.api.getCatalogItemById(id);
-          return [id, vatRateForTaxGroup(item?.taxGroup)] as const;
+          const { items } = await window.api.getCatalogItems({ ids });
+          return items;
         } catch {
-          return [id, vatRateForTaxGroup(null)] as const;
+          return [];
         }
       }),
-    ).then((entries) => {
-      if (active) setRates(new Map(entries));
+    ).then((results) => {
+      if (!active) return;
+      const taxGroups = new Map(results.flat().map((item) => [item.id, item.taxGroup]));
+      // Missing (deleted, foreign) or failed lookups fall back to the general rate.
+      setRates(new Map(catalogIds.map((id) => [id, vatRateForTaxGroup(taxGroups.get(id))])));
     });
     return () => {
       active = false;

@@ -81,7 +81,8 @@ func (s *Server) handlePlatformImpersonate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	log.Printf("platform admin %q impersonated %q in %q from %s", admin.Username, user.Username, tenant.Slug, clientIP(r))
-	setSessionCookie(w, s.config, token, expiresAt)
+	// Persistent for its fixed hour (impersonation sessions never slide).
+	setSessionCookie(w, s.config, token, expiresAt, true)
 	writeJSON(w, http.StatusOK, domain.PlatformImpersonationResponse{
 		Success:   true,
 		User:      user,

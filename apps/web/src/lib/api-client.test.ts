@@ -60,6 +60,30 @@ const baseInput: CreateWorkOrderInput = {
 }
 
 describe('createHttpApi', () => {
+  it('sends the remember flag on login and shows a rate-limit answer as a form error', async () => {
+    const fetchMock = vi.fn(async () =>
+      response(
+        { error: 'Previše neuspešnih pokušaja. Pokušajte ponovo kasnije.' },
+        { status: 429 },
+      ),
+    )
+    const api = createHttpApi('http://api.test', fetchMock)
+
+    await expect(
+      api.login({ orgSlug: 'demo', username: 'admin', password: 'x', remember: true }),
+    ).resolves.toEqual({
+      success: false,
+      error: 'Previše neuspešnih pokušaja. Pokušajte ponovo kasnije.',
+    })
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(JSON.parse(String(init.body))).toEqual({
+      orgSlug: 'demo',
+      username: 'admin',
+      password: 'x',
+      remember: true,
+    })
+  })
+
   it('checks backend readiness through /healthz', async () => {
     const fetchMock = vi.fn(async () => response({ status: 'ok' }))
     const api = createHttpApi('http://127.0.0.1:8080', fetchMock)

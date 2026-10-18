@@ -36,8 +36,10 @@ function readRememberedLogin(): {
   }
 }
 
-// The organization is remembered separately (src/lib/organization-login.ts) and
-// always: it is not a secret, and it is what lets a device skip step one.
+// "Zapamti me" keeps the username here and asks the API for a remembered
+// session (a persistent cookie, up to 30 days). The organization is remembered
+// separately (src/lib/organization-login.ts) and always: it is not a secret,
+// and it is what lets a device skip step one.
 function storeRememberedLogin(username: string, rememberDevice: boolean): void {
   try {
     if (rememberDevice) {
@@ -83,7 +85,12 @@ export function Login({
     setIsLoading(true);
 
     try {
-      const result = await window.api.login({ orgSlug, username, password });
+      const result = await window.api.login({
+        orgSlug,
+        username,
+        password,
+        remember: rememberDevice,
+      });
 
       if (result.success && result.user) {
         storeRememberedLogin(username, rememberDevice);
@@ -256,6 +263,7 @@ export function Login({
               checked={rememberDevice}
               onChange={(e) => setRememberDevice(e.target.checked)}
               disabled={isLoading}
+              aria-describedby="remember-device-hint"
               className="peer size-3.5 shrink-0 appearance-none border border-input bg-transparent transition-colors checked:border-foreground checked:bg-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--iris-accent)]/35 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <Check
@@ -267,6 +275,9 @@ export function Login({
           </span>
           <span className="group-hover:text-foreground">{t("auth.rememberDevice")}</span>
         </label>
+        <p id="remember-device-hint" className="leading-4 sm:max-w-[60%] sm:text-right">
+          {t("auth.rememberDeviceHint")}
+        </p>
       </div>
     </LoginShell>
   );

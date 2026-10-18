@@ -40,6 +40,27 @@ paths:
     post:
       tags: [Auth]
       summary: Authenticate a user
+      description: |
+        Sets the HttpOnly `iris_session` cookie (SameSite=Lax). The token is
+        random and stored server-side only as its SHA-256 hash. Its idle expiry
+        slides forward on authenticated requests (rewritten at most once an
+        hour) up to an absolute cap fixed at sign-in:
+
+        - `remember` false (default): 12 h idle, 24 h at most, and a
+          browser-session cookie (no `Expires`/`Max-Age`).
+        - `remember` true: 7 days idle, 30 days at most, and a persistent
+          cookie whose `Expires`/`Max-Age` always equals the server-side expiry
+          (it is re-sent whenever the session slides).
+
+        Failed attempts are rate limited in a 15-minute window, counted before
+        the credentials are checked: 5 per organization + username from one
+        client IP, 20 per client IP across usernames, and 50 per organization +
+        username from all addresses together (so one address cannot lock an
+        account out for everyone). A successful sign-in clears its counters;
+        while any limit is reached every attempt, right password included,
+        gets 429. A request whose `Origin` header is
+        neither the API's own host nor allow-listed is refused with 403, like
+        every other state-changing request.
       operationId: login
       requestBody:
         required: true
@@ -60,10 +81,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/CrossOriginRequest'
+        '429':
+          description: >-
+            Too many failed attempts for this address or account. Body:
+            `{"error":"Previše neuspešnih pokušaja. Pokušajte ponovo kasnije."}`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /auth/session:
     get:
       tags: [Auth]
       summary: Return the current cookie-backed session
+      description: >-
+        Like every authenticated request, this slides the session's idle expiry
+        (at most once an hour, never past its absolute cap); a remembered
+        session's cookie is re-sent with the new expiry.
       operationId: getCurrentSession
       responses:
         '200':
@@ -185,6 +220,15 @@ paths:
           schema:
             type: string
             enum: ['true']
+        - name: ids
+          in: query
+          description: >-
+            Comma-separated catalog item ids for a batch lookup (at most 200
+            distinct ids; blanks and duplicates are ignored). Only the caller's
+            organization's items are returned; unknown ids are silently omitted.
+            Combines with the other filters.
+          schema:
+            type: string
         - name: limit
           in: query
           description: Page size. Omit or <= 0 to return all matches.
@@ -203,6 +247,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CatalogItemListResponse'
+        '422':
+          description: More than 200 distinct ids were requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Catalog]
       summary: Create a catalog item (admin only)
@@ -582,6 +632,10 @@ paths:
     put:
       tags: [Users]
       summary: Update a user's role and optionally reset their password (admin only)
+      description: >-
+        Setting a password ends every session of that user, impersonation
+        sessions included. An admin changing their own password keeps the
+        session making this request; their other sessions end.
       operationId: updateUser
       parameters:
         - name: id
@@ -709,67 +763,48 @@ paths:
       tags: [Work Orders]
       summary: Return filtered and paginated work orders
       operationId: listWorkOrders
+      description: >-
+        Filtering, sorting and paging are server-side; `total` is the number of
+        orders matching the filters (for the pager). For every match without
+        paging use `GET /work-orders/export.csv`.
       parameters:
-        - name: search
-          in: query
-          schema:
-            type: string
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [new, assigned, inProgress, completed, cancelled, invoiced]
-        - name: assignedTo
-          in: query
-          schema:
-            type: string
-        - name: dateFrom
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: dateTo
-          in: query
-          schema:
-            type: string
-            format: date
-        - name: needsCostReview
-          in: query
-          description: >-
-            When `true`, returns only orders awaiting cost entry (the admin
-            review queue). Admin-only — ignored for non-admin sessions.
-          schema:
-            type: boolean
+        - $ref: '#/components/parameters/WorkOrderSearch'
+        - $ref: '#/components/parameters/WorkOrderStatusFilter'
+        - $ref: '#/components/parameters/WorkOrderAssignedTo'
+        - $ref: '#/components/parameters/WorkOrderCustomerId'
+        - $ref: '#/components/parameters/WorkOrderBillingDocumentType'
+        - $ref: '#/components/parameters/WorkOrderDeliveryMethod'
+        - $ref: '#/components/parameters/WorkOrderQueue'
+        - $ref: '#/components/parameters/WorkOrderToday'
+        - $ref: '#/components/parameters/WorkOrderDateFrom'
+        - $ref: '#/components/parameters/WorkOrderDateTo'
+        - $ref: '#/components/parameters/WorkOrderNeedsCostReview'
+        - $ref: '#/components/parameters/WorkOrderSort'
         - name: limit
           in: query
           description: >-
-            Page size. `0` (or omitted) applies no LIMIT and returns every
-            match — intended for the dashboard, which aggregates over all
-            orders and should pair it with `view=summary`. Explicit values
-            above 500 are clamped to 500.
+            Page size. Omitted, `0` or negative uses the default of 50; values
+            above 200 are clamped to 200.
           schema:
             type: integer
-            minimum: 0
-            maximum: 500
+            minimum: 1
+            maximum: 200
+            default: 50
         - name: offset
           in: query
           schema:
             type: integer
             minimum: 0
-        - name: sort
-          in: query
-          schema:
-            type: string
-            example: -issueDate
         - name: view
           in: query
           description: >-
             Response projection. `summary` omits the per-order history
             collections (`statusHistory`, `internalNotes`, `customerNotes`,
             `events`, `attachments`, `materialUsage`, `timeEntries`), which
-            only the detail page reads. `invoiceDraft` is retained because the
-            dashboard derives profit from its line items. Omitted (`full`)
-            returns every collection.
+            only the detail page reads; the server reads a stored slim copy
+            instead of decoding the full order. `invoiceDraft` is retained
+            (duplicating an order from the list pre-fills from it). Omitted
+            (`full`) returns every collection.
           schema:
             type: string
             enum: [full, summary]
@@ -826,6 +861,63 @@ paths:
                 type: array
                 items:
                   type: string
+  /work-orders/export.csv:
+    get:
+      tags: [Work Orders]
+      summary: Export every work order matching the list filters as CSV
+      operationId: exportWorkOrdersCsv
+      description: >-
+        Same filters and sort as `GET /work-orders`, without paging. The file
+        starts with a UTF-8 BOM, uses CRLF line endings and RFC 4180 quoting,
+        column headers and labels (priority, document type, status) in the
+        `lang` language, the due date as DD.MM.YYYY and the selling price as a
+        plain number. A text cell that starts with `=`, `+`, `-`, `@`, a tab
+        or a carriage return is prefixed with `'` so spreadsheets do not run it
+        as a formula (the price column is never prefixed).
+      parameters:
+        - $ref: '#/components/parameters/WorkOrderSearch'
+        - $ref: '#/components/parameters/WorkOrderStatusFilter'
+        - $ref: '#/components/parameters/WorkOrderAssignedTo'
+        - $ref: '#/components/parameters/WorkOrderCustomerId'
+        - $ref: '#/components/parameters/WorkOrderBillingDocumentType'
+        - $ref: '#/components/parameters/WorkOrderDeliveryMethod'
+        - $ref: '#/components/parameters/WorkOrderQueue'
+        - $ref: '#/components/parameters/WorkOrderToday'
+        - $ref: '#/components/parameters/WorkOrderDateFrom'
+        - $ref: '#/components/parameters/WorkOrderDateTo'
+        - $ref: '#/components/parameters/WorkOrderNeedsCostReview'
+        - $ref: '#/components/parameters/WorkOrderSort'
+        - name: columns
+          in: query
+          description: >-
+            Comma-separated list column keys to include, in canonical order
+            (`orderNumber`, `clientName`, `jobDescription`, `assigned`,
+            `priority`, `billing`, `schedule`, `price`, `status`).
+            `orderNumber` is always included. Omitted exports every column.
+          schema:
+            type: string
+            example: clientName,jobDescription,status
+        - name: lang
+          in: query
+          description: >-
+            Language of the column headers and labels: `sr` (Serbian, default)
+            or `en` (English). The web client sends its current UI language.
+          schema:
+            type: string
+            enum: [sr, en]
+            default: sr
+      responses:
+        '200':
+          description: CSV file (`Content-Disposition` attachment).
+          headers:
+            X-Total-Count:
+              description: Number of exported orders.
+              schema:
+                type: integer
+          content:
+            text/csv:
+              schema:
+                type: string
   /work-orders/{id}:
     parameters:
       - name: id
@@ -1860,7 +1952,8 @@ paths:
       summary: Open an organization session as one of its users (operator only)
       description: >
         Sets an ordinary `iris_session` cookie for the chosen user (replacing any
-        organization session in this browser), valid for one hour. The session
+        organization session in this browser), valid for one hour and never
+        extended (it does not slide like a signed-in session). The session
         reports `impersonatedBy` on `/auth/session`, is written to the
         `impersonation_events` audit log (every change request made with it is
         traced, see `/platform/audit`), is not counted as a login, and ends on
@@ -2534,6 +2627,16 @@ components:
       in: cookie
       name: iris_platform_session
   responses:
+    CrossOriginRequest:
+      description: >-
+        A state-changing request (not GET/HEAD/OPTIONS) whose `Origin` header is
+        neither the API's own host nor in the CORS allow-list
+        (`IRIS_ALLOWED_ORIGINS`). Applies to every such route. Body:
+        `{"error":"Zahtev sa druge adrese nije dozvoljen."}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     ProcessesModuleDisabled:
       description: >-
         The organization has not enabled the "Procesi rada" module (Backoffice-controlled, off by default; it also
@@ -2578,6 +2681,96 @@ components:
       schema:
         type: string
         enum: [purchase, sale, both]
+    WorkOrderSearch:
+      name: search
+      in: query
+      description: >-
+        Free-text search, case- and diacritic-insensitive (č/ć→c, š→s, ž→z,
+        đ→dj), over order number, client, job description, operator,
+        priority and document type (value and Serbian label), issue and due
+        dates (YYYY-MM-DD and DD.MM.YYYY) and price (raw and "12.500,5 RSD").
+      schema:
+        type: string
+    WorkOrderStatusFilter:
+      name: status
+      in: query
+      schema:
+        type: string
+        enum: [new, assigned, inProgress, completed, cancelled, invoiced]
+    WorkOrderAssignedTo:
+      name: assignedTo
+      in: query
+      schema:
+        type: string
+    WorkOrderCustomerId:
+      name: customerId
+      in: query
+      schema:
+        type: string
+    WorkOrderBillingDocumentType:
+      name: billingDocumentType
+      in: query
+      schema:
+        type: string
+        example: invoice
+    WorkOrderDeliveryMethod:
+      name: deliveryMethod
+      in: query
+      schema:
+        type: string
+        example: pickup
+    WorkOrderQueue:
+      name: queue
+      in: query
+      description: >-
+        Dashboard-style due-date bucket; each excludes cancelled orders.
+        `unassigned` has no operator, `overdue` is due before `today` and not
+        completed, `today` is due on `today`, `thisWeek` is due from `today`
+        through `today` + 7 days. Unknown values are ignored.
+      schema:
+        type: string
+        enum: [unassigned, overdue, today, thisWeek]
+    WorkOrderToday:
+      name: today
+      in: query
+      description: >-
+        The caller's local date for the `queue` buckets; defaults to the
+        server's UTC date. Malformed values are ignored.
+      schema:
+        type: string
+        format: date
+    WorkOrderDateFrom:
+      name: dateFrom
+      in: query
+      schema:
+        type: string
+        format: date
+    WorkOrderDateTo:
+      name: dateTo
+      in: query
+      schema:
+        type: string
+        format: date
+    WorkOrderNeedsCostReview:
+      name: needsCostReview
+      in: query
+      description: >-
+        When `true`, returns only orders awaiting cost entry (the admin
+        review queue). Admin-only — ignored for non-admin sessions.
+      schema:
+        type: boolean
+    WorkOrderSort:
+      name: sort
+      in: query
+      description: >-
+        Sort field, `-` prefix for descending: `orderNumber` (natural, by the
+        embedded numbers), `clientName`, `jobDescription`, `assignedTo`,
+        `priority` (by rank low to urgent), `billingDocumentType`,
+        `deliveryMethod`, `dueDate`, `price`, `status`, `issueDate`. Missing
+        values sort last. Default `-issueDate`.
+      schema:
+        type: string
+        example: -orderNumber
   schemas:
     ProcessNode:
       type: object
@@ -2987,6 +3180,13 @@ components:
         password:
           type: string
           example: admin123
+        remember:
+          type: boolean
+          default: false
+          description: >-
+            Stay signed in on this device ("Zapamti me na ovom uređaju"):
+            persistent cookie, 7 days idle and 30 days at most, instead of a
+            browser-session cookie with 12 h idle and 24 h at most.
     LoginResponse:
       type: object
       required: [success]

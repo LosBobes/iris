@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/dashboard"
+	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/store"
 )
 
@@ -42,23 +44,40 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		*param.dst = value
 	}
 
-	// An empty query loads every order of the tenant (no LIMIT), with invoice
-	// line items and their real unitCost: aggregation must see true costs, and
-	// only the admin-gated Finance section ever exposes derived numbers.
-	result, err := s.store.WorkOrders(r.Context(), store.WorkOrderListQuery{})
-	if err != nil {
-		writeServerError(w, r, err)
-		return
-	}
-
 	username := ""
 	if user := currentUser(r); user != nil {
 		username = user.Username
 	}
-	writeJSON(w, http.StatusOK, dashboard.Build(result.Items, dashboard.Options{
+	data, err := s.buildDashboard(r.Context(), dashboard.Options{
 		Filters:  filters,
 		Today:    today,
 		IsAdmin:  isAdmin(r),
 		Username: username,
-	}))
+	})
+	if err != nil {
+		writeServerError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, data)
+}
+
+// buildDashboard loads only the orders the dashboard can use (the filter range
+// plus orders that can raise a signal or queue entry; see store.DashboardOrders)
+// with their full payload, so invoice line items keep their real unitCost:
+// aggregation must see true costs, and only the admin-gated Finance section ever
+// exposes derived numbers. The result is identical to aggregating every order.
+func (s *Server) buildDashboard(ctx context.Context, opts dashboard.Options) (domain.DashboardData, error) {
+	source, err := s.store.DashboardOrders(ctx, store.DashboardOrdersQuery{
+		DateFrom: opts.Filters.DateFrom,
+		DateTo:   opts.Filters.DateTo,
+		IssuedBy: opts.Filters.IssuedBy,
+		Today:    opts.Today,
+		Username: opts.Username,
+	})
+	if err != nil {
+		return domain.DashboardData{}, err
+	}
+	data := dashboard.Build(source.Orders, opts)
+	data.HasOrders = source.HasOrders
+	return data, nil
 }

@@ -138,6 +138,7 @@ func (s *SQLiteStore) DeleteLoginLogo(ctx context.Context) error {
 	); err != nil {
 		return fmt.Errorf("delete login logo: %w", err)
 	}
+	s.invalidateSettings(tenantID)
 	return nil
 }
 

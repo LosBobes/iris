@@ -7,6 +7,8 @@ import { initPwaInstallListeners, registerServiceWorker } from './lib/pwa'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from '@/lib/query-client'
 import { FontScaleProvider } from '@/components/providers/FontScaleProvider'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { ListPreferencesProvider } from '@/components/providers/ListPreferencesProvider'
@@ -17,14 +19,16 @@ registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
-      <ListPreferencesProvider>
-        <ColumnVisibilityProvider>
-          <FontScaleProvider>
-            <App />
-          </FontScaleProvider>
-        </ColumnVisibilityProvider>
-      </ListPreferencesProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <ListPreferencesProvider>
+          <ColumnVisibilityProvider>
+            <FontScaleProvider>
+              <App />
+            </FontScaleProvider>
+          </ColumnVisibilityProvider>
+        </ListPreferencesProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   </StrictMode>
 )

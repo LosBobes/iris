@@ -71,6 +71,8 @@ export interface CatalogItemQuery {
   active?: boolean
   limit?: number
   offset?: number
+  /** Batch lookup by id (max 200 per request; other tenants' ids are never returned). */
+  ids?: string[]
 }
 
 export interface CatalogItemListResult {

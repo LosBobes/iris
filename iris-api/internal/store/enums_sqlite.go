@@ -99,11 +99,21 @@ func catalogUnits(ctx context.Context, db dbExecQuerier, tenantID string) ([]str
 
 // EnumValues returns the built-in defaults merged with admin-created values.
 func (s *SQLiteStore) EnumValues(ctx context.Context) ([]domain.EnumValue, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if cached, ok := s.caches.enums.get(tenantID); ok {
+		return append([]domain.EnumValue(nil), cached...), nil
+	}
+	gen := s.caches.enums.generation(tenantID)
 	custom, err := s.listCustomEnumValues(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return mergeEnumValues(custom), nil
+	values := mergeEnumValues(custom)
+	s.caches.enums.put(tenantID, gen, append([]domain.EnumValue(nil), values...))
+	return values, nil
 }
 
 func (s *SQLiteStore) listCustomEnumValues(ctx context.Context) ([]domain.EnumValue, error) {
@@ -181,6 +191,7 @@ func (s *SQLiteStore) CreateEnumValue(
 		}
 		return nil, fmt.Errorf("create enum value: %w", err)
 	}
+	s.invalidateEnums(tenantID)
 
 	return &domain.EnumValue{
 		ID:        id,
@@ -242,6 +253,7 @@ func (s *SQLiteStore) UpdateEnumValue(
 		}
 		return nil, fmt.Errorf("update enum value: %w", err)
 	}
+	s.invalidateEnums(tenantID)
 
 	return &domain.EnumValue{
 		ID:        id,
@@ -263,6 +275,7 @@ func (s *SQLiteStore) DeleteEnumValue(ctx context.Context, id string) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM enum_values WHERE id = ? AND tenant_id = ?`, id, tenantID); err != nil {
 		return fmt.Errorf("delete enum value: %w", err)
 	}
+	s.invalidateEnums(tenantID)
 	return nil
 }
 

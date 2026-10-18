@@ -29,9 +29,6 @@ services:
     restart: unless-stopped
     environment:
       IRIS_ENV: "${IRIS_ENV:-production}"
-      # Must be a strong random value in production (openssl rand -hex 32).
-      # Kept in the server's .env (gitignored), never committed.
-      IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:?set IRIS_SESSION_SECRET in .env}"
       DATABASE_PATH: "/data/iris.db"
       # Same-origin: the browser hits Caddy -> nginx -> /api/, so no
       # cross-origin allow-list is needed.
@@ -92,6 +89,24 @@ services:
     # gamgee uses 3000; Iris uses 3001.
     ports:
       - "127.0.0.1:3001:80"
+    environment:
+      # Caddy's loopback connection reaches nginx from this network's gateway
+      # (Docker's port proxy / NAT), so that one address, and only it, may
+      # supply the client address via X-Forwarded-For (frontend/iris-real-ip.sh).
+      # Must match the gateway pinned under `networks:` below.
+      IRIS_TRUSTED_PROXY: "${IRIS_TRUSTED_PROXY:-172.31.253.1}"
+
+# The default network's subnet and gateway are pinned so the trusted proxy
+# above is one fixed address rather than all of 172.16.0.0/12. If this subnet
+# ever collides with another network on the host, change both together (and
+# IRIS_TRUSTED_PROXY in .env if it overrides the default). Compose recreates
+# the network on the next `up -d` when this changes.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.31.253.0/24
+          gateway: 172.31.253.1
 
 volumes:
   iris_sqlite_data:

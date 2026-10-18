@@ -41,7 +41,7 @@ func TestPlatformAdminAuthAndSessions(t *testing.T) {
 	if err := sqliteStore.db.QueryRowContext(ctx, `SELECT token_hash FROM platform_sessions`).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored == token || stored != hashPlatformToken(token) {
+	if stored == token || stored != hashSessionToken(token) {
 		t.Fatalf("stored token = %q, want the hash of the issued token", stored)
 	}
 	if got, _ := sqliteStore.PlatformAdminBySession(ctx, token); got == nil || got.Username != "ops" {

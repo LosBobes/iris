@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/go-chi/chi/v5"
@@ -69,6 +70,21 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if user == nil {
 		writeAPIError(w, r, http.StatusNotFound, "Korisnik nije pronađen.", nil)
 		return
+	}
+	// A new password signs the account out everywhere (impersonation sessions
+	// opened as it included). An admin resetting their own password keeps the
+	// session they are using; their other devices sign in again.
+	if strings.TrimSpace(input.Password) != "" {
+		keep := ""
+		if current := currentUser(r); current != nil && current.ID == user.ID {
+			if cookie, err := r.Cookie(s.config.SessionCookieName); err == nil {
+				keep = cookie.Value
+			}
+		}
+		if err := s.store.EndUserSessions(r.Context(), user.ID, keep); err != nil {
+			writeServerError(w, r, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, user)
 }

@@ -50,7 +50,7 @@ Arhitektura: web + Go API + SQLite — sve deli istu bazu.
 cd iris-api
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret-change-me go run ./cmd/server
+DATABASE_PATH=./data/iris.db go run ./cmd/server
 
 # Sačekaj healthz, pa tek onda Terminal 2 — web
 curl http://localhost:8080/healthz   # → {"status":"ok"}

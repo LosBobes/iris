@@ -290,12 +290,13 @@ func weekEnd(today string) (time.Time, bool) {
 }
 
 // OrderSignals ports getWorkOrderAttentionSignals. Cancelled orders raise none.
+// An empty due date counts as none, like in the queue summary.
 func orderSignals(order *domain.WorkOrder, today string) []signal {
 	var signals []signal
 	if !CountsTowardWorkQueue(order) {
 		return signals
 	}
-	if order.DueDate != nil {
+	if order.DueDate != nil && *order.DueDate != "" {
 		due := *order.DueDate
 		if due < today && !order.IsCompleted {
 			signals = append(signals, signalOverdue)

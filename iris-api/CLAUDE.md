@@ -50,9 +50,20 @@ out required web follow-up rather than leaving drift.
 
 - `POST /auth/login` takes `{ orgSlug, username, password }`, resolves the tenant
   via `TenantBySlug`, authenticates within it, then issues an HTTP-only
-  `iris_session` cookie (12h default). Unknown org and bad credentials return the
-  **same** generic Serbian error. Protected routes use `requireAuth`; admin-only
+  `iris_session` cookie. Unknown org and bad credentials return the
+  **same** generic Serbian error; failures are rate limited per 15 min: 5 per
+  org+username from one IP, 20 per IP, 50 per org+username overall (429;
+  `orgLoginKeys` in `sessions.go`, atomic `loginLimiter.reserve`). Protected routes use `requireAuth`; admin-only
   routes use `requireAdmin`.
+- **Sessions** (`internal/api/sessions.go`, `internal/store/sessions.go`, D-020):
+  tokens are stored only as SHA-256 (`sessions.token_hash`). The idle expiry
+  slides on use (rewritten at most once per `SessionRefreshInterval`, 1 h) under
+  a fixed absolute cap: 12 h idle / 24 h cap with a browser-session cookie, or
+  with `remember: true` 7 d / 30 d and a persistent cookie re-sent on refresh.
+  Impersonation (1 h) and platform (2 h) sessions do not slide. A password change
+  via `PUT /users/{id}` ends that user's other sessions. Mutating requests with a
+  foreign `Origin` get 403 (`originGuard`). The client IP comes only from
+  `X-Real-IP` (`proxyRealIP`, set by nginx), never `X-Forwarded-For`/`True-Client-IP`.
 - **Multi-tenancy:** `requireAuth` attaches the tenant to the request context
   (`store.ContextWithTenant(ctx, user.TenantID)`); every store method reads it via
   `tenantFromContext` and filters by `tenant_id`, returning `ErrNoTenant` if it is
@@ -62,8 +73,9 @@ out required web follow-up rather than leaving drift.
   require `-tenant <slug>`.
 - User-facing auth messages that mirror client behavior stay in Serbian. Code,
   comments, tests, internal docs: English.
-- Production (`IRIS_ENV=production`) requires an explicit DB path + session secret
-  and blocks the demo `admin`/`admin123` account.
+- Production (`IRIS_ENV=production`) requires an explicit DB path, blocks the
+  demo `admin`/`admin123` account and drops the dev-only localhost CORS fallback.
+  `IRIS_SESSION_SECRET` is unused (ignored if set).
 
 ## Commands (run from `iris-api/`, not repo root)
 
