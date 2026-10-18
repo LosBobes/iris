@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,7 +48,7 @@ func seededProcesses(t *testing.T, s *SQLiteStore, tctx context.Context) []domai
 func TestSeedDemoFromFixtures(t *testing.T) {
 	s, ctx := openDemoStore(t)
 
-	result, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "")
+	result, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "", "")
 	if err != nil || result.AlreadySeeded {
 		t.Fatalf("SeedDemoFromFixtures = %+v, %v", result, err)
 	}
@@ -216,7 +217,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 	// and stock content untouched.
 	beforeMovements := movements.Total
 	beforeOrders := all.Total
-	again, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "")
+	again, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "", "")
 	if err != nil || !again.AlreadySeeded {
 		t.Fatalf("second run = %+v, %v", again, err)
 	}
@@ -257,7 +258,7 @@ func TestDemoPasswords(t *testing.T) {
 
 func TestSeedDemoWithProductionPasswords(t *testing.T) {
 	s, ctx := openDemoStore(t)
-	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "admin-strong-pass", "operater-strong-pass"); err != nil {
+	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "admin-strong-pass", "operater-strong-pass", ""); err != nil {
 		t.Fatal(err)
 	}
 	tenant, _ := s.TenantBySlug(ctx, DemoTenantSlug)
@@ -282,11 +283,63 @@ func TestSeedDemoWithProductionPasswords(t *testing.T) {
 	}
 }
 
+func TestSeedDemoIDPrefixAvoidsCollision(t *testing.T) {
+	s, ctx := openDemoStore(t)
+	// Another tenant already owns a record with a fixture id (as the real
+	// Čobanović data owns cust-2). Without a prefix the demo seed collides.
+	if err := s.EnsureTenant(ctx, "tenant-other", "other", "Other"); err != nil {
+		t.Fatal(err)
+	}
+	octx := ContextWithTenant(ctx, "tenant-other")
+	if _, err := s.UpsertCustomer(octx, domain.Customer{ID: "cust-2", Name: "Pre-existing"}); err != nil {
+		t.Fatal(err)
+	}
+	// Unprefixed seed must fail on the colliding id.
+	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "", ""); err == nil {
+		t.Fatal("expected a collision without an id prefix")
+	}
+
+	// A fresh store, prefixed, coexists with the other tenant's cust-2.
+	s2, ctx2 := openDemoStore(t)
+	if err := s2.EnsureTenant(ctx2, "tenant-other", "other", "Other"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s2.UpsertCustomer(ContextWithTenant(ctx2, "tenant-other"), domain.Customer{ID: "cust-2", Name: "Pre-existing"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SeedDemoFromFixtures(ctx2, s2, demoFixtureDir, "", "", "demo-"); err != nil {
+		t.Fatalf("prefixed seed failed: %v", err)
+	}
+	demo := ContextWithTenant(ctx2, DemoTenantID)
+	// The demo customer carries the prefixed id; the other tenant's record is intact.
+	if c, err := s2.CustomerByID(demo, "demo-cust-2"); err != nil || c == nil {
+		t.Fatalf("demo-cust-2 = %v, %v", c, err)
+	}
+	if c, err := s2.CustomerByID(ContextWithTenant(ctx2, "tenant-other"), "cust-2"); err != nil || c == nil || c.Name != "Pre-existing" {
+		t.Fatalf("other tenant cust-2 changed: %v, %v", c, err)
+	}
+	// The bare fixture id was namespaced away in the demo tenant (the content
+	// half keeps its own cust-demo-* ids, which is a different namespace).
+	if c, err := s2.CustomerByID(demo, "cust-2"); err != nil || c != nil {
+		t.Fatalf("unprefixed cust-2 present in demo tenant: %v, %v", c, err)
+	}
+	// No demo work order references an unprefixed fixture customer id.
+	orders, err := s2.WorkOrders(demo, WorkOrderListQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range orders.Items {
+		if o.CustomerID != nil && strings.HasPrefix(*o.CustomerID, "cust-") && !strings.HasPrefix(*o.CustomerID, "cust-demo-") {
+			t.Fatalf("work order %s references unprefixed fixture customer: %q", o.OrderNumber, *o.CustomerID)
+		}
+	}
+}
+
 // TestDeleteTenantCascades checks that deleting a tenant leaves no row behind in
 // any table that carries tenant data, including child tables without a tenant_id.
 func TestDeleteTenantCascades(t *testing.T) {
 	s, ctx := openDemoStore(t)
-	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", ""); err != nil {
+	if _, err := SeedDemoFromFixtures(ctx, s, demoFixtureDir, "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	tenant, _ := s.TenantBySlug(ctx, DemoTenantSlug)

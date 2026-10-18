@@ -93,6 +93,7 @@ iris-api/
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |
 | `IRIS_CHROME_PATH` | Chrome/Chromium binary used to render work-order PDFs (`GET /work-orders/{id}/report`). When empty the usual names (`chromium`, `chromium-browser`, `google-chrome`, …) are searched on `$PATH`; when nothing is found the endpoint answers `503` instead of rendering. | empty |
 | `IRIS_DEMO_ADMIN_PASSWORD`, `IRIS_DEMO_OPERATOR_PASSWORD` | Passwords for the demo organization's `admin` / operator logins, read by `irisctl seed-demo`. Required in production (12+ characters, not a public demo password); outside production the public demo passwords are kept. Nothing on server start reads them — the demo org is created only when you run `seed-demo`. | empty |
+| `IRIS_DEMO_ID_PREFIX` | Prefix added to the demo **fixture** record ids by `irisctl seed-demo` (same as `-id-prefix`). Set it (e.g. `demo-`) when the database already holds another tenant seeded from the same fixed ids (customers `cust-N`, work orders `1`…), such as a real Grafika Čobanović data set, so the demo org can coexist without an id collision. | empty |
 
 ## Commands
 
@@ -166,6 +167,13 @@ Outside production the logins use the public demo passwords (`admin` / `admin123
 `IRIS_DEMO_OPERATOR_PASSWORD` (or pass `-admin-password` / `-operator-password`), at least 12
 characters and not a public demo password. The admin password replaces the fixture admin's; the
 operator password replaces every non-admin login's (the fixture operators and the content `operater`).
+
+The fixture half uses fixed record ids (`cust-1`, `loc-1`, work order `1`, …) and record ids are
+globally unique, so if the database already holds another tenant seeded from the same ids — e.g. the
+real Grafika Čobanović data, whose customers are also `cust-N` — the plain seed collides. Pass
+`-id-prefix demo-` (or set `IRIS_DEMO_ID_PREFIX`) to namespace the fixture ids and their references so
+the demo org coexists with that tenant. The process/stock half already uses its own `cust-demo-*` /
+`cat-demo-*` ids and is unaffected.
 
 Verification:
 
