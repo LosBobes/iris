@@ -10,97 +10,49 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
-// Showcase organization: a prepopulated tenant for manually exercising the
-// "Procesi rada" and "Magacin" modules. Everything goes through the same store
-// methods the HTTP API uses (module switch, catalog, stock count/receipt,
-// process templates, work orders, process updates), so stock movements come
-// from the real posting logic rather than hand-inserted rows.
+// Demo content: the "Procesi rada" and "Magacin" half of the demo organization.
+// SeedDemoFromFixtures lays down the fixture users/customers/work-orders first
+// (modules off, no process), then calls seedDemoContent to turn both modules on
+// and add a curated, process- and stock-driven data set on top. Everything here
+// goes through the same store methods the HTTP API uses (module switch, catalog,
+// stock count/receipt, process templates, work orders, process updates), so
+// stock movements come from the real posting logic rather than hand-inserted
+// rows. The two halves share one tenant: article codes and order numbers are
+// unique per tenant, so the fixtures are seeded first and the orders below take
+// the next free RN-<year>-<seq> numbers after them.
 
-// Showcase defaults.
 const (
-	ShowcaseDefaultSlug = "showcase"
-	ShowcaseName        = "Showcase Štamparija"
+	// demoAdminUsername is created by the fixture seed; the content below reuses
+	// it as the actor for admin-only writes (module switch, stock count, order
+	// creation). demoOperatorUsername is created here (the fixtures have their
+	// own operator logins) and acts for operator-only writes (receipts, marking
+	// steps done).
+	demoAdminUsername    = "admin"
+	demoOperatorUsername = "operater"
+	demoOperatorPassword = "operater123"
 
-	ShowcaseAdminUsername    = "admin"
-	ShowcaseAdminPassword    = "admin123"
-	ShowcaseOperatorUsername = "operater"
-	ShowcaseOperatorPassword = "operater123"
-
-	// ShowcaseBrochureTemplate is the template with an intermediate product and
-	// two parallel steps, the one to open in the process simulator.
-	ShowcaseBrochureTemplate = "Brošura sa šivenjem"
+	// demoBrochureTemplate is the template with an intermediate product and two
+	// parallel steps, the one to open in the process simulator.
+	demoBrochureTemplate = "Brošura sa šivenjem"
 )
 
-// ShowcaseOptions controls SeedShowcase.
-type ShowcaseOptions struct {
-	// Slug is the organization slug; empty means ShowcaseDefaultSlug.
-	Slug string
-	// Reset deletes an existing organization with that slug before seeding.
-	Reset bool
-	// Now anchors the order dates; zero means time.Now().
-	Now time.Time
-	// AdminPassword and OperatorPassword set the two logins' passwords; empty
-	// means the public demo passwords. Resolve them with ShowcasePasswords so
-	// production never gets the demo ones.
-	AdminPassword    string
-	OperatorPassword string
-}
-
-// MinShowcasePasswordLength is required for the showcase logins in production.
-const MinShowcasePasswordLength = 12
-
-// ShowcasePasswords resolves the showcase logins' passwords. Outside production
-// an empty value falls back to the public demo password. In production both
-// must be set, at least MinShowcasePasswordLength characters, and must not be
-// a demo password: a production server refuses to start with the demo admin
-// password, and the showcase org is reachable at /login/<slug> on the live host.
-func ShowcasePasswords(production bool, admin, operator string) (string, string, error) {
-	admin, operator = strings.TrimSpace(admin), strings.TrimSpace(operator)
-	if !production {
-		if admin == "" {
-			admin = ShowcaseAdminPassword
-		}
-		if operator == "" {
-			operator = ShowcaseOperatorPassword
-		}
-		return admin, operator, nil
-	}
-	for _, pw := range []struct{ name, value string }{
-		{"IRIS_SHOWCASE_ADMIN_PASSWORD", admin},
-		{"IRIS_SHOWCASE_OPERATOR_PASSWORD", operator},
-	} {
-		switch {
-		case pw.value == "":
-			return "", "", fmt.Errorf("%s is required in production", pw.name)
-		case len(pw.value) < MinShowcasePasswordLength:
-			return "", "", fmt.Errorf("%s must be at least %d characters", pw.name, MinShowcasePasswordLength)
-		case pw.value == ShowcaseAdminPassword || pw.value == ShowcaseOperatorPassword || pw.value == "admin123321":
-			return "", "", fmt.Errorf("%s must not be a demo password", pw.name)
-		}
-	}
-	return admin, operator, nil
-}
-
-// ShowcaseResult describes what SeedShowcase did. When Created is false the
-// organization already existed and nothing else is filled in.
-type ShowcaseResult struct {
-	Created          bool
-	Slug             string
-	Name             string
+// DemoSeedResult describes what SeedDemoFromFixtures created, for the CLI
+// summary. The order numbers are resolved at creation time because they follow
+// the fixture orders. When AlreadySeeded is true the process/stock content was
+// already present and left untouched, so the other fields are zero.
+type DemoSeedResult struct {
+	AlreadySeeded    bool
 	Templates        int
-	Orders           int
+	Orders           int      // process-driven orders added on top of the fixtures
 	LowArticles      []string // names of articles flagged low
 	ShortageOrder    string   // open order whose planned input exceeds on-hand stock
-	ShortageArticle  string
-	InProgressOrder  string // in progress, actual quantity above planned
+	InProgressOrder  string   // in progress, actual quantity above planned
 	BrochureOrder    string
 	BrochureTemplate string
 	CancelledOrder   string
-	// DemoPasswords is true when the logins use the public demo passwords.
-	DemoPasswords bool
 }
 
-type showcaseArticle struct {
+type demoArticle struct {
 	key      string
 	code     string
 	name     string
@@ -110,7 +62,7 @@ type showcaseArticle struct {
 	opening  float64
 }
 
-var showcaseArticles = []showcaseArticle{
+var demoArticles = []demoArticle{
 	{"papir80", "PAP-80-A3", "Papir 80g A3", "tabak", 12.5, 1000, 6500},
 	{"kunstdruk", "PAP-KD-135", "Papir kunstdruk 135g SRA3", "tabak", 24, 500, 1500},
 	{"karton", "KAR-300", "Karton 300g", "tabak", 38, 100, 400},
@@ -123,7 +75,7 @@ var showcaseArticles = []showcaseArticle{
 	{"otpad", "OTP-BAN", "Otpad bannera", "m2", 0, 0, 0},
 }
 
-var showcaseServices = []struct {
+var demoServices = []struct {
 	code, name, unit string
 	price            float64
 }{
@@ -133,61 +85,41 @@ var showcaseServices = []struct {
 	{"USL-KNJIGOVEZ", "Knjigovezivanje", "kom", 45},
 }
 
-// SeedShowcase creates and prepopulates the showcase organization. It is
-// idempotent: when the organization exists it changes nothing (Created=false)
-// unless opts.Reset is set, which deletes and recreates it. A failure midway
-// removes the half-built organization so a re-run starts clean.
-func SeedShowcase(ctx context.Context, s *SQLiteStore, opts ShowcaseOptions) (result ShowcaseResult, err error) {
-	slug := strings.ToLower(strings.TrimSpace(opts.Slug))
-	if slug == "" {
-		slug = ShowcaseDefaultSlug
+// seedDemoContent turns on both modules for the demo tenant (already in ctx) and
+// adds the curated catalog, warehouse stock, process templates and
+// process-driven work orders. It assumes the fixture seed has already run, so it
+// creates only the operater login (the admin login comes from the fixtures) and
+// its orders take the next free order numbers. now anchors the order dates; zero
+// means time.Now().
+func seedDemoContent(ctx context.Context, s *SQLiteStore, slug string, now time.Time) (DemoSeedResult, error) {
+	// Idempotency sentinel: process templates exist only once this content has
+	// run, so their presence means a prior seed already added everything here.
+	// The fixture half (seedDemoFixtures) is upsert-based and safe to re-run; the
+	// content half below creates templates, orders and stock movements that are
+	// not, so skip it rather than duplicate them.
+	if templates, err := s.ProcessTemplates(ctx); err != nil {
+		return DemoSeedResult{}, err
+	} else if len(templates) > 0 {
+		return DemoSeedResult{AlreadySeeded: true}, nil
 	}
-	existing, err := s.TenantBySlug(ctx, slug)
-	if err != nil {
-		return ShowcaseResult{}, err
+	if now.IsZero() {
+		now = time.Now()
 	}
-	if existing != nil {
-		if !opts.Reset {
-			return ShowcaseResult{Slug: slug, Name: existing.Name}, nil
-		}
-		if _, err := s.DeleteTenant(ctx, slug); err != nil {
-			return ShowcaseResult{}, err
-		}
+	b := &demoContentBuilder{
+		s: s, slug: slug, ctx: ctx, now: now,
+		articles:  map[string]domain.CatalogItem{},
+		customers: map[string]domain.Customer{},
+		locations: map[string]domain.Location{},
+		templates: map[string]*domain.ProcessTemplate{},
 	}
-	tenant, err := s.CreateTenant(ctx, "tenant-"+slug, slug, ShowcaseName)
-	if err != nil {
-		return ShowcaseResult{}, err
+	var result DemoSeedResult
+	if err := b.build(&result); err != nil {
+		return DemoSeedResult{}, err
 	}
-	defer func() {
-		if err != nil {
-			_, _ = s.DeleteTenant(context.WithoutCancel(ctx), slug)
-		}
-	}()
-	b := &showcaseBuilder{
-		s: s, slug: slug, ctx: ContextWithTenant(ctx, tenant.ID),
-		now: opts.Now, articles: map[string]domain.CatalogItem{}, customers: map[string]domain.Customer{},
-		locations: map[string]domain.Location{}, templates: map[string]*domain.ProcessTemplate{},
-		adminPassword: opts.AdminPassword, operatorPassword: opts.OperatorPassword,
-	}
-	if b.adminPassword == "" {
-		b.adminPassword = ShowcaseAdminPassword
-	}
-	if b.operatorPassword == "" {
-		b.operatorPassword = ShowcaseOperatorPassword
-	}
-	if b.now.IsZero() {
-		b.now = time.Now()
-	}
-	result.Slug, result.Name = slug, tenant.Name
-	if err = b.build(&result); err != nil {
-		return ShowcaseResult{}, err
-	}
-	result.Created = true
-	result.DemoPasswords = b.adminPassword == ShowcaseAdminPassword && b.operatorPassword == ShowcaseOperatorPassword
 	return result, nil
 }
 
-type showcaseBuilder struct {
+type demoContentBuilder struct {
 	s         *SQLiteStore
 	ctx       context.Context
 	slug      string
@@ -196,11 +128,9 @@ type showcaseBuilder struct {
 	customers map[string]domain.Customer
 	locations map[string]domain.Location
 	templates map[string]*domain.ProcessTemplate
-
-	adminPassword, operatorPassword string
 }
 
-func (b *showcaseBuilder) build(result *ShowcaseResult) error {
+func (b *demoContentBuilder) build(result *DemoSeedResult) error {
 	steps := []func() error{
 		b.users, b.modules, b.customersAndLocations, b.catalog, b.stock, b.processTemplates,
 	}
@@ -212,36 +142,23 @@ func (b *showcaseBuilder) build(result *ShowcaseResult) error {
 	return b.workOrders(result)
 }
 
-func (b *showcaseBuilder) users() error {
-	for _, u := range []struct {
-		name, password string
-		role           domain.UserRole
-	}{
-		{ShowcaseAdminUsername, b.adminPassword, domain.RoleAdmin},
-		{ShowcaseOperatorUsername, b.operatorPassword, domain.RoleUser},
-	} {
-		id := "user-" + b.slug + "-" + u.name
-		if err := b.s.CreateUser(b.ctx, id, u.name, u.password, u.role, true); err != nil {
-			return fmt.Errorf("showcase user %s: %w", u.name, err)
-		}
+func (b *demoContentBuilder) users() error {
+	id := "user-" + b.slug + "-" + demoOperatorUsername
+	if err := b.s.CreateUser(b.ctx, id, demoOperatorUsername, demoOperatorPassword, domain.RoleUser, true); err != nil {
+		return fmt.Errorf("demo user %s: %w", demoOperatorUsername, err)
 	}
 	return nil
 }
 
-func (b *showcaseBuilder) modules() error {
+func (b *demoContentBuilder) modules() error {
 	on := true
 	if _, err := b.s.SetTenantModules(b.ctx, b.slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on}); err != nil {
-		return fmt.Errorf("showcase modules: %w", err)
-	}
-	// Brand the app with the showcase name instead of the default firm name.
-	firmName := ShowcaseName
-	if _, err := b.s.UpdateOrganizationSettings(b.ctx, domain.OrganizationSettingsUpdate{FirmName: &firmName}); err != nil {
-		return fmt.Errorf("showcase firm name: %w", err)
+		return fmt.Errorf("demo modules: %w", err)
 	}
 	return nil
 }
 
-func (b *showcaseBuilder) customersAndLocations() error {
+func (b *demoContentBuilder) customersAndLocations() error {
 	str := func(v string) *string { return &v }
 	for _, c := range []struct{ key, name, contact, email, phone, location, address string }{
 		{"pekara", "Pekara Zlatni klas", "Milan Jovanović", "milan@zlatniklas.example", "021/555-101", "Pekara Centar", "Bulevar oslobođenja 12, Novi Sad"},
@@ -255,30 +172,30 @@ func (b *showcaseBuilder) customersAndLocations() error {
 			ContactName: str(c.contact), Email: str(c.email), Phone: str(c.phone),
 		})
 		if err != nil {
-			return fmt.Errorf("showcase customer %s: %w", c.key, err)
+			return fmt.Errorf("demo customer %s: %w", c.key, err)
 		}
 		location, err := b.s.UpsertLocation(b.ctx, domain.Location{
 			ID: "loc-" + b.slug + "-" + c.key, CustomerID: customer.ID, Name: c.location, Address: str(c.address),
 		})
 		if err != nil {
-			return fmt.Errorf("showcase location %s: %w", c.key, err)
+			return fmt.Errorf("demo location %s: %w", c.key, err)
 		}
 		b.customers[c.key], b.locations[c.key] = *customer, *location
 	}
 	return nil
 }
 
-func (b *showcaseBuilder) catalog() error {
-	for _, svc := range showcaseServices {
+func (b *demoContentBuilder) catalog() error {
+	for _, svc := range demoServices {
 		price := svc.price
 		if _, err := b.s.UpsertCatalogItem(b.ctx, domain.CatalogItem{
 			ID: "cat-" + b.slug + "-" + strings.ToLower(svc.code), Code: svc.code, Name: svc.name, Unit: svc.unit,
 			Kind: domain.CatalogItemKindService, SalePrice: &price, IsActive: true,
 		}, ""); err != nil {
-			return fmt.Errorf("showcase service %s: %w", svc.code, err)
+			return fmt.Errorf("demo service %s: %w", svc.code, err)
 		}
 	}
-	for _, a := range showcaseArticles {
+	for _, a := range demoArticles {
 		item := domain.CatalogItem{
 			ID: "cat-" + b.slug + "-" + a.key, Code: a.code, Name: a.name, Unit: a.unit,
 			Kind: domain.CatalogItemKindArticle, IsActive: true,
@@ -293,7 +210,7 @@ func (b *showcaseBuilder) catalog() error {
 		}
 		saved, err := b.s.UpsertCatalogItem(b.ctx, item, "")
 		if err != nil {
-			return fmt.Errorf("showcase article %s: %w", a.code, err)
+			return fmt.Errorf("demo article %s: %w", a.code, err)
 		}
 		b.articles[a.key] = *saved
 	}
@@ -302,13 +219,13 @@ func (b *showcaseBuilder) catalog() error {
 
 // stock posts the opening balance as a stock count (history shows "Početno
 // stanje") and three goods receipts on different articles.
-func (b *showcaseBuilder) stock() error {
-	counts := make([]domain.StockCountLine, 0, len(showcaseArticles))
-	for _, a := range showcaseArticles {
+func (b *demoContentBuilder) stock() error {
+	counts := make([]domain.StockCountLine, 0, len(demoArticles))
+	for _, a := range demoArticles {
 		counts = append(counts, domain.StockCountLine{CatalogItemID: b.articles[a.key].ID, CountedQuantity: a.opening})
 	}
-	if _, err := b.s.PostStockCount(b.ctx, domain.StockCountInput{Note: "Početno stanje", Lines: counts}, ShowcaseAdminUsername); err != nil {
-		return fmt.Errorf("showcase opening stock: %w", err)
+	if _, err := b.s.PostStockCount(b.ctx, domain.StockCountInput{Note: "Početno stanje", Lines: counts}, demoAdminUsername); err != nil {
+		return fmt.Errorf("demo opening stock: %w", err)
 	}
 	line := func(key string, qty float64) domain.StockReceiptLine {
 		return domain.StockReceiptLine{CatalogItemID: b.articles[key].ID, Quantity: qty}
@@ -318,8 +235,8 @@ func (b *showcaseBuilder) stock() error {
 		{DocumentRef: "FA-2026-0342 Chem-Color", Note: "Boje i ploče", Lines: []domain.StockReceiptLine{line("boja", 10), line("ploca", 50)}},
 		{DocumentRef: "OT-2026-131 Banerprint", Note: "Baneri i žica", Lines: []domain.StockReceiptLine{line("baner", 150), line("zica", 4)}},
 	} {
-		if _, err := b.s.PostStockReceipt(b.ctx, r, ShowcaseOperatorUsername); err != nil {
-			return fmt.Errorf("showcase receipt %s: %w", r.DocumentRef, err)
+		if _, err := b.s.PostStockReceipt(b.ctx, r, demoOperatorUsername); err != nil {
+			return fmt.Errorf("demo receipt %s: %w", r.DocumentRef, err)
 		}
 	}
 	return nil
@@ -330,23 +247,23 @@ func (b *showcaseBuilder) stock() error {
 // and its byproducts below, products one column after their step. The web
 // editor draws inputs and byproducts as vertical lines into/out of the step.
 type graphBuilder struct {
-	b     *showcaseBuilder
+	b     *demoContentBuilder
 	graph domain.ProcessGraph
 }
 
 const (
-	showcaseColumn = 300.0
-	showcaseRow    = 120.0 // step row → byproduct row
-	showcaseInRow  = 170.0 // input row → step row; room for right-angled side streams
+	demoColumn = 300.0
+	demoRow    = 120.0 // step row → byproduct row
+	demoInRow  = 170.0 // input row → step row; room for right-angled side streams
 )
 
 func (g *graphBuilder) step(id, label string, col, y float64) {
-	g.graph.Nodes = append(g.graph.Nodes, domain.ProcessNode{ID: id, Kind: domain.ProcessNodeStep, Label: label, X: col * showcaseColumn, Y: y})
+	g.graph.Nodes = append(g.graph.Nodes, domain.ProcessNode{ID: id, Kind: domain.ProcessNodeStep, Label: label, X: col * demoColumn, Y: y})
 }
 
 // item adds an input (stack index above the step), byproduct (below) or product.
 func (g *graphBuilder) item(kind domain.ProcessNodeKind, id, label, article string, qty float64, col, y float64) {
-	node := domain.ProcessNode{ID: id, Kind: kind, Label: label, X: col * showcaseColumn, Y: y}
+	node := domain.ProcessNode{ID: id, Kind: kind, Label: label, X: col * demoColumn, Y: y}
 	if article != "" {
 		a := g.b.articles[article]
 		node.CatalogItemID, node.Unit = a.ID, a.Unit
@@ -363,7 +280,7 @@ func (g *graphBuilder) edges(pairs ...string) {
 	}
 }
 
-func (b *showcaseBuilder) processTemplates() error {
+func (b *demoContentBuilder) processTemplates() error {
 	const lane = 300.0 // main step row; inputs sit above, byproducts below
 	in, by, pr := domain.ProcessNodeInput, domain.ProcessNodeByproduct, domain.ProcessNodeProduct
 	type spec struct {
@@ -377,11 +294,11 @@ func (b *showcaseBuilder) processTemplates() error {
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("secenje", "Sečenje", 2, lane)
 			g.step("pakovanje", "Pakovanje", 3, lane)
-			g.item(in, "ploce", "Offset ploče", "ploca", 4, 0, lane-showcaseInRow)
-			g.item(in, "papir", "Papir 80g A3", "papir80", 100, 0.63, lane-showcaseInRow)
-			g.item(in, "boja", "Boja CMYK", "boja", 2, 1.37, lane-showcaseInRow)
-			g.item(by, "mak-stampa", "Makulatura (štampa)", "makulatura", 3, 1, lane+showcaseRow)
-			g.item(by, "mak-secenje", "Makulatura (sečenje)", "makulatura", 2, 2, lane+showcaseRow)
+			g.item(in, "ploce", "Offset ploče", "ploca", 4, 0, lane-demoInRow)
+			g.item(in, "papir", "Papir 80g A3", "papir80", 100, 0.63, lane-demoInRow)
+			g.item(in, "boja", "Boja CMYK", "boja", 2, 1.37, lane-demoInRow)
+			g.item(by, "mak-stampa", "Makulatura (štampa)", "makulatura", 3, 1, lane+demoRow)
+			g.item(by, "mak-secenje", "Makulatura (sečenje)", "makulatura", 2, 2, lane+demoRow)
 			g.item(pr, "otisci", "Gotovi otisci", "", 0, 4, lane)
 			g.edges("priprema", "stampa", "stampa", "secenje", "secenje", "pakovanje", "pakovanje", "otisci",
 				"ploce", "priprema", "papir", "stampa", "boja", "stampa", "stampa", "mak-stampa", "secenje", "mak-secenje")
@@ -390,23 +307,23 @@ func (b *showcaseBuilder) processTemplates() error {
 			g.step("priprema", "Priprema fajla", 0, lane)
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("dorada", "Dorada", 2, lane)
-			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 50, 0.63, lane-showcaseInRow)
-			g.item(in, "toner", "Toner", "toner", 1, 1.37, lane-showcaseInRow)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 50, 0.63, lane-demoInRow)
+			g.item(in, "toner", "Toner", "toner", 1, 1.37, lane-demoInRow)
 			g.item(pr, "otisci", "Digitalni otisci", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "dorada", "dorada", "otisci", "papir", "stampa", "toner", "stampa")
 		}},
-		{"brosura", ShowcaseBrochureTemplate, "Brošura sa međuproizvodom (štampani tabaci) i paralelnom štampom korica.", false, func(g *graphBuilder) {
+		{"brosura", demoBrochureTemplate, "Brošura sa međuproizvodom (štampani tabaci) i paralelnom štampom korica.", false, func(g *graphBuilder) {
 			g.step("stampa-tabaka", "Štampa tabaka", 0, lane)
 			g.step("savijanje", "Savijanje", 2, lane)
 			g.step("sivenje", "Šivenje", 3, lane)
 			g.step("obrezivanje", "Obrezivanje", 4, lane)
 			g.step("stampa-korica", "Štampa korica", 1, lane+320)
-			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 200, -0.37, lane-showcaseInRow)
-			g.item(in, "boja", "Boja CMYK", "boja", 3, 0.37, lane-showcaseInRow)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 200, -0.37, lane-demoInRow)
+			g.item(in, "boja", "Boja CMYK", "boja", 3, 0.37, lane-demoInRow)
 			g.item(pr, "tabaci", "Štampani tabaci", "", 0, 1, lane)
-			g.item(in, "karton", "Karton 300g", "karton", 50, 1, lane+320-showcaseInRow)
-			g.item(in, "zica", "Žica za povez", "zica", 1, 3, lane-showcaseInRow)
-			g.item(by, "mak", "Makulatura", "makulatura", 5, 4, lane+showcaseRow)
+			g.item(in, "karton", "Karton 300g", "karton", 50, 1, lane+320-demoInRow)
+			g.item(in, "zica", "Žica za povez", "zica", 1, 3, lane-demoInRow)
+			g.item(by, "mak", "Makulatura", "makulatura", 5, 4, lane+demoRow)
 			g.item(pr, "brosure", "Brošure", "", 0, 5, lane)
 			g.edges("stampa-tabaka", "tabaci", "tabaci", "savijanje", "savijanje", "sivenje", "stampa-korica", "sivenje",
 				"sivenje", "obrezivanje", "obrezivanje", "brosure", "obrezivanje", "mak",
@@ -416,8 +333,8 @@ func (b *showcaseBuilder) processTemplates() error {
 			g.step("priprema", "Priprema", 0, lane)
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("ojacanje", "Ojačanje i ringlovanje", 2, lane)
-			g.item(in, "baner", "Banner PVC 510g", "baner", 12, 1, lane-showcaseInRow)
-			g.item(by, "otpad", "Otpad bannera", "otpad", 1, 1, lane+showcaseRow)
+			g.item(in, "baner", "Banner PVC 510g", "baner", 12, 1, lane-demoInRow)
+			g.item(by, "otpad", "Otpad bannera", "otpad", 1, 1, lane+demoRow)
 			g.item(pr, "gotov", "Baner", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "ojacanje", "ojacanje", "gotov", "baner", "stampa", "stampa", "otpad")
 		}},
@@ -429,15 +346,15 @@ func (b *showcaseBuilder) processTemplates() error {
 			Name: sp.name, Description: sp.description, IsDefault: sp.isDefault, Graph: g.graph,
 		})
 		if err != nil {
-			return fmt.Errorf("showcase template %s: %w", sp.name, err)
+			return fmt.Errorf("demo template %s: %w", sp.name, err)
 		}
 		b.templates[sp.key] = template
 	}
 	return nil
 }
 
-// showcaseOrder is one work order to create.
-type showcaseOrder struct {
+// demoOrder is one work order to create.
+type demoOrder struct {
 	customer, description, template string
 	daysAgo                         int
 	assignee                        string
@@ -449,72 +366,72 @@ type showcaseOrder struct {
 	statuses []domain.WorkOrderStatus
 	// done lists step batches to complete in order; actual overrides the
 	// recorded quantity of item nodes when that batch is marked done.
-	done []showcaseDone
+	done []demoDone
 	// finish moves the order to the final status after the process work.
 	finish []domain.WorkOrderStatus
 }
 
-type showcaseDone struct {
+type demoDone struct {
 	steps  []string
 	actual map[string]float64
 }
 
-func (b *showcaseBuilder) workOrders(result *ShowcaseResult) error {
+func (b *demoContentBuilder) workOrders(result *DemoSeedResult) error {
 	assigned := []domain.WorkOrderStatus{domain.WorkOrderStatusAssigned}
 	progress := []domain.WorkOrderStatus{domain.WorkOrderStatusAssigned, domain.WorkOrderStatusInProgress}
 	completed := []domain.WorkOrderStatus{domain.WorkOrderStatusCompleted}
-	offsetAll := []showcaseDone{{steps: []string{"priprema"}}, {steps: []string{"stampa"}}, {steps: []string{"secenje"}}, {steps: []string{"pakovanje"}}}
-	orders := []showcaseOrder{
+	offsetAll := []demoDone{{steps: []string{"priprema"}}, {steps: []string{"stampa"}}, {steps: []string{"secenje"}}, {steps: []string{"pakovanje"}}}
+	orders := []demoOrder{
 		{ // 1: new, untouched -> reserved stock
 			customer: "pekara", description: "Flajeri A5, 5.000 kom, 4+4", template: "offset", daysAgo: 2,
-			assignee: ShowcaseOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 38000,
+			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 38000,
 			scale: map[string]float64{"papir": 650, "boja": 2, "ploce": 4},
 		},
 		{ // 2: new digital
 			customer: "pixel", description: "Vizit karte, 500 kom, kunstdruk 350g", template: "digital", daysAgo: 1,
-			assignee: ShowcaseOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 7800,
+			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 7800,
 			scale: map[string]float64{"papir": 40, "toner": 1},
 		},
 		{ // 3: in progress, actual paper above plan
 			customer: "opstina", description: "Obrasci A4 u tri primerka, 10.000 kom", template: "offset", daysAgo: 9,
-			assignee: ShowcaseOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 112000,
+			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 112000,
 			scale:    map[string]float64{"papir": 2500, "boja": 6, "ploce": 8, "mak-stampa": 40, "mak-secenje": 25},
 			statuses: progress,
-			done: []showcaseDone{
+			done: []demoDone{
 				{steps: []string{"priprema"}},
 				{steps: []string{"stampa"}, actual: map[string]float64{"papir": 2750, "boja": 6.5, "mak-stampa": 55}},
 			},
 		},
 		{ // 4: in progress brochure, two parallel steps done
 			customer: "slovo", description: "Katalog izdanja, 24 strane, 500 kom", template: "brosura", daysAgo: 6,
-			assignee: ShowcaseAdminUsername, priority: domain.WorkOrderPriorityHigh, price: 96000,
+			assignee: demoAdminUsername, priority: domain.WorkOrderPriorityHigh, price: 96000,
 			scale:    map[string]float64{"papir": 600, "boja": 6, "karton": 150, "zica": 2, "mak": 12},
 			statuses: progress,
-			done:     []showcaseDone{{steps: []string{"stampa-tabaka", "stampa-korica"}}},
+			done:     []demoDone{{steps: []string{"stampa-tabaka", "stampa-korica"}}},
 		},
 		{ // 5: completed offset
 			customer: "volan", description: "Brošure i uputstva A4, 3.000 kom", template: "offset", daysAgo: 20,
-			assignee: ShowcaseOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 54000,
+			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 54000,
 			scale:    map[string]float64{"papir": 1100, "boja": 4, "ploce": 4, "mak-stampa": 18, "mak-secenje": 9},
 			statuses: progress, done: offsetAll, finish: completed,
 		},
 		{ // 6: completed banner
 			customer: "pixel", description: "Baner 4x2 m za sajam", template: "baner", daysAgo: 15,
-			assignee: ShowcaseAdminUsername, priority: domain.WorkOrderPriorityUrgent, price: 9800,
+			assignee: demoAdminUsername, priority: domain.WorkOrderPriorityUrgent, price: 9800,
 			scale:    map[string]float64{"baner": 8, "otpad": 0.5},
 			statuses: progress,
-			done:     []showcaseDone{{steps: []string{"priprema"}}, {steps: []string{"stampa"}}, {steps: []string{"ojacanje"}}},
+			done:     []demoDone{{steps: []string{"priprema"}}, {steps: []string{"stampa"}}, {steps: []string{"ojacanje"}}},
 			finish:   completed,
 		},
 		{ // 7: big order, planned inputs exceed stock
 			customer: "slovo", description: "Zbirka priča, 320 strana, tiraž 2.000", template: "offset", daysAgo: 3,
-			assignee: ShowcaseOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 640000,
+			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 640000,
 			scale:    map[string]float64{"papir": 8000, "boja": 30, "ploce": 24, "mak-stampa": 120, "mak-secenje": 60},
 			statuses: assigned,
 		},
 		{ // 8: cancelled, must not reserve stock
 			customer: "opstina", description: "Plakati A3, 200 kom", template: "digital", daysAgo: 12,
-			assignee: ShowcaseOperatorUsername, priority: domain.WorkOrderPriorityLow, price: 6400,
+			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityLow, price: 6400,
 			scale:    map[string]float64{"papir": 400, "toner": 1},
 			statuses: []domain.WorkOrderStatus{domain.WorkOrderStatusCancelled},
 		},
@@ -522,7 +439,7 @@ func (b *showcaseBuilder) workOrders(result *ShowcaseResult) error {
 	for i, order := range orders {
 		number, err := b.createOrder(order)
 		if err != nil {
-			return fmt.Errorf("showcase order %d: %w", i+1, err)
+			return fmt.Errorf("demo order %d: %w", i+1, err)
 		}
 		switch i {
 		case 2:
@@ -530,13 +447,13 @@ func (b *showcaseBuilder) workOrders(result *ShowcaseResult) error {
 		case 3:
 			result.BrochureOrder = number
 		case 6:
-			result.ShortageOrder, result.ShortageArticle = number, b.articles["papir80"].Name
+			result.ShortageOrder = number
 		case 7:
 			result.CancelledOrder = number
 		}
 	}
 	result.Orders = len(orders)
-	result.BrochureTemplate = ShowcaseBrochureTemplate
+	result.BrochureTemplate = demoBrochureTemplate
 	result.Templates = len(b.templates)
 
 	levels, err := b.s.StockLevels(b.ctx, StockLevelQuery{})
@@ -551,7 +468,7 @@ func (b *showcaseBuilder) workOrders(result *ShowcaseResult) error {
 	return nil
 }
 
-func (b *showcaseBuilder) createOrder(o showcaseOrder) (string, error) {
+func (b *demoContentBuilder) createOrder(o demoOrder) (string, error) {
 	customer, location := b.customers[o.customer], b.locations[o.customer]
 	issue := b.now.AddDate(0, 0, -o.daysAgo)
 	due := issue.AddDate(0, 0, 10).Format("2006-01-02")
@@ -559,7 +476,7 @@ func (b *showcaseBuilder) createOrder(o showcaseOrder) (string, error) {
 	customerID, locationID := customer.ID, location.ID
 	order, err := b.s.CreateWorkOrder(b.ctx, domain.CreateWorkOrderInput{
 		CustomerID: &customerID, LocationID: &locationID, ClientName: customer.Name, ContactPerson: customer.ContactName,
-		JobDescription: o.description, IssuedBy: ShowcaseAdminUsername, IssueDate: issue.Format("2006-01-02"), DueDate: &due,
+		JobDescription: o.description, IssuedBy: demoAdminUsername, IssueDate: issue.Format("2006-01-02"), DueDate: &due,
 		Assignment: domain.Assignment{AssignedTo: &assignee, Priority: o.priority}, Price: &price,
 	})
 	if err != nil {
@@ -575,12 +492,12 @@ func (b *showcaseBuilder) createOrder(o showcaseOrder) (string, error) {
 				return "", err
 			}
 		}
-		if _, err := b.s.ApplyProcessTemplate(b.ctx, order.ID, template.ID, ShowcaseAdminUsername); err != nil {
+		if _, err := b.s.ApplyProcessTemplate(b.ctx, order.ID, template.ID, demoAdminUsername); err != nil {
 			return "", err
 		}
 	}
 	// Scale planned quantities on the order's own graph (admin, structural).
-	if err := b.editProcess(order.ID, ShowcaseAdminUsername, true, func(node *domain.ProcessNode) {
+	if err := b.editProcess(order.ID, demoAdminUsername, true, func(node *domain.ProcessNode) {
 		if qty, ok := o.scale[node.ID]; ok {
 			value := qty
 			node.Quantity = &value
@@ -616,7 +533,7 @@ func (b *showcaseBuilder) createOrder(o showcaseOrder) (string, error) {
 	return order.OrderNumber, nil
 }
 
-func (b *showcaseBuilder) editProcess(workOrderID, user string, structural bool, edit func(*domain.ProcessNode)) error {
+func (b *demoContentBuilder) editProcess(workOrderID, user string, structural bool, edit func(*domain.ProcessNode)) error {
 	process, err := b.s.WorkOrderProcess(b.ctx, workOrderID)
 	if err != nil {
 		return err
@@ -632,7 +549,7 @@ func (b *showcaseBuilder) editProcess(workOrderID, user string, structural bool,
 	return err
 }
 
-func (b *showcaseBuilder) setStatuses(workOrderID string, statuses []domain.WorkOrderStatus) error {
+func (b *demoContentBuilder) setStatuses(workOrderID string, statuses []domain.WorkOrderStatus) error {
 	for _, status := range statuses {
 		raw, err := json.Marshal(status)
 		if err != nil {

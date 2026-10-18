@@ -20,7 +20,7 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	ctx := testTenantContext()
 	dbPath := filepath.Join(t.TempDir(), "iris.db")
 	sqliteStore := newSQLiteStoreForTest(t, ctx, dbPath)
-	if err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t)); err != nil {
+	if _, err := SeedDemoFromFixtures(ctx, sqliteStore, testutil.FixtureDir(t)); err != nil {
 		t.Fatalf("SeedDemoFromFixtures() returned error: %v", err)
 	}
 
@@ -28,8 +28,9 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WorkOrders() returned error: %v", err)
 	}
-	if result.Total != 43 || len(result.Items) != 10 {
-		t.Fatalf("result = %#v, want total 43 and limited page", result)
+	// 43 plain fixture orders plus the 8 process-driven content orders.
+	if result.Total != 51 || len(result.Items) != 10 {
+		t.Fatalf("result = %#v, want total 51 and limited page", result)
 	}
 	if err := sqliteStore.Close(); err != nil {
 		t.Fatalf("Close() returned error: %v", err)

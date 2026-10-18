@@ -195,17 +195,30 @@ func TestFixtureStoreProcessLifecycle(t *testing.T) {
 	runProcessStoreContract(t, s, ctx, order.ID)
 }
 
-func TestSeedDemoCreatesDefaultProcessTemplateOnce(t *testing.T) {
+func TestSeedDemoCreatesTemplatesOnce(t *testing.T) {
 	ctx := context.Background()
 	s := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	t.Cleanup(func() { _ = s.Close() })
 	for i := 0; i < 2; i++ {
-		if err := SeedDemoFromFixtures(ctx, s, testutil.FixtureDir(t)); err != nil {
+		if _, err := SeedDemoFromFixtures(ctx, s, testutil.FixtureDir(t)); err != nil {
 			t.Fatalf("seed #%d: %v", i+1, err)
 		}
 	}
+	// A re-seed must not duplicate the content templates.
 	templates, err := s.ProcessTemplates(testTenantContext())
-	if err != nil || len(templates) != 1 || templates[0].Name != "Offset štampa" || !templates[0].IsDefault {
+	if err != nil || len(templates) != 4 {
 		t.Fatalf("templates = %+v, %v", templates, err)
+	}
+	defaults := 0
+	for _, template := range templates {
+		if template.IsDefault {
+			defaults++
+			if template.Name != "Offset štampa" {
+				t.Fatalf("default template = %q", template.Name)
+			}
+		}
+	}
+	if defaults != 1 {
+		t.Fatalf("default templates = %d", defaults)
 	}
 }
