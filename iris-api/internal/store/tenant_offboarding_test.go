@@ -115,6 +115,7 @@ func offboardingFixture(t *testing.T) (*SQLiteStore, context.Context, AuditActor
 	actor := AuditActor{AdminID: admin.ID, AdminUsername: admin.Username, IP: "127.0.0.1"}
 	if _, _, err := s.CreateImpersonationSession(ctx, ImpersonationInput{
 		AdminID: admin.ID, AdminUsername: admin.Username, TenantID: demo.ID, UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour),
+		Reason: "Podrška pri gašenju naloga",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -245,10 +246,17 @@ func TestPlatformDeleteTenant(t *testing.T) {
 		t.Fatalf("delete = %v, %v", deletion, err)
 	}
 	total := 0
-	for table, count := range before {
+	for _, table := range tenantDataTables {
+		count := before[table.name]
+		if table.keepOnDelete {
+			if _, ok := deletion.Rows[table.name]; ok {
+				t.Errorf("deletion reports %s, which is kept", table.name)
+			}
+			continue
+		}
 		total += count
-		if deletion.Rows[table] != count {
-			t.Errorf("deleted %s = %d, want %d", table, deletion.Rows[table], count)
+		if deletion.Rows[table.name] != count {
+			t.Errorf("deleted %s = %d, want %d", table.name, deletion.Rows[table.name], count)
 		}
 	}
 	if deletion.TotalRows != total || deletion.Slug != DemoTenantSlug || deletion.Name != demo.Name {
@@ -312,10 +320,28 @@ func TestPlatformDeleteTenant(t *testing.T) {
 	for _, event := range log.Items {
 		if event.Action == domain.AuditImpersonationStart && event.TenantSlug == DemoTenantSlug {
 			impersonations++
+			// The impersonation itself survives (v30): status, reason and trail.
+			if event.Impersonation == nil || event.Impersonation.ActionCount != 1 || event.Impersonation.Reason != "Podrška pri gašenju naloga" {
+				t.Fatalf("impersonation of the deleted organization = %+v", event.Impersonation)
+			}
+			actions, found, err := s.ImpersonationActions(ctx, event.Impersonation.ID)
+			if err != nil || !found || len(actions) != 1 || actions[0].Path != "/customers/cust-1" {
+				t.Fatalf("impersonation trail after delete = %+v, %v, %v", actions, found, err)
+			}
 		}
 	}
 	if impersonations != 1 {
 		t.Fatalf("impersonation audit rows of the deleted organization = %d, want 1", impersonations)
+	}
+	var kept int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM impersonation_events WHERE tenant_id IS NULL AND tenant_slug = ? AND tenant_name = ?`,
+		DemoTenantSlug, demo.Name,
+	).Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept != before["impersonation_events"] || kept == 0 {
+		t.Fatalf("detached impersonation events = %d, want %d", kept, before["impersonation_events"])
 	}
 
 	if again, err := s.PlatformDeleteTenant(ctx, actor, DemoTenantSlug, DemoTenantSlug); err != nil || again != nil {

@@ -36,7 +36,10 @@ A fresh PostgreSQL database is created directly at the consolidated v12 schema
 and stamped as such, rather than replaying the twelve SQLite migrations (several
 of which are SQLite table rebuilds). **Migration 13 and later are shared**: add
 them to `sqliteMigrations` only, never to `postgresSchema`, or existing
-PostgreSQL databases will skip them.
+PostgreSQL databases will skip them. A shared migration that changes a column's
+constraints (SQLite has no `ALTER COLUMN`) is an `fn` migration that branches on
+the driver: a table rebuild on SQLite, `ALTER TABLE` on PostgreSQL — see v30,
+`impersonationHistoryMigration`.
 
 ## Migrating the production database
 

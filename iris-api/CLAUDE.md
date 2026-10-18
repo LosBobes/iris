@@ -14,7 +14,9 @@ selects PostgreSQL. Queries are written once in the SQLite dialect and rewritten
 for Postgres inside the driver (`internal/store/postgres_sql.go`) — so when you
 add a query, do not branch on the engine. If it uses a construct the translator
 does not cover, add a rule plus a case in `postgres_sql_test.go`. New migrations
-(13+) go in `sqliteMigrations` only, never in `postgresSchema`.
+(13+) go in `sqliteMigrations` only, never in `postgresSchema`; one that changes
+a column's constraints must branch on the driver inside its `fn` (SQLite rebuild
+vs Postgres `ALTER`, see v30 `impersonationHistoryMigration`).
 
 ## Boundaries
 

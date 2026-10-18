@@ -1107,7 +1107,7 @@ export const sr = {
       deleteIrreversible: 'Brisanje je trajno i ne može se poništiti.',
       deleteScope:
         'Biće uklonjeni svi podaci organizacije: korisnici, klijenti, radni nalozi, katalog, magacin, procesi i podešavanja.',
-      deleteAuditNote: 'Aktivnost u Backoffice-u zadržava zapis o ovom brisanju.',
+      deleteAuditNote: 'Aktivnost u Backoffice-u zadržava zapis o ovom brisanju i istoriju impersonacija.',
       deleteExportHint: 'Preporučujemo da pre brisanja izvezete podatke organizacije.',
       deleteConfirmLabel: 'Za potvrdu upišite oznaku organizacije: {{slug}}',
       deleteConfirm: 'Trajno obriši',

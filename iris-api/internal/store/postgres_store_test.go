@@ -47,6 +47,7 @@ func storeScenarios() []storeScenario {
 		{name: "WorkOrderSearchEscapesWildcards", run: scenarioWorkOrderSearchEscapesWildcards},
 		{name: "IDCounterSurvivesNonNumericAndLargeIDs", run: scenarioIDCounterSurvivesNonNumericAndLargeIDs},
 		{name: "AnnouncementsTargetAndWindow", run: scenarioAnnouncementsTargetAndWindow},
+		{name: "DeletedOrganizationKeepsImpersonationHistory", run: scenarioDeletedOrganizationKeepsImpersonationHistory},
 	}
 }
 

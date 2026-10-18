@@ -2359,7 +2359,8 @@ paths:
       description: >
         Every POST/PUT/PATCH/DELETE made with the impersonated session: method,
         route pattern, path, response status and time. Request bodies are never
-        recorded; reads are not traced.
+        recorded; reads are not traced. Still available after the
+        organization is deleted.
       operationId: getPlatformImpersonationActions
       security:
         - PlatformSession: []
@@ -2527,10 +2528,12 @@ paths:
         Two-phase: the organization must be suspended first, and the body must
         repeat its slug exactly. Deletes every row the organization owns in one
         transaction (users, sessions, customers, work orders, catalog, stock,
-        processes, settings, login and impersonation history). Recorded as
+        processes, settings, login history, superadmin notes). Recorded as
         `tenant.delete` with the name, slug and row counts; the activity log
-        keeps all earlier events of the organization. Cannot be undone —
-        export first.
+        keeps all earlier events of the organization, and its impersonation
+        history (each session's reason, status and request trail) is kept,
+        detached from the deleted organization. Cannot be undone — export
+        first.
       operationId: deletePlatformTenant
       security:
         - PlatformSession: []

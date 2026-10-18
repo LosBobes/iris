@@ -1108,7 +1108,7 @@ export const en: typeof sr = {
       deleteIrreversible: 'Deletion is permanent and cannot be undone.',
       deleteScope:
         'All of the organization’s data will be removed: users, customers, work orders, catalog, stock, processes and settings.',
-      deleteAuditNote: 'The Backoffice activity log keeps a record of this deletion.',
+      deleteAuditNote: 'The Backoffice activity log keeps a record of this deletion and the impersonation history.',
       deleteExportHint: 'We recommend exporting the organization’s data before deleting it.',
       deleteConfirmLabel: 'To confirm, type the organization slug: {{slug}}',
       deleteConfirm: 'Delete permanently',

@@ -31,6 +31,10 @@ type tenantDataTable struct {
 	// noExport keeps the whole table out of the export (session tokens); its
 	// rows are still deleted.
 	noExport bool
+	// keepOnDelete exports the rows but leaves them when the organization is
+	// deleted: their tenant reference is ON DELETE SET NULL, so they outlive
+	// it (impersonation history, v30).
+	keepOnDelete bool
 }
 
 const (
@@ -48,8 +52,11 @@ var tenantDataTables = []tenantDataTable{
 	// sessions reference users and impersonation_events (no cascade on the
 	// latter), so they go first. Never exported: they are credentials.
 	{name: "sessions", where: tenantUsers, noExport: true},
-	{name: "impersonation_actions", where: `impersonation_id IN (SELECT id FROM impersonation_events WHERE tenant_id = ?)`},
-	{name: "impersonation_events", where: tenantRows},
+	// Impersonation history is exported but kept: deleting the tenant nulls
+	// impersonation_events.tenant_id (slug and name stay on the row), and the
+	// trail hangs off the event, so the activity log still shows both.
+	{name: "impersonation_actions", where: `impersonation_id IN (SELECT id FROM impersonation_events WHERE tenant_id = ?)`, keepOnDelete: true},
+	{name: "impersonation_events", where: tenantRows, keepOnDelete: true},
 	{name: "login_events", where: tenantRows},
 	// Superadmin-internal notes about the organization (D-022): removed with
 	// it, but never handed to the organization in its export.
@@ -233,9 +240,9 @@ func exportTableRows(ctx context.Context, db queryer, table tenantDataTable, ten
 // The activity log keeps a tenant.delete event with the organization's name,
 // slug and row counts; earlier events of the organization stay too (their
 // tenant reference becomes NULL). Impersonation history (impersonation_events
-// and their per-request trail) goes with the organization: each impersonation
-// keeps its "impersonate" row in the activity log, and the full trail is in
-// the export. It returns nil when no organization has that slug.
+// and their per-request trail) is kept the same way (v30), so "Aktivnost" and
+// /platform/impersonations/{id}/actions keep working for it. It returns nil
+// when no organization has that slug.
 func (s *SQLiteStore) PlatformDeleteTenant(ctx context.Context, actor AuditActor, slug, confirmSlug string) (*domain.PlatformTenantDeletion, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -261,6 +268,9 @@ func (s *SQLiteStore) PlatformDeleteTenant(ctx context.Context, actor AuditActor
 		Rows:      map[string]int{},
 	}
 	for _, table := range tenantDataTables {
+		if table.keepOnDelete {
+			continue
+		}
 		result, err := tx.ExecContext(ctx, `DELETE FROM `+table.name+` WHERE `+table.where, tenant.ID)
 		if err != nil {
 			return nil, fmt.Errorf("delete %s: %w", table.name, err)
