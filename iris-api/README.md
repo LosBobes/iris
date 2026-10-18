@@ -230,6 +230,15 @@ For a non-demo user, run:
 docker compose run --rm --entrypoint irisctl iris-api create-user -tenant demo -username milica -password '<secret>' -role admin
 ```
 
+The image ships both binaries — the server (`iris-api`, the entrypoint) and the
+`irisctl` operations CLI — so the same `--entrypoint irisctl` form works against
+the production compose file too (migrations, seeding, backups), reusing the
+backend's `/data` volume and environment:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm --entrypoint irisctl backend seed-demo -id-prefix demo-
+```
+
 SQLite migrations run idempotently on startup before the API begins serving.
 They create missing tables and indexes without destructive rebuilds.
 
