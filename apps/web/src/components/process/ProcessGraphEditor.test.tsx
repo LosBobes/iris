@@ -77,6 +77,23 @@ describe('ProcessGraphEditor', () => {
     expect(after.edges).toEqual([])
   })
 
+  it('marks a step as a starting step and offers the role for items', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<Harness onChange={onChange} />)
+
+    // userEvent's mousedown has no `view`, which d3-drag (React Flow) requires.
+    fireEvent.click(await screen.findByText('Štampa'))
+    expect(screen.queryByLabelText('Uloga')).not.toBeInTheDocument()
+    await user.click(await screen.findByLabelText('Početni korak'))
+    expect((onChange.mock.calls.at(-1)![0] as ProcessGraph).nodes[0].start).toBe(true)
+    expect(await screen.findByTestId('node-start')).toHaveTextContent('Početak')
+
+    fireEvent.click(screen.getByText('Papir'))
+    expect(await screen.findByLabelText('Uloga')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Krajnji izlaz')).not.toBeInTheDocument()
+  })
+
   it('shows validation errors inline', () => {
     render(<Harness initial={{ nodes: [], edges: [] }} />)
     expect(screen.getByRole('alert')).toHaveTextContent('Proces mora imati bar jedan korak.')
@@ -93,6 +110,7 @@ describe('ProcessGraphEditor', () => {
     expect(await screen.findByLabelText('Naziv')).toHaveAttribute('readonly')
     expect(screen.getByLabelText('Planirana količina')).toHaveAttribute('readonly')
     expect(screen.queryByRole('button', { name: 'Obriši čvor' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Uloga')).not.toBeInTheDocument()
 
     const actual = screen.getByLabelText('Stvarna količina')
     await user.type(actual, '7')

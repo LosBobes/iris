@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
   canConnect,
+  changeItemKind,
   edgeHandles,
   edgeStream,
   type EdgeStream,
@@ -344,6 +345,11 @@ function ProcessGraphEditorInner({
     [emit],
   )
 
+  const changeKind = useCallback(
+    (id: string, kind: ProcessNodeKind) => emit(changeItemKind(latest.current, id, kind)),
+    [emit],
+  )
+
   const patchEdge = useCallback(
     (id: string, patch: Partial<ProcessEdge>) => {
       const graph = latest.current
@@ -429,6 +435,7 @@ function ProcessGraphEditorInner({
             articleLinking={articleLinking}
             articlesHidden={articlesHidden}
             onNodeChange={patchNode}
+            onKindChange={changeKind}
             onEdgeChange={patchEdge}
             onDelete={deleteSelection}
           />

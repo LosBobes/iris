@@ -237,6 +237,8 @@ func TestProcessStructureChanged(t *testing.T) {
 		"remove edge":   func(g *ProcessGraph) { g.Edges = g.Edges[1:] },
 		"edge label":    func(g *ProcessGraph) { g.Edges[0].Label = "novo" },
 		"edge retarget": func(g *ProcessGraph) { g.Edges[3].Target = "prints" },
+		"start marker":  func(g *ProcessGraph) { g.Nodes[1].Start = true },
+		"final marker":  func(g *ProcessGraph) { g.Nodes[3].Final = true },
 	}
 	for name, mutate := range structural {
 		t.Run("structural "+name, func(t *testing.T) {
@@ -246,5 +248,70 @@ func TestProcessStructureChanged(t *testing.T) {
 				t.Fatal("not reported as structural")
 			}
 		})
+	}
+}
+
+func TestNormalizeProcessGraphMarkers(t *testing.T) {
+	// Two independent starting steps feeding a shared one that yields two
+	// outputs; the intermediate product is also marked as a final output.
+	g := ProcessGraph{
+		Nodes: []ProcessNode{
+			{ID: "paper", Kind: ProcessNodeInput, Label: "Papir", Start: true, Final: true},
+			{ID: "print", Kind: ProcessNodeStep, Label: "Štampa", Start: true, Final: true},
+			{ID: "foil", Kind: ProcessNodeStep, Label: "Folija", Start: true},
+			{ID: "sheets", Kind: ProcessNodeProduct, Label: "Tabaci", Final: true, Start: true},
+			{ID: "bind", Kind: ProcessNodeStep, Label: "Povez"},
+			{ID: "books", Kind: ProcessNodeProduct, Label: "Knjige"},
+			{ID: "offcuts", Kind: ProcessNodeByproduct, Label: "Otpad", Final: true},
+		},
+		Edges: []ProcessEdge{
+			edge("e1", "paper", "print"), edge("e2", "print", "sheets"), edge("e3", "sheets", "bind"),
+			edge("e4", "foil", "bind"), edge("e5", "bind", "books"), edge("e6", "bind", "offcuts"),
+		},
+	}
+	got, err := NormalizeProcessGraph(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][2]bool{ // id → {start, final}
+		"paper": {false, false}, "print": {true, false}, "foil": {true, false},
+		"sheets": {false, true}, "bind": {false, false}, "books": {false, false}, "offcuts": {false, true},
+	}
+	for _, n := range got.Nodes {
+		if w := want[n.ID]; n.Start != w[0] || n.Final != w[1] {
+			t.Errorf("%s: start=%v final=%v, want %v", n.ID, n.Start, n.Final, w)
+		}
+	}
+	// Markers are structure: a template keeps them.
+	template, err := PrepareTemplateGraph(got)
+	if err != nil || !template.Nodes[1].Start || !template.Nodes[3].Final {
+		t.Fatalf("template = %+v, %v", template.Nodes, err)
+	}
+}
+
+func TestDesiredStockNetSameArticleInAndOut(t *testing.T) {
+	// One article is both consumed and (partly) returned by the same process.
+	g := ProcessGraph{
+		Nodes: []ProcessNode{
+			{ID: "paper", Kind: ProcessNodeInput, Label: "Papir", CatalogItemID: "cat-paper", Quantity: f(10)},
+			{ID: "print", Kind: ProcessNodeStep, Label: "Štampa", Status: ProcessStepDone},
+			{ID: "cut", Kind: ProcessNodeStep, Label: "Sečenje", Status: ProcessStepDone},
+			{ID: "leftover", Kind: ProcessNodeByproduct, Label: "Višak papira", CatalogItemID: "cat-paper", Quantity: f(3)},
+			{ID: "flyers", Kind: ProcessNodeProduct, Label: "Flajeri", CatalogItemID: "cat-paper", Quantity: f(6), Final: true},
+		},
+		Edges: []ProcessEdge{
+			edge("e1", "paper", "print"), edge("e2", "print", "leftover"), edge("e3", "print", "cut"),
+			edge("e4", "cut", "flyers"),
+		},
+	}
+	normalized, err := PrepareWorkOrderGraph(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	net := DesiredStockNet(normalized)
+	for id, want := range map[string]float64{"paper": -10, "leftover": 3, "flyers": 6} {
+		if got := net[id]; got.CatalogItemID != "cat-paper" || got.Net != want {
+			t.Errorf("%s = %+v, want %v", id, got, want)
+		}
 	}
 }

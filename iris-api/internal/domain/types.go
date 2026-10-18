@@ -1226,15 +1226,20 @@ const (
 // ProcessNode is one vertex of a process graph. Step nodes carry Status; item
 // nodes (input, product, byproduct) carry the quantity fields.
 type ProcessNode struct {
-	ID             string            `json:"id"`
-	Kind           ProcessNodeKind   `json:"kind"`
-	Label          string            `json:"label"`
-	X              float64           `json:"x"`
-	Y              float64           `json:"y"`
-	Quantity       *float64          `json:"quantity,omitempty"`
-	Unit           string            `json:"unit,omitempty"`
-	CatalogItemID  string            `json:"catalogItemId,omitempty"`
-	Note           string            `json:"note,omitempty"`
+	ID            string          `json:"id"`
+	Kind          ProcessNodeKind `json:"kind"`
+	Label         string          `json:"label"`
+	X             float64         `json:"x"`
+	Y             float64         `json:"y"`
+	Quantity      *float64        `json:"quantity,omitempty"`
+	Unit          string          `json:"unit,omitempty"`
+	CatalogItemID string          `json:"catalogItemId,omitempty"`
+	Note          string          `json:"note,omitempty"`
+	// Start marks a step as a starting point of the process; steps only.
+	Start bool `json:"start,omitempty"`
+	// Final marks a product/byproduct as an output of the process even when a
+	// later step also consumes it; product and byproduct nodes only.
+	Final          bool              `json:"final,omitempty"`
 	Status         ProcessStepStatus `json:"status,omitempty"`
 	ActualQuantity *float64          `json:"actualQuantity,omitempty"`
 }

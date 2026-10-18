@@ -768,7 +768,7 @@ export const sr = {
     planned: 'Plan',
     actual: 'Stvarno',
     canvasLabel: 'Grafikon procesa',
-    rulesHint: 'Povucite od tačke na čvoru do drugog čvora da ih povežete. Ulaz vodi u korak, korak u korak, proizvod ili nusproizvod, a proizvod i nusproizvod mogu voditi u sledeći korak.',
+    rulesHint: 'Povucite od tačke na čvoru do drugog čvora da ih povežete. Ulaz vodi u korak, korak u korak, proizvod ili nusproizvod, a proizvod i nusproizvod mogu voditi u sledeći korak. Proces može imati više početnih koraka i više proizvoda i nusproizvoda.',
     defaultLabel: { step: 'Novi korak', input: 'Novi ulaz', product: 'Novi proizvod', byproduct: 'Novi nusproizvod' },
     toolbar: {
       label: 'Dodavanje čvorova',
@@ -797,7 +797,17 @@ export const sr = {
       articleNone: 'Nije povezano sa artiklom — stanje se ne prati.',
       articleLinked: 'Povezano sa artiklom: {{name}}',
       unitFollowsArticle: 'Jedinica prati artikal iz kataloga.',
+      role: 'Uloga',
+      roleHint: 'Isti artikal može biti ulaz, proizvod ili nusproizvod. Veze koje nova uloga ne dozvoljava se uklanjaju.',
+      start: 'Početni korak',
+      startHint: 'Proces može imati više početnih koraka; ovaj ne čeka nijedan drugi korak.',
+      final: 'Krajnji izlaz',
+      finalHint: 'Računa se kao rezultat procesa i kada ga kasniji korak dalje koristi.',
       articleOnStock: 'Na stanju: {{qty}}',
+    },
+    marker: {
+      start: 'Početak',
+      final: 'Izlaz',
     },
     stock: {
       onStock: 'Na stanju {{qty}}',
@@ -890,6 +900,7 @@ export const sr = {
       },
       issue: {
         stepNoInput: 'Korak „{{label}}“ nema ulaza ni prethodnog koraka.',
+        startHasUpstream: 'Korak „{{label}}“ je označen kao početni, ali mu prethodi drugi korak.',
         stepDeadEnd: 'Korak „{{label}}“ ne vodi nigde (nema izlaza).',
         itemIsolated: '„{{label}}“ nije povezan ni sa čim.',
         inputUnused: 'Ulaz „{{label}}“ ne troši nijedan korak.',

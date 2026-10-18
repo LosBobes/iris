@@ -769,7 +769,7 @@ export const en: typeof sr = {
     planned: 'Planned',
     actual: 'Actual',
     canvasLabel: 'Process graph',
-    rulesHint: 'Drag from a node handle to another node to connect them. An input feeds a step, a step feeds a step, product or byproduct, and a product or byproduct can feed a later step.',
+    rulesHint: 'Drag from a node handle to another node to connect them. An input feeds a step, a step feeds a step, product or byproduct, and a product or byproduct can feed a later step. A process can have several starting steps and several products and byproducts.',
     defaultLabel: { step: 'New step', input: 'New input', product: 'New product', byproduct: 'New byproduct' },
     toolbar: {
       label: 'Add nodes',
@@ -798,7 +798,17 @@ export const en: typeof sr = {
       articleNone: 'Not linked to an article — stock is not tracked.',
       articleLinked: 'Linked to article: {{name}}',
       unitFollowsArticle: 'The unit follows the catalog article.',
+      role: 'Role',
+      roleHint: 'The same article can be an input, a product or a byproduct. Connections the new role does not allow are removed.',
+      start: 'Starting step',
+      startHint: 'A process can have several starting steps; this one does not wait for any other step.',
+      final: 'Final output',
+      finalHint: 'Counts as a result of the process even when a later step uses it further.',
       articleOnStock: 'On hand: {{qty}}',
+    },
+    marker: {
+      start: 'Start',
+      final: 'Output',
     },
     stock: {
       onStock: 'On hand {{qty}}',
@@ -891,6 +901,7 @@ export const en: typeof sr = {
       },
       issue: {
         stepNoInput: 'Step "{{label}}" has no input and no previous step.',
+        startHasUpstream: 'Step "{{label}}" is marked as a starting step, but another step comes before it.',
         stepDeadEnd: 'Step "{{label}}" leads nowhere (no output).',
         itemIsolated: '"{{label}}" is not connected to anything.',
         inputUnused: 'Input "{{label}}" is not consumed by any step.',

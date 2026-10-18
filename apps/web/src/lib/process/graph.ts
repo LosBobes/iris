@@ -31,6 +31,37 @@ export function isItemKind(kind: ProcessNodeKind): boolean {
   return kind !== 'step'
 }
 
+/** Whether a node of this kind may carry the `final` marker. */
+export function canBeFinal(kind: ProcessNodeKind): boolean {
+  return kind === 'product' || kind === 'byproduct'
+}
+
+/**
+ * Switches an item node to another item role (input / product / byproduct) in
+ * place, keeping its id, label, quantity, unit, article link and every edge the
+ * new role still allows. Edges the role does not allow (e.g. a step feeding a
+ * node that becomes an input) are dropped, and so is `final` on an input.
+ * Steps and unknown ids leave the graph unchanged.
+ */
+export function changeItemKind(graph: ProcessGraph, id: string, kind: ProcessNodeKind): ProcessGraph {
+  const target = graph.nodes.find((node) => node.id === id)
+  if (!target || !isItemKind(target.kind) || !isItemKind(kind) || target.kind === kind) return graph
+  const nodes = graph.nodes.map((node) => {
+    if (node.id !== id) return node
+    const next: ProcessNode = { ...node, kind }
+    if (!canBeFinal(kind)) delete next.final
+    return next
+  })
+  const kinds = new Map(nodes.map((node) => [node.id, node.kind]))
+  const edges = graph.edges.filter((edge) => {
+    if (edge.source !== id && edge.target !== id) return true
+    const source = kinds.get(edge.source)
+    const to = kinds.get(edge.target)
+    return source !== undefined && to !== undefined && isConnectionAllowed(source, to)
+  })
+  return { nodes, edges }
+}
+
 /** Whether an edge from a node of kind `source` to one of kind `target` is allowed. */
 export function isConnectionAllowed(source: ProcessNodeKind, target: ProcessNodeKind): boolean {
   return ALLOWED_TARGETS[source].includes(target)
@@ -311,8 +342,8 @@ function sameText(a: string | undefined | null, b: string | undefined | null): b
 
 /**
  * True when `next` differs from `prev` in anything an operator may not change:
- * the node set, kind, label, quantity, unit, catalogItemId, or the edge set
- * (including labels). Status, actual quantity, note and position are free.
+ * the node set, kind, label, quantity, unit, catalogItemId, the start/final
+ * markers, or the edge set (including labels). Status, actual quantity, note and position are free.
  */
 export function hasStructuralChange(prev: ProcessGraph, next: ProcessGraph): boolean {
   if (prev.nodes.length !== next.nodes.length || prev.edges.length !== next.edges.length) return true
@@ -326,7 +357,9 @@ export function hasStructuralChange(prev: ProcessGraph, next: ProcessGraph): boo
       !sameText(old.label, node.label) ||
       !sameNumber(old.quantity, node.quantity) ||
       !sameText(old.unit, node.unit) ||
-      !sameText(old.catalogItemId, node.catalogItemId)
+      !sameText(old.catalogItemId, node.catalogItemId) ||
+      Boolean(old.start) !== Boolean(node.start) ||
+      Boolean(old.final) !== Boolean(node.final)
     ) {
       return true
     }
@@ -390,8 +423,11 @@ export function normalizeGraphForKinds(graph: ProcessGraph): ProcessGraph {
       delete next.unit
       delete next.catalogItemId
       delete next.actualQuantity
+      delete next.final
     } else {
       delete next.status
+      delete next.start
+      if (!canBeFinal(node.kind)) delete next.final
     }
     return next
   })

@@ -333,3 +333,65 @@ describe('stock-aware tester', () => {
     ])
   })
 })
+
+describe('multiple starts and outputs', () => {
+  // Two independent starting steps (print, laminate) feed bind; print's sheets
+  // are both sold (marked final) and partly bound; bind yields two products.
+  const multi: ProcessGraph = {
+    nodes: [
+      n('paper', 'input', { quantity: 10, unit: 'kg' }),
+      n('foil', 'input', { quantity: 1, unit: 'kg' }),
+      n('print', 'step', { start: true }),
+      n('laminate', 'step', { start: true }),
+      n('sheets', 'product', { quantity: 4, unit: 'kg', final: true }),
+      n('bind', 'step'),
+      n('books', 'product', { quantity: 5, unit: 'kg' }),
+      n('covers', 'product', { quantity: 1, unit: 'kg' }),
+      n('offcut', 'byproduct', { quantity: 1, unit: 'kg' }),
+    ],
+    edges: [
+      e('paper', 'print'),
+      e('foil', 'laminate'),
+      e('print', 'sheets'),
+      e('sheets', 'bind'),
+      e('laminate', 'bind'),
+      e('bind', 'books'),
+      e('bind', 'covers'),
+      e('bind', 'offcut'),
+    ],
+  }
+
+  it('runs both starting steps in the first wave', () => {
+    const plan = planSimulation(multi)
+    expect(plan.ticks[0].steps.map((step) => step.id).sort()).toEqual(['laminate', 'print'])
+    expect(plan.stepTick.bind).toBe(2)
+  })
+
+  it('counts a final-marked intermediate and every terminal output in the totals', () => {
+    const plan = planSimulation(multi)
+    expect(plan.totals.products).toEqual([{ unit: 'kg', quantity: 10, unknown: 0 }])
+    expect(plan.totals.byproducts).toEqual([{ unit: 'kg', quantity: 1, unknown: 0 }])
+    expect(plan.yieldPercent).toBeCloseTo(90.9, 1)
+  })
+
+  it('does not flag marked starting steps as having no input', () => {
+    const bare: ProcessGraph = {
+      nodes: [n('a', 'step', { start: true }), n('b', 'step'), n('p', 'product')],
+      edges: [e('a', 'p'), e('b', 'p')],
+    }
+    const codes = analyzeProcess(bare).map((issue) => [issue.code, issue.nodeIds[0]])
+    expect(codes).toContainEqual(['stepNoInput', 'b'])
+    expect(codes).not.toContainEqual(['stepNoInput', 'a'])
+  })
+
+  it('warns when a starting step has an earlier step', () => {
+    const late = {
+      ...multi,
+      nodes: multi.nodes.map((node) => (node.id === 'bind' ? { ...node, start: true } : node)),
+    }
+    const issues = analyzeProcess(late).filter((issue) => issue.code === 'startHasUpstream')
+    expect(issues.map((issue) => issue.nodeIds)).toEqual([['bind']])
+    expect(issues[0].message).toContain('bind')
+    expect(analyzeProcess(multi).some((issue) => issue.code === 'startHasUpstream')).toBe(false)
+  })
+})

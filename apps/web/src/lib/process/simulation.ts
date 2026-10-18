@@ -2,7 +2,7 @@ import i18n from '@/i18n'
 import type { ProcessGraph, ProcessNode, ProcessStepStatus } from '@/types/process'
 import type { StockContext } from '@/lib/stock/posting'
 import { STOCK_EPSILON, shortageOf } from '@/lib/stock/posting'
-import { hasCycle, validateGraph } from './graph'
+import { hasCycle, predecessorSteps, validateGraph } from './graph'
 
 // Pure, client-side process "tester" and "simulator". Nothing here touches the
 // API or mutates the graph it is given.
@@ -14,6 +14,7 @@ export type IssueSeverity = 'error' | 'warning'
 export type IssueCode =
   | 'invalid'
   | 'stepNoInput'
+  | 'startHasUpstream'
   | 'stepDeadEnd'
   | 'itemIsolated'
   | 'inputUnused'
@@ -41,7 +42,9 @@ function labelOf(node: ProcessNode): string {
  *
  * - `stepNoInput`: a step with no incoming edge at all (nothing feeds it: no
  *   input, product, byproduct or earlier step). Legitimate for a first step, so
- *   warn only.
+ *   warn only; steps marked `start` are never flagged.
+ * - `startHasUpstream`: a step marked `start` that an earlier step leads to
+ *   (directly or through items), so it cannot actually start the process.
  * - `stepDeadEnd`: a step with no outgoing edge (leads to no step, product or
  *   byproduct).
  * - `itemIsolated`: an input/product/byproduct with no edge at all.
@@ -66,7 +69,8 @@ function labelOf(node: ProcessNode): string {
  *
  * Deliberately NOT flagged: a product or byproduct with no outgoing edge. That
  * is a terminal output (the final product or a by-product leaving the process),
- * which is the normal way for a process to end.
+ * which is the normal way for a process to end. A process may have any number
+ * of starting steps and outputs.
  */
 export interface AnalyzeOptions {
   /** Warehouse state; enables the stock checks. */
@@ -108,7 +112,8 @@ export function analyzeProcess(graph: ProcessGraph, options: AnalyzeOptions = {}
   const items = graph.nodes.filter((node) => node.kind !== 'step')
 
   warn('itemIsolated', items.filter((node) => inCount(node.id) + outCount(node.id) === 0))
-  warn('stepNoInput', steps.filter((node) => inCount(node.id) === 0))
+  warn('stepNoInput', steps.filter((node) => !node.start && inCount(node.id) === 0))
+  warn('startHasUpstream', steps.filter((node) => node.start && predecessorSteps(graph, node.id).length > 0))
   warn('stepDeadEnd', steps.filter((node) => outCount(node.id) === 0))
   warn(
     'inputUnused',
@@ -240,8 +245,9 @@ function addTotals(items: SimItem[]): SimTotal[] {
  * branches share a wave). An item consumed by several steps is listed once, at
  * the earliest wave that consumes it. Skipped steps consume and produce
  * nothing, and an item produced *only* by skipped steps never exists, so no
- * later step consumes it either. Totals and yield count final outputs only
- * (products/byproducts no step consumes afterwards).
+ * later step consumes it either. Totals and yield count final outputs only:
+ * products/byproducts no step consumes afterwards, plus those marked `final`
+ * (an output that is also partly used further on).
  */
 export function planSimulation(graph: ProcessGraph, options: SimulationOptions = {}): SimPlan {
   const factor = Number.isFinite(options.quantity) ? Math.max(0, options.quantity as number) : 1
@@ -351,8 +357,9 @@ export function planSimulation(graph: ProcessGraph, options: SimulationOptions =
   }
 
   // Totals and yield count only final outputs; an intermediate product that a
-  // later step consumes is not an output of the process.
-  const isFinal = (item: SimItem): boolean => (outgoing.get(item.nodeId)?.length ?? 0) === 0
+  // later step consumes is not an output of the process unless marked `final`.
+  const isFinal = (item: SimItem): boolean =>
+    Boolean(byId.get(item.nodeId)?.final) || (outgoing.get(item.nodeId)?.length ?? 0) === 0
   const allProducts = ticks.flatMap((tick) => tick.products).filter(isFinal)
   const allByproducts = ticks.flatMap((tick) => tick.byproducts).filter(isFinal)
   const totals = {

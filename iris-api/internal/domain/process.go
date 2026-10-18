@@ -63,8 +63,8 @@ func processConnectionAllowed(source, target ProcessNodeKind) bool {
 }
 
 // NormalizeProcessGraph validates a graph and returns a cleaned copy: labels
-// are trimmed, state and quantity fields that do not belong to a node's kind
-// are dropped, and nil slices become empty ones. The input is not modified.
+// are trimmed, state, quantity and marker fields (start on steps, final on
+// products/byproducts) that do not belong to a node's kind are dropped, and nil slices become empty ones. The input is not modified.
 // Per-order state (status, actualQuantity) is kept as sent; step statuses that
 // are set must be valid.
 func NormalizeProcessGraph(graph ProcessGraph) (ProcessGraph, error) {
@@ -108,11 +108,16 @@ func NormalizeProcessGraph(graph ProcessGraph) (ProcessGraph, error) {
 			steps++
 			node.Quantity, node.ActualQuantity = nil, nil
 			node.Unit, node.CatalogItemID = "", ""
+			node.Final = false
 			if node.Status != "" && !node.Status.valid() {
 				return ProcessGraph{}, graphError("Nepoznat status koraka.")
 			}
 		} else {
 			node.Status = ""
+			node.Start = false
+			if node.Kind == ProcessNodeInput {
+				node.Final = false
+			}
 			node.Unit = strings.TrimSpace(node.Unit)
 			node.CatalogItemID = strings.TrimSpace(node.CatalogItemID)
 			if utf8.RuneCountInString(node.Unit) > MaxProcessUnit {
@@ -275,7 +280,8 @@ func CloneProcessGraph(graph ProcessGraph) ProcessGraph {
 // ProcessStructureChanged reports whether next differs from current in more
 // than per-order state and layout. Status, actualQuantity, note and the x/y
 // position may change freely; the node set, kind, label, quantity, unit,
-// catalogItemId and the edge set (including labels) may not. Both graphs
+// catalogItemId, the start/final markers and the edge set (including labels)
+// may not. Both graphs
 // should already be normalized.
 func ProcessStructureChanged(current, next ProcessGraph) bool {
 	if len(current.Nodes) != len(next.Nodes) || len(current.Edges) != len(next.Edges) {
@@ -288,7 +294,8 @@ func ProcessStructureChanged(current, next ProcessGraph) bool {
 	for _, node := range next.Nodes {
 		old, ok := nodes[node.ID]
 		if !ok || old.Kind != node.Kind || old.Label != node.Label || old.Unit != node.Unit ||
-			old.CatalogItemID != node.CatalogItemID || !sameFloat(old.Quantity, node.Quantity) {
+			old.CatalogItemID != node.CatalogItemID || old.Start != node.Start || old.Final != node.Final ||
+			!sameFloat(old.Quantity, node.Quantity) {
 			return true
 		}
 	}

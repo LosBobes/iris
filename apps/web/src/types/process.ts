@@ -5,6 +5,8 @@ export type ProcessNodeKind = 'step' | 'input' | 'product' | 'byproduct'
 export type ProcessStepStatus = 'pending' | 'in_progress' | 'done' | 'skipped'
 
 export const PROCESS_NODE_KINDS: ProcessNodeKind[] = ['step', 'input', 'product', 'byproduct']
+/** The roles an item node can switch between in place. */
+export const PROCESS_ITEM_KINDS: ProcessNodeKind[] = ['input', 'product', 'byproduct']
 export const PROCESS_STEP_STATUSES: ProcessStepStatus[] = ['pending', 'in_progress', 'done', 'skipped']
 
 export interface ProcessNode {
@@ -20,6 +22,13 @@ export interface ProcessNode {
   /** Optional link to a catalog item; item nodes only. */
   catalogItemId?: string
   note?: string
+  /** Marks a starting step (any number of steps may be marked); step nodes only. */
+  start?: boolean
+  /**
+   * Marks a product/byproduct as an output of the process even when a later
+   * step also consumes it; product and byproduct nodes only.
+   */
+  final?: boolean
   /** Per-order state; step nodes only. */
   status?: ProcessStepStatus
   /** Per-order state; item nodes only. */

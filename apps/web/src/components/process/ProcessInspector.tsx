@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link2, Link2Off, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,15 +21,18 @@ import {
   MAX_LABEL_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_UNIT_LENGTH,
+  canBeFinal,
   isItemKind,
   isStepReady,
   stepStatus,
 } from '@/lib/process/graph'
 import {
+  PROCESS_ITEM_KINDS,
   PROCESS_STEP_STATUSES,
   type ProcessEdge,
   type ProcessGraph,
   type ProcessNode,
+  type ProcessNodeKind,
   type ProcessStepStatus,
 } from '@/types/process'
 
@@ -46,6 +50,8 @@ interface ProcessInspectorProps {
   /** Hides the article section entirely (Magacin module off). */
   articlesHidden?: boolean
   onNodeChange: (id: string, patch: Partial<ProcessNode>) => void
+  /** Switches an item node's role in place (input / product / byproduct). */
+  onKindChange?: (id: string, kind: ProcessNodeKind) => void
   onEdgeChange: (id: string, patch: Partial<ProcessEdge>) => void
   onDelete: () => void
 }
@@ -65,6 +71,7 @@ export function ProcessInspector({
   articleLinking = false,
   articlesHidden = false,
   onNodeChange,
+  onKindChange,
   onEdgeChange,
   onDelete,
 }: ProcessInspectorProps): React.JSX.Element {
@@ -149,6 +156,49 @@ export function ProcessInspector({
           onChange={(event) => onNodeChange(current.id, { label: event.target.value })}
         />
       </div>
+
+      {isItem && canEditStructure && onKindChange && (
+        <div className="space-y-1.5">
+          <Label htmlFor={`${uid}-kind`}>{t('process.inspector.role')}</Label>
+          <Select value={current.kind} onValueChange={(value) => onKindChange(current.id, value as ProcessNodeKind)}>
+            <SelectTrigger id={`${uid}-kind`} className="w-full" aria-describedby={`${uid}-kind-hint`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PROCESS_ITEM_KINDS.map((kind) => (
+                <SelectItem key={kind} value={kind}>
+                  {t(`process.kind.${kind}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p id={`${uid}-kind-hint`} className="text-[10px] text-[color:var(--iris-ink-soft)]">
+            {t('process.inspector.roleHint')}
+          </p>
+        </div>
+      )}
+
+      {isStep && (
+        <MarkerToggle
+          id={`${uid}-start`}
+          checked={Boolean(current.start)}
+          disabled={!canEditStructure}
+          label={t('process.inspector.start')}
+          hint={t('process.inspector.startHint')}
+          onChange={(start) => onNodeChange(current.id, { start: start || undefined })}
+        />
+      )}
+
+      {canBeFinal(current.kind) && (
+        <MarkerToggle
+          id={`${uid}-final`}
+          checked={Boolean(current.final)}
+          disabled={!canEditStructure}
+          label={t('process.inspector.final')}
+          hint={t('process.inspector.finalHint')}
+          onChange={(final) => onNodeChange(current.id, { final: final || undefined })}
+        />
+      )}
 
       {isItem && (
         <div className="grid grid-cols-2 gap-2">
@@ -292,5 +342,39 @@ export function ProcessInspector({
         </Button>
       )}
     </>,
+  )
+}
+
+function MarkerToggle({
+  id,
+  checked,
+  disabled,
+  label,
+  hint,
+  onChange,
+}: {
+  id: string
+  checked: boolean
+  disabled: boolean
+  label: string
+  hint: string
+  onChange: (checked: boolean) => void
+}): React.JSX.Element {
+  return (
+    <div className="flex items-start gap-2">
+      <Checkbox
+        id={id}
+        checked={checked}
+        disabled={disabled}
+        aria-describedby={`${id}-hint`}
+        onCheckedChange={(value) => onChange(value === true)}
+      />
+      <div>
+        <Label htmlFor={id}>{label}</Label>
+        <p id={`${id}-hint`} className="mt-1 text-[10px] text-[color:var(--iris-ink-soft)]">
+          {hint}
+        </p>
+      </div>
+    </div>
   )
 }

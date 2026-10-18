@@ -3597,6 +3597,17 @@ components:
         note:
           type: string
           maxLength: 500
+        start:
+          type: boolean
+          description: >-
+            Marks a step as a starting point of the process (any number of steps may be marked). Step nodes
+            only; dropped on items. Structural: only admins may change it on a work-order process.
+        final:
+          type: boolean
+          description: >-
+            Marks a product or byproduct as an output of the process even when a later step also consumes it
+            (an item without outgoing edges is an output anyway). Product and byproduct nodes only; dropped on
+            steps and inputs. Structural, like `start`.
         status:
           $ref: '#/components/schemas/ProcessStepStatus'
         actualQuantity:

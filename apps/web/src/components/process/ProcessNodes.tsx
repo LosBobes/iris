@@ -95,6 +95,16 @@ function ProcessNodeCardBase({ data, selected, type }: NodeProps<ProcessFlowNode
           </div>
         </div>
       </div>
+      {(node.start || node.final) && (
+        <div className="mt-1.5">
+          <span
+            data-testid={node.start ? 'node-start' : 'node-final'}
+            className="rounded-sm bg-[color:var(--iris-accent)]/10 px-1 py-px text-[9px] font-medium uppercase tracking-[1px] text-[color:var(--iris-accent)]"
+          >
+            {node.start ? t('process.marker.start') : t('process.marker.final')}
+          </span>
+        </div>
+      )}
       {isStep && mode === 'order' && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <StepStatusBadge status={status} />

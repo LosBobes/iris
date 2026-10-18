@@ -130,7 +130,11 @@ Admin-modeled production graphs (see [D-017](DECISIONS.md#d-017-model-work-order
 | **Product** | `product` | `Proizvod` | Output of a step; may feed a later step as an intermediate product. |
 | **Byproduct** | `byproduct` | `Nusproizvod` | Side output of a step (waste, offcuts, makulatura); may feed a later step. |
 
+| **Starting Step** | `start` | `Početni korak` | Optional marker on a step; any number of steps may be marked. The tester stops warning that a marked step has no input, and warns if another step leads into it. |
+| **Final Output** | `final` | `Krajnji izlaz` | Optional marker on a product/byproduct: it counts as a result of the process (simulator totals, yield) even when a later step also consumes it. Unmarked outputs with no outgoing edge count anyway. |
+
 Allowed edges: input→step, step→step, step→product, step→byproduct, product→step, byproduct→step; the graph must be acyclic.
+A process may have any number of inputs, starting steps, products and byproducts. The role belongs to the node, not the article: the same catalog article may be an input in one node and a product or byproduct in another (even in the same graph), and an item node's role can be switched in place in the editor (connections the new role does not allow are dropped). `start`/`final` are structure: only admins change them on a work-order process.
 
 ## Warehouse (Magacin)
 

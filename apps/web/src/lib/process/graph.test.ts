@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProcessGraph, ProcessNode } from '@/types/process'
 import {
   canConnect,
+  changeItemKind,
   edgeHandles,
   edgeStream,
   checkConnection,
@@ -11,6 +12,7 @@ import {
   hasStructuralChange,
   isConnectionAllowed,
   isStepReady,
+  normalizeGraphForKinds,
   readySteps,
   stripOrderState,
   summarizeProgress,
@@ -261,5 +263,68 @@ describe('edgeStream', () => {
     expect(edgeStream('step', 'product')).toBe('product')
     expect(edgeStream('product', 'step')).toBe('product')
     expect(edgeStream('step', 'step')).toBe('flow')
+  })
+})
+
+describe('changeItemKind', () => {
+  // in1 -> s1 -> p1 -> s2, s1 -> by1
+  const graph: ProcessGraph = {
+    nodes: [
+      n('in1', 'input', { quantity: 5, unit: 'kg', catalogItemId: 'cat-1' }),
+      n('s1', 'step'),
+      n('p1', 'product', { quantity: 2, unit: 'kg', catalogItemId: 'cat-1', final: true }),
+      n('s2', 'step'),
+      n('by1', 'byproduct'),
+    ],
+    edges: [e('in1', 's1'), e('s1', 'p1'), e('p1', 's2'), e('s1', 'by1')],
+  }
+
+  it('switches product and byproduct in place, keeping data and edges', () => {
+    const next = changeItemKind(graph, 'p1', 'byproduct')
+    expect(next.nodes[2]).toEqual({ ...graph.nodes[2], kind: 'byproduct' })
+    expect(next.edges).toEqual(graph.edges)
+    expect(validateGraph(next)).toEqual([])
+  })
+
+  it('drops the edges and final marker an input cannot have', () => {
+    const next = changeItemKind(graph, 'p1', 'input')
+    expect(next.nodes[2]).toMatchObject({ kind: 'input', quantity: 2, catalogItemId: 'cat-1' })
+    expect(next.nodes[2].final).toBeUndefined()
+    expect(next.edges.map((edge) => edge.id)).toEqual(['in1-s1', 'p1-s2', 's1-by1'])
+    expect(validateGraph(next)).toEqual([])
+  })
+
+  it('leaves steps, unknown ids and same-kind changes alone', () => {
+    expect(changeItemKind(graph, 's1', 'product')).toBe(graph)
+    expect(changeItemKind(graph, 'p1', 'step')).toBe(graph)
+    expect(changeItemKind(graph, 'missing', 'product')).toBe(graph)
+    expect(changeItemKind(graph, 'p1', 'product')).toBe(graph)
+  })
+})
+
+describe('start and final markers', () => {
+  it('are structural', () => {
+    const base = sample()
+    const started = { ...base, nodes: base.nodes.map((node) => (node.id === 's1' ? { ...node, start: true } : node)) }
+    const finalized = { ...base, nodes: base.nodes.map((node) => (node.id === 'p1' ? { ...node, final: true } : node)) }
+    expect(hasStructuralChange(base, started)).toBe(true)
+    expect(hasStructuralChange(base, finalized)).toBe(true)
+  })
+
+  it('are dropped where they do not belong to the kind', () => {
+    const graph: ProcessGraph = {
+      nodes: [
+        n('in1', 'input', { start: true, final: true }),
+        n('s1', 'step', { start: true, final: true }),
+        n('p1', 'product', { start: true, final: true }),
+        n('by1', 'byproduct', { final: true }),
+      ],
+      edges: [],
+    }
+    const [input, step, product, byproduct] = normalizeGraphForKinds(graph).nodes
+    expect([input.start, input.final]).toEqual([undefined, undefined])
+    expect([step.start, step.final]).toEqual([true, undefined])
+    expect([product.start, product.final]).toEqual([undefined, true])
+    expect(byproduct.final).toBe(true)
   })
 })
