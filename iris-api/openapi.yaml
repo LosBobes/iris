@@ -2369,6 +2369,73 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /platform/backups:
+    get:
+      tags: [Platform]
+      summary: Backup status and the newest backup copies (operator only)
+      description: >
+        SQLite only: copies are written to `IRIS_BACKUP_DIR` (default a `backups`
+        folder next to the database) under generated names
+        `iris-YYYYMMDD-HHMMSS[-N].db`, newest first, at most 50 (`total` counts
+        all). Copies are listed, never served. On PostgreSQL `supported` is
+        false: backups are taken outside the API (pg_dump, deploy/POSTGRES.md).
+      operationId: getPlatformBackups
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: Backups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformBackups'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Take a backup copy now (operator only)
+      description: >
+        Writes a consistent copy of the SQLite database (VACUUM INTO), then
+        prunes the directory to the newest `IRIS_BACKUP_KEEP` copies. Takes no
+        input. Recorded as `backup.create` with detail `{name, sizeBytes}`.
+      operationId: createPlatformBackup
+      security:
+        - PlatformSession: []
+      responses:
+        '201':
+          description: The new copy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformBackup'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Backups are not taken by the API on this database (PostgreSQL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /platform/audit:
     get:
       tags: [Platform]
@@ -4374,7 +4441,7 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete, backup.create]
         tenantSlug:
           type: string
           description: As it was at the time.
@@ -4488,6 +4555,14 @@ components:
               type: integer
             heapBytes:
               type: integer
+            engine:
+              type: string
+              enum: [sqlite, postgres]
+            schemaVersion:
+              type: integer
+              description: Highest applied schema migration.
+            backup:
+              $ref: '#/components/schemas/PlatformBackupStatus'
         tenants:
           type: array
           items:
@@ -4512,6 +4587,59 @@ components:
                 description: Sign-ins that day, keyed by organization slug.
                 additionalProperties:
                   type: integer
+    PlatformBackupStatus:
+      type: object
+      required: [supported, lastBackupAt, stale, staleAfterHours, intervalSeconds]
+      properties:
+        supported:
+          type: boolean
+          description: False on PostgreSQL, where backups are managed outside the API.
+        lastBackupAt:
+          type: [string, 'null']
+          format: date-time
+        stale:
+          type: boolean
+          description: Supported and the newest copy is missing or older than staleAfterHours.
+        staleAfterHours:
+          type: integer
+          description: IRIS_BACKUP_STALE_HOURS (default 24).
+        intervalSeconds:
+          type: integer
+          description: Automatic backup interval (IRIS_BACKUP_INTERVAL); 0 when off.
+    PlatformBackup:
+      type: object
+      required: [name, sizeBytes, createdAt]
+      properties:
+        name:
+          type: string
+          example: iris-20261018-080000.db
+        sizeBytes:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    PlatformBackups:
+      allOf:
+        - $ref: '#/components/schemas/PlatformBackupStatus'
+        - type: object
+          required: [engine, directory, keep, total, items]
+          properties:
+            engine:
+              type: string
+              enum: [sqlite, postgres]
+            directory:
+              type: string
+              description: Server path of the backup directory; empty when unsupported.
+            keep:
+              type: integer
+              description: Copies retained (IRIS_BACKUP_KEEP); 0 keeps all.
+            total:
+              type: integer
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlatformBackup'
     PlatformTenantMetrics:
       type: object
       properties:

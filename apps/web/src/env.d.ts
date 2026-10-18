@@ -42,6 +42,8 @@ import type {
   PlatformImpersonationResponse,
   PlatformImpersonationAction,
   PlatformAuditLog,
+  PlatformBackup,
+  PlatformBackups,
   PlatformTenant,
   PlatformCreateTenantInput,
   PlatformUpdateTenantInput,
@@ -154,6 +156,9 @@ declare global {
       setPlatformTenantModules: (slug: string, modules: OrganizationModules) => Promise<PlatformTenant>
       resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
       getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
+      getPlatformBackups: () => Promise<PlatformBackups>
+      /** Takes a SQLite backup copy now (audited); refused on PostgreSQL. */
+      createPlatformBackup: () => Promise<PlatformBackup>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

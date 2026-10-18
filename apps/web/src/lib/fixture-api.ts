@@ -633,6 +633,10 @@ function fixturePlatformMetrics(days: PlatformRangeDays): PlatformMetrics {
       uptimeSeconds: 0,
       goroutines: 0,
       heapBytes: 0,
+      engine: 'sqlite',
+      schemaVersion: 0,
+      // Fixture mode has no database file to copy.
+      backup: { supported: false, lastBackupAt: null, stale: false, staleAfterHours: 24, intervalSeconds: 0 },
     },
     tenants: [tenant],
     daily,
@@ -1232,6 +1236,26 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
 
     async getPlatformImpersonationActions() {
       throw new Error('Impersonacija ne postoji.')
+    },
+
+    async getPlatformBackups() {
+      if (!platformSignedIn) throw new Error('Prijava je obavezna.')
+      return {
+        supported: false,
+        lastBackupAt: null,
+        stale: false,
+        staleAfterHours: 24,
+        intervalSeconds: 0,
+        engine: 'sqlite',
+        directory: '',
+        keep: 0,
+        total: 0,
+        items: [],
+      }
+    },
+
+    async createPlatformBackup() {
+      throw new Error('Rezervne kopije nisu dostupne u demo režimu.')
     },
 
     async getWorkOrders(query) {

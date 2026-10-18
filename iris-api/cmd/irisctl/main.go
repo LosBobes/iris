@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LosBobes/iris/iris-api/internal/backups"
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/seed/cobanovic"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -117,7 +118,9 @@ func main() {
 		out := cmd.String("out", "", "putanja izlazne .db kopije")
 		_ = cmd.Parse(os.Args[2:])
 		if *out == "" {
-			*out = filepath.Join("backups", "iris-"+time.Now().UTC().Format("20060102-150405")+".db")
+			// Same directory and naming as the Backoffice backups, so the copy
+			// shows up in its list (IRIS_BACKUP_DIR, default next to the database).
+			*out = filepath.Join(backups.FromEnv(dbPathFromEnv()).Dir, "iris-"+time.Now().UTC().Format("20060102-150405")+".db")
 		}
 		dataStore := mustOpenStore(ctx)
 		defer dataStore.Close()
@@ -566,7 +569,7 @@ func usage() {
   irisctl import-stock -tenant oznaka --file stanje.csv --apply
   irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off]
   irisctl create-platform-admin -username ime -password lozinka
-  irisctl backup [-out backups/iris.db]
+  irisctl backup [-out backups/iris.db]   (bez -out: IRIS_BACKUP_DIR, podrazumevano backups/ pored baze)
   irisctl migrate-to-postgres [-check] [-from ./data/iris.db] [-to postgres://...]
 
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),

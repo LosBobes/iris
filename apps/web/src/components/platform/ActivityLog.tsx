@@ -20,6 +20,7 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "process_template.create": "platform.activity.kinds.processTemplateCreate",
   "process_template.update": "platform.activity.kinds.processTemplateUpdate",
   "process_template.delete": "platform.activity.kinds.processTemplateDelete",
+  "backup.create": "platform.activity.kinds.backupCreate",
 };
 
 type Trail =
@@ -40,6 +41,9 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
   }
   if (event.action.startsWith("process_template.") && event.detail?.name) {
     lines.push(t("platform.activity.processTemplate", { name: event.detail.name }));
+  }
+  if (event.action === "backup.create" && event.detail?.name) {
+    lines.push(t("platform.activity.backupFile", { name: event.detail.name }));
   }
   if (event.detail?.toName) {
     lines.push(t("platform.activity.renamed", { from: event.detail.fromName, to: event.detail.toName }));

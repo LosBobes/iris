@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LosBobes/iris/iris-api/internal/backups"
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
@@ -66,6 +67,9 @@ type Config struct {
 	ImpersonationDuration time.Duration
 	// Release is shown on the operator dashboard (IRIS_RELEASE).
 	Release string
+	// Backups takes and lists SQLite backup copies for the Backoffice
+	// (backups.go); nil on PostgreSQL, where backups are managed externally.
+	Backups *backups.Manager
 }
 
 func DefaultConfig() Config {
@@ -162,6 +166,8 @@ func (s *Server) Routes() http.Handler {
 	r.With(s.requirePlatformAdmin).Get("/platform/tenants/{slug}/users", s.handlePlatformTenantUsers)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants/{slug}/impersonate", s.handlePlatformImpersonate)
 	r.With(s.requirePlatformAdmin).Get("/platform/audit", s.handlePlatformAudit)
+	r.With(s.requirePlatformAdmin).Get("/platform/backups", s.handlePlatformBackups)
+	r.With(s.requirePlatformAdmin).Post("/platform/backups", s.handlePlatformCreateBackup)
 	r.With(s.requirePlatformAdmin).Get("/platform/tenants", s.handlePlatformTenants)
 	r.With(s.requirePlatformAdmin).Post("/platform/tenants", s.handlePlatformCreateTenant)
 	r.With(s.requirePlatformAdmin).Patch("/platform/tenants/{slug}", s.handlePlatformUpdateTenant)

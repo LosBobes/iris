@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/api"
+	"github.com/LosBobes/iris/iris-api/internal/backups"
 	"github.com/LosBobes/iris/iris-api/internal/reports"
 	"github.com/LosBobes/iris/iris-api/internal/store"
 	"github.com/getsentry/sentry-go"
@@ -74,6 +75,22 @@ func main() {
 	}
 	persistence = dataStore
 
+	// Backoffice backups (SQLite only; on Postgres they run outside with
+	// pg_dump). IRIS_BACKUP_INTERVAL also turns on automatic copies.
+	var backupManager *backups.Manager
+	if dataStore.BackupSupported() {
+		backupManager = backups.New(backups.FromEnv(dbPath), dataStore.Backup)
+		config := backupManager.Config()
+		if config.Interval > 0 {
+			log.Printf("automatic backups every %s into %s (keeping %d)", config.Interval, config.Dir, config.Keep)
+		}
+	}
+	backupCtx, stopBackups := context.WithCancel(ctx)
+	defer stopBackups()
+	if backupManager != nil {
+		go backupManager.Run(backupCtx)
+	}
+
 	server := api.NewServer(persistence, api.Config{
 		AllowedOrigins:    splitCSV(os.Getenv("IRIS_ALLOWED_ORIGINS")),
 		SessionCookieName: "iris_session",
@@ -81,6 +98,7 @@ func main() {
 		Production:        env == "production",
 		WebDir:            os.Getenv("IRIS_WEB_DIR"),
 		Release:           os.Getenv("IRIS_RELEASE"),
+		Backups:           backupManager,
 	})
 
 	addr := os.Getenv("IRIS_API_ADDR")

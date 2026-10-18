@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Check, RefreshCw } from "lucide-react";
 import { BackofficeMenu } from "./BackofficeMenu";
 import { SectionTabs } from "./SectionTabs";
@@ -10,6 +10,7 @@ import { staggerStyle } from "@/lib/motion";
 import { PlatformChangePassword } from "./PlatformChangePassword";
 import { OrganizationsPanel } from "./OrganizationsPanel";
 import { ActivityLog } from "./ActivityLog";
+import { BackupWarning, SystemPanel } from "./SystemPanel";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -109,11 +110,13 @@ export function PlatformDashboard({
   // Sections: the metrics overview at /backoffice, organization management
   // and the activity log below it.
   const pathname = useLocation().pathname;
-  const section: "overview" | "organizations" | "activity" = pathname.startsWith("/backoffice/organizations")
+  const section: "overview" | "organizations" | "activity" | "system" = pathname.startsWith("/backoffice/organizations")
     ? "organizations"
     : pathname.startsWith("/backoffice/activity")
       ? "activity"
-      : "overview";
+      : pathname.startsWith("/backoffice/system")
+        ? "system"
+        : "overview";
   const showLog = section !== "overview";
 
   const load = useCallback(async (): Promise<void> => {
@@ -229,6 +232,7 @@ export function PlatformDashboard({
     { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
     { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
     { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
+    { to: "/backoffice/system", label: t("platform.nav.system"), current: section === "system" },
   ];
   const navTabs = <SectionTabs tabs={sections} label={t("platform.nav.label")} />;
 
@@ -290,9 +294,13 @@ export function PlatformDashboard({
         {showLog ? (
           <>
             <h1 className="text-[22px] font-medium tracking-[-0.3px]">
-              {section === "organizations" ? t("platform.nav.organizations") : t("platform.nav.activity")}
+              {section === "organizations"
+                ? t("platform.nav.organizations")
+                : section === "system"
+                  ? t("platform.nav.system")
+                  : t("platform.nav.activity")}
             </h1>
-            {section === "organizations" ? <OrganizationsPanel /> : <ActivityLog />}
+            {section === "organizations" ? <OrganizationsPanel /> : section === "system" ? <SystemPanel /> : <ActivityLog />}
           </>
         ) : (
         <>
@@ -310,6 +318,15 @@ export function PlatformDashboard({
             {error}
           </div>
         ) : null}
+
+        <BackupWarning
+          status={metrics?.system.backup}
+          action={
+            <Link to="/backoffice/system" className="iris-focusable rounded font-medium underline underline-offset-2">
+              {t("platform.backups.open")}
+            </Link>
+          }
+        />
 
         {!metrics ? (
           <p className="py-24 text-center text-[13px] text-[color:var(--pf-muted)]">

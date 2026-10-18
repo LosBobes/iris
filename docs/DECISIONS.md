@@ -211,4 +211,15 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
+## D-0xx (tbd): Backoffice backups are SQLite file copies, listed but never served
+- **Status**: `accepted`
+- **Context**: Superadmins had no way to see whether the database was being backed up, or to take a copy without shell access to `irisctl backup`. The API runs on SQLite or PostgreSQL.
+- **Decision**: On SQLite the server owns a backup folder (`IRIS_BACKUP_DIR`, default `backups/` next to the database). `POST /platform/backups` takes a `VACUUM INTO` copy under a server-generated name (`iris-YYYYMMDD-HHMMSS[-N].db`, written as `.partial` then renamed), prunes to the newest `IRIS_BACKUP_KEEP` (default 14) and writes a `backup.create` audit row; `GET /platform/backups` lists them. No route takes a file name and no route serves a copy: a download endpoint would put the whole multi-tenant database one cookie away. An optional in-process schedule (`IRIS_BACKUP_INTERVAL`) takes a copy when the newest one, from any source, is that old. On PostgreSQL there is no in-process backup: the API reports `supported: false` and points to `pg_dump`. Backup status, database engine and schema version extend the existing `system` block of `GET /platform/metrics` rather than a new endpoint; the dashboard warns when the newest copy is older than `IRIS_BACKUP_STALE_HOURS` (24).
+- **Consequences**:
+  - Copies live on the same disk as the database until someone syncs them off the machine; the Backoffice says so.
+  - Scheduled copies are not audited (no superadmin acted); only Backoffice-triggered ones are. The audit row is written after the file is in place, since a file write cannot share the database transaction.
+  - `irisctl backup` without `-out` now writes to the same folder, so its copies are listed and count toward retention.
+
+---
+
 *Last verified against the checked-in repository state on 2026-10-17.*
