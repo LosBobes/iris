@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -554,9 +555,14 @@ func TestPrintBillingRowsPaidIsIndependent(t *testing.T) {
 
 func TestResolveBrowserPathHonorsEnvOverride(t *testing.T) {
 	// A stand-in "browser": resolveBrowserPath only checks that the configured
-	// value is executable, it never launches it.
+	// value is executable, it never launches it. On Windows LookPath only
+	// accepts files with an executable extension.
 	dir := t.TempDir()
-	fake := filepath.Join(dir, "fake-chrome")
+	name := "fake-chrome"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	fake := filepath.Join(dir, name)
 	if err := os.WriteFile(fake, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatalf("write fake browser: %v", err)
 	}

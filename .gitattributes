@@ -1,3 +1,6 @@
 # Shell scripts run inside Linux containers (frontend/iris-real-ip.sh): keep LF
 # even on a Windows checkout with core.autocrlf.
 *.sh text eol=lf
+
+# gofmt only accepts LF; keep Go sources LF on a Windows checkout too.
+*.go text eol=lf
