@@ -41,6 +41,8 @@ import type {
   PlatformImpersonationResponse,
   PlatformImpersonationAction,
   PlatformAuditLog,
+  PlatformBackup,
+  PlatformBackups,
   PlatformTenant,
   PlatformCreateTenantInput,
   PlatformTenantNotesInput,
@@ -879,6 +881,16 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlatformImpersonationActions(id: number) {
       const response = await fetchImpl(url(`/platform/impersonations/${id}/actions`), credentialedRequest())
       return readJSON<PlatformImpersonationAction[]>(response)
+    },
+
+    async getPlatformBackups() {
+      const response = await fetchImpl(url('/platform/backups'), credentialedRequest())
+      return readJSON<PlatformBackups>(response)
+    },
+
+    async createPlatformBackup() {
+      const response = await fetchImpl(url('/platform/backups'), credentialedRequest({ method: 'POST' }))
+      return readJSON<PlatformBackup>(response)
     },
 
     async listUsers() {

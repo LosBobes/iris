@@ -162,6 +162,20 @@ Start-ScheduledTask -TaskName IrisAutoUpdate
 Either way, the latest images are pulled and the containers are recreated. The
 `iris_sqlite_data` volume is untouched, so no data is lost.
 
+## Backups (SQLite)
+
+The Backoffice "Sistem" tab (`/backoffice/system`) shows the app version,
+database engine, schema version and size, and the database backups. "Napravi
+kopiju sada" writes a consistent copy (`VACUUM INTO`) to `IRIS_BACKUP_DIR`
+(default `/data/backups`, on the same volume as the database) and keeps the
+newest `IRIS_BACKUP_KEEP` (default 14). Set `IRIS_BACKUP_INTERVAL` (e.g. `24h`)
+in `.env` for automatic copies; the dashboard warns when the newest copy is
+older than `IRIS_BACKUP_STALE_HOURS` (default 24). Copies are listed only and
+cannot be downloaded through the app, and a copy on the same disk is not a real
+backup: sync `/data/backups` off the machine (for example `docker cp` from the
+backend container, or a scheduled copy of the volume). On PostgreSQL the tab
+says backups are managed outside the app; use `pg_dump` (`POSTGRES.md`).
+
 ## Client addresses behind a proxy
 
 Browsers connect straight to nginx on port 80 here, so nginx trusts no

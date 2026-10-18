@@ -648,6 +648,42 @@ type PlatformSystem struct {
 	UptimeSeconds int64  `json:"uptimeSeconds"`
 	Goroutines    int    `json:"goroutines"`
 	HeapBytes     uint64 `json:"heapBytes"`
+	// Engine is "sqlite" or "postgres"; SchemaVersion the highest applied migration.
+	Engine        string               `json:"engine"`
+	SchemaVersion int                  `json:"schemaVersion"`
+	Backup        PlatformBackupStatus `json:"backup"`
+}
+
+// AuditBackupCreate is the audit action of a backup taken from the Backoffice.
+const AuditBackupCreate = "backup.create"
+
+// PlatformBackupStatus summarizes backups for the dashboard. On PostgreSQL
+// Supported is false: backups are managed outside the API (pg_dump).
+type PlatformBackupStatus struct {
+	Supported       bool    `json:"supported"`
+	LastBackupAt    *string `json:"lastBackupAt"`
+	Stale           bool    `json:"stale"`
+	StaleAfterHours int     `json:"staleAfterHours"`
+	// IntervalSeconds is the automatic backup interval; 0 when off.
+	IntervalSeconds int64 `json:"intervalSeconds"`
+}
+
+// PlatformBackup is one backup copy (listed only, never downloadable).
+type PlatformBackup struct {
+	Name      string `json:"name"`
+	SizeBytes int64  `json:"sizeBytes"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// PlatformBackups is GET /platform/backups: the status, where copies go and
+// the newest copies (at most 50; Total counts all).
+type PlatformBackups struct {
+	PlatformBackupStatus
+	Engine    string           `json:"engine"`
+	Directory string           `json:"directory"`
+	Keep      int              `json:"keep"`
+	Total     int              `json:"total"`
+	Items     []PlatformBackup `json:"items"`
 }
 
 type PlatformTenantMetrics struct {

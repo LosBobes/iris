@@ -33,6 +33,7 @@ does not cover, add a rule plus a case in `postgres_sql_test.go`. New migrations
 | `internal/domain/` | Go structs — contract with OpenAPI |
 | `internal/store/` | SQL store (SQLite + Postgres), migrations, seed; fixture store for tests |
 | `internal/reports/` | work-order PDF generation |
+| `internal/backups/` | SQLite backup copies for the Backoffice: create, list, prune, schedule (`IRIS_BACKUP_*`) |
 | `internal/testutil/` | shared test helpers |
 
 Keep handlers thin; data access lives in `internal/store/`. Don't add new

@@ -323,7 +323,9 @@ state at the moment of the stop in step 3.
 ## Backups
 
 `irisctl backup` is SQLite-only (`VACUUM INTO`) and does not work with
-`DATABASE_URL` set. After the cutover, dump with `pg_dump`.
+`DATABASE_URL` set. After the cutover, dump with `pg_dump`. The Backoffice
+"Sistem" tab then reports backups as managed outside the app (no "back up now"
+button, no stale-backup warning) and `IRIS_BACKUP_*` are ignored.
 
 Nightly cron on the box (`crontab -e`), plus an off-box sync of `backups/`
 (rsync/rclone to another host; a backup on the database's own disk is not a

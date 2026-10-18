@@ -152,6 +152,7 @@ export type PlatformAuditAction =
   | 'admin.2fa_reset'
   | 'admin.login_failed'
   | 'admin.recovery_login'
+  | 'backup.create'
 
 /** One superadmin action in the Backoffice activity log (GET /platform/audit). */
 export interface PlatformAuditEvent {
@@ -224,6 +225,43 @@ export interface PlatformSystem {
   uptimeSeconds: number
   goroutines: number
   heapBytes: number
+  engine: 'sqlite' | 'postgres'
+  /** Highest applied schema migration. */
+  schemaVersion: number
+  backup: PlatformBackupStatus
+}
+
+/**
+ * Backup summary. `supported` is false on PostgreSQL, where backups are taken
+ * outside the API (pg_dump); `stale` is then always false.
+ */
+export interface PlatformBackupStatus {
+  supported: boolean
+  lastBackupAt: string | null
+  /** The newest copy is missing or older than `staleAfterHours`. */
+  stale: boolean
+  staleAfterHours: number
+  /** Automatic backup interval in seconds; 0 when off. */
+  intervalSeconds: number
+}
+
+/** One backup copy on the server (listed only, never downloadable). */
+export interface PlatformBackup {
+  name: string
+  sizeBytes: number
+  createdAt: string
+}
+
+/** GET /platform/backups. */
+export interface PlatformBackups extends PlatformBackupStatus {
+  engine: 'sqlite' | 'postgres'
+  /** Server path of the backup directory; empty when unsupported. */
+  directory: string
+  /** Copies retained; 0 keeps all. */
+  keep: number
+  total: number
+  /** Newest first, at most 50. */
+  items: PlatformBackup[]
 }
 
 export interface PlatformTenantMetrics {

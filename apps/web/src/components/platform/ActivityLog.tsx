@@ -28,6 +28,7 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "admin.2fa_reset": "platform.activity.kinds.adminTwoFactorReset",
   "admin.login_failed": "platform.activity.kinds.adminLoginFailed",
   "admin.recovery_login": "platform.activity.kinds.adminRecoveryLogin",
+  "backup.create": "platform.activity.kinds.backupCreate",
 };
 
 type Trail =
@@ -60,6 +61,9 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
   }
   if (event.action.startsWith("process_template.") && event.detail?.name) {
     lines.push(t("platform.activity.processTemplate", { name: event.detail.name }));
+  }
+  if (event.action === "backup.create" && event.detail?.name) {
+    lines.push(t("platform.activity.backupFile", { name: event.detail.name }));
   }
   if (event.detail?.toName) {
     lines.push(t("platform.activity.renamed", { from: event.detail.fromName, to: event.detail.toName }));

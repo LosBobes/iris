@@ -261,6 +261,14 @@ func (s *Server) handlePlatformMetrics(w http.ResponseWriter, r *http.Request) {
 		UptimeSeconds: int64(now.Sub(s.startedAt).Seconds()),
 		Goroutines:    runtime.NumGoroutine(),
 		HeapBytes:     mem.HeapAlloc,
+		Engine:        s.databaseEngine(),
+		Backup:        s.backupStatus(),
+	}
+	if system, ok := s.systemStore(); ok {
+		if metrics.System.SchemaVersion, err = system.SchemaVersion(r.Context()); err != nil {
+			writeServerError(w, r, err)
+			return
+		}
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, metrics)

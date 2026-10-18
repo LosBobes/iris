@@ -33,6 +33,13 @@ services:
       # SENTRY_DSN: "${SENTRY_DSN:-}"
       # Optional release identifier shown in Sentry (e.g. the git sha or tag).
       IRIS_RELEASE: "${IRIS_RELEASE:-}"
+      # SQLite backups (Backoffice "Sistem" tab). Copies go to /data/backups on
+      # the data volume; empty values take the defaults (keep 14, warn after
+      # 24 h). IRIS_BACKUP_INTERVAL (e.g. 24h) turns on automatic copies.
+      IRIS_BACKUP_DIR: "${IRIS_BACKUP_DIR:-}"
+      IRIS_BACKUP_KEEP: "${IRIS_BACKUP_KEEP:-}"
+      IRIS_BACKUP_INTERVAL: "${IRIS_BACKUP_INTERVAL:-}"
+      IRIS_BACKUP_STALE_HOURS: "${IRIS_BACKUP_STALE_HOURS:-}"
     # Internal only: the backend is never published to the LAN directly.
     # nginx (frontend) reaches it over the compose network on this port.
     expose:
