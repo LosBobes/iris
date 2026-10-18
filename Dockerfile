@@ -8,9 +8,16 @@ COPY iris-api/go.mod iris-api/go.sum ./
 RUN go mod download
 
 COPY iris-api/ ./
+# App version (VERSION file) and commit linked into internal/buildinfo; see
+# backend/Dockerfile.
+ARG IRIS_COMMIT=""
+COPY VERSION /VERSION
 RUN mkdir -p /out /empty-data && \
-	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/iris-api ./cmd/server && \
-	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/irisctl ./cmd/irisctl
+	version="$(tr -d ' \r\n' < /VERSION)" && \
+	pkg="github.com/LosBobes/iris/iris-api/internal/buildinfo" && \
+	ldflags="-s -w -X ${pkg}.Version=${version:-dev} -X ${pkg}.Commit=${IRIS_COMMIT}" && \
+	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="${ldflags}" -o /out/iris-api ./cmd/server && \
+	CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="${ldflags}" -o /out/irisctl ./cmd/irisctl
 
 FROM node:24-bookworm-slim AS web-build
 
