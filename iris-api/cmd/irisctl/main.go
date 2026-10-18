@@ -37,6 +37,7 @@ func main() {
 		fixtureDir := cmd.String("fixtures", "testdata/fixtures", "putanja do JSON demo podataka")
 		adminPassword := cmd.String("admin-password", os.Getenv("IRIS_DEMO_ADMIN_PASSWORD"), "lozinka naloga admin (podrazumevano IRIS_DEMO_ADMIN_PASSWORD; obavezno u produkciji)")
 		operatorPassword := cmd.String("operator-password", os.Getenv("IRIS_DEMO_OPERATOR_PASSWORD"), "lozinka operaterskih naloga (podrazumevano IRIS_DEMO_OPERATOR_PASSWORD; obavezno u produkciji)")
+		idPrefix := cmd.String("id-prefix", os.Getenv("IRIS_DEMO_ID_PREFIX"), "prefiks za id-jeve fiksnih zapisa (npr. demo-) kad baza već ima drugu organizaciju sa istim id-jevima")
 		_ = cmd.Parse(os.Args[2:])
 		// Outside production the public demo passwords are kept; production
 		// requires strong passwords of its own (see store.DemoPasswords) so the
@@ -48,7 +49,7 @@ func main() {
 		}
 		sqliteStore := mustOpen(ctx, dbPathFromEnv())
 		defer sqliteStore.Close()
-		result, err := store.SeedDemoFromFixtures(ctx, sqliteStore, *fixtureDir, adminPw, operatorPw)
+		result, err := store.SeedDemoFromFixtures(ctx, sqliteStore, *fixtureDir, adminPw, operatorPw, *idPrefix)
 		must(err)
 		printDemoSummary(result, production)
 	case "seed-cobanovic":
@@ -478,7 +479,7 @@ func onOff(value bool) string {
 func usage() {
 	fmt.Println(`Korišćenje:
   irisctl migrate
-  irisctl seed-demo [-fixtures testdata/fixtures] [-admin-password … -operator-password …]
+  irisctl seed-demo [-fixtures testdata/fixtures] [-admin-password … -operator-password …] [-id-prefix demo-]
   irisctl seed-cobanovic [-dir internal/seed/cobanovic/data]
   irisctl create-tenant -slug oznaka -name "Naziv" [-id tenant-id] [-admin-username ime -admin-password lozinka]
   irisctl create-user -tenant oznaka -username ime -password lozinka [-role admin|user] [-id user-id]
@@ -503,7 +504,10 @@ prijemi i radni nalozi sa procesima u raznim statusima, na /login/demo. Van prod
 prijava je admin / admin123 i operater / operater123. Kada je IRIS_ENV=production, lozinke
 se moraju zadati (IRIS_DEMO_ADMIN_PASSWORD i IRIS_DEMO_OPERATOR_PASSWORD ili -admin-password i
 -operator-password, najmanje 12 znakova, ne demo lozinke) — inače bi server odbio da se
-pokrene zbog demo naloga admin / admin123.
+pokrene zbog demo naloga admin / admin123. Ako baza već sadrži drugu organizaciju sa istim
+id-jevima zapisa (fiksni id-jevi cust-1, loc-1, radni nalog "1", …), koristite -id-prefix
+(npr. demo-) da im se doda prefiks i izbegne sudar; procesni/magacin deo već koristi
+sopstvene id-jeve.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.`)
 }

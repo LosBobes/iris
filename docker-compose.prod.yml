@@ -45,6 +45,10 @@ services:
       # server's .env (gitignored), never committed.
       IRIS_DEMO_ADMIN_PASSWORD: "${IRIS_DEMO_ADMIN_PASSWORD:-}"
       IRIS_DEMO_OPERATOR_PASSWORD: "${IRIS_DEMO_OPERATOR_PASSWORD:-}"
+      # Prefix for the demo fixture record ids, needed when another tenant in the
+      # same database already uses the fixed fixture ids (e.g. the real Čobanović
+      # data, whose customers are also cust-N). Read by seed-demo only.
+      IRIS_DEMO_ID_PREFIX: "${IRIS_DEMO_ID_PREFIX:-}"
     # Internal only: never published to the host. nginx (frontend) reaches it
     # over the compose network on this port.
     expose:

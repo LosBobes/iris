@@ -200,7 +200,7 @@ func TestSeedDemoCreatesTemplatesOnce(t *testing.T) {
 	s := newSQLiteStoreForTest(t, ctx, filepath.Join(t.TempDir(), "iris.db"))
 	t.Cleanup(func() { _ = s.Close() })
 	for i := 0; i < 2; i++ {
-		if _, err := SeedDemoFromFixtures(ctx, s, testutil.FixtureDir(t), "", ""); err != nil {
+		if _, err := SeedDemoFromFixtures(ctx, s, testutil.FixtureDir(t), "", "", ""); err != nil {
 			t.Fatalf("seed #%d: %v", i+1, err)
 		}
 	}
