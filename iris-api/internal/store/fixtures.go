@@ -73,6 +73,8 @@ type FixtureStore struct {
 type fixtureSession struct {
 	userID    string
 	expiresAt time.Time
+	absolute  time.Time
+	remember  bool
 }
 
 // fixtureReservation mirrors the SQLite reservation ledger in memory so the
@@ -135,27 +137,47 @@ func (s *FixtureStore) AuthenticateUser(
 	return nil, nil
 }
 
-func (s *FixtureStore) CreateSession(
-	_ context.Context,
-	userID string,
-	expiresAt time.Time,
-) (string, error) {
+func (s *FixtureStore) CreateSession(ctx context.Context, userID string, expiresAt time.Time) (string, error) {
+	return s.StartSession(ctx, NewSession{UserID: userID, ExpiresAt: expiresAt})
+}
+
+// StartSession mirrors the SQLite store: sessions are keyed by the token's
+// hash, never the token itself.
+func (s *FixtureStore) StartSession(_ context.Context, input NewSession) (string, error) {
 	token, err := newSessionToken()
 	if err != nil {
 		return "", err
 	}
+	absolute := input.AbsoluteExpiresAt
+	if absolute.IsZero() || absolute.Before(input.ExpiresAt) {
+		absolute = input.ExpiresAt
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.sessions[token] = fixtureSession{userID: userID, expiresAt: expiresAt}
+	s.sessions[hashSessionToken(token)] = fixtureSession{
+		userID:    input.UserID,
+		expiresAt: input.ExpiresAt.UTC(),
+		absolute:  absolute.UTC(),
+		remember:  input.Remember,
+	}
 	return token, nil
 }
 
 func (s *FixtureStore) UserBySessionToken(ctx context.Context, token string) (*domain.User, error) {
+	session, err := s.SessionByToken(ctx, token)
+	if err != nil || session == nil {
+		return nil, err
+	}
+	return session.User, nil
+}
+
+func (s *FixtureStore) SessionByToken(ctx context.Context, token string) (*Session, error) {
+	key := hashSessionToken(token)
 	s.mu.Lock()
-	session, ok := s.sessions[token]
+	session, ok := s.sessions[key]
 	if ok && time.Now().UTC().After(session.expiresAt) {
-		delete(s.sessions, token)
+		delete(s.sessions, key)
 		ok = false
 	}
 	s.mu.Unlock()
@@ -169,16 +191,54 @@ func (s *FixtureStore) UserBySessionToken(ctx context.Context, token string) (*d
 	}
 	for _, user := range users {
 		if user.ID == session.userID {
-			return &domain.User{ID: user.ID, Username: user.Username, Role: user.Role, TenantID: DemoTenantID}, nil
+			return &Session{
+				User:              &domain.User{ID: user.ID, Username: user.Username, Role: user.Role, TenantID: DemoTenantID},
+				ExpiresAt:         session.expiresAt,
+				AbsoluteExpiresAt: session.absolute,
+				Remember:          session.remember,
+			}, nil
 		}
 	}
 	return nil, nil
 }
 
+func (s *FixtureStore) ExtendSession(_ context.Context, token string, expiresAt time.Time) error {
+	key := hashSessionToken(token)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[key]
+	if !ok {
+		return nil
+	}
+	if expiresAt.After(session.absolute) {
+		expiresAt = session.absolute
+	}
+	if expiresAt.After(session.expiresAt) {
+		session.expiresAt = expiresAt.UTC()
+		s.sessions[key] = session
+	}
+	return nil
+}
+
 func (s *FixtureStore) DeleteSession(_ context.Context, token string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.sessions, token)
+	delete(s.sessions, hashSessionToken(token))
+	return nil
+}
+
+func (s *FixtureStore) EndUserSessions(_ context.Context, userID string, exceptToken string) error {
+	keep := ""
+	if exceptToken != "" {
+		keep = hashSessionToken(exceptToken)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, session := range s.sessions {
+		if session.userID == userID && key != keep {
+			delete(s.sessions, key)
+		}
+	}
 	return nil
 }
 
@@ -294,6 +354,19 @@ func (s *FixtureStore) Locations(_ context.Context, customerID string) ([]domain
 		}
 	}
 	return cloneLocations(filtered), nil
+}
+
+func (s *FixtureStore) LocationByID(ctx context.Context, customerID, id string) (*domain.Location, error) {
+	locations, err := s.Locations(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range locations {
+		if locations[i].ID == id {
+			return &locations[i], nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *FixtureStore) UpsertCustomer(
@@ -749,47 +822,6 @@ func cloneEnumValues(values []domain.EnumValue) []domain.EnumValue {
 	return cloned
 }
 
-func filterWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) []domain.WorkOrder {
-	filtered := make([]domain.WorkOrder, 0, len(workOrders))
-	search := strings.ToLower(strings.TrimSpace(query.Search))
-	for _, workOrder := range workOrders {
-		if search != "" {
-			searchable := strings.ToLower(strings.Join([]string{
-				workOrder.OrderNumber,
-				workOrder.ClientName,
-				workOrder.JobDescription,
-			}, " "))
-			if !strings.Contains(searchable, search) {
-				continue
-			}
-		}
-		if query.Status != "" && workOrder.Status != query.Status {
-			continue
-		}
-		if query.AssignedTo != "" {
-			assignedTo := ""
-			if workOrder.Assignment.AssignedTo != nil {
-				assignedTo = *workOrder.Assignment.AssignedTo
-			}
-			if assignedTo != query.AssignedTo {
-				continue
-			}
-		}
-		if query.DateFrom != "" && workOrder.IssueDate < query.DateFrom {
-			continue
-		}
-		if query.DateTo != "" && workOrder.IssueDate > query.DateTo {
-			continue
-		}
-		if query.NeedsCostReview && !workOrder.NeedsCostReview {
-			continue
-		}
-		filtered = append(filtered, workOrder)
-	}
-
-	sortWorkOrders(filtered, query.Sort)
-	return filtered
-}
 
 func paginateWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery) []domain.WorkOrder {
 	if query.Offset >= len(workOrders) {
@@ -804,47 +836,6 @@ func paginateWorkOrders(workOrders []domain.WorkOrder, query WorkOrderListQuery)
 		end = start + query.Limit
 	}
 	return workOrders[start:end]
-}
-
-func sortWorkOrders(workOrders []domain.WorkOrder, sortKey string) {
-	desc := strings.HasPrefix(sortKey, "-")
-	field := strings.TrimPrefix(sortKey, "-")
-	if field == "" {
-		field = "issueDate"
-		desc = true
-	}
-
-	sort.SliceStable(workOrders, func(i int, j int) bool {
-		a := workOrderSortValue(workOrders[i], field)
-		b := workOrderSortValue(workOrders[j], field)
-		if desc {
-			return a > b
-		}
-		return a < b
-	})
-}
-
-func workOrderSortValue(workOrder domain.WorkOrder, field string) string {
-	switch field {
-	case "orderNumber":
-		return workOrder.OrderNumber
-	case "clientName":
-		return workOrder.ClientName
-	case "status":
-		return string(workOrder.Status)
-	case "assignedTo":
-		if workOrder.Assignment.AssignedTo == nil {
-			return ""
-		}
-		return *workOrder.Assignment.AssignedTo
-	case "dueDate":
-		if workOrder.DueDate == nil {
-			return ""
-		}
-		return *workOrder.DueDate
-	default:
-		return workOrder.IssueDate
-	}
 }
 
 func (s *FixtureStore) ensureWorkOrdersLoaded() error {

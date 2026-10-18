@@ -63,8 +63,9 @@ it:
 - `register-task.ps1`
 
 Optionally create a `.env` file next to `docker-compose.yml` to set
-`IRIS_SESSION_SECRET` (a strong random value) and `IRIS_ENV=production`. Do not
-commit that file; it stays only on the server.
+`IRIS_ENV=production` and other server-local values. Do not commit that file;
+it stays only on the server. (`IRIS_SESSION_SECRET` is no longer needed; an
+existing value is ignored.)
 
 Error reporting goes to Sentry, with a separate project per surface: the Go API
 reports to the backend project and the web client reports to the frontend one.

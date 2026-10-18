@@ -75,7 +75,41 @@ describe("Login", () => {
       // so the slug typed here is the only thing that can tag later events.
       expect(onLoginSuccess).toHaveBeenCalledWith(user, "demo");
     });
-    expect(login).toHaveBeenCalledWith({ orgSlug: "demo", username: "admin", password: "admin123" });
+    expect(login).toHaveBeenCalledWith({
+      orgSlug: "demo",
+      username: "admin",
+      password: "admin123",
+      remember: false,
+    });
+  });
+
+  it("asks for a remembered session only when the operator ticks the checkbox", async () => {
+    const user = { id: "u-1", username: "admin", role: "admin" as const };
+    const login = vi.fn(async () => ({ success: true, user }));
+    vi.stubGlobal("api", { getAppVersion: vi.fn(async () => "1.0.0"), login });
+
+    renderLogin();
+
+    const checkbox = screen.getByRole("checkbox", { name: strings.rememberDevice });
+    // Off by default, and honest about what it does.
+    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toHaveAccessibleDescription(strings.rememberDeviceHint);
+
+    await userEvent.click(checkbox);
+    await userEvent.type(screen.getByLabelText(strings.username), "admin");
+    await userEvent.type(screen.getByLabelText(strings.password), "admin123");
+    await userEvent.click(screen.getByRole("button", { name: strings.submit }));
+
+    await waitFor(() => {
+      expect(login).toHaveBeenCalledWith({
+        orgSlug: "demo",
+        username: "admin",
+        password: "admin123",
+        remember: true,
+      });
+    });
+    // The username is remembered for next time too.
+    expect(window.localStorage.getItem("iris.rememberedUsername")).toBe("admin");
   });
 
   it("shows the organization's logo when it has one, and its name otherwise", () => {

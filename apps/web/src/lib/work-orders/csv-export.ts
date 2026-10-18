@@ -1,6 +1,8 @@
 // CSV export for the Work Orders list. Exports the currently visible columns
 // (so the file matches what the user sees) using their displayed/plain values.
-// Values are emitted in the same Serbian formatting as the table.
+// Values are emitted in the same Serbian formatting as the table. The API
+// builds the real export (iris-api store.WriteWorkOrdersCSV) over every
+// matching order; workOrdersToCsv is its in-browser twin for fixture mode.
 
 import type { WorkOrder } from "@/types/work-order";
 import {
@@ -68,15 +70,13 @@ export function workOrdersToCsv(
   return [header, ...rows].join("\r\n");
 }
 
-/** Triggers a client-side download of the CSV. Prefixed with a UTF-8 BOM so
- *  Excel renders Serbian characters correctly. */
+/** Triggers a browser download of an exported CSV file (the API's
+ *  `GET /work-orders/export.csv`, already prefixed with a UTF-8 BOM so Excel
+ *  renders Serbian characters correctly). */
 export function downloadWorkOrdersCsv(
-  orders: WorkOrder[],
-  visibleColumns: ReadonlySet<WorkOrderColumnKey>,
+  blob: Blob,
   filename = `radni-nalozi-${new Date().toISOString().slice(0, 10)}.csv`,
 ): void {
-  const csv = "﻿" + workOrdersToCsv(orders, visibleColumns);
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

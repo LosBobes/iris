@@ -307,8 +307,8 @@ func TestSQLiteStoreCreateSessionSweepsExpiredSessions(t *testing.T) {
 	var remaining int
 	if err := sqliteStore.db.QueryRowContext(
 		ctx,
-		`SELECT COUNT(*) FROM sessions WHERE token = ?`,
-		expiredToken,
+		`SELECT COUNT(*) FROM sessions WHERE token_hash = ?`,
+		hashSessionToken(expiredToken),
 	).Scan(&remaining); err != nil {
 		t.Fatalf("count expired session returned error: %v", err)
 	}

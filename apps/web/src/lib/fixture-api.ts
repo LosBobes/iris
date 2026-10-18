@@ -29,6 +29,9 @@ import type {
   WorkOrderStatusHistory,
 } from '@/types/work-order'
 import { buildDashboardData } from '@/lib/dashboard/build'
+import { filterAndSortWorkOrders, queryWorkOrderList } from '@/lib/work-orders/list-query'
+import { workOrdersToCsv } from '@/lib/work-orders/csv-export'
+import { ALL_COLUMN_KEYS, type WorkOrderColumnKey } from '@/lib/work-order-columns'
 import type { CatalogCleanupFilter, CatalogItem, CatalogItemCost } from '@/types/catalog'
 import {
   DEFAULT_BILLING_DEFAULTS,
@@ -659,52 +662,21 @@ function listEnumValues(): EnumValue[] {
 }
 
 function listFixtureWorkOrders(query: WorkOrderListQuery = {}): WorkOrderListResult {
-  const search = query.search?.trim().toLowerCase() ?? ''
-  let items = workOrders.filter((order) => {
-    if (search) {
-      const haystack = `${order.orderNumber} ${order.clientName} ${order.jobDescription}`.toLowerCase()
-      if (!haystack.includes(search)) return false
+  // Same filters, sort, default/capped page size and summary projection as the API.
+  const result = queryWorkOrderList(workOrders, query)
+  const items = cloneValue(result.items)
+  if (query.view === 'summary') {
+    for (const order of items) {
+      order.statusHistory = []
+      order.internalNotes = []
+      order.customerNotes = []
+      order.events = []
+      order.attachments = []
+      order.materialUsage = []
+      order.timeEntries = []
     }
-    if (query.status && order.status !== query.status) return false
-    if (query.assignedTo && order.assignment.assignedTo !== query.assignedTo) return false
-    if (query.dateFrom && order.issueDate < query.dateFrom) return false
-    if (query.dateTo && order.issueDate > query.dateTo) return false
-    if (query.needsCostReview && !order.needsCostReview) return false
-    return true
-  })
-
-  const sort = query.sort ?? '-issueDate'
-  const desc = sort.startsWith('-')
-  const field = desc ? sort.slice(1) : sort
-  items = [...items].sort((a, b) => {
-    const av = fixtureSortValue(a, field)
-    const bv = fixtureSortValue(b, field)
-    const cmp = av.localeCompare(bv, 'sr-Latn')
-    return desc ? -cmp : cmp
-  })
-
-  const total = items.length
-  const offset = query.offset ?? 0
-  const limit = query.limit ?? 0
-  const paged = limit > 0 ? items.slice(offset, offset + limit) : items.slice(offset)
-  return { items: cloneValue(paged), total }
-}
-
-function fixtureSortValue(order: WorkOrder, field: string): string {
-  switch (field) {
-    case 'orderNumber':
-      return order.orderNumber
-    case 'clientName':
-      return order.clientName
-    case 'status':
-      return order.status
-    case 'assignedTo':
-      return order.assignment.assignedTo ?? ''
-    case 'dueDate':
-      return order.dueDate ?? ''
-    default:
-      return order.issueDate
   }
+  return { items, total: result.total }
 }
 
 function validateCreateInput(input: WorkOrder): void {
@@ -1003,6 +975,10 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
 
     async getCatalogItems(query = {}) {
       let items = catalogItems.map(withStock)
+      if (query.ids) {
+        const wanted = new Set(query.ids)
+        items = items.filter((item) => wanted.has(item.id))
+      }
       if (query.kind) items = items.filter((item) => item.kind === query.kind)
       if (query.active) items = items.filter((item) => item.isActive)
       if (query.q) {
@@ -1260,6 +1236,16 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
 
     async getWorkOrders(query) {
       return listFixtureWorkOrders(query)
+    },
+
+    async exportWorkOrdersCsv(query = {}) {
+      const { columns, ...filters } = query
+      const keys = new Set<WorkOrderColumnKey>(
+        (columns && columns.length > 0 ? columns : ALL_COLUMN_KEYS) as WorkOrderColumnKey[],
+      )
+      keys.add('orderNumber')
+      const csv = '﻿' + workOrdersToCsv(filterAndSortWorkOrders(workOrders, filters), keys)
+      return new Blob([csv], { type: 'text/csv;charset=utf-8' })
     },
 
     async getWorkOrderOperators() {

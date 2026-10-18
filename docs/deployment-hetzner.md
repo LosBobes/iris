@@ -97,18 +97,15 @@ cp .env.prod.example .env
 nano .env
 ```
 
-Set a strong session secret (the backend refuses to start without it):
-
-```bash
-openssl rand -hex 32   # paste the output as IRIS_SESSION_SECRET
-```
-
 Minimal `.env`:
 
 ```env
 IRIS_ENV=production
-IRIS_SESSION_SECRET=<the openssl output>
 ```
+
+(`IRIS_SESSION_SECRET` is no longer needed: session tokens are random and stored
+hashed, so nothing is signed with it. A value left in an existing `.env` is
+ignored.)
 
 The `.env` file is gitignored and stays only on the server.
 

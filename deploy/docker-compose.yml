@@ -19,10 +19,6 @@ services:
     restart: unless-stopped
     environment:
       IRIS_ENV: "${IRIS_ENV:-production}"
-      # IRIS_SESSION_SECRET must be a strong random value in production.
-      # TODO: set a real secret on the server (e.g. via a .env file next to
-      # this compose, which is gitignored). Never commit the real value.
-      IRIS_SESSION_SECRET: "${IRIS_SESSION_SECRET:-CHANGE_ME_IN_PRODUCTION}"
       DATABASE_PATH: "/data/iris.db"
       # Same-origin: the browser hits nginx, which proxies /api/ to this
       # service, so no cross-origin allow-list is required.

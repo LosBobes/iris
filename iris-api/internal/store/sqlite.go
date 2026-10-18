@@ -20,7 +20,8 @@ import (
 )
 
 type SQLiteStore struct {
-	db *sql.DB
+	db     *sql.DB
+	caches metaCaches
 }
 
 func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
@@ -48,6 +49,13 @@ func OpenSQLite(ctx context.Context, path string) (*SQLiteStore, error) {
 	if err := RunMigrations(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+
+	// Refresh planner statistics once per start; cheap, and keeps index choices
+	// good on a long-lived database. SQLite-only (this is the SQLite opener).
+	if _, err := db.ExecContext(ctx, `PRAGMA optimize`); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("sqlite optimize: %w", err)
 	}
 
 	return &SQLiteStore{db: db}, nil
@@ -79,6 +87,8 @@ const (
 //     connection so a fresh database also comes up in WAL.
 //   - synchronous=NORMAL: the safe pairing with WAL (durable across process
 //     crashes; only a host power loss can lose the last commits).
+//   - cache_size(-16000): ~16 MB page cache per connection (negative = KiB).
+//   - temp_store(memory): sorts and temp b-trees stay in RAM.
 //   - _txlock=immediate: every transaction takes its write lock up front. With
 //     deferred transactions, two concurrent writers can both start as readers
 //     and then deadlock on the upgrade, which busy_timeout cannot resolve.
@@ -88,6 +98,8 @@ func buildDSN(path string) string {
 		"_pragma=foreign_keys(ON)",
 		"_pragma=journal_mode(WAL)",
 		"_pragma=synchronous(NORMAL)",
+		"_pragma=cache_size(-16000)",
+		"_pragma=temp_store(memory)",
 		"_txlock=immediate",
 	}
 	return path + "?" + strings.Join(params, "&")
@@ -155,6 +167,9 @@ func (s *SQLiteStore) AuthenticateUser(
 		username,
 	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &passwordHash)
 	if errors.Is(err, sql.ErrNoRows) {
+		// Same bcrypt cost as a real account, so timing does not reveal
+		// whether the username exists.
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		return nil, nil
 	}
 	if err != nil {
@@ -164,86 +179,6 @@ func (s *SQLiteStore) AuthenticateUser(
 		return nil, nil
 	}
 	return &user, nil
-}
-
-func (s *SQLiteStore) CreateSession(
-	ctx context.Context,
-	userID string,
-	expiresAt time.Time,
-) (string, error) {
-	token, err := newSessionToken()
-	if err != nil {
-		return "", err
-	}
-	// Sessions are otherwise only deleted on logout or when an already-expired
-	// token happens to be looked up, so an install with no explicit logouts
-	// would grow this table forever. Sweep expired rows once per login instead
-	// of adding a background job.
-	if _, err := s.db.ExecContext(
-		ctx,
-		`DELETE FROM sessions WHERE expires_at <= ?`,
-		time.Now().UTC().Format(time.RFC3339),
-	); err != nil {
-		return "", fmt.Errorf("sweep expired sessions: %w", err)
-	}
-	if _, err := s.db.ExecContext(
-		ctx,
-		`INSERT INTO sessions(token, user_id, expires_at) VALUES (?, ?, ?)`,
-		token,
-		userID,
-		expiresAt.UTC().Format(time.RFC3339),
-	); err != nil {
-		return "", fmt.Errorf("create session: %w", err)
-	}
-	return token, nil
-}
-
-func (s *SQLiteStore) UserBySessionToken(ctx context.Context, token string) (*domain.User, error) {
-	var user domain.User
-	var expiresAtRaw string
-	var impersonatedBy sql.NullString
-	var impersonationID sql.NullInt64
-	// An impersonation session (see CreateImpersonationSession) carries the
-	// superadmin who opened it; ordinary sign-ins leave impersonated_by NULL.
-	err := s.db.QueryRowContext(
-		ctx,
-		`SELECT users.id, users.username, users.role, users.tenant_id, sessions.expires_at,
-		        platform_admins.username, sessions.impersonation_id, tenants.suspended_at IS NOT NULL
-		 FROM sessions
-		 JOIN users ON users.id = sessions.user_id
-		 JOIN tenants ON tenants.id = users.tenant_id
-		 LEFT JOIN platform_admins ON platform_admins.id = sessions.impersonated_by
-		 WHERE sessions.token = ?`,
-		token,
-	).Scan(&user.ID, &user.Username, &user.Role, &user.TenantID, &expiresAtRaw, &impersonatedBy, &impersonationID, &user.TenantSuspended)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("load session: %w", err)
-	}
-	expiresAt, err := time.Parse(time.RFC3339, expiresAtRaw)
-	if err != nil || time.Now().UTC().After(expiresAt) {
-		_ = s.DeleteSession(ctx, token)
-		return nil, nil
-	}
-	if impersonatedBy.Valid {
-		user.ImpersonatedBy = &impersonatedBy.String
-		user.ImpersonationID = impersonationID.Int64
-	}
-	return &user, nil
-}
-
-func (s *SQLiteStore) DeleteSession(ctx context.Context, token string) error {
-	// Signing out of an impersonated session (or its expiry) ends that
-	// impersonation in the log.
-	if err := s.markImpersonationsEnded(ctx, `token = ?`, token); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token = ?`, token); err != nil {
-		return fmt.Errorf("delete session: %w", err)
-	}
-	return nil
 }
 
 // TenantBySlug resolves an organization by its login slug (case-insensitive),
@@ -526,6 +461,34 @@ func (s *SQLiteStore) Locations(ctx context.Context, customerID string) ([]domai
 	return locations, rows.Err()
 }
 
+// LocationByID loads a single location through its parent customer's tenant.
+func (s *SQLiteStore) LocationByID(ctx context.Context, customerID, id string) (*domain.Location, error) {
+	tenantID, err := tenantFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	query := `SELECT locations.id, locations.customer_id, locations.name, locations.address
+		 FROM locations
+		 JOIN customers ON customers.id = locations.customer_id
+		 WHERE customers.tenant_id = ? AND locations.id = ?`
+	args := []any{tenantID, id}
+	if customerID != "" {
+		query += ` AND locations.customer_id = ?`
+		args = append(args, customerID)
+	}
+	var location domain.Location
+	var address sql.NullString
+	err = s.db.QueryRowContext(ctx, query, args...).Scan(&location.ID, &location.CustomerID, &location.Name, &address)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load location: %w", err)
+	}
+	location.Address = nullStringPtr(address)
+	return &location, nil
+}
+
 func (s *SQLiteStore) UpsertCustomer(
 	ctx context.Context,
 	customer domain.Customer,
@@ -771,7 +734,13 @@ func (s *SQLiteStore) WorkOrders(
 		return WorkOrderListResult{}, fmt.Errorf("count work orders: %w", err)
 	}
 
-	sqlQuery := `SELECT payload FROM work_orders ` + where + ` ` + workOrderOrderBy(query.Sort)
+	// The summary view decodes the slim summary_payload (written alongside the
+	// full payload) instead of every order's history collections.
+	payloadColumn := `payload`
+	if query.Summary {
+		payloadColumn = `COALESCE(summary_payload, payload)`
+	}
+	sqlQuery := `SELECT ` + payloadColumn + ` FROM work_orders ` + where + ` ` + workOrderOrderBy(query.Sort)
 	if query.Limit > 0 {
 		sqlQuery += ` LIMIT ? OFFSET ?`
 		args = append(args, query.Limit, maxInt(query.Offset, 0))
@@ -1118,13 +1087,19 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 	}
 	assignedTo := ptrStringValue(workOrder.Assignment.AssignedTo)
 	publicToken := nullIfEmpty(workOrder.Communication.PublicToken)
+	list, err := listColumnsFor(workOrder)
+	if err != nil {
+		return err
+	}
 	if _, err := db.ExecContext(
 		ctx,
 		`INSERT INTO work_orders(
 		   id, tenant_id, order_number, customer_id, location_id, client_name, job_description,
 		   issued_by, assigned_to, status, issue_date, due_date, price, needs_cost_review,
-		   payload, created_at, updated_at, public_token
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		   payload, created_at, updated_at, public_token,
+		   billing_document_type, delivery_method, priority, is_completed, search_text,
+		   order_number_sort, summary_payload
+		 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   order_number = excluded.order_number,
 		   customer_id = excluded.customer_id,
@@ -1141,7 +1116,14 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 		   payload = excluded.payload,
 		   created_at = excluded.created_at,
 		   updated_at = excluded.updated_at,
-		   public_token = excluded.public_token
+		   public_token = excluded.public_token,
+		   billing_document_type = excluded.billing_document_type,
+		   delivery_method = excluded.delivery_method,
+		   priority = excluded.priority,
+		   is_completed = excluded.is_completed,
+		   search_text = excluded.search_text,
+		   order_number_sort = excluded.order_number_sort,
+		   summary_payload = excluded.summary_payload
 		 WHERE work_orders.tenant_id = excluded.tenant_id`,
 		workOrder.ID,
 		tenantID,
@@ -1161,10 +1143,17 @@ func putWorkOrder(ctx context.Context, db sqlExecutor, tenantID string, workOrde
 		workOrder.CreatedAt,
 		workOrder.UpdatedAt,
 		publicToken,
+		list.BillingDocumentType,
+		list.DeliveryMethod,
+		list.Priority,
+		list.IsCompleted,
+		list.SearchText,
+		list.OrderNumberSort,
+		list.SummaryPayload,
 	); err != nil {
 		return fmt.Errorf("put work order: %w", err)
 	}
-	return nil
+	return bumpWorkOrderSequence(ctx, db, workOrder.ID)
 }
 
 // nullIfEmpty returns nil for a blank string so callers can bind it as SQL NULL
@@ -1257,22 +1246,6 @@ func (s *SQLiteStore) Backup(ctx context.Context, path string) error {
 		return fmt.Errorf("backup sqlite database: %w", err)
 	}
 	return nil
-}
-
-func nextSequence(ctx context.Context, db sqlExecutor) (int, error) {
-	var next sql.NullInt64
-	if err := db.QueryRowContext(
-		ctx,
-		`SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1
-		 FROM work_orders
-		 WHERE id GLOB '[0-9]*'`,
-	).Scan(&next); err != nil {
-		return 0, fmt.Errorf("next work-order sequence: %w", err)
-	}
-	if !next.Valid || next.Int64 < 1 {
-		return 1, nil
-	}
-	return int(next.Int64), nil
 }
 
 // nextOrderNumber returns the next free RN-<year>-<seq> order number for the year.
@@ -1577,65 +1550,6 @@ func reservationHonored(ctx context.Context, db sqlExecutor, tenantID, orderNumb
 		return false, fmt.Errorf("check order number taken: %w", err)
 	}
 	return taken == 0, nil
-}
-
-func buildWorkOrderWhere(tenantID string, query WorkOrderListQuery) (string, []any) {
-	clauses := []string{"tenant_id = ?"}
-	args := []any{tenantID}
-	if strings.TrimSpace(query.Search) != "" {
-		clauses = append(clauses, `(LOWER(order_number || ' ' || client_name || ' ' || job_description) LIKE ?)`)
-		args = append(args, "%"+strings.ToLower(strings.TrimSpace(query.Search))+"%")
-	}
-	if query.Status != "" {
-		clauses = append(clauses, `status = ?`)
-		args = append(args, string(query.Status))
-	}
-	if query.AssignedTo != "" {
-		clauses = append(clauses, `assigned_to = ?`)
-		args = append(args, query.AssignedTo)
-	}
-	if query.DateFrom != "" {
-		clauses = append(clauses, `issue_date >= ?`)
-		args = append(args, query.DateFrom)
-	}
-	if query.DateTo != "" {
-		clauses = append(clauses, `issue_date <= ?`)
-		args = append(args, query.DateTo)
-	}
-	if query.NeedsCostReview {
-		clauses = append(clauses, `needs_cost_review = 1`)
-	}
-	if len(clauses) == 0 {
-		return "", args
-	}
-	return "WHERE " + strings.Join(clauses, " AND "), args
-}
-
-func workOrderOrderBy(sortKey string) string {
-	desc := strings.HasPrefix(sortKey, "-")
-	field := strings.TrimPrefix(sortKey, "-")
-	column := "issue_date"
-	switch field {
-	case "orderNumber":
-		column = "order_number"
-	case "clientName":
-		column = "client_name"
-	case "status":
-		column = "status"
-	case "assignedTo":
-		column = "assigned_to"
-	case "dueDate":
-		column = "due_date"
-	case "price":
-		column = "price"
-	case "issueDate", "":
-		column = "issue_date"
-	}
-	direction := "ASC"
-	if desc || sortKey == "" {
-		direction = "DESC"
-	}
-	return "ORDER BY " + column + " " + direction + ", id ASC"
 }
 
 func nullStringPtr(value sql.NullString) *string {

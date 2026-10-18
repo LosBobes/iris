@@ -78,15 +78,14 @@ function CustomerDetailPage(): React.JSX.Element {
     if (isNew || !routeId) return;
     setLoading(true);
     try {
-      const [found, allLocations] = await Promise.all([
+      const [found, ownLocations] = await Promise.all([
         window.api.getCustomerById(routeId),
-        window.api.getLocations(),
+        window.api.getLocations(routeId),
       ]);
       if (!found) {
         setNotFound(true);
         return;
       }
-      const ownLocations = allLocations.filter((location) => location.customerId === routeId);
       setCustomer(found);
       setLocations(ownLocations);
       setBaseline(JSON.stringify([found, []]));

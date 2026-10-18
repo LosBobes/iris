@@ -1,25 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type {
   WorkOrder,
   WorkOrderStatus,
   BillingDocumentType,
   DeliveryMethod,
+  WorkOrderListFilters,
 } from "@/types/work-order";
 import {
-  compareWorkOrderNumbers,
-  countsTowardWorkQueue,
   getLocalIsoDate,
-  workOrderCollator,
   WORK_ORDER_STATUS_ORDER,
 } from "@/shared/utils/work-orders";
 import { readStoredDefaultPageSize } from "@/lib/list-preferences";
 import i18n from "@/i18n";
-import {
-  buildSearchHaystack,
-  type WorkOrderColumnKey,
-} from "@/lib/work-order-columns";
+import type { WorkOrderColumnKey } from "@/lib/work-order-columns";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
+import { queryKeys } from "@/lib/query-client";
 
 export type SortField =
   | "orderNumber"
@@ -54,9 +55,13 @@ export interface WorkOrdersFiltersState {
 }
 
 export interface UseWorkOrdersResult {
+  /** The current page of orders, as filtered, sorted and paged by the API. */
   orders: WorkOrder[];
-  /** All filtered + sorted orders (every page), for export. */
-  filteredSortedOrders: WorkOrder[];
+  /**
+   * The server-side filters + sort behind the list, for the CSV export
+   * (`window.api.exportWorkOrdersCsv`), which covers every page.
+   */
+  exportFilters: WorkOrderListFilters;
   totalFiltered: number;
   allOrdersCount: number;
   loading: boolean;
@@ -185,98 +190,67 @@ function areFiltersEqual(
   );
 }
 
-export function filterWorkOrdersForList(
-  orders: WorkOrder[],
+/** API sort parameter for each table sort column. */
+const SORT_PARAM: Record<SortField, string> = {
+  orderNumber: "orderNumber",
+  clientName: "clientName",
+  jobDescription: "jobDescription",
+  "assignment.assignedTo": "assignedTo",
+  "assignment.priority": "priority",
+  dueDate: "dueDate",
+  billingDocumentType: "billingDocumentType",
+  "shipping.deliveryMethod": "deliveryMethod",
+  price: "price",
+  status: "status",
+  issueDate: "issueDate",
+};
+
+/** `field` / `-field` sort parameter for the list API. */
+export function toSortParam(field: SortField, direction: SortDirection): string {
+  return `${direction === "desc" ? "-" : ""}${SORT_PARAM[field]}`;
+}
+
+/**
+ * Maps the list's filter state to the API's server-side filters, keeping the
+ * table's established rules: the status and document-type filters only apply
+ * while their column is shown, and a customer drill-down (customerId)
+ * replaces the free-text search it was opened with.
+ */
+export function buildWorkOrderListFilters(
   filters: WorkOrdersFiltersState,
-  today = getLocalIsoDate(),
-  // When provided, free-text search and the status/document filters are scoped
-  // to the columns the user has chosen to show. Defaults to all columns.
   visibleColumns?: ReadonlySet<WorkOrderColumnKey>,
-): WorkOrder[] {
+  today = getLocalIsoDate(),
+): WorkOrderListFilters {
   const isColumnVisible = (key: WorkOrderColumnKey): boolean =>
     visibleColumns ? visibleColumns.has(key) : true;
-
-  return orders.filter((order) => {
-    if (filters.customerId && order.customerId !== filters.customerId) {
-      return false;
-    }
-
-    if (filters.assignedTo && order.assignment.assignedTo !== filters.assignedTo) {
-      return false;
-    }
-
-    if (filters.search && !filters.customerId) {
-      const q = filters.search.toLowerCase();
-      // Searchable across the visible columns only: br naloga, klijent, opis
-      // posla, operater, prioritet, tip dokumenta, plan (datumi) and cena.
-      // Enum-backed fields contribute raw value + Serbian label; price
-      // contributes raw + formatted; dates contribute ISO + DD.MM.YYYY. Hidden
-      // columns are excluded so the field list governs search scope.
-      const haystack = buildSearchHaystack(order, visibleColumns);
-      if (!haystack.includes(q)) return false;
-    }
-    if (
-      isColumnVisible("status") &&
-      filters.status !== "all" &&
-      order.status !== filters.status
-    )
-      return false;
-    if (
-      isColumnVisible("billing") &&
-      filters.billingDocumentType !== "all" &&
-      order.billingDocumentType !== filters.billingDocumentType
-    )
-      return false;
-    if (
-      filters.deliveryMethod !== "all" &&
-      order.shipping.deliveryMethod !== filters.deliveryMethod
-    )
-      return false;
-    if (filters.queue !== "all") {
-      const dueDate = order.dueDate;
-      // The queue buckets mirror the dashboard tiles, which leave cancelled
-      // orders out — an explicit status filter is how you go looking for them.
-      if (!countsTowardWorkQueue(order)) {
-        return false;
-      }
-      if (filters.queue === "unassigned" && order.assignment.assignedTo) {
-        return false;
-      }
-      if (
-        filters.queue === "overdue" &&
-        (!dueDate || dueDate >= today || order.isCompleted)
-      ) {
-        return false;
-      }
-      if (filters.queue === "today" && dueDate !== today) {
-        return false;
-      }
-      if (filters.queue === "thisWeek") {
-        if (!dueDate) return false;
-        const due = new Date(`${dueDate}T00:00:00`);
-        const now = new Date(`${today}T00:00:00`);
-        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-        if (
-          due.getTime() < now.getTime() ||
-          due.getTime() > now.getTime() + sevenDaysMs
-        ) {
-          return false;
-        }
-      }
-    }
-    if (filters.dateFrom && order.issueDate < filters.dateFrom) return false;
-    if (filters.dateTo && order.issueDate > filters.dateTo) return false;
-    if (filters.needsCostReview && !order.needsCostReview) return false;
-    return true;
-  });
+  const params: WorkOrderListFilters = {};
+  if (filters.customerId) params.customerId = filters.customerId;
+  else if (filters.search.trim()) params.search = filters.search.trim();
+  if (filters.assignedTo) params.assignedTo = filters.assignedTo;
+  if (filters.status !== "all" && isColumnVisible("status")) {
+    params.status = filters.status;
+  }
+  if (filters.billingDocumentType !== "all" && isColumnVisible("billing")) {
+    params.billingDocumentType = filters.billingDocumentType;
+  }
+  if (filters.deliveryMethod !== "all") {
+    params.deliveryMethod = filters.deliveryMethod;
+  }
+  if (filters.queue !== "all") {
+    params.queue = filters.queue;
+    params.today = today;
+  }
+  if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+  if (filters.dateTo) params.dateTo = filters.dateTo;
+  if (filters.needsCostReview) params.needsCostReview = true;
+  return params;
 }
 
 export interface UseWorkOrdersOptions {
   /**
-   * Fetch only orders awaiting cost entry, filtered by the API. The cost-review
-   * queue uses this so it downloads its few hundred rows instead of every order
-   * in the shop, and lists exactly the set the sidebar badge counts (both come
-   * from the same server-side filter).
+   * Scope the list (and its "of all" count) to orders awaiting cost entry,
+   * filtered by the API — the cost-review queue lists exactly the set the
+   * sidebar badge counts (both come from the same server-side filter).
    */
   needsCostReview?: boolean;
 }
@@ -285,11 +259,9 @@ export function useWorkOrders(
   options: UseWorkOrdersOptions = {},
 ): UseWorkOrdersResult {
   const serverNeedsCostReview = options.needsCostReview === true;
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParamsKey = searchParams.toString();
-  const [orders, setOrders] = useState<WorkOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<WorkOrdersFiltersState>(() =>
     filtersFromSearchParams(searchParams),
   );
@@ -312,30 +284,6 @@ export function useWorkOrders(
     filtersRef.current = filters;
   }, [filters]);
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      // Filtering, sorting and paging happen client-side over the full set
-      // (search is scoped to visible columns, and export covers every page),
-      // so this asks for all orders — but only the fields the table reads.
-      // The cost-review queue narrows that set on the server first.
-      const data = await window.api.getWorkOrders({
-        view: "summary",
-        ...(serverNeedsCostReview ? { needsCostReview: true } : {}),
-      });
-      setOrders(data.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : i18n.t("common.unknownError"));
-    } finally {
-      setLoading(false);
-    }
-  }, [serverNeedsCostReview]);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
   useEffect(() => {
     const nextFilters = filtersFromSearchParams(
       new URLSearchParams(searchParamsKey),
@@ -349,69 +297,55 @@ export function useWorkOrders(
     setCurrentPage(1);
   }, [searchParamsKey]);
 
-  const filteredOrders = useMemo(() => {
-    return filterWorkOrdersForList(orders, filters, undefined, visibleColumnSet);
-  }, [orders, filters, visibleColumnSet]);
+  const exportFilters = useMemo<WorkOrderListFilters>(() => {
+    const params = buildWorkOrderListFilters(filters, visibleColumnSet);
+    if (serverNeedsCostReview) params.needsCostReview = true;
+    params.sort = toSortParam(sortField, sortDirection);
+    return params;
+  }, [filters, visibleColumnSet, serverNeedsCostReview, sortField, sortDirection]);
 
-  const sortedOrders = useMemo(() => {
-    const sorted = [...filteredOrders];
-    sorted.sort((a, b) => {
-      let aVal: string | number | null;
-      let bVal: string | number | null;
+  const pageParams = useMemo(
+    () => ({
+      ...exportFilters,
+      view: "summary" as const,
+      limit: pageSize,
+      offset: (currentPage - 1) * pageSize,
+    }),
+    [exportFilters, pageSize, currentPage],
+  );
 
-      switch (sortField) {
-        case "orderNumber":
-          // Order numbers sort by their digits, not alphabetically.
-          return sortDirection === "asc"
-            ? compareWorkOrderNumbers(a.orderNumber, b.orderNumber)
-            : -compareWorkOrderNumbers(a.orderNumber, b.orderNumber);
-        case "shipping.deliveryMethod":
-          aVal = a.shipping.deliveryMethod;
-          bVal = b.shipping.deliveryMethod;
-          break;
-        case "assignment.assignedTo":
-          aVal = a.assignment.assignedTo;
-          bVal = b.assignment.assignedTo;
-          break;
-        case "assignment.priority":
-          aVal = a.assignment.priority;
-          bVal = b.assignment.priority;
-          break;
-        case "dueDate":
-          aVal = a.dueDate;
-          bVal = b.dueDate;
-          break;
-        case "price":
-          aVal = a.price;
-          bVal = b.price;
-          break;
-        default:
-          aVal = a[sortField];
-          bVal = b[sortField];
-      }
+  const listQuery = useQuery({
+    queryKey: queryKeys.workOrderList(pageParams),
+    queryFn: () => window.api.getWorkOrders(pageParams),
+    // Keep showing the previous page while the next one loads, so paging and
+    // filtering don't flash the loading state.
+    placeholderData: keepPreviousData,
+  });
 
-      if (aVal === null && bVal === null) return 0;
-      if (aVal === null) return 1;
-      if (bVal === null) return -1;
+  // The unfiltered size of the list ("x of y" and the empty state): one row
+  // is enough, only `total` is read.
+  const countParams = useMemo(
+    () => ({
+      view: "summary" as const,
+      limit: 1,
+      ...(serverNeedsCostReview ? { needsCostReview: true } : {}),
+    }),
+    [serverNeedsCostReview],
+  );
+  const countQuery = useQuery({
+    queryKey: queryKeys.workOrderCount(countParams),
+    queryFn: async () => (await window.api.getWorkOrders(countParams)).total,
+  });
 
-      const cmp =
-        typeof aVal === "number" && typeof bVal === "number"
-          ? aVal - bVal
-          : workOrderCollator.compare(String(aVal), String(bVal));
-
-      return sortDirection === "asc" ? cmp : -cmp;
-    });
-    return sorted;
-  }, [filteredOrders, sortField, sortDirection]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / pageSize));
-
+  const totalFiltered = listQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
   const safeCurrentPage = Math.min(currentPage, totalPages);
 
-  const paginatedOrders = useMemo(() => {
-    const start = (safeCurrentPage - 1) * pageSize;
-    return sortedOrders.slice(start, start + pageSize);
-  }, [pageSize, safeCurrentPage, sortedOrders]);
+  // A delete or a narrower result can leave the current page past the end;
+  // step back to the last page that exists.
+  useEffect(() => {
+    if (listQuery.data && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [listQuery.data, currentPage, totalPages]);
 
   const handleSort = useCallback(
     (field: SortField) => {
@@ -457,12 +391,24 @@ export function useWorkOrders(
     setCurrentPage(1);
   }, []);
 
+  const refreshOrders = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.workOrders });
+  }, [queryClient]);
+
+  let error: string | null = null;
+  if (listQuery.error) {
+    error =
+      listQuery.error instanceof Error
+        ? listQuery.error.message
+        : i18n.t("common.unknownError");
+  }
+
   return {
-    orders: paginatedOrders,
-    filteredSortedOrders: sortedOrders,
-    totalFiltered: sortedOrders.length,
-    allOrdersCount: orders.length,
-    loading,
+    orders: listQuery.data?.items ?? [],
+    exportFilters,
+    totalFiltered,
+    allOrdersCount: countQuery.data ?? totalFiltered,
+    loading: listQuery.isPending,
     error,
     filters,
     updateFilters,
@@ -475,6 +421,6 @@ export function useWorkOrders(
     setCurrentPage,
     pageSize,
     setPageSize: handlePageSizeChange,
-    refreshOrders: fetchOrders,
+    refreshOrders,
   };
 }

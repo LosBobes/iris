@@ -26,6 +26,19 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 	if err != nil {
 		return domain.OrganizationSettings{}, err
 	}
+	if cached, ok := s.caches.settings.get(tenantID); ok {
+		return cloneSettings(cached), nil
+	}
+	gen := s.caches.settings.generation(tenantID)
+	settings, err := s.loadOrganizationSettings(ctx, tenantID)
+	if err != nil {
+		return domain.OrganizationSettings{}, err
+	}
+	s.caches.settings.put(tenantID, gen, cloneSettings(settings))
+	return settings, nil
+}
+
+func (s *SQLiteStore) loadOrganizationSettings(ctx context.Context, tenantID string) (domain.OrganizationSettings, error) {
 	settings := domain.OrganizationSettings{
 		FirmName:            domain.DefaultFirmName,
 		PDFSections:         domain.DefaultPDFSections(),
@@ -265,5 +278,6 @@ func (s *SQLiteStore) upsertSetting(ctx context.Context, key, value string) erro
 	); err != nil {
 		return fmt.Errorf("update organization settings: %w", err)
 	}
+	s.invalidateSettings(tenantID)
 	return nil
 }

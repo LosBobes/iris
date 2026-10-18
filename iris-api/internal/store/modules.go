@@ -158,6 +158,7 @@ func (s *SQLiteStore) PlatformSetTenantModules(ctx context.Context, actor AuditA
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit set tenant modules: %w", err)
 	}
+	s.invalidateSettings(tenant.ID)
 	return s.platformTenantByID(ctx, tenant.ID)
 }
 
@@ -186,6 +187,7 @@ func (s *SQLiteStore) SetTenantModules(ctx context.Context, slug string, update 
 	if err := writeModules(ctx, s.db, tenant.ID, modules); err != nil {
 		return nil, err
 	}
+	s.invalidateSettings(tenant.ID)
 	return &modules, nil
 }
 

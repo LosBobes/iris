@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -9,18 +9,16 @@ import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrd
 import { WorkOrderForm } from "@/components/WorkOrders/WorkOrderForm";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { useWorkOrderEditLock } from "@/hooks/useWorkOrderEditLock";
+import { useWorkOrder } from "@/hooks/useWorkOrder";
 import {
   canToggleWorkOrderCompletion,
   getPrimaryWorkOrderTransition,
   getWorkOrderStatusLabel,
   requiresWorkOrderCloseConfirm,
 } from "@/shared/utils/work-orders";
-import type {
-  WorkOrder,
-  WorkOrderNote,
-} from "@/types/work-order";
+import type { WorkOrderNote } from "@/types/work-order";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
-import { formatActionError, reportUnexpectedError } from "@/lib/errors";
+import { formatActionError } from "@/lib/errors";
 
 function cleanNotes(notes: WorkOrderNote[]): WorkOrderNote[] {
   return notes.filter((note) => note.body.trim() !== "");
@@ -30,52 +28,15 @@ function WorkOrderEditPage(): React.JSX.Element {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<WorkOrder | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { order, setOrder, loading, error } = useWorkOrder(id, {
+    context: "WorkOrderEditPage.load",
+    fresh: true,
+  });
   const [completeOpen, setCompleteOpen] = useState(false);
   const { lockedBy, readOnly } = useWorkOrderEditLock(id);
   const [dirty, setDirty] = useState(false);
   const guard = useUnsavedChangesGuard(dirty);
   const { allowNavigation } = guard;
-
-  useEffect(() => {
-    if (!id) return;
-    let isCancelled = false;
-
-    const loadOrder = async (): Promise<void> => {
-      setLoading(true);
-      setError(null);
-      setOrder(null);
-
-      try {
-        const data = await window.api.getWorkOrderById(id);
-        if (isCancelled) return;
-
-        if (!data) {
-          setError(t("workOrders.detail.notFound"));
-          return;
-        }
-
-        setOrder(data);
-      } catch (error: unknown) {
-        reportUnexpectedError("WorkOrderEditPage.load", error);
-        if (!isCancelled) {
-          setError(formatActionError(t("workOrders.detail.loadError"), error));
-        }
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadOrder();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [id, t]);
 
   const handleSubmit = useCallback(
     async (values: WorkOrderFormValues) => {
@@ -149,7 +110,7 @@ function WorkOrderEditPage(): React.JSX.Element {
     } catch (error) {
       toast.error(formatActionError(t("workOrders.toast.statusError"), error));
     }
-  }, [id, order, t]);
+  }, [id, order, setOrder, t]);
 
   // Closing the order is one-way, so ask first; the other advances stay
   // one-click.

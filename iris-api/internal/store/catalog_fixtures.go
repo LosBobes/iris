@@ -18,8 +18,18 @@ func (s *FixtureStore) CatalogItems(
 	defer s.mu.Unlock()
 
 	search := strings.ToLower(strings.TrimSpace(query.Search))
+	var wantIDs map[string]bool
+	if len(query.IDs) > 0 {
+		wantIDs = make(map[string]bool, len(query.IDs))
+		for _, id := range query.IDs {
+			wantIDs[id] = true
+		}
+	}
 	matched := make([]domain.CatalogItem, 0, len(s.catalogItems))
 	for _, item := range s.catalogItems {
+		if wantIDs != nil && !wantIDs[item.ID] {
+			continue
+		}
 		if query.Kind != "" && item.Kind != query.Kind {
 			continue
 		}

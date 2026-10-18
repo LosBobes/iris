@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/LosBobes/iris/iris-api/internal/domain"
@@ -158,7 +159,8 @@ func openReservations(ctx context.Context, q dbExecQuerier, tenantID string) (ma
 		ctx,
 		`SELECT p.graph FROM work_order_processes p
 		 JOIN work_orders w ON w.id = p.work_order_id
-		 WHERE p.tenant_id = ? AND w.tenant_id = ? AND p.stock_tracked = 1 AND w.status NOT IN `+closedWorkOrderStatusesSQL,
+		 WHERE p.tenant_id = ? AND w.tenant_id = ? AND p.stock_tracked = 1 AND w.status NOT IN `+closedWorkOrderStatusesSQL+`
+		   AND p.graph LIKE '%"catalogItemId"%'`,
 		tenantID, tenantID,
 	)
 	if err != nil {
@@ -171,13 +173,48 @@ func openReservations(ctx context.Context, q dbExecQuerier, tenantID string) (ma
 		if err := rows.Scan(&raw); err != nil {
 			return nil, fmt.Errorf("scan process graph: %w", err)
 		}
-		graph, err := decodeProcessGraph(raw)
+		perGraph, err := reservedInputsForGraph(raw)
 		if err != nil {
 			return nil, err
 		}
-		sumReserved(reserved, graph)
+		for id, quantity := range perGraph {
+			reserved[id] += quantity
+		}
 	}
 	return reserved, rows.Err()
+}
+
+// reservedCache memoizes the planned-input reservation of a process graph keyed
+// by its raw JSON. The result is a pure function of that text, so a changed
+// graph (different text) can never hit a stale entry. The cache is bounded and
+// simply reset when full.
+var reservedCache = struct {
+	sync.Mutex
+	entries map[string]map[string]float64
+}{entries: map[string]map[string]float64{}}
+
+const reservedCacheMax = 4096
+
+func reservedInputsForGraph(raw string) (map[string]float64, error) {
+	reservedCache.Lock()
+	cached, ok := reservedCache.entries[raw]
+	reservedCache.Unlock()
+	if ok {
+		return cached, nil
+	}
+	graph, err := decodeProcessGraph(raw)
+	if err != nil {
+		return nil, err
+	}
+	perGraph := map[string]float64{}
+	sumReserved(perGraph, graph)
+	reservedCache.Lock()
+	if len(reservedCache.entries) >= reservedCacheMax {
+		reservedCache.entries = map[string]map[string]float64{}
+	}
+	reservedCache.entries[raw] = perGraph
+	reservedCache.Unlock()
+	return perGraph, nil
 }
 
 // StockLevels lists the tenant's articles with on-hand, reserved and available
@@ -192,7 +229,7 @@ func (s *SQLiteStore) StockLevels(ctx context.Context, query StockLevelQuery) (d
 		`SELECT c.id, c.code, c.name, c.unit, c.is_active, c.min_stock,
 		        COALESCE(SUM(m.quantity), 0), MAX(m.created_at), COUNT(m.id)
 		 FROM catalog_items c
-		 LEFT JOIN stock_movements m ON m.catalog_item_id = c.id
+		 LEFT JOIN stock_movements m ON m.catalog_item_id = c.id AND m.tenant_id = c.tenant_id
 		 WHERE c.tenant_id = ? AND c.kind = 'article'
 		 GROUP BY c.id`,
 		tenantID,

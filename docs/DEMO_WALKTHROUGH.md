@@ -17,7 +17,7 @@ Start the three pieces (see [REPO_MAP.md](../REPO_MAP.md) for details):
 # Backend (from iris-api/) — seed demo data first
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-DATABASE_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server   # :8080
+DATABASE_PATH=./data/iris.db go run ./cmd/server   # :8080
 
 # Web (from apps/web/)
 npm run dev    # :5173

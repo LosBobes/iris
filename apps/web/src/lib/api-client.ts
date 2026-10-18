@@ -503,6 +503,15 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
 
     async login(credentials) {
       const response = await fetchImpl(url('/auth/login'), jsonRequest('POST', credentials))
+      // Too many failed attempts is an answer for the form to show, not a
+      // backend fault.
+      if (response.status === 429) {
+        const payload = (await response.json().catch(() => null)) as { error?: unknown } | null
+        return {
+          success: false,
+          error: typeof payload?.error === 'string' ? payload.error : undefined,
+        }
+      }
       return readJSON<LoginResponse>(response)
     },
 
@@ -612,6 +621,7 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       if (query.active) params.set('active', 'true')
       if (query.limit !== undefined) params.set('limit', String(query.limit))
       if (query.offset !== undefined) params.set('offset', String(query.offset))
+      if (query.ids) params.set('ids', query.ids.join(','))
       const search = params.toString()
       const response = await fetchImpl(
         url(`/catalog-items${search ? `?${search}` : ''}`),
@@ -854,6 +864,21 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getWorkOrders(query) {
       const response = await fetchImpl(url(`/work-orders${queryString(query)}`), credentialedRequest())
       return normalizeWorkOrderListResult(await readJSON<WorkOrderListResult>(response))
+    },
+
+    async exportWorkOrdersCsv(query = {}) {
+      const { columns, ...filters } = query
+      const params = new URLSearchParams(queryString(filters).slice(1))
+      if (columns && columns.length > 0) params.set('columns', columns.join(','))
+      const search = params.toString()
+      const response = await fetchImpl(
+        url(`/work-orders/export.csv${search ? `?${search}` : ''}`),
+        credentialedRequest(),
+      )
+      // Errors come back as the usual JSON envelope; readJSON raises them with
+      // the status and request reference.
+      if (!response.ok) await readJSON<never>(response)
+      return response.blob()
     },
 
     async getWorkOrderOperators() {

@@ -32,7 +32,7 @@ Backend API:
 cd iris-api
 IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl migrate
 IRIS_DB_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
-IRIS_DB_PATH=./data/iris.db IRIS_SESSION_SECRET=dev-secret go run ./cmd/server
+IRIS_DB_PATH=./data/iris.db go run ./cmd/server
 ```
 
 Web client:

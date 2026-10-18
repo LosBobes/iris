@@ -25,6 +25,18 @@ vars and must not be committed.
   `src/components/ui/` — reuse before adding new ones.
 - Data hooks in `src/hooks/` (`useAuth`, `useWorkOrders`, `useDashboardData`).
   Separate data fetching (hooks) from presentation (components).
+- **Client cache:** TanStack Query (`src/lib/query-client.ts`, provider in
+  `main.tsx`). Work-order list/detail, enum values, catalog items and settings
+  are queries (30 s stale for lists, 5 min for reference data). Successful
+  `window.api` mutations invalidate the affected roots automatically via
+  `withQueryInvalidation` — register a new mutating method in its
+  `INVALIDATIONS` map. The cache is cleared on login/logout/session expiry
+  (tenant-scoped data). Tests: `src/test/query.tsx`
+  (`renderWithQueryClient`, `renderHookWithQueryClient`).
+- **Work-order list** is filtered, sorted and paged by the API (`GET /work-orders`,
+  default 50 / max 200 per page; `GET /work-orders/export.csv` for the export).
+  `src/lib/work-orders/list-query.ts` is the fixture-mode twin of the Go query
+  (`iris-api/internal/store/work_order_list.go`) — keep them in sync.
 - Pages/routes in `src/pages/` (incl. `PublicWorkOrderPage`, `CustomersPage`);
   routing via `react-router-dom`.
 - Domain types in `src/types/work-order.ts` — a contract-sync point with

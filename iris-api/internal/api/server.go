@@ -35,14 +35,29 @@ type Server struct {
 	config          Config
 	startedAt       time.Time
 	platformLimiter *loginLimiter
+	// Organization sign-in throttling (sessions.go).
+	orgLoginIPLimiter      *loginLimiter
+	orgLoginAccountLimiter *loginLimiter
 }
 
 type Config struct {
 	AllowedOrigins    []string
 	SessionCookieName string
-	SessionDuration   time.Duration
-	SecureCookies     bool
-	WebDir            string
+	// Organization session lifetimes (see sessions.go). SessionDuration is the
+	// idle timeout of an ordinary sign-in and SessionMaxLifetime its absolute
+	// cap; the Remember* pair applies when the user ticked "Zapamti me".
+	// SessionRefreshInterval throttles how often a used session's expiry is
+	// rewritten. Zero values take the defaults (12 h / 24 h, 7 d / 30 d, 1 h).
+	SessionDuration            time.Duration
+	SessionMaxLifetime         time.Duration
+	RememberSessionDuration    time.Duration
+	RememberSessionMaxLifetime time.Duration
+	SessionRefreshInterval     time.Duration
+	SecureCookies              bool
+	// Production disables the development CORS fallback that, with an empty
+	// AllowedOrigins, grants credentialed CORS to any http://localhost:* page.
+	Production bool
+	WebDir     string
 	// Operator console session (see platform.go): a separate cookie, kept
 	// short because it can read usage across every organization.
 	PlatformSessionCookieName string
@@ -56,8 +71,12 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		SessionCookieName: "iris_session",
-		SessionDuration:   12 * time.Hour,
+		SessionCookieName:          "iris_session",
+		SessionDuration:            defaultSessionIdleTimeout,
+		SessionMaxLifetime:         defaultSessionMaxLifetime,
+		RememberSessionDuration:    defaultRememberSessionIdleTimeout,
+		RememberSessionMaxLifetime: defaultRememberSessionMaxLifetime,
+		SessionRefreshInterval:     defaultSessionRefreshInterval,
 	}
 }
 
@@ -70,7 +89,19 @@ func NewServer(store store.Store, configs ...Config) *Server {
 		config.SessionCookieName = "iris_session"
 	}
 	if config.SessionDuration == 0 {
-		config.SessionDuration = 12 * time.Hour
+		config.SessionDuration = defaultSessionIdleTimeout
+	}
+	if config.SessionMaxLifetime == 0 {
+		config.SessionMaxLifetime = defaultSessionMaxLifetime
+	}
+	if config.RememberSessionDuration == 0 {
+		config.RememberSessionDuration = defaultRememberSessionIdleTimeout
+	}
+	if config.RememberSessionMaxLifetime == 0 {
+		config.RememberSessionMaxLifetime = defaultRememberSessionMaxLifetime
+	}
+	if config.SessionRefreshInterval == 0 {
+		config.SessionRefreshInterval = defaultSessionRefreshInterval
 	}
 	if config.PlatformSessionCookieName == "" {
 		config.PlatformSessionCookieName = "iris_platform_session"
@@ -81,12 +112,15 @@ func NewServer(store store.Store, configs ...Config) *Server {
 	if config.ImpersonationDuration == 0 {
 		config.ImpersonationDuration = time.Hour
 	}
+	orgLoginIPLimiter, orgLoginAccountLimiter := newOrgLoginLimiters()
 	return &Server{
 		store:     store,
 		config:    config,
 		startedAt: time.Now(),
 		// 5 failures per IP or username, 50 overall, per 15 minutes.
-		platformLimiter: newLoginLimiter(15*time.Minute, 5, 50),
+		platformLimiter:        newLoginLimiter(15*time.Minute, 5, 50),
+		orgLoginIPLimiter:      orgLoginIPLimiter,
+		orgLoginAccountLimiter: orgLoginAccountLimiter,
 	}
 }
 
@@ -97,7 +131,7 @@ func NewServer(store store.Store, configs ...Config) *Server {
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	r.Use(proxyRealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	// gzip/deflate compresses only chi's default content-type list (text/*,
@@ -110,6 +144,7 @@ func (s *Server) Routes() http.Handler {
 	// panic before Recoverer swallows it.
 	r.Use(sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle)
 	r.Use(s.corsMiddleware)
+	r.Use(s.originGuard)
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -161,6 +196,7 @@ func (s *Server) Routes() http.Handler {
 		protected.Get("/dashboard", s.handleDashboard)
 		protected.Get("/work-orders", s.handleWorkOrders)
 		protected.Get("/work-orders/operators", s.handleOperators)
+		protected.Get("/work-orders/export.csv", s.handleExportWorkOrdersCSV)
 		protected.Get("/work-orders/{id}", s.handleWorkOrderByID)
 		protected.Get("/work-orders/{id}/report", s.handleWorkOrderReport)
 		protected.Post("/work-orders/preview", s.handleWorkOrderPreview)
@@ -248,7 +284,9 @@ func (s *Server) isAllowedOrigin(origin string) bool {
 		}
 	}
 	if len(s.config.AllowedOrigins) == 0 {
-		return isLocalhostOrigin(origin)
+		// Development convenience only: a production server with no
+		// allow-list grants credentialed CORS to nobody.
+		return !s.config.Production && isLocalhostOrigin(origin)
 	}
 	// When a dev allowlist includes any localhost origin, permit other local
 	// Vite ports (e.g. 5174 when 5173 is already listed).
@@ -339,21 +377,21 @@ func (s *Server) requireAdmin(handler http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) userFromRequest(w http.ResponseWriter, r *http.Request) (*domain.User, bool) {
-	cookie, err := r.Cookie(s.config.SessionCookieName)
-	if err != nil || cookie.Value == "" {
-		writeAPIError(w, r, http.StatusUnauthorized, "Potrebna je prijava.", nil)
-		return nil, false
-	}
-	user, err := s.store.UserBySessionToken(r.Context(), cookie.Value)
+	token, session, err := s.sessionFromCookie(r)
 	if err != nil {
 		writeServerError(w, r, err)
 		return nil, false
 	}
-	if user == nil {
+	if token == "" {
+		writeAPIError(w, r, http.StatusUnauthorized, "Potrebna je prijava.", nil)
+		return nil, false
+	}
+	if session == nil {
 		clearSessionCookie(w, s.config)
 		writeAPIError(w, r, http.StatusUnauthorized, "Sesija je istekla.", nil)
 		return nil, false
 	}
+	user := session.User
 	// A suspended organization keeps no ordinary sessions; a Backoffice
 	// impersonation still gets in.
 	if user.TenantSuspended && user.ImpersonationID == 0 {
@@ -361,6 +399,7 @@ func (s *Server) userFromRequest(w http.ResponseWriter, r *http.Request) (*domai
 		writeAPIError(w, r, http.StatusUnauthorized, tenantSuspendedMessage, nil)
 		return nil, false
 	}
+	s.refreshSession(w, r, token, session)
 	return user, true
 }
 
@@ -369,16 +408,23 @@ func currentUser(r *http.Request) *domain.User {
 	return user
 }
 
-func setSessionCookie(w http.ResponseWriter, config Config, token string, expiresAt time.Time) {
-	http.SetCookie(w, &http.Cookie{
+// setSessionCookie sends the organization session cookie. A persistent one
+// expires exactly when the server-side session does; otherwise it is a
+// browser-session cookie (no Expires/Max-Age).
+func setSessionCookie(w http.ResponseWriter, config Config, token string, expiresAt time.Time, persistent bool) {
+	cookie := &http.Cookie{
 		Name:     config.SessionCookieName,
 		Value:    token,
 		Path:     "/",
-		Expires:  expiresAt,
 		HttpOnly: true,
 		Secure:   config.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+	if persistent {
+		cookie.Expires = expiresAt
+		cookie.MaxAge = max(1, int(time.Until(expiresAt).Seconds()))
+	}
+	http.SetCookie(w, cookie)
 }
 
 func clearSessionCookie(w http.ResponseWriter, config Config) {
@@ -403,12 +449,18 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Resolve the organization first. A missing or unknown org yields the same
 	// generic error as bad credentials, so the form never reveals which orgs exist.
 	const invalidCredentials = "Neispravna organizacija, korisničko ime ili lozinka."
+	keys := newOrgLoginKeys(r, req)
+	if !s.orgLoginAllowed(keys) {
+		writeAPIError(w, r, http.StatusTooManyRequests, loginRateLimitedMessage, nil)
+		return
+	}
 	tenant, err := s.store.TenantBySlug(r.Context(), req.OrgSlug)
 	if err != nil {
 		writeServerError(w, r, err)
 		return
 	}
 	if tenant == nil {
+		s.orgLoginFailed(keys)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: invalidCredentials})
 		return
 	}
@@ -420,12 +472,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user == nil {
+		s.orgLoginFailed(keys)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{
 			Success: false,
 			Error:   invalidCredentials,
 		})
 		return
 	}
+	s.orgLoginSucceeded(keys)
 	// Said only after the credentials check out, so it reveals nothing to
 	// someone guessing.
 	if tenant.Suspended {
@@ -435,13 +489,18 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	s.recordLogin(r, user)
 
-	expiresAt := time.Now().UTC().Add(s.config.SessionDuration)
-	token, err := s.store.CreateSession(r.Context(), user.ID, expiresAt)
+	expiresAt, absoluteExpiresAt := s.newSessionExpiry(time.Now().UTC(), req.Remember)
+	token, err := s.store.StartSession(r.Context(), store.NewSession{
+		UserID:            user.ID,
+		ExpiresAt:         expiresAt,
+		AbsoluteExpiresAt: absoluteExpiresAt,
+		Remember:          req.Remember,
+	})
 	if err != nil {
 		writeServerError(w, r, err)
 		return
 	}
-	setSessionCookie(w, s.config, token, expiresAt)
+	setSessionCookie(w, s.config, token, expiresAt, req.Remember)
 	writeJSON(w, http.StatusOK, domain.LoginResponse{
 		Success: true,
 		User:    user,
@@ -449,26 +508,27 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(s.config.SessionCookieName)
-	if err != nil || cookie.Value == "" {
-		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false})
-		return
-	}
-	user, err := s.store.UserBySessionToken(r.Context(), cookie.Value)
+	token, session, err := s.sessionFromCookie(r)
 	if err != nil {
 		writeServerError(w, r, err)
 		return
 	}
-	if user == nil {
+	if token == "" {
+		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false})
+		return
+	}
+	if session == nil {
 		clearSessionCookie(w, s.config)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false})
 		return
 	}
+	user := session.User
 	if user.TenantSuspended && user.ImpersonationID == 0 {
 		clearSessionCookie(w, s.config)
 		writeJSON(w, http.StatusOK, domain.LoginResponse{Success: false, Error: tenantSuspendedMessage})
 		return
 	}
+	s.refreshSession(w, r, token, session)
 	writeJSON(w, http.StatusOK, domain.LoginResponse{Success: true, User: user})
 }
 
@@ -578,52 +638,6 @@ func (s *Server) handleDeleteLocation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-func (s *Server) handleWorkOrders(w http.ResponseWriter, r *http.Request) {
-	if s.serveWebIfHTML(w, r) {
-		return
-	}
-	result, err := s.store.WorkOrders(r.Context(), parseWorkOrderListQuery(r))
-	if err != nil {
-		writeServerError(w, r, err)
-		return
-	}
-
-	admin := isAdmin(r)
-	summary := r.URL.Query().Get("view") == workOrderViewSummary
-	for i := range result.Items {
-		if !admin {
-			stripWorkOrderCost(&result.Items[i])
-		}
-		if summary {
-			stripWorkOrderDetail(&result.Items[i])
-		}
-	}
-
-	writeJSON(w, http.StatusOK, result)
-}
-
-// workOrderViewSummary is the `view` value that asks for the list projection:
-// every matching order, but without the per-order history collections.
-const workOrderViewSummary = "summary"
-
-// stripWorkOrderDetail drops the collections that only the work-order detail
-// page reads. The list and dashboard screens fetch every order to filter and
-// aggregate client-side, and these arrays dominate a work order's payload —
-// carrying them made a full list response many times larger than the fields
-// those screens actually use.
-//
-// The selling side is deliberately left intact: InvoiceDraft (and its line
-// items) drives the dashboard's per-item and per-company profit breakdowns.
-func stripWorkOrderDetail(workOrder *domain.WorkOrder) {
-	workOrder.StatusHistory = nil
-	workOrder.InternalNotes = nil
-	workOrder.CustomerNotes = nil
-	workOrder.Events = nil
-	workOrder.Attachments = nil
-	workOrder.MaterialUsage = nil
-	workOrder.TimeEntries = nil
-}
-
 // stripWorkOrderCost removes the admin-only cost and margin figures (cached
 // profit, per-line UnitCost, and the cost-review flag) so regular operators
 // never receive cost data.
@@ -637,40 +651,6 @@ func stripWorkOrderCost(workOrder *domain.WorkOrder) {
 	workOrder.NeedsCostReview = false
 	for i := range workOrder.InvoiceDraft.LineItems {
 		workOrder.InvoiceDraft.LineItems[i].UnitCost = nil
-	}
-}
-
-// maxWorkOrderListLimit caps an explicitly requested page size.
-const maxWorkOrderListLimit = 500
-
-func parseWorkOrderListQuery(r *http.Request) store.WorkOrderListQuery {
-	values := r.URL.Query()
-	limit, _ := strconv.Atoi(values.Get("limit"))
-	offset, _ := strconv.Atoi(values.Get("offset"))
-	if limit < 0 {
-		limit = 0
-	}
-	// A caller cannot make the server materialize an arbitrarily large page.
-	// Limit 0 still means "no LIMIT clause" — the dashboard aggregates over
-	// every order — but that path is meant to be paired with view=summary.
-	if limit > maxWorkOrderListLimit {
-		limit = maxWorkOrderListLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	return store.WorkOrderListQuery{
-		Search:     values.Get("search"),
-		Status:     domain.WorkOrderStatus(values.Get("status")),
-		AssignedTo: values.Get("assignedTo"),
-		DateFrom:   values.Get("dateFrom"),
-		DateTo:     values.Get("dateTo"),
-		// The cost-review queue is admin-only; ignore the filter for operators so
-		// they can't enumerate which orders await cost entry.
-		NeedsCostReview: isAdmin(r) && values.Get("needsCostReview") == "true",
-		Limit:           limit,
-		Offset:          offset,
-		Sort:            values.Get("sort"),
 	}
 }
 
@@ -889,16 +869,13 @@ func (s *Server) handleWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 		if workOrder.CustomerID != nil {
 			customerID = *workOrder.CustomerID
 		}
-		locations, locErr := s.store.Locations(r.Context(), customerID)
+		location, locErr := s.store.LocationByID(r.Context(), customerID, *workOrder.LocationID)
 		if locErr != nil {
 			writeServerError(w, r, locErr)
 			return
 		}
-		for _, location := range locations {
-			if location.ID == *workOrder.LocationID {
-				locationAddress = location.Address
-				break
-			}
+		if location != nil {
+			locationAddress = location.Address
 		}
 	}
 
@@ -956,16 +933,13 @@ func (s *Server) handleWorkOrderPreview(w http.ResponseWriter, r *http.Request) 
 		if order.CustomerID != nil {
 			customerID = *order.CustomerID
 		}
-		locations, err := s.store.Locations(r.Context(), customerID)
+		location, err := s.store.LocationByID(r.Context(), customerID, *order.LocationID)
 		if err != nil {
 			writeServerError(w, r, err)
 			return
 		}
-		for _, location := range locations {
-			if location.ID == *order.LocationID {
-				locationAddress = location.Address
-				break
-			}
+		if location != nil {
+			locationAddress = location.Address
 		}
 	}
 

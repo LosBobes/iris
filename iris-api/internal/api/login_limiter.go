@@ -8,7 +8,9 @@ import (
 // loginLimiter throttles failed sign-ins. Each attempt is checked against
 // several keys (client IP, username) and one global budget: per-key limits stop
 // a single guesser, the global one bounds a distributed attempt or a client
-// that spoofs its forwarded IP. Successful logins clear their keys.
+// that spoofs its forwarded IP. Successful logins clear their keys. A global
+// budget of zero or less means none (organization sign-in uses that: one
+// shared budget would let a single guesser lock every organization out).
 type loginLimiter struct {
 	mu       sync.Mutex
 	window   time.Duration
@@ -45,7 +47,7 @@ func (l *loginLimiter) allow(keys ...string) bool {
 	defer l.mu.Unlock()
 	cutoff := l.now().Add(-l.window)
 	l.all = l.prune(l.all, cutoff)
-	if len(l.all) >= l.global {
+	if l.global > 0 && len(l.all) >= l.global {
 		return false
 	}
 	for _, key := range keys {
@@ -65,7 +67,9 @@ func (l *loginLimiter) fail(keys ...string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	at := l.now()
-	l.all = append(l.all, at)
+	if l.global > 0 {
+		l.all = append(l.all, at)
+	}
 	for _, key := range keys {
 		l.failures[key] = append(l.failures[key], at)
 	}

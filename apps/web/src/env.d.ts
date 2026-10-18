@@ -13,6 +13,7 @@ import type {
   WorkOrder,
   CustomerListQuery,
   CustomerListResult,
+  WorkOrderCsvExportQuery,
   WorkOrderListQuery,
   WorkOrderListResult,
 } from '@/types/work-order'
@@ -99,6 +100,8 @@ declare global {
         orgSlug: string
         username: string
         password: string
+        /** Stay signed in on this device (persistent cookie, up to 30 days). */
+        remember?: boolean
       }) => Promise<LoginResponse>
       getCurrentSession: () => Promise<LoginResponse>
       logout: () => Promise<void>
@@ -156,6 +159,8 @@ declare global {
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>
       deleteUser: (id: string) => Promise<{ success: boolean }>
       getWorkOrders: (query?: WorkOrderListQuery) => Promise<WorkOrderListResult>
+      /** Every order matching the filters (no paging) as the list CSV file. */
+      exportWorkOrdersCsv: (query?: WorkOrderCsvExportQuery) => Promise<Blob>
       getWorkOrderOperators: () => Promise<string[]>
       getDashboard: (query?: DashboardQuery) => Promise<DashboardData>
       getWorkOrderById: (id: string) => Promise<WorkOrder | null>

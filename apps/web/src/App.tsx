@@ -46,6 +46,12 @@ import {
   subscribeSessionExpired,
 } from "@/lib/session";
 import { reportUnexpectedError } from "@/lib/errors";
+import {
+  clearQueryCache,
+  queryClient,
+  queryKeys,
+  REFERENCE_STALE_TIME_MS,
+} from "@/lib/query-client";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
@@ -208,7 +214,13 @@ function AppContent(): React.JSX.Element {
    */
   const loadOrganizationSettings = useCallback(async () => {
     try {
-      applyOrganizationSettings(await window.api.getSettings());
+      applyOrganizationSettings(
+        await queryClient.fetchQuery({
+          queryKey: queryKeys.settings,
+          queryFn: () => window.api.getSettings(),
+          staleTime: REFERENCE_STALE_TIME_MS,
+        }),
+      );
     } catch {
       // Keep whatever the app already has (the defaults on a fresh boot); the
       // next sign-in tries again.
@@ -293,12 +305,15 @@ function AppContent(): React.JSX.Element {
         // The settings belong to the organization that just signed out, so they
         // go with it: the next sign-in loads its own.
         applyOrganizationSettings(null);
+        clearQueryCache();
       });
   }, [applyOrganizationSettings, currentUser?.impersonatedBy, navigate]);
 
   const handleLoginSuccess = useCallback(
     (user: AuthenticatedUser, orgSlug: string) => {
       setSessionExpired(false);
+      // A new session may be another organization: drop the previous cache.
+      clearQueryCache();
       setSentryUser(user, orgSlug);
       setCurrentUser(user);
       // Signing in here is the start of a session the bootstrap never saw: the
@@ -323,6 +338,8 @@ function AppContent(): React.JSX.Element {
       if (sessionExpiryHandled.current) return;
       sessionExpiryHandled.current = true;
       clearSentryUser();
+      // Cached data belongs to the lapsed session's organization.
+      clearQueryCache();
       startTransition(() => {
         setSessionExpired(true);
         setCurrentUser(null);

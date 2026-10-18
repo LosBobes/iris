@@ -76,8 +76,10 @@ func (s *SQLiteStore) CreateImpersonationSession(ctx context.Context, input Impe
 	}
 	if _, err := tx.ExecContext(
 		ctx,
-		`INSERT INTO sessions(token, user_id, expires_at, impersonated_by, impersonation_id) VALUES (?, ?, ?, ?, ?)`,
-		token, user.ID, input.ExpiresAt.UTC().Format(time.RFC3339), input.AdminID, impersonationID,
+		// Fixed lifetime: the idle and absolute expiry are the same and it is
+		// never extended (see ExtendSession).
+		`INSERT INTO sessions(token_hash, user_id, expires_at, absolute_expires_at, impersonated_by, impersonation_id) VALUES (?, ?, ?, ?, ?, ?)`,
+		hashSessionToken(token), user.ID, input.ExpiresAt.UTC().Format(time.RFC3339), input.ExpiresAt.UTC().Format(time.RFC3339), input.AdminID, impersonationID,
 	); err != nil {
 		return "", nil, fmt.Errorf("create impersonation session: %w", err)
 	}
