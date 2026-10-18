@@ -246,6 +246,30 @@ export function buildWorkOrderListFilters(
   return params;
 }
 
+/** How often an open list checks whether the local date rolled over. */
+export const TODAY_CHECK_INTERVAL_MS = 60_000;
+
+/**
+ * The local ISO date, re-read every minute and whenever the tab regains focus
+ * or visibility, so date-relative queries (and their query keys) follow
+ * midnight.
+ */
+export function useLocalToday(): string {
+  const [today, setToday] = useState(() => getLocalIsoDate());
+  useEffect(() => {
+    const refresh = () => setToday(getLocalIsoDate());
+    const timer = window.setInterval(refresh, TODAY_CHECK_INTERVAL_MS);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+  return today;
+}
+
 export interface UseWorkOrdersOptions {
   /**
    * Scope the list (and its "of all" count) to orders awaiting cost entry,
@@ -274,6 +298,9 @@ export function useWorkOrders(
     readStoredDefaultPageSize(),
   );
   const { visibleColumnSet } = useColumnVisibility();
+  // The queue filters (overdue / today / this week) are relative to the local
+  // date, which must roll over at midnight in a tab left open.
+  const today = useLocalToday();
 
   // Mirrors `filters` for callbacks (`updateFilters`, the URL-sync effect
   // below) that need the latest value without depending on `filters` itself
@@ -298,11 +325,11 @@ export function useWorkOrders(
   }, [searchParamsKey]);
 
   const exportFilters = useMemo<WorkOrderListFilters>(() => {
-    const params = buildWorkOrderListFilters(filters, visibleColumnSet);
+    const params = buildWorkOrderListFilters(filters, visibleColumnSet, today);
     if (serverNeedsCostReview) params.needsCostReview = true;
     params.sort = toSortParam(sortField, sortDirection);
     return params;
-  }, [filters, visibleColumnSet, serverNeedsCostReview, sortField, sortDirection]);
+  }, [filters, visibleColumnSet, today, serverNeedsCostReview, sortField, sortDirection]);
 
   const pageParams = useMemo(
     () => ({

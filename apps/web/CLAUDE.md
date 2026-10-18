@@ -31,7 +31,11 @@ vars and must not be committed.
   `window.api` mutations invalidate the affected roots automatically via
   `withQueryInvalidation` — register a new mutating method in its
   `INVALIDATIONS` map. The cache is cleared on login/logout/session expiry
-  (tenant-scoped data). Tests: `src/test/query.tsx`
+  (tenant-scoped data), and those session changes (plus impersonation start)
+  are broadcast to the other tabs (`lib/auth-broadcast.ts`, `iris-auth`
+  BroadcastChannel or a `storage` event), which clear their cache and re-check
+  the session. The work-order detail query always refetches on mount (cached
+  copy shown meanwhile). Tests: `src/test/query.tsx`
   (`renderWithQueryClient`, `renderHookWithQueryClient`).
 - **Work-order list** is filtered, sorted and paged by the API (`GET /work-orders`,
   default 50 / max 200 per page; `GET /work-orders/export.csv` for the export).

@@ -46,6 +46,7 @@ import {
   subscribeSessionExpired,
 } from "@/lib/session";
 import { reportUnexpectedError } from "@/lib/errors";
+import { subscribeAuthChange } from "@/lib/auth-broadcast";
 import {
   clearQueryCache,
   queryClient,
@@ -275,6 +276,16 @@ function AppContent(): React.JSX.Element {
 
   useEffect(() => {
     void checkBackendStatus();
+  }, [checkBackendStatus]);
+
+  // Another tab signed in, signed out or started/ended an impersonation: the
+  // shared cookie now belongs to a different session, so drop this tab's
+  // cache and re-check who is signed in.
+  useEffect(() => {
+    return subscribeAuthChange(() => {
+      clearQueryCache();
+      void checkBackendStatus();
+    });
   }, [checkBackendStatus]);
 
   const handleLogout = useCallback(() => {

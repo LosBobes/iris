@@ -25,7 +25,11 @@ export interface UseWorkOrderResult {
   error: string | null;
 }
 
-/** One work order by id, cached (and invalidated by every work-order mutation). */
+/**
+ * One work order by id, cached (and invalidated by every work-order mutation).
+ * Opening the detail page always refetches: the cached copy renders at once
+ * (unless `fresh`), then the server's current version replaces it.
+ */
 export function useWorkOrder(
   id: string | undefined,
   { context, fresh = false }: UseWorkOrderOptions,
@@ -35,7 +39,8 @@ export function useWorkOrder(
     queryKey: queryKeys.workOrder(id ?? ""),
     queryFn: () => window.api.getWorkOrderById(id ?? ""),
     enabled: Boolean(id),
-    refetchOnMount: fresh ? "always" : true,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   useEffect(() => {

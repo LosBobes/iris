@@ -32,6 +32,29 @@ describe('query cache', () => {
     expect(client.getQueryState(queryKeys.enumValues)?.isInvalidated).toBe(true)
   })
 
+  it('invalidates catalog items (stock) after a process save', async () => {
+    const client = createTestQueryClient()
+    const api = withQueryInvalidation(
+      {
+        updateWorkOrderProcess: vi.fn(async () => ({})),
+        applyProcessTemplate: vi.fn(async () => ({})),
+        deleteWorkOrderProcess: vi.fn(async () => undefined),
+      } as unknown as Window['api'],
+      client,
+    )
+    for (const call of [
+      () => api.updateWorkOrderProcess('1', {} as never),
+      () => api.applyProcessTemplate('1', 't' as never),
+      () => api.deleteWorkOrderProcess('1'),
+    ]) {
+      client.setQueryData(queryKeys.catalogItemList({}), [])
+      client.setQueryData(queryKeys.workOrder('1'), { id: '1' })
+      await call()
+      expect(client.getQueryState(queryKeys.catalogItemList({}))?.isInvalidated).toBe(true)
+      expect(client.getQueryState(queryKeys.workOrder('1'))?.isInvalidated).toBe(true)
+    }
+  })
+
   it('drops all tenant-scoped data on logout', async () => {
     const client = createTestQueryClient()
     const api = withQueryInvalidation(
