@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.3.0 — 2026-10-18
+
+### Minor
+
+- The API can run on PostgreSQL, and irisctl can migrate an existing SQLite database into it.
+
 ## 2.2.0 — 2026-10-18
 
 ### Minor
