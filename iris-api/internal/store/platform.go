@@ -72,6 +72,14 @@ type PlatformStore interface {
 	PlatformCreateProcessTemplate(ctx context.Context, actor AuditActor, slug string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
 	PlatformUpdateProcessTemplate(ctx context.Context, actor AuditActor, slug, id string, input domain.ProcessTemplateInput) (*domain.ProcessTemplate, error)
 	PlatformDeleteProcessTemplate(ctx context.Context, actor AuditActor, slug, id string) error
+
+	// Announcements (announcements.go). Mutations write a
+	// platform_audit_events row; ErrAnnouncementNotFound means an unknown id.
+	PlatformAnnouncements(ctx context.Context, now time.Time) ([]domain.PlatformAnnouncement, error)
+	PlatformCreateAnnouncement(ctx context.Context, actor AuditActor, input domain.PlatformAnnouncementInput, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformUpdateAnnouncement(ctx context.Context, actor AuditActor, id string, input domain.PlatformAnnouncementInput, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformEndAnnouncement(ctx context.Context, actor AuditActor, id string, now time.Time) (*domain.PlatformAnnouncement, error)
+	PlatformDeleteAnnouncement(ctx context.Context, actor AuditActor, id string, now time.Time) error
 }
 
 var _ PlatformStore = (*SQLiteStore)(nil)

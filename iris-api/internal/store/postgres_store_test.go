@@ -46,6 +46,7 @@ func storeScenarios() []storeScenario {
 		{name: "SessionsSlideUnderAbsoluteCap", run: scenarioSessionsSlideUnderAbsoluteCap},
 		{name: "WorkOrderSearchEscapesWildcards", run: scenarioWorkOrderSearchEscapesWildcards},
 		{name: "IDCounterSurvivesNonNumericAndLargeIDs", run: scenarioIDCounterSurvivesNonNumericAndLargeIDs},
+		{name: "AnnouncementsTargetAndWindow", run: scenarioAnnouncementsTargetAndWindow},
 	}
 }
 

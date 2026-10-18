@@ -480,6 +480,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /announcements:
+    get:
+      tags: [Settings]
+      summary: Platform announcements active now for the session's organization
+      description: >-
+        Written by Backoffice superadmins (`/platform/announcements`). Only the
+        ones whose window includes now and that target every organization or
+        this one; maintenance first, then warning, then info. Shown as a banner
+        at the top of the app; info ones can be dismissed per device.
+      operationId: getAnnouncements
+      responses:
+        '200':
+          description: Active announcements (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Announcement'
+        '401':
+          description: No organization session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /settings:
     get:
       tags: [Settings]
@@ -1760,6 +1785,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /public/organizations/{slug}/announcements:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Auth]
+      summary: Platform announcements active now for an organization, for its sign-in page
+      description: |
+        Unauthenticated. Same list as `GET /announcements` for that
+        organization: message, severity and time window only.
+      operationId: getPublicAnnouncements
+      security: []
+      responses:
+        '200':
+          description: Active announcements (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Announcement'
+        '404':
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /platform/auth/login:
     post:
       tags: [Platform]
@@ -2612,6 +2667,209 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: No such organization or template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/announcements:
+    get:
+      tags: [Platform]
+      summary: Every announcement with its status and targets, latest start first (operator only)
+      operationId: getPlatformAnnouncements
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: All announcements (active, scheduled and ended)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformAnnouncement'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Platform]
+      summary: Create an announcement (operator only)
+      description: >-
+        Recorded as `announcement.create` with detail `{announcementId, severity, message, target}`
+        (message cut to 80 characters; target `all` or comma-joined slugs).
+      operationId: createPlatformAnnouncement
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformAnnouncementInput'
+      responses:
+        '201':
+          description: Created announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAnnouncement'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            Empty or too long message, unknown severity, invalid times (end not after start, or already
+            past), no target, or an unknown organization (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/announcements/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags: [Platform]
+      summary: Replace an announcement's message, severity, window and targets (operator only)
+      description: >-
+        Recorded as `announcement.update`. Unlike create, an end time in the past is accepted.
+      operationId: updatePlatformAnnouncement
+      security:
+        - PlatformSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlatformAnnouncementInput'
+      responses:
+        '200':
+          description: Updated announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAnnouncement'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid input (Serbian `error` message)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Platform]
+      summary: Delete an announcement (operator only)
+      description: Recorded as `announcement.delete`.
+      operationId: deletePlatformAnnouncement
+      security:
+        - PlatformSession: []
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /platform/announcements/{id}/end:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Platform]
+      summary: End an announcement now (operator only)
+      description: >-
+        Sets `endsAt` to now (a scheduled one also gets `startsAt` = now). Recorded as
+        `announcement.end`; ending one that has already ended changes nothing and is not recorded.
+      operationId: endPlatformAnnouncement
+      security:
+        - PlatformSession: []
+      responses:
+        '200':
+          description: The ended announcement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformAnnouncement'
+        '401':
+          description: No operator session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: The account must change its password first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No such announcement
           content:
             application/json:
               schema:
@@ -4374,7 +4632,7 @@ components:
           type: string
         action:
           type: string
-          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete]
+          enum: [tenant.create, tenant.update, tenant.suspend, tenant.reactivate, tenant.modules, user.password_reset, impersonate, process_template.create, process_template.update, process_template.delete, announcement.create, announcement.update, announcement.end, announcement.delete]
         tenantSlug:
           type: string
           description: As it was at the time.
@@ -4564,6 +4822,88 @@ components:
         logoVersion:
           type: [string, 'null']
           description: Content hash of the sign-in logo; null when none is set.
+    Announcement:
+      type: object
+      description: A platform announcement as an organization's users see it.
+      required: [id, message, severity, startsAt, endsAt]
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+          maxLength: 500
+          description: Plain text.
+        severity:
+          type: string
+          enum: [info, warning, maintenance]
+          description: Info banners can be dismissed by the user; warning and maintenance ones cannot.
+        startsAt:
+          type: string
+          format: date-time
+          description: UTC, `YYYY-MM-DDTHH:MM:SSZ`.
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+          description: UTC; null means until ended.
+    PlatformAnnouncement:
+      allOf:
+        - $ref: '#/components/schemas/Announcement'
+        - type: object
+          required: [status, allTenants, tenants, createdAt, createdBy, updatedAt]
+          properties:
+            status:
+              type: string
+              enum: [active, scheduled, ended]
+              description: At the time of the request.
+            allTenants:
+              type: boolean
+            tenants:
+              type: array
+              description: Targeted organizations (current slug and name); empty when allTenants.
+              items:
+                type: object
+                required: [slug, name]
+                properties:
+                  slug:
+                    type: string
+                  name:
+                    type: string
+            createdAt:
+              type: string
+              format: date-time
+            createdBy:
+              type: string
+              description: Superadmin username.
+            updatedAt:
+              type: string
+              format: date-time
+    PlatformAnnouncementInput:
+      type: object
+      required: [message, severity]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+        severity:
+          type: string
+          enum: [info, warning, maintenance]
+        startsAt:
+          type: [string, 'null']
+          format: date-time
+          description: RFC 3339; defaults to now.
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+          description: RFC 3339, after startsAt (and, on create, in the future); null keeps it up until ended.
+        allTenants:
+          type: boolean
+          default: false
+        tenantSlugs:
+          type: array
+          items:
+            type: string
+          description: Required (non-empty) unless allTenants; ignored when it is set.
     LoginLogoUpload:
       type: object
       required: [contentType, data]

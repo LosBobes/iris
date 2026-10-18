@@ -4,6 +4,7 @@ import { Check, Eye, EyeOff } from "lucide-react";
 import { rememberOrganizationSlug } from "@/lib/session";
 import type { PublicOrganization } from "@/types/settings";
 import { LoginShell } from "./LoginShell";
+import { LoginAnnouncements } from "./LoginAnnouncements";
 
 interface LoginProps {
   /** The organization chosen (and validated) in step one. */
@@ -117,6 +118,7 @@ export function Login({
 
   return (
     <LoginShell organization={organization}>
+      <LoginAnnouncements orgSlug={orgSlug} />
       {/* Use ref so the shake animation can be re-triggered on subsequent errors. */}
       {sessionExpired ? (
         <div

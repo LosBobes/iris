@@ -10,6 +10,7 @@ import { staggerStyle } from "@/lib/motion";
 import { PlatformChangePassword } from "./PlatformChangePassword";
 import { OrganizationsPanel } from "./OrganizationsPanel";
 import { ActivityLog } from "./ActivityLog";
+import { AnnouncementsPanel } from "./AnnouncementsPanel";
 import type { PlatformMetrics, PlatformRangeDays } from "@/types/platform";
 import { buildRows, buildSeries } from "./series";
 import { formatBytes, formatCount, formatDate, formatDateTime, formatDuration } from "./format";
@@ -109,11 +110,13 @@ export function PlatformDashboard({
   // Sections: the metrics overview at /backoffice, organization management
   // and the activity log below it.
   const pathname = useLocation().pathname;
-  const section: "overview" | "organizations" | "activity" = pathname.startsWith("/backoffice/organizations")
+  const section: "overview" | "organizations" | "announcements" | "activity" = pathname.startsWith("/backoffice/organizations")
     ? "organizations"
-    : pathname.startsWith("/backoffice/activity")
-      ? "activity"
-      : "overview";
+    : pathname.startsWith("/backoffice/announcements")
+      ? "announcements"
+      : pathname.startsWith("/backoffice/activity")
+        ? "activity"
+        : "overview";
   const showLog = section !== "overview";
 
   const load = useCallback(async (): Promise<void> => {
@@ -228,6 +231,7 @@ export function PlatformDashboard({
   const sections = [
     { to: "/backoffice", label: t("platform.nav.overview"), current: section === "overview" },
     { to: "/backoffice/organizations", label: t("platform.nav.organizations"), current: section === "organizations" },
+    { to: "/backoffice/announcements", label: t("platform.nav.announcements"), current: section === "announcements" },
     { to: "/backoffice/activity", label: t("platform.nav.activity"), current: section === "activity" },
   ];
   const navTabs = <SectionTabs tabs={sections} label={t("platform.nav.label")} />;
@@ -290,9 +294,15 @@ export function PlatformDashboard({
         {showLog ? (
           <>
             <h1 className="text-[22px] font-medium tracking-[-0.3px]">
-              {section === "organizations" ? t("platform.nav.organizations") : t("platform.nav.activity")}
+              {t(`platform.nav.${section}`)}
             </h1>
-            {section === "organizations" ? <OrganizationsPanel /> : <ActivityLog />}
+            {section === "organizations" ? (
+              <OrganizationsPanel />
+            ) : section === "announcements" ? (
+              <AnnouncementsPanel />
+            ) : (
+              <ActivityLog />
+            )}
           </>
         ) : (
         <>

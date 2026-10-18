@@ -20,6 +20,10 @@ const KIND_KEYS: Record<PlatformAuditAction, string> = {
   "process_template.create": "platform.activity.kinds.processTemplateCreate",
   "process_template.update": "platform.activity.kinds.processTemplateUpdate",
   "process_template.delete": "platform.activity.kinds.processTemplateDelete",
+  "announcement.create": "platform.activity.kinds.announcementCreate",
+  "announcement.update": "platform.activity.kinds.announcementUpdate",
+  "announcement.end": "platform.activity.kinds.announcementEnd",
+  "announcement.delete": "platform.activity.kinds.announcementDelete",
 };
 
 type Trail =
@@ -40,6 +44,14 @@ function EventDetails({ event, now }: { event: PlatformAuditEvent; now: number }
   }
   if (event.action.startsWith("process_template.") && event.detail?.name) {
     lines.push(t("platform.activity.processTemplate", { name: event.detail.name }));
+  }
+  if (event.action.startsWith("announcement.") && event.detail?.message) {
+    lines.push(t("platform.activity.announcement", { message: event.detail.message }));
+    lines.push(
+      t("platform.activity.announcementTarget", {
+        target: event.detail.target === "all" ? t("platform.activity.announcementAll") : event.detail.target,
+      }),
+    );
   }
   if (event.detail?.toName) {
     lines.push(t("platform.activity.renamed", { from: event.detail.fromName, to: event.detail.toName }));

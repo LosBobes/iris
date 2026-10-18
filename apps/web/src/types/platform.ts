@@ -71,6 +71,10 @@ export type PlatformAuditAction =
   | 'process_template.create'
   | 'process_template.update'
   | 'process_template.delete'
+  | 'announcement.create'
+  | 'announcement.update'
+  | 'announcement.end'
+  | 'announcement.delete'
 
 /** One superadmin action in the Backoffice activity log (GET /platform/audit). */
 export interface PlatformAuditEvent {

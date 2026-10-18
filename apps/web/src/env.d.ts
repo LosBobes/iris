@@ -154,6 +154,20 @@ declare global {
       setPlatformTenantModules: (slug: string, modules: OrganizationModules) => Promise<PlatformTenant>
       resetPlatformUserPassword: (slug: string, userId: string, password: string) => Promise<AuthenticatedUser>
       getPlatformImpersonationActions: (id: number) => Promise<PlatformImpersonationAction[]>
+      /** Platform announcements: the session organization's active ones, and the sign-in page's. */
+      getAnnouncements: () => Promise<import('@/types/announcement').Announcement[]>
+      getPublicAnnouncements: (slug: string) => Promise<import('@/types/announcement').Announcement[]>
+      /** Backoffice announcement management (every change is audited). */
+      getPlatformAnnouncements: () => Promise<import('@/types/announcement').PlatformAnnouncement[]>
+      createPlatformAnnouncement: (
+        input: import('@/types/announcement').PlatformAnnouncementInput,
+      ) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      updatePlatformAnnouncement: (
+        id: string,
+        input: import('@/types/announcement').PlatformAnnouncementInput,
+      ) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      endPlatformAnnouncement: (id: string) => Promise<import('@/types/announcement').PlatformAnnouncement>
+      deletePlatformAnnouncement: (id: string) => Promise<void>
       listUsers: () => Promise<ManagedUser[]>
       createUser: (input: CreateUserInput) => Promise<ManagedUser>
       updateUser: (id: string, input: UpdateUserInput) => Promise<ManagedUser>

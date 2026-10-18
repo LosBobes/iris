@@ -403,6 +403,7 @@ var sqliteMigrations = []struct {
 	{version: 23, sql: perfIndexesAndSequenceMigration},
 	{version: 24, fn: workOrderListColumnsMigration},
 	{version: 25, fn: sessionTokenHashMigration},
+	{version: 29, sql: platformAnnouncementsMigration},
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

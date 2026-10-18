@@ -211,4 +211,15 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
+## D-0xx (tbd): Platform announcements are platform-level rows targeted by tenant id
+- **Status**: `accepted`
+- **Context**: Superadmins need to tell organizations about maintenance windows and changes (a banner in the app), either everyone or a chosen few, without impersonating anyone or touching tenant data.
+- **Decision**: Announcements live in `platform_announcements` (migration v29) with no `tenant_id`: message (plain text, ≤ 500 characters), severity (`info` / `warning` / `maintenance`), `starts_at`, optional `ends_at` (UTC `YYYY-MM-DDTHH:MM:SSZ`, compared as text on both engines) and `all_tenants`. A chosen set of organizations is stored in `platform_announcement_tenants` by tenant **id** (FK `ON DELETE CASCADE`), so renaming a slug keeps the target and deleting an organization drops it. Status (active / scheduled / ended) is computed when read, never stored. Superadmins manage them under `/platform/announcements` (create, edit, end now, delete), each change audited in `platform_audit_events` in the same transaction. Organizations read only what is active now for them: `GET /announcements` (session tenant) and, for the sign-in page, `GET /public/organizations/{slug}/announcements` — message, severity and window only. The web app polls lightly (TanStack Query: on focus and every 5 min while visible) and shows them as strips under the impersonation banner; info ones can be dismissed per device (localStorage, ids only), warning and maintenance ones cannot.
+- **Consequences**:
+  - The public endpoint reveals active announcement text to anyone who knows an organization slug; announcements must not contain anything confidential.
+  - A banner can lag its end time by at most one poll interval server-side; the client also hides strips whose `endsAt` has passed.
+  - A dismissed info announcement reappears on another device or after clearing site data.
+
+---
+
 *Last verified against the checked-in repository state on 2026-10-17.*
