@@ -15,7 +15,7 @@ func parseCivil(date string) (time.Time, error) {
 
 const driftGrace = 15 * time.Minute
 
-func drift(plan domain.ProductionPlan, orders []Order, now time.Time) domain.PlanDrift {
+func drift(plan domain.ProductionPlan, orders []Order, downtimes []domain.MachineDowntime, now time.Time) domain.PlanDrift {
 	type key struct{ order, step string }
 	statuses := map[key]domain.ProcessStepStatus{}
 	labels := map[key]string{}
@@ -62,6 +62,21 @@ func drift(plan domain.ProductionPlan, orders []Order, now time.Time) domain.Pla
 		}
 	}
 	loc := now.Location()
+	// Downtime windows by machine, in the plan's local time (D-028).
+	type window struct{ start, end time.Time }
+	down := map[string][]window{}
+	for _, d := range downtimes {
+		start, err1 := time.ParseInLocation(layoutDateTime, d.From, loc)
+		end, err2 := time.ParseInLocation(layoutDateTime, d.To, loc)
+		if err1 != nil || err2 != nil || !end.After(start) {
+			continue
+		}
+		down[d.MachineID] = append(down[d.MachineID], window{start, end})
+	}
+	for id := range down {
+		list := down[id]
+		sort.Slice(list, func(i, j int) bool { return list[i].start.Before(list[j].start) })
+	}
 	covered := map[key]bool{}
 	for _, a := range blocks {
 		k := key{a.WorkOrderID, a.StepNodeID}
@@ -84,6 +99,16 @@ func drift(plan domain.ProductionPlan, orders []Order, now time.Time) domain.Pla
 			add(fmt.Sprintf("Nalog %s, korak „%s“: trebalo je da počne u %s, a još nije započet.", number, label, start.Format("15:04")))
 		case status != domain.ProcessStepDone && status != domain.ProcessStepSkipped && end.Before(now):
 			add(fmt.Sprintf("Nalog %s, korak „%s“: trebalo je da se završi u %s, a nije završen.", number, label, end.Format("15:04")))
+		}
+		if a.MachineID == nil || status == domain.ProcessStepDone || status == domain.ProcessStepSkipped {
+			continue
+		}
+		for _, w := range down[*a.MachineID] {
+			if w.start.Before(end) && start.Before(w.end) {
+				add(fmt.Sprintf("Nalog %s, korak „%s“: mašina „%s“ je van pogona %s – %s, a korak je planiran na njoj.",
+					number, label, a.MachineName, w.start.Format("02.01.2006 15:04"), w.end.Format("02.01.2006 15:04")))
+				break
+			}
 		}
 	}
 	for _, k := range progress {

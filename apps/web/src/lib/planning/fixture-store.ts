@@ -18,9 +18,12 @@ import type { OrganizationModules } from '@/types/settings'
 import {
   MAX_MACHINE_NAME_LENGTH,
   MAX_MACHINE_NOTE_LENGTH,
+  MAX_TRANSFER_MINUTES,
+  MAX_WORKING_HOURS_EXCEPTIONS,
   PLANNING_FORECAST_DAYS,
   type AttendanceEntry,
   type Machine,
+  type MachineDowntime,
   type MachineType,
   type MyQueue,
   type OrderForecast,
@@ -61,6 +64,12 @@ const MESSAGES = {
   tooManyAssignments: 'Plan može imati najviše 2000 blokova.',
   noDraft: 'Nacrt plana za taj datum ne postoji.',
   badHours: 'Radno vreme nije ispravno.',
+  badTransfer: `Međuoperacijsko vreme mora biti između 0 i ${MAX_TRANSFER_MINUTES} minuta.`,
+  tooManyExceptions: `Izuzetaka može biti najviše ${MAX_WORKING_HOURS_EXCEPTIONS}.`,
+  downtimeTime: 'Početak i kraj zastoja moraju biti u obliku GGGG-MM-DDTHH:MM.',
+  downtimeOrder: 'Početak zastoja mora biti pre njegovog kraja.',
+  downtimeNoteTooLong: 'Napomena zastoja je predugačka (najviše 500 znakova).',
+  downtimeMissing: 'Zastoj mašine nije pronađen.',
 }
 
 const CLOSED_STATUSES = new Set(['completed', 'cancelled', 'invoiced'])
@@ -106,6 +115,9 @@ type PlanningApi = Pick<
   | 'createMachine'
   | 'updateMachine'
   | 'deleteMachine'
+  | 'listMachineDowntimes'
+  | 'createMachineDowntime'
+  | 'deleteMachineDowntime'
   | 'listQualifications'
   | 'setQualifications'
   | 'listAttendance'
@@ -134,6 +146,8 @@ export const DEFAULT_WORKING_HOURS: WorkingHours = {
     end: '15:00',
     breaks: [{ start: '11:00', end: '11:30' }],
   })),
+  transferMinutes: 0,
+  exceptions: [],
 }
 
 /** Seed machine types; ids match the planning fields of the seeded process template. */
@@ -157,6 +171,10 @@ function validDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
 }
 
+function validLocal(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(value) && validDate(value.slice(0, 10))
+}
+
 function validClock(value: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 }
@@ -167,23 +185,39 @@ function hoursProblem(hours: WorkingHours): string | null {
   } catch {
     return MESSAGES.badHours
   }
+  if (!Number.isInteger(hours.transferMinutes) || hours.transferMinutes < 0 || hours.transferMinutes > MAX_TRANSFER_MINUTES) {
+    return MESSAGES.badTransfer
+  }
+  const shiftProblem = (start: string, end: string, shiftBreaks: { start: string; end: string }[]): string | null => {
+    if (!validClock(start) || !validClock(end) || parseClock(start) >= parseClock(end)) return MESSAGES.badHours
+    let previousEnd = parseClock(start)
+    const breaks = [...shiftBreaks].sort((a, b) => a.start.localeCompare(b.start))
+    for (const gap of breaks) {
+      if (!validClock(gap.start) || !validClock(gap.end)) return MESSAGES.badHours
+      if (parseClock(gap.start) < previousEnd || parseClock(gap.start) >= parseClock(gap.end)) return MESSAGES.badHours
+      if (parseClock(gap.end) > parseClock(end)) return MESSAGES.badHours
+      previousEnd = parseClock(gap.end)
+    }
+    return null
+  }
   const seen = new Set<number>()
   for (const day of hours.days) {
     if (!Number.isInteger(day.weekday) || day.weekday < 1 || day.weekday > 7 || seen.has(day.weekday)) {
       return MESSAGES.badHours
     }
     seen.add(day.weekday)
-    if (!validClock(day.start) || !validClock(day.end) || parseClock(day.start) >= parseClock(day.end)) {
-      return MESSAGES.badHours
-    }
-    let previousEnd = parseClock(day.start)
-    const breaks = [...day.breaks].sort((a, b) => a.start.localeCompare(b.start))
-    for (const gap of breaks) {
-      if (!validClock(gap.start) || !validClock(gap.end)) return MESSAGES.badHours
-      if (parseClock(gap.start) < previousEnd || parseClock(gap.start) >= parseClock(gap.end)) return MESSAGES.badHours
-      if (parseClock(gap.end) > parseClock(day.end)) return MESSAGES.badHours
-      previousEnd = parseClock(gap.end)
-    }
+    const problem = shiftProblem(day.start, day.end, day.breaks)
+    if (problem) return problem
+  }
+  const exceptions = hours.exceptions ?? []
+  if (exceptions.length > MAX_WORKING_HOURS_EXCEPTIONS) return MESSAGES.tooManyExceptions
+  const dates = new Set<string>()
+  for (const exception of exceptions) {
+    if (!validDate(exception.date) || dates.has(exception.date)) return MESSAGES.badHours
+    dates.add(exception.date)
+    if (exception.off) continue
+    const problem = shiftProblem(exception.start ?? '', exception.end ?? '', exception.breaks ?? [])
+    if (problem) return problem
   }
   return null
 }
@@ -204,6 +238,9 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
     updatedAt: seededAt,
   }))
   let hours: WorkingHours = clone(DEFAULT_WORKING_HOURS)
+  // machineId -> downtime windows (D-028).
+  const downtimes = new Map<string, MachineDowntime[]>()
+  const allDowntimes = (): MachineDowntime[] => [...downtimes.values()].flat()
   // userId -> machine type ids; users without an entry have none.
   const qualifications = new Map<string, string[]>()
   // `${date}|${userId}` -> override
@@ -302,6 +339,7 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
     date: planDate,
     machineTypes: types,
     machines,
+    downtimes: allDowntimes(),
     workers: workers(planDate),
     orders: sourceOrders(),
   })
@@ -508,6 +546,39 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         requireAdmin()
         if (!machines.some((machine) => machine.id === id)) throw fixtureError(404, MESSAGES.machineMissing)
         machines = machines.filter((machine) => machine.id !== id)
+        downtimes.delete(id)
+      },
+      async listMachineDowntimes(machineId) {
+        requireUser()
+        if (!machines.some((machine) => machine.id === machineId)) throw fixtureError(404, MESSAGES.machineMissing)
+        return clone([...(downtimes.get(machineId) ?? [])].sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to)))
+      },
+      async createMachineDowntime(machineId, input) {
+        requireAdmin()
+        const from = input.from.trim()
+        const to = input.to.trim()
+        if (!validLocal(from) || !validLocal(to)) throw fixtureError(422, MESSAGES.downtimeTime)
+        if (from >= to) throw fixtureError(422, MESSAGES.downtimeOrder)
+        const note = (input.note ?? '').trim()
+        if ([...note].length > MAX_MACHINE_NOTE_LENGTH) throw fixtureError(422, MESSAGES.downtimeNoteTooLong)
+        if (!machines.some((machine) => machine.id === machineId)) throw fixtureError(404, MESSAGES.machineMissing)
+        const created: MachineDowntime = {
+          id: `down-${sequence++}`,
+          machineId,
+          from,
+          to,
+          ...(note ? { note } : {}),
+          createdAt: stamp(),
+        }
+        downtimes.set(machineId, [...(downtimes.get(machineId) ?? []), created])
+        return clone(created)
+      },
+      async deleteMachineDowntime(machineId, downtimeId) {
+        requireAdmin()
+        if (!machines.some((machine) => machine.id === machineId)) throw fixtureError(404, MESSAGES.machineMissing)
+        const list = downtimes.get(machineId) ?? []
+        if (!list.some((downtime) => downtime.id === downtimeId)) throw fixtureError(404, MESSAGES.downtimeMissing)
+        downtimes.set(machineId, list.filter((downtime) => downtime.id !== downtimeId))
       },
       async listQualifications() {
         requireUser()
@@ -556,6 +627,14 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         hours = clone({
           timeZone: input.timeZone,
           days: [...input.days].sort((a, b) => a.weekday - b.weekday),
+          transferMinutes: input.transferMinutes,
+          exceptions: [...(input.exceptions ?? [])]
+            .map((exception) =>
+              exception.off
+                ? { date: exception.date, off: true, breaks: [] }
+                : { date: exception.date, off: false, start: exception.start, end: exception.end, breaks: exception.breaks ?? [] },
+            )
+            .sort((a, b) => a.date.localeCompare(b.date)),
         })
         return clone(hours)
       },
@@ -566,7 +645,7 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         const publishedView = publishedPlan ? planView(publishedPlan, date) : null
         let drift: PlanDay['drift'] = null
         if (publishedView && date === today()) {
-          drift = computeDrift(publishedView, sourceOrders(), localMoment(nowDate(), hours.timeZone))
+          drift = computeDrift(publishedView, sourceOrders(), localMoment(nowDate(), hours.timeZone), allDowntimes())
         }
         const draft = drafts.get(date)
         return clone({

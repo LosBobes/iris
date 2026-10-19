@@ -249,12 +249,13 @@ func insertPlan(ctx context.Context, q dbExecQuerier, tenantID string, plan doma
 
 // planningData is the static input of a planner run.
 type planningData struct {
-	hours    domain.WorkingHours
-	location *time.Location
-	types    []domain.MachineType
-	machines []domain.Machine
-	users    []planningUser
-	quals    map[string][]string
+	hours     domain.WorkingHours
+	location  *time.Location
+	types     []domain.MachineType
+	machines  []domain.Machine
+	downtimes []domain.MachineDowntime
+	users     []planningUser
+	quals     map[string][]string
 }
 
 func loadPlanningData(ctx context.Context, q dbExecQuerier, tenantID string) (planningData, error) {
@@ -268,6 +269,9 @@ func loadPlanningData(ctx context.Context, q dbExecQuerier, tenantID string) (pl
 		return data, err
 	}
 	if data.machines, err = listMachines(ctx, q, tenantID); err != nil {
+		return data, err
+	}
+	if data.downtimes, err = listMachineDowntimes(ctx, q, tenantID, ""); err != nil {
 		return data, err
 	}
 	if data.users, err = listPlanningUsers(ctx, q, tenantID); err != nil {
@@ -381,19 +385,13 @@ func isoWeekday(date time.Time) int {
 	return 7
 }
 
-// workingDay finds the shift of a local date; ok is false on a day off.
+// workingDay finds the shift of a local date (an exception date first, then
+// the weekday pattern); ok is false on a day off.
 func workingDay(hours domain.WorkingHours, date string) (domain.WorkingDay, bool) {
-	parsed, err := time.Parse(planningDateLayout, date)
-	if err != nil {
+	if _, err := time.Parse(planningDateLayout, date); err != nil {
 		return domain.WorkingDay{}, false
 	}
-	weekday := isoWeekday(parsed)
-	for _, day := range hours.Days {
-		if day.Weekday == weekday {
-			return day, true
-		}
-	}
-	return domain.WorkingDay{}, false
+	return hours.ShiftOn(date)
 }
 
 // clockOn is the local time "HH:MM" on a local date.
@@ -423,7 +421,7 @@ func planStart(hours domain.WorkingHours, location *time.Location, date string, 
 func (d planningData) input(date string, start time.Time, workers []planner.Worker, orders []planner.Order) planner.Input {
 	return planner.Input{
 		Hours: d.hours, Date: date, Start: start, HorizonDays: domain.PlanningForecastDays,
-		MachineTypes: d.types, Machines: d.machines, Workers: workers, Orders: orders,
+		MachineTypes: d.types, Machines: d.machines, Downtimes: d.downtimes, Workers: workers, Orders: orders,
 	}
 }
 
@@ -473,7 +471,11 @@ func (s *SQLiteStore) PlanDay(ctx context.Context, date string, includeDraft boo
 		if err != nil {
 			return day, err
 		}
-		drift := planner.Drift(*day.Published, orders, now.In(location))
+		downtimes, err := listMachineDowntimes(ctx, s.db, tenantID, "")
+		if err != nil {
+			return day, err
+		}
+		drift := planner.Drift(*day.Published, orders, downtimes, now.In(location))
 		if drift.Reasons == nil {
 			drift.Reasons = []string{}
 		}

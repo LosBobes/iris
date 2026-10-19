@@ -75,6 +75,8 @@ import type {
   AttendanceEntry,
   AttendanceInput,
   Machine,
+  MachineDowntime,
+  MachineDowntimeInput,
   MachineInput,
   MachineType,
   MachineTypeInput,
@@ -139,6 +141,9 @@ function normalizeWorkingHours(hours: WorkingHours): WorkingHours {
   return {
     ...hours,
     days: readArray(hours?.days).map((day) => ({ ...day, breaks: readArray(day.breaks) })),
+    // Settings saved before D-028 have no inter-operation time or exceptions.
+    transferMinutes: typeof hours?.transferMinutes === 'number' && Number.isFinite(hours.transferMinutes) ? hours.transferMinutes : 0,
+    exceptions: readArray(hours?.exceptions).map((exception) => ({ ...exception, breaks: readArray(exception.breaks) })),
   }
 }
 
@@ -1302,6 +1307,30 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async deleteMachine(id: string) {
       const response = await fetchImpl(
         url(`/machines/${encodeURIComponent(id)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
+    async listMachineDowntimes(machineId: string) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(machineId)}/downtimes`),
+        credentialedRequest(),
+      )
+      return readArray(await readJSON<MachineDowntime[]>(response))
+    },
+
+    async createMachineDowntime(machineId: string, input: MachineDowntimeInput) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(machineId)}/downtimes`),
+        jsonRequest('POST', input),
+      )
+      return readJSON<MachineDowntime>(response)
+    },
+
+    async deleteMachineDowntime(machineId: string, downtimeId: string) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(machineId)}/downtimes/${encodeURIComponent(downtimeId)}`),
         credentialedRequest({ method: 'DELETE' }),
       )
       await readNoContent(response)

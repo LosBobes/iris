@@ -322,6 +322,7 @@ func TestWorkingHoursDefaultAndValidation(t *testing.T) {
 		"repeat": {TimeZone: "UTC", Days: []domain.WorkingDay{
 			{Weekday: 1, Start: "08:00", End: "16:00"}, {Weekday: 1, Start: "08:00", End: "16:00"},
 		}},
+		"lag": {TimeZone: "UTC", Days: custom.Days, TransferMinutes: domain.MaxTransferMinutes + 1},
 	} {
 		_, err := s.SetWorkingHours(ctx, bad)
 		var validation *ValidationError
@@ -331,6 +332,13 @@ func TestWorkingHoursDefaultAndValidation(t *testing.T) {
 	}
 	if got, _ := s.WorkingHours(ctx); got.TimeZone != "UTC" {
 		t.Fatalf("a rejected save changed the hours: %+v", got)
+	}
+	custom.TransferMinutes = 25
+	if saved, err := s.SetWorkingHours(ctx, custom); err != nil || saved.TransferMinutes != 25 {
+		t.Fatalf("saved lag = %+v, %v", saved, err)
+	}
+	if got, _ := s.WorkingHours(ctx); got.TransferMinutes != 25 {
+		t.Fatalf("read back lag = %+v", got)
 	}
 }
 
@@ -404,7 +412,7 @@ func TestPlanningTablesInTenantExport(t *testing.T) {
 	if _, err := s.SetAttendance(ctx, "u-ana", domain.AttendanceInput{Date: "2026-10-19", Present: &present}); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"machine_types", "machines", "worker_qualifications", "attendance_overrides", "production_plans"} {
+	for _, table := range []string{"machine_types", "machines", "machine_downtimes", "worker_qualifications", "attendance_overrides", "production_plans"} {
 		found := false
 		for _, listed := range tenantDataTables {
 			found = found || listed.name == table
@@ -965,7 +973,7 @@ func TestPlanningMigration(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT group_concat(version) FROM schema_migrations WHERE version >= 27`).Scan(&versions); err != nil {
 		t.Fatal(err)
 	}
-	if versions != "27,29,30,31,32" {
+	if versions != "27,29,30,31,32,33" {
 		t.Fatalf("versions = %s", versions)
 	}
 	mustExec := func(query string, args ...any) {

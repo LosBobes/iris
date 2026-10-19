@@ -92,6 +92,9 @@ type stepRun struct {
 	desc       []*stepRun
 	succ       []*stepRun
 	end        int64
+	// lagEnd is end plus the inter-operation time in working minutes: the
+	// earliest a successor may start. Equal to end when the lag is 0.
+	lagEnd int64
 }
 
 type orderRun struct {
@@ -117,6 +120,7 @@ type planner struct {
 	segs       []seg
 	types      map[string]domain.MachineType
 	machines   map[string]*resource
+	downtimes  map[string][]downtimeWindow
 	byType     map[string][]*resource
 	workers    []*worker
 	workerByID map[string]*worker
@@ -190,6 +194,17 @@ func (p *planner) setupResources() {
 		p.machines[m.ID] = r
 		if _, known := p.types[m.MachineTypeID]; known && m.InService {
 			p.byType[m.MachineTypeID] = append(p.byType[m.MachineTypeID], r)
+		}
+	}
+	// Downtime windows are busy time on the unit (D-028); they add no load.
+	p.downtimes = p.cal.downtimeWindows(p.in.Downtimes)
+	for id, windows := range p.downtimes {
+		r := p.machines[id]
+		if r == nil {
+			continue
+		}
+		for _, w := range windows {
+			r.reserve(w.s, w.e)
 		}
 	}
 	workers := append([]Worker(nil), p.in.Workers...)
@@ -339,6 +354,16 @@ func (p *planner) applyPinned() error {
 				m = &resource{id: *a.MachineID, name: a.MachineName}
 				p.machines[*a.MachineID] = m
 			}
+			// The block stays where it is, but a downtime of its machine makes
+			// it a machine_down issue the admin has to resolve (D-028).
+			if w, hit := overlapping(p.downtimes[*a.MachineID], s, e); hit {
+				p.issues = append(p.issues, domain.PlanIssue{
+					Code: domain.PlanIssueMachineDown, WorkOrderID: a.WorkOrderID, OrderNumber: a.OrderNumber,
+					StepNodeID: a.StepNodeID, StepLabel: a.StepLabel,
+					Message: fmt.Sprintf("Nalog %s, korak „%s“: mašina „%s“ je van pogona %s – %s, a zaključani blok je planiran u tom periodu.",
+						a.OrderNumber, a.StepLabel, m.name, p.cal.formatHuman(w.s), p.cal.formatHuman(w.e)),
+				})
+			}
 			m.reserve(s, e)
 			m.load += a.Minutes
 		}
@@ -369,14 +394,29 @@ func (p *planner) applyPinned() error {
 			if st := o.byID[a.StepNodeID]; st != nil && st.state == stOpen {
 				st.state = stScheduled
 				if e > st.end {
-					st.end = e
+					st.end, st.lagEnd = e, p.afterLag(e)
 				}
 			} else if st != nil && st.state == stScheduled && e > st.end {
-				st.end = e
+				st.end, st.lagEnd = e, p.afterLag(e)
 			}
 		}
 	}
 	return nil
+}
+
+// afterLag is the earliest a successor may start after a step ending at end:
+// end plus Hours.TransferMinutes of working time (D-028). A lag that never
+// elapses within the calendar pushes the successor past the horizon.
+func (p *planner) afterLag(end int64) int64 {
+	lag := p.in.Hours.TransferMinutes
+	if lag <= 0 {
+		return end
+	}
+	at, ok := p.cal.addWorking(end, lag)
+	if !ok {
+		return farAvail
+	}
+	return at
 }
 
 func (p *planner) message(o *orderRun, s *stepRun, text string) string {
@@ -520,14 +560,17 @@ func (p *planner) placeInProgress() {
 	}
 }
 
+// ready is the earliest start of a pending step: the planning start, or the
+// latest scheduled ancestor's end plus the inter-operation time. ok is false
+// while an ancestor is still unscheduled.
 func (p *planner) ready(s *stepRun) (int64, bool) {
 	at := p.startMin
 	for _, a := range s.ancestors {
 		switch a.state {
 		case stFinished:
 		case stScheduled:
-			if a.end > at {
-				at = a.end
+			if a.lagEnd > at {
+				at = a.lagEnd
 			}
 		default:
 			return 0, false
@@ -766,6 +809,7 @@ func (p *planner) commit(o *orderRun, s *stepRun, parts []part, machine *resourc
 	}
 	s.state = stScheduled
 	s.end = parts[len(parts)-1].end
+	s.lagEnd = p.afterLag(s.end)
 	if !o.hasBlock || s.end > o.lastEnd {
 		o.lastEnd, o.hasBlock = s.end, true
 	}

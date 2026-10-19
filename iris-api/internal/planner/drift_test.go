@@ -58,7 +58,7 @@ func TestDrift(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := Drift(c.plan, []Order{driftOrder(c.status)}, now)
+			got := Drift(c.plan, []Order{driftOrder(c.status)}, nil, now)
 			if got.Reasons == nil {
 				t.Fatal("Reasons must never be nil")
 			}
@@ -78,7 +78,7 @@ func TestDrift(t *testing.T) {
 }
 
 func TestDriftOnTrackMarshalsEmptyArray(t *testing.T) {
-	got := Drift(driftPlan(), nil, at("2026-10-19T09:30"))
+	got := Drift(driftPlan(), nil, nil, at("2026-10-19T09:30"))
 	raw, err := json.Marshal(got)
 	if err != nil {
 		t.Fatal(err)
@@ -97,8 +97,8 @@ func TestDriftDeterministicOrder(t *testing.T) {
 		domain.PlanAssignment{ID: "b2", WorkOrderID: "o2", StepNodeID: "s1", Start: "2026-10-19T07:00", End: "2026-10-19T08:00"},
 	)
 	now := at("2026-10-19T09:30")
-	first := Drift(plan, []Order{a, b}, now)
-	second := Drift(plan, []Order{b, a}, now)
+	first := Drift(plan, []Order{a, b}, nil, now)
+	second := Drift(plan, []Order{b, a}, nil, now)
 	if len(first.Reasons) != len(second.Reasons) || len(first.Reasons) < 3 {
 		t.Fatalf("%q vs %q", first.Reasons, second.Reasons)
 	}

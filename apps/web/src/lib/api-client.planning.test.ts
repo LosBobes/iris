@@ -37,6 +37,14 @@ describe('planning HTTP client: resources', () => {
     expect(call(fetchMock, 3)).toMatchObject({ url: 'http://api.test/machines', method: 'POST', body: machine })
     expect(call(fetchMock, 4)).toMatchObject({ url: 'http://api.test/machines/m1', method: 'PUT' })
     expect(call(fetchMock, 5)).toMatchObject({ url: 'http://api.test/machines/m1', method: 'DELETE' })
+
+    const downtime = { from: '2026-10-21T08:00', to: '2026-10-22T15:00', note: 'Servis' }
+    await api.listMachineDowntimes('m 1')
+    await api.createMachineDowntime('m1', downtime)
+    await api.deleteMachineDowntime('m1', 'd 1')
+    expect(call(fetchMock, 6)).toMatchObject({ url: 'http://api.test/machines/m%201/downtimes', method: 'GET' })
+    expect(call(fetchMock, 7)).toMatchObject({ url: 'http://api.test/machines/m1/downtimes', method: 'POST', body: downtime })
+    expect(call(fetchMock, 8)).toMatchObject({ url: 'http://api.test/machines/m1/downtimes/d%201', method: 'DELETE' })
   })
 
   it('tolerates null lists', async () => {
@@ -68,9 +76,12 @@ describe('planning HTTP client: resources', () => {
       method: 'PUT',
       body: { date: '2026-10-19', present: null },
     })
-    const hours = { timeZone: 'Europe/Belgrade', days: [{ weekday: 1, start: '07:00', end: '15:00', breaks: [] }] }
-    await api.setWorkingHours(hours)
+    const hours = { timeZone: 'Europe/Belgrade', days: [{ weekday: 1, start: '07:00', end: '15:00', breaks: [] }], transferMinutes: 15 }
+    const saved = await api.setWorkingHours(hours)
     expect(call(fetchMock, 3)).toMatchObject({ url: 'http://api.test/planning/working-hours', method: 'PUT', body: hours })
+    // A server from before D-028 sends no inter-operation time or exceptions.
+    expect(saved.transferMinutes).toBe(0)
+    expect(saved.exceptions).toEqual([])
   })
 })
 

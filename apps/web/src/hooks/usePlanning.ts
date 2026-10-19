@@ -22,6 +22,16 @@ export function useMachines() {
   })
 }
 
+/** Downtime windows of one machine (D-028); fetched only while `enabled`. */
+export function useMachineDowntimes(machineId: string, enabled = true) {
+  return useQuery({
+    queryKey: planningKeys.machineDowntimes(machineId),
+    queryFn: () => window.api.listMachineDowntimes(machineId),
+    staleTime: REFERENCE_STALE_TIME_MS,
+    enabled,
+  })
+}
+
 export function useQualifications() {
   return useQuery({
     queryKey: planningKeys.qualifications,

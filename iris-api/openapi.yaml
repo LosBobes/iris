@@ -3747,6 +3747,136 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /machines/{id}/downtimes:
+    get:
+      tags: [Planning]
+      summary: Downtime windows of a machine unit
+      operationId: listMachineDowntimes
+      description: >-
+        Dated windows (D-028) in which the unit is not available: planned maintenance or a breakdown with a known
+        end. The planner treats them as busy time; a locked block overlapping one is reported as `machine_down`
+        and a hand-edited draft block as a `conflict`. Sorted by start.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Downtimes sorted by start
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MachineDowntime'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+        '404':
+          description: Unknown machine (`Mašina nije pronađena.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Planning]
+      summary: Add a downtime window to a machine unit (admin only)
+      operationId: createMachineDowntime
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineDowntimeInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineDowntime'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            Malformed times (`Početak i kraj zastoja moraju biti u obliku GGGG-MM-DDTHH:MM.`), `from` not before `to`
+            (`Početak zastoja mora biti pre njegovog kraja.`) or a note over 500 characters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /machines/{id}/downtimes/{downtimeId}:
+    delete:
+      tags: [Planning]
+      summary: Remove a downtime window (admin only)
+      operationId: deleteMachineDowntime
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: downtimeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine (`Mašina nije pronađena.`) or downtime (`Zastoj mašine nije pronađen.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /attendance:
     get:
       tags: [Attendance]
@@ -3946,7 +4076,8 @@ paths:
       summary: Replace the working hours (admin only)
       operationId: setWorkingHours
       description: >-
-        Stored in `app_settings` (`working_hours`); no migration.
+        Stored in `app_settings` (`working_hours`); no migration. A missing `transferMinutes` is 0; a value
+        outside 0-480 is a 422 (`Međuoperacijsko vreme mora biti između 0 i 480 minuta.`).
       requestBody:
         required: true
         content:
@@ -4510,6 +4641,26 @@ components:
         name: {type: string, minLength: 1, maxLength: 120}
         inService: {type: boolean}
         note: {type: string, maxLength: 500}
+    MachineDowntime:
+      type: object
+      required: [id, machineId, from, to, createdAt]
+      description: >-
+        A window in which the machine unit is not available (D-028). `from`/`to` are local "YYYY-MM-DDTHH:MM" in the
+        working-hours time zone, `from` < `to`; the window may span several days.
+      properties:
+        id: {type: string}
+        machineId: {type: string}
+        from: {type: string, example: '2026-10-21T08:00'}
+        to: {type: string, example: '2026-10-22T15:00'}
+        note: {type: string, maxLength: 500}
+        createdAt: {type: string, format: date-time}
+    MachineDowntimeInput:
+      type: object
+      required: [from, to]
+      properties:
+        from: {type: string, description: 'Local "YYYY-MM-DDTHH:MM".'}
+        to: {type: string, description: 'Local "YYYY-MM-DDTHH:MM", after `from`.'}
+        note: {type: string, maxLength: 500}
     WorkerQualifications:
       type: object
       required: [userId, username, machineTypeIds]
@@ -4565,16 +4716,53 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkingBreak'
+    WorkingHoursException:
+      type: object
+      required: [date, off]
+      description: >-
+        Overrides the weekly pattern on one civil date (D-028): with `off` true the date is a day off whatever its
+        weekday (a holiday); otherwise `start`, `end` and `breaks` are that date's one-off shift, under the same
+        rules as a WorkingDay. The calendar consults exceptions before the weekday pattern. Responses carry
+        `breaks` always (empty for a day off) and omit `start`/`end` for a day off.
+      properties:
+        date: {type: string, format: date}
+        off: {type: boolean}
+        start: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        end: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        breaks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkingBreak'
     WorkingHours:
       type: object
       required: [timeZone, days]
-      description: Organization-wide shifts; weekdays not listed are days off. No shift crosses midnight.
+      description: >-
+        Organization-wide shifts; weekdays not listed are days off. No shift crosses midnight. `exceptions` (at most
+        400, unique dates) override single dates.
       properties:
         timeZone: {type: string, description: 'IANA time zone, e.g. Europe/Belgrade.'}
         days:
           type: array
           items:
             $ref: '#/components/schemas/WorkingDay'
+        exceptions:
+          type: array
+          maxItems: 400
+          description: Exception dates, sorted by date in responses; missing in a request means none (D-028).
+          items:
+            $ref: '#/components/schemas/WorkingHoursException'
+        transferMinutes:
+          type: integer
+          minimum: 0
+          maximum: 480
+          default: 0
+          description: >-
+            Inter-operation time ("međuoperacijsko vreme", D-028): the organization-wide average waiting and
+            transfer time between two consecutive steps, in minutes. The planner starts a step no earlier than this
+            much working time after every upstream step ends (the lag pauses for breaks and the end of the shift and
+            may cross into the next working day); a hand-edited draft block that starts sooner is reported as a
+            `conflict`. 0 (the default, and the value for settings saved before D-028) chains steps back to back.
+            Always present in responses.
     PlanAssignment:
       type: object
       required: [id, workOrderId, orderNumber, clientName, stepNodeId, stepLabel, machineId, machineName, leadUserId, userIds, start, end, minutes, part, parts, locked]
@@ -4609,7 +4797,9 @@ components:
       properties:
         code:
           type: string
-          enum: [unknown_machine_type, no_machine, no_workers, no_capacity, missing_duration, conflict]
+          enum: [unknown_machine_type, no_machine, no_workers, no_capacity, missing_duration, conflict, machine_down]
+          description: >-
+            `machine_down` (D-028): a locked block the plan keeps lies in a downtime window of its machine.
         workOrderId: {type: string}
         orderNumber: {type: string}
         stepNodeId: {type: string}
