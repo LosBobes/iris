@@ -10,6 +10,7 @@ Onboarding snapshot for senior engineers. **Last verified:** 2026-07-10.
 - **Customers and locations** - normalized master data (web client; API-backed)
 - **Dashboard** - revenue/status charts and queue summaries (aggregated server-side by `GET /dashboard`)
 - **Public tracking** - token-based status lookup at `/public/work-orders/:token` (web only)
+- **Landing page** - public product overview for prospective organizations at `/home` (web only, no API calls)
 - **Organization settings** - admin-configurable, shop-wide defaults (firm name, PDF sections, billing/priority defaults, shipping-options toggle)
 
 The system is **multi-tenant**: every row is scoped to a **tenant** (an isolated

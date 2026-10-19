@@ -67,6 +67,7 @@ const MyQueuePage = lazy(() => import("@/pages/MyQueuePage"));
 const PlanningPrintPage = lazy(() => import("@/pages/PlanningPrintPage"));
 const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
 const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
+const HomePage = lazy(() => import("@/pages/HomePage"));
 const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
 const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
@@ -431,6 +432,8 @@ function AppContent(): React.JSX.Element {
         <Suspense fallback={<RouteLoadingScreen />}>
           <Routes>
             <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
+            {/* Public landing page for prospective organizations; works signed in or out. */}
+            <Route path="/home" element={<HomePage signedIn={Boolean(currentUser)} />} />
             {/* Backoffice: superadmin session, independent of any organization. */}
             <Route path="/backoffice/*" element={<PlatformConsole />} />
             <Route
