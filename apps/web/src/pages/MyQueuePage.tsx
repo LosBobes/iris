@@ -9,7 +9,7 @@ import { useInvalidatePlanning, useMyQueue, useUserNames } from '@/hooks/usePlan
 import { formatActionError, reportUnexpectedError } from '@/lib/errors'
 import { timeOfLocal } from '@/lib/planning/time'
 import { setProcessStepStatus } from '@/lib/planning/step-status'
-import { formatWorkOrderDate, formatWorkOrderDateTime, getLocalIsoDate } from '@/shared/utils/work-orders'
+import { formatWorkOrderDateTime, getLocalIsoDate } from '@/shared/utils/work-orders'
 import type { MyQueueItem } from '@/types/planning'
 import type { ProcessStepStatus } from '@/types/process'
 
@@ -76,12 +76,11 @@ function MyQueuePage(): React.JSX.Element {
       </div>
 
       <div className="space-y-3 px-5 pb-8 sm:px-8">
-        <p className="text-[12px] text-[color:var(--iris-ink-soft)]">
-          <span className="tnum">{formatWorkOrderDate(date)}</span>
-          {query.data?.publishedAt && (
-            <> · {t('planning.myQueue.publishedAt', { at: formatWorkOrderDateTime(query.data.publishedAt) })}</>
-          )}
-        </p>
+        {query.data?.publishedAt && (
+          <p className="text-[12px] text-[color:var(--iris-ink-soft)]">
+            {t('planning.myQueue.publishedAt', { at: formatWorkOrderDateTime(query.data.publishedAt) })}
+          </p>
+        )}
 
         {query.isPending ? (
           <div className="flex items-center gap-2 py-10 text-[12px] text-[color:var(--iris-ink-soft)]">

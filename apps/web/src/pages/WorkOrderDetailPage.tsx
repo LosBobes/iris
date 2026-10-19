@@ -615,11 +615,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
     <>
       <CustomerSummaryPanel order={order} />
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] border-b border-border bg-card">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] border-b border-border bg-card">
         {metaCells.map(([k, v]) => (
           <div
             key={k}
-            className="min-w-0 border-r border-b border-[color:var(--iris-border-soft)] px-6 py-4"
+            className="min-w-0 border-r border-b border-[color:var(--iris-border-soft)] px-5 py-4"
           >
             <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
               {k}

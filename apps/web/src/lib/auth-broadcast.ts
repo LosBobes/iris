@@ -4,16 +4,22 @@
 // of showing another organization's or a signed-out user's data.
 //
 // BroadcastChannel where available; otherwise a localStorage write, which
-// fires a `storage` event in every other tab. Neither reaches the sending tab.
+// fires a `storage` event in every other tab. A storage event never reaches
+// the sending tab, but a BroadcastChannel message reaches every other channel
+// object of that name, the sending page's own subscriber included, so each
+// message carries the sender's tab id and a tab ignores its own.
 
 export type AuthChange = 'login' | 'logout' | 'impersonation-start'
 
 const CHANNEL_NAME = 'iris-auth'
 const STORAGE_KEY = 'iris-auth-change'
+const TAB_ID = Math.random().toString(36).slice(2)
 
 interface AuthChangeMessage {
   change: AuthChange
   at: number
+  /** The sending tab, so it can ignore its own message. */
+  tab?: string
 }
 
 function openChannel(): BroadcastChannel | null {
@@ -35,7 +41,7 @@ function isAuthChangeMessage(value: unknown): value is AuthChangeMessage {
 
 /** Tells the other tabs of this browser that the session changed. */
 export function broadcastAuthChange(change: AuthChange): void {
-  const message: AuthChangeMessage = { change, at: Date.now() }
+  const message: AuthChangeMessage = { change, at: Date.now(), tab: TAB_ID }
   const channel = openChannel()
   if (channel) {
     try {
@@ -58,7 +64,7 @@ export function subscribeAuthChange(listener: (change: AuthChange) => void): () 
   const channel = openChannel()
   if (channel) {
     const onMessage = (event: MessageEvent) => {
-      if (isAuthChangeMessage(event.data)) listener(event.data.change)
+      if (isAuthChangeMessage(event.data) && event.data.tab !== TAB_ID) listener(event.data.change)
     }
     channel.addEventListener('message', onMessage)
     return () => {

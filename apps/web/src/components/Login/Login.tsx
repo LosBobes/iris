@@ -253,7 +253,7 @@ export function Login({
         </button>
       </form>
 
-      <div className="mt-5 flex flex-col gap-3 border-t border-[color:var(--iris-border-soft)] pt-4 text-[11px] text-[color:var(--iris-ink-mute)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-5 flex flex-col gap-1 border-t border-[color:var(--iris-border-soft)] pt-4 text-[11px] text-[color:var(--iris-ink-mute)]">
         <label
           htmlFor="remember-device"
           className="iris-focusable group -ml-1 inline-flex w-fit cursor-pointer items-center gap-2 px-1 py-1"
@@ -277,7 +277,7 @@ export function Login({
           </span>
           <span className="group-hover:text-foreground">{t("auth.rememberDevice")}</span>
         </label>
-        <p id="remember-device-hint" className="leading-4 sm:max-w-[60%] sm:text-right">
+        <p id="remember-device-hint" className="pl-[22px] leading-4">
           {t("auth.rememberDeviceHint")}
         </p>
       </div>

@@ -60,11 +60,15 @@ function renderColumnCell(
   switch (key) {
     case "orderNumber":
       return {
-        className: "tnum px-4 font-medium text-foreground",
+        className: "tnum whitespace-nowrap px-4 font-medium text-foreground",
         content: order.orderNumber,
       };
     case "clientName":
-      return { className: "px-4 text-foreground", content: order.clientName };
+      return {
+        className: "max-w-[180px] truncate px-4 text-foreground",
+        content: order.clientName,
+        title: order.clientName,
+      };
     case "jobDescription":
       return {
         className:
@@ -251,7 +255,7 @@ const WorkOrderRow = memo(function WorkOrderRow({
         );
       })}
       <td
-        className="sticky right-0 z-10 bg-card px-3"
+        className="sticky right-0 z-10 border-l border-[color:var(--iris-border-soft)] bg-card px-3"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-end gap-1 text-[color:var(--iris-ink-soft)]">
@@ -391,7 +395,8 @@ export function WorkOrdersTable({
       )}
       {isTableLayout && (
       <div className="overflow-x-auto">
-      <table className="min-w-[1100px] w-full border-collapse text-[12px]">
+      {/* Fits a 1366 px laptop without scrolling; narrower screens scroll with the actions pinned. */}
+      <table className="min-w-[1000px] w-full border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-border">
             {dataColumns.map((col) => {
@@ -435,10 +440,10 @@ export function WorkOrdersTable({
               );
             })}
             <th
-              style={{ width: "172px" }}
-              className="sticky right-0 z-20 bg-card px-4 py-[10px] text-right text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]"
+              style={{ width: "148px" }}
+              className="sticky right-0 z-20 border-l border-[color:var(--iris-border-soft)] bg-card px-4 py-[10px] text-right text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]"
             >
-              Radnje
+              {t("workOrders.table.actionsColumn")}
             </th>
           </tr>
         </thead>

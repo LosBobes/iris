@@ -2027,6 +2027,7 @@ export const sr = {
     },
   },
   attendance: {
+    eyebrow: 'Iris · prisustvo',
     title: 'Prisustvo',
     hint: 'Prisutan je ko se prijavio tog dana, osim ako administrator ne odredi drugačije.',
     signedIn: 'Prijavljen',
@@ -2268,6 +2269,7 @@ export const sr = {
       sortBy: 'Sortiraj po {{col}}',
       ascending: 'rastuće',
       descending: 'opadajuće',
+      actionsColumn: 'Radnje',
       openRow: 'Otvori nalog {{order}} – {{client}}',
       changeStatusTo: 'Promeni u {{status}}',
       statusNotFromList: 'Status ovog naloga se ne menja iz liste',

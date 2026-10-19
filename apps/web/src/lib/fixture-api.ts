@@ -866,7 +866,8 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
     },
 
     async getCurrentSession() {
-      return { success: false }
+      // In memory only: a reload starts signed out, like a fresh browser.
+      return sessionUser ? { success: true, user: { ...sessionUser } } : { success: false }
     },
 
     async logout() {

@@ -286,9 +286,6 @@ function PlanningPage(): React.JSX.Element {
             onChange={(next) => next && changeDate(next)}
             placeholder={t('planning.date')}
           />
-          <span className="tnum text-[12px] text-[color:var(--iris-ink-soft)]" aria-live="polite">
-            {formatWorkOrderDate(date)}
-          </span>
           {isAdmin && (
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <Button type="button" disabled={busy !== null} onClick={() => ask('generate')}>

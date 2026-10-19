@@ -10,12 +10,23 @@ afterEach(() => {
 })
 
 describe('auth broadcast', () => {
-  it('reaches other subscribers over BroadcastChannel', async () => {
+  it('reaches other tabs over BroadcastChannel, never the sending tab', async () => {
     if (typeof BroadcastChannel !== 'function') return
     const listener = vi.fn()
     const unsubscribe = subscribeAuthChange(listener)
-    broadcastAuthChange('logout')
+
+    // Another tab's message carries a different tab id.
+    const otherTab = new BroadcastChannel('iris-auth')
+    otherTab.postMessage({ change: 'logout', at: 1, tab: 'other-tab' })
     await vi.waitFor(() => expect(listener).toHaveBeenCalledWith('logout'))
+    otherTab.close()
+
+    // This tab's own sign-in must not make it drop its cache and re-check
+    // the session it just started (a loading flash, and in fixture mode a
+    // sign-out).
+    broadcastAuthChange('login')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
   })
 

@@ -2027,6 +2027,7 @@ export const en: typeof sr = {
     },
   },
   attendance: {
+    eyebrow: 'Iris · attendance',
     title: 'Attendance',
     hint: 'A user is present if they signed in that day, unless an administrator decides otherwise.',
     signedIn: 'Signed in',
@@ -2268,6 +2269,7 @@ export const en: typeof sr = {
       sortBy: 'Sort by {{col}}',
       ascending: 'ascending',
       descending: 'descending',
+      actionsColumn: 'Actions',
       openRow: 'Open order {{order}} – {{client}}',
       changeStatusTo: 'Change to {{status}}',
       statusNotFromList: 'This order’s status cannot be changed from the list',

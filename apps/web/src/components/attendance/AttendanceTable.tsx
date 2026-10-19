@@ -45,10 +45,10 @@ export function AttendanceTable({ canEdit }: { canEdit: boolean }): React.JSX.El
 
   return (
     <section aria-labelledby="attendance-heading" className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <p id="attendance-heading" className="text-[12px] text-[color:var(--iris-ink-soft)]">
-          {t('attendance.hint')}
-        </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label id="attendance-heading" htmlFor="attendance-date" className="text-[12px] text-[color:var(--iris-ink-soft)]">
+          {t('attendance.date')}
+        </label>
         <DatePicker
           value={date}
           onChange={(next) => next && setDate(next)}
