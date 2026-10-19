@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpen, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useInteractiveTour } from "@/hooks/useInteractiveTour";
@@ -81,6 +82,22 @@ function HelpPage(): React.JSX.Element {
               {t("help.tour.hint")}
             </p>
           </div>
+
+          <Link
+            to="/docs"
+            className="iris-focusable iris-press group flex items-center justify-between gap-4 border border-border bg-card px-5 py-4 hover:border-[color:var(--iris-accent)] lg:col-span-2"
+          >
+            <div className="flex items-start gap-3">
+              <BookOpen className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--iris-accent)]" />
+              <div>
+                <div className="text-[14px] font-medium text-foreground">{t("docs.openFromHelp")}</div>
+                <div className="mt-0.5 text-[12px] leading-relaxed text-[color:var(--iris-ink-soft)]">
+                  {t("docs.openFromHelpHint")}
+                </div>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)] transition-transform group-hover:translate-x-1" />
+          </Link>
 
           <Section title={t("help.about.title")}>
             <p className="text-[13px] leading-relaxed text-[color:var(--iris-ink-soft)]">

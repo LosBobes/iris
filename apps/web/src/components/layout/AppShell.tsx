@@ -17,6 +17,7 @@ import {
   Settings,
   UserCog,
   HelpCircle,
+  BookOpen,
   Menu,
   X,
 } from "lucide-react";
@@ -405,6 +406,33 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
                 </NavLink>
               </SidebarTooltip>
             )}
+            <SidebarTooltip label={t("nav.docs")} enabled={isSidebarCollapsed}>
+              <NavLink
+                to="/docs"
+                onClick={closeMobileMenu}
+                className={({ isActive }) =>
+                  cn(
+                    "iris-focusable iris-press relative flex items-center rounded-sm px-2 py-2.5 text-[13px] transition-all duration-300",
+                    isSidebarCollapsed ? "lg:w-full lg:justify-center lg:px-0 lg:gap-0" : "gap-3",
+                    isActive
+                      ? cn(
+                          "bg-black/5 font-medium text-foreground",
+                          !isSidebarCollapsed &&
+                            "lg:before:pointer-events-none lg:before:absolute lg:before:top-2 lg:before:bottom-2 lg:before:left-[-20px] lg:before:w-0.5 lg:before:bg-[color:var(--iris-accent)] lg:before:content-['']",
+                        )
+                      : "font-normal text-[color:var(--iris-ink-soft)] hover:bg-black/[0.03] hover:text-foreground",
+                  )
+                }
+              >
+                <BookOpen size={NAV_ICON_SIZE} className="shrink-0" />
+                <span className={cn(
+                  "transition-all duration-300 ease-[var(--iris-ease-out-decisive)] whitespace-nowrap",
+                  isSidebarCollapsed ? "lg:w-0 lg:opacity-0 lg:overflow-hidden lg:pointer-events-none" : "lg:w-auto lg:opacity-100",
+                )}>
+                  {t("nav.docs")}
+                </span>
+              </NavLink>
+            </SidebarTooltip>
             <SidebarTooltip label={t("nav.help")} enabled={isSidebarCollapsed}>
               <NavLink
                 to="/help"
