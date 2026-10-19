@@ -91,6 +91,7 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { MaterialNeeds, MaterialNeedsQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -302,6 +303,8 @@ declare global {
       /** The signed-in user's blocks of the published plan (date defaults to today). */
       getMyQueue: (date?: string) => Promise<MyQueue>
       getPlanningForecast: () => Promise<OrderForecast[]>
+      /** Input material per week from the published horizon against stock (D-028; planning + stock modules). */
+      getMaterialNeeds: (query?: MaterialNeedsQuery) => Promise<MaterialNeeds>
     }
   }
 }

@@ -881,6 +881,16 @@ function PlanningChapter(): React.JSX.Element {
         tipa ili niko nije kvalifikovan), piše <strong>ne može se planirati</strong>. To je
         najbolje mesto da vidiš problem pre nego što klijent pozove.
       </P>
+      <H2>Potrebe materijala</H2>
+      <P>
+        Kad je uključen i Magacin, kartica <Ui>Potrebe materijala</Ui> na stranici plana
+        pokazuje koliko će ulaznog materijala otvoreni nalozi potrošiti po nedeljama, prema
+        objavljenim planovima. Materijal se računa u nedelji kada je prvi put zakazan korak
+        koji ga troši; korak bez termina ide u kolonu <strong>Neplanirano</strong>. Red je
+        crven kad zbir do neke nedelje pređe stanje u magacinu, a ta nedelja je posebno
+        označena, pa se zna do kada treba naručiti. Materijal koji nije povezan sa artiklom
+        vidi se samo po nazivu, bez stanja.
+      </P>
     </>
   );
 }

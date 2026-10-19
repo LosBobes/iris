@@ -286,3 +286,49 @@ export interface MyQueue {
   publishedAt: string | null
   items: MyQueueItem[]
 }
+
+/** One column of the material-needs report: a calendar week (Mon–Sun) clipped to the window, dates inclusive. */
+export interface MaterialNeedsWeek {
+  start: string
+  end: string
+}
+
+/**
+ * One material of `GET /planning/material-needs` (D-028): a catalog article
+ * with its stock figures, or an unlinked input listed by name and unit (null
+ * `catalogItemId` and figures). `weeks[i]` is consumed by steps planned in
+ * week i; `shortFromWeek` is the first week whose cumulative need exceeds
+ * `onHand` (null when none).
+ */
+export interface MaterialNeedsItem {
+  catalogItemId: string | null
+  name: string
+  unit: string
+  onHand: number | null
+  reserved: number | null
+  available: number | null
+  weeks: number[]
+  cumulative: number[]
+  /** Inputs of open steps with no block in the horizon. */
+  unplanned: number
+  shortFromWeek: number | null
+}
+
+/** `GET /planning/material-needs`: the resolved window, its weeks and the materials (shortages first). */
+export interface MaterialNeeds {
+  from: string
+  to: string
+  weeks: MaterialNeedsWeek[]
+  items: MaterialNeedsItem[]
+}
+
+/** Optional window of `getMaterialNeeds` (local dates; the server defaults both). */
+export interface MaterialNeedsQuery {
+  from?: string
+  to?: string
+}
+
+/** The report window may touch at most this many calendar weeks. */
+export const MAX_MATERIAL_NEEDS_WEEKS = 8
+/** Default window without a published horizon: four weeks from the start. */
+export const DEFAULT_MATERIAL_NEEDS_DAYS = 28

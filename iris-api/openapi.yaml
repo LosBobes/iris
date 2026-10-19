@@ -4436,6 +4436,74 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/material-needs:
+    get:
+      tags: [Planning]
+      summary: Input material needed per week from the published plans' kept horizon, against stock
+      operationId: getMaterialNeeds
+      description: >-
+        D-028 "Potrebe materijala". For each date from `from` on, the blocks of that date's published plan stand,
+        else what the most recent earlier published plan projected onto it (its kept horizon). Every open work
+        order's input nodes count while none of the steps they feed is done (posted consumption is excluded) and
+        one of them is open (not skipped); the quantity is the per-unit quantity times the order's quantity
+        (`quantitiesPerOrder` copies are not scaled), and it falls in the week of the first planned block of its
+        consuming steps. Inputs whose steps have no block from `from` on are reported as `unplanned`; those first
+        planned after `to` are left out. Inputs linked to a catalog article are grouped by article and carry its
+        stock figures; unlinked inputs are grouped by name and unit and carry none. `shortFromWeek` is the first
+        week whose cumulative need exceeds the stock on hand (`onHand`; the article's `reserved` already contains
+        these inputs, so comparing with `available` would count them twice). Items: shortages first (earliest week
+        first), then by name. Requires the "Planiranje" and "Magacin" modules; open to every signed-in user.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First local date "YYYY-MM-DD" (working-hours time zone); defaults to today.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: >-
+            Last local date (inclusive). Defaults to the latest `horizonEnd` of the published plans considered, or
+            `from` + 27 days when none reaches `from`, clipped to the end of the eighth week. The window may touch
+            at most 8 calendar weeks.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The material needs of the window
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialNeeds'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: >-
+            The "Planiranje" module (see PlanningModuleDisabled) or the "Magacin" module (see StockModuleDisabled)
+            is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The window ends before it starts or touches more than 8 weeks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
@@ -4978,6 +5046,54 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MyQueueItem'
+    MaterialNeedsWeek:
+      type: object
+      description: A calendar week (Monday to Sunday) clipped to the window; both dates inclusive.
+      required: [start, end]
+      properties:
+        start: {type: string, format: date}
+        end: {type: string, format: date}
+    MaterialNeedsItem:
+      type: object
+      description: >-
+        One material: a catalog article (with its stock level) or an unlinked input listed by name and unit (null
+        catalogItemId and stock figures). `weeks[i]` is the quantity the steps planned in week i consume,
+        `cumulative` the running total.
+      required: [catalogItemId, name, unit, onHand, reserved, available, weeks, cumulative, unplanned, shortFromWeek]
+      properties:
+        catalogItemId: {type: string, nullable: true}
+        name: {type: string}
+        unit: {type: string}
+        onHand: {type: number, nullable: true}
+        reserved: {type: number, nullable: true}
+        available: {type: number, nullable: true}
+        weeks:
+          type: array
+          items: {type: number}
+        cumulative:
+          type: array
+          items: {type: number}
+        unplanned:
+          type: number
+          description: Quantity of open steps with no block in the horizon from `from` on.
+        shortFromWeek:
+          type: integer
+          nullable: true
+          description: First week index whose cumulative need exceeds `onHand`; null when none (or no stock figures).
+    MaterialNeeds:
+      type: object
+      required: [from, to, weeks, items]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        weeks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialNeedsWeek'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialNeedsItem'
     ProcessNode:
       type: object
       required: [id, kind, label, x, y]

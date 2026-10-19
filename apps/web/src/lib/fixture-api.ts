@@ -808,6 +808,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
         createdAt: order.createdAt,
       })),
     processes: () => processStore.listAllOrderProcesses(),
+    stockLevels: async () => (await stockStore.api.getStockLevels()).items,
   })
 
   // Opening balances of the demo articles ("Početno stanje").
