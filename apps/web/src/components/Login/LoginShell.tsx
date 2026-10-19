@@ -101,9 +101,9 @@ function IrisWordmark(): React.JSX.Element {
           navigate("/backoffice");
         }
       }}
-      className="flex select-none flex-col items-center gap-3 text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px] lg:items-start"
+      className="flex select-none items-center justify-center gap-3 text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px] lg:flex-col lg:items-start"
     >
-      <IrisMark className="h-14 w-14 shrink-0 text-foreground sm:h-16 sm:w-16" />
+      <IrisMark className="h-12 w-12 shrink-0 text-foreground sm:h-14 sm:w-14 lg:h-16 lg:w-16" />
       <span>Iris</span>
     </div>
   );
