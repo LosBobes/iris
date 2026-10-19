@@ -397,3 +397,93 @@ type MyQueueItem struct {
 	StepStatus ProcessStepStatus `json:"stepStatus"`
 	IsLead     bool              `json:"isLead"`
 }
+
+// ---- Workstation load ("Zauzetost", D-028) ----
+
+const (
+	// MaxLoadDays caps the range of GET /planning/load (inclusive).
+	MaxLoadDays = 31
+	// LoadNoMachineTypeName names the pseudo machine type (id "") that holds
+	// steps without a machine type and blocks on machines that no longer exist.
+	LoadNoMachineTypeName = "Bez mašine"
+)
+
+// LoadSource says which plans supplied the blocks of a load report: the
+// published plans, or (admins, from = today) today's draft in place of
+// today's published plan.
+type LoadSource string
+
+const (
+	LoadSourcePublished LoadSource = "published"
+	LoadSourceDraft     LoadSource = "draft"
+)
+
+// WorkstationLoadBlock is one planned block on a unit-day or person-day:
+// enough to list what fills the day (order, step, minutes) without the whole
+// PlanAssignment. Start/End are local "YYYY-MM-DDTHH:MM".
+type WorkstationLoadBlock struct {
+	WorkOrderID string `json:"workOrderId"`
+	OrderNumber string `json:"orderNumber"`
+	StepNodeID  string `json:"stepNodeId"`
+	StepLabel   string `json:"stepLabel"`
+	MachineName string `json:"machineName"`
+	Start       string `json:"start"`
+	End         string `json:"end"`
+	Minutes     int    `json:"minutes"`
+	LeadUserID  string `json:"leadUserId,omitempty"`
+}
+
+// WorkstationLoadTotal is a machine type's planned and available minutes on
+// one day (the sum over its units).
+type WorkstationLoadTotal struct {
+	Date             string `json:"date"`
+	PlannedMinutes   int    `json:"plannedMinutes"`
+	AvailableMinutes int    `json:"availableMinutes"`
+}
+
+// WorkstationLoadDay is one unit's or person's day: PlannedMinutes is the sum
+// of the blocks starting that day, AvailableMinutes the shift minus breaks
+// (minus downtime windows for a unit; 0 for a unit out of service or a person
+// not present), Blocks sorted by start.
+type WorkstationLoadDay struct {
+	Date             string                 `json:"date"`
+	PlannedMinutes   int                    `json:"plannedMinutes"`
+	AvailableMinutes int                    `json:"availableMinutes"`
+	Blocks           []WorkstationLoadBlock `json:"blocks"`
+}
+
+// WorkstationLoadUnit is one machine unit's load per day.
+type WorkstationLoadUnit struct {
+	ID        string               `json:"id"`
+	Name      string               `json:"name"`
+	InService bool                 `json:"inService"`
+	Days      []WorkstationLoadDay `json:"days"`
+}
+
+// WorkstationLoadType is one machine type with its units and per-day totals.
+type WorkstationLoadType struct {
+	ID    string                 `json:"id"`
+	Name  string                 `json:"name"`
+	Units []WorkstationLoadUnit  `json:"units"`
+	Days  []WorkstationLoadTotal `json:"days"`
+}
+
+// WorkstationLoadPerson is one user's load per day (as lead or crew).
+type WorkstationLoadPerson struct {
+	UserID   string               `json:"userId"`
+	Username string               `json:"username"`
+	Days     []WorkstationLoadDay `json:"days"`
+}
+
+// WorkstationLoad is the answer of GET /planning/load: planned against
+// available minutes per machine type, unit and person for each day of Days
+// (the working days of From..To, plus any day off that still carries planned
+// blocks). Every Days list of a type, unit or person follows Days.
+type WorkstationLoad struct {
+	From         string                  `json:"from"`
+	To           string                  `json:"to"`
+	Source       LoadSource              `json:"source"`
+	Days         []string                `json:"days"`
+	MachineTypes []WorkstationLoadType   `json:"machineTypes"`
+	People       []WorkstationLoadPerson `json:"people"`
+}

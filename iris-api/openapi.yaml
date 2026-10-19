@@ -4197,6 +4197,90 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /planning/load:
+    get:
+      tags: [Planning]
+      summary: Workstation load ("Zauzetost") - planned vs available minutes per machine and person per day
+      operationId: getPlanningLoad
+      description: >-
+        D-028. For each day of `from`..`to` (at most 31 days): planned minutes per machine type, machine unit and
+        person against the minutes available. **Which plan supplies a day's blocks:** the published plan dated that
+        day when one exists; otherwise the most recent earlier published plan whose kept horizon
+        (`date`..`horizonEnd`) covers the day, i.e. the blocks that plan projected onto it (an older plan's
+        projection is never used once a newer plan covers the day). Only blocks starting on the day are counted
+        (the planner already splits a step into one block per day). With `plan=draft` (admins, `from` must be
+        today) today's draft stands in for today's published plan, also for the later days it projects onto.
+        **Available minutes:** the day's shift minus breaks from the working hours (exception dates included); for
+        a unit also minus its downtime windows, and 0 when the unit is out of service; for a person 0 when not
+        present by the attendance rules (an admin override wins; up to today the day's sign-in counts; later days
+        count as present). Steps without a machine type are reported under the pseudo type `id: ""`,
+        `name: "Bez mašine"` with one pseudo unit `id: ""` (available 0: that work is bounded by people); blocks on a
+        machine that no longer exists appear there too, as an out-of-service unit with the block's machine name.
+        `days` lists the working days of the range plus any day off that still carries planned blocks; every
+        `days` list of a type, unit or person follows it. Types are sorted by name (the pseudo type last), units and
+        people by name.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First local date "YYYY-MM-DD"; defaults to today.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: >-
+            Last local date (inclusive), at most 30 days after `from`. Defaults to the `horizonEnd` of the plan that
+            speaks for `from` (capped at 31 days), or `from` when there is none.
+          schema:
+            type: string
+            format: date
+        - name: plan
+          in: query
+          required: false
+          description: '`draft` (admins only; `from` must be today) uses today''s draft in place of today''s published plan.'
+          schema:
+            type: string
+            enum: [published, draft]
+            default: published
+      responses:
+        '200':
+          description: The load of the range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkstationLoad'
+        '400':
+          description: Malformed date or `plan` value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: '`plan=draft` from an operator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: '`plan=draft` but today has no draft'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: '`to` before `from`, a range longer than 31 days, or `plan=draft` with `from` not today'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /planning/plan/generate:
     post:
       tags: [Planning]
@@ -4935,6 +5019,106 @@ components:
           allOf:
             - $ref: '#/components/schemas/PlanHorizon'
           nullable: true
+    WorkstationLoadBlock:
+      type: object
+      description: One planned block of a unit-day or person-day.
+      required: [workOrderId, orderNumber, stepNodeId, stepLabel, machineName, start, end, minutes]
+      properties:
+        workOrderId: {type: string}
+        orderNumber: {type: string}
+        stepNodeId: {type: string}
+        stepLabel: {type: string}
+        machineName:
+          type: string
+          description: Empty for a step without a machine.
+        start: {type: string, description: 'Local "YYYY-MM-DDTHH:MM".'}
+        end: {type: string, description: 'Local "YYYY-MM-DDTHH:MM".'}
+        minutes: {type: integer, description: Working minutes inside the block.}
+        leadUserId: {type: string}
+    WorkstationLoadTotal:
+      type: object
+      description: A machine type's day, summed over its units.
+      required: [date, plannedMinutes, availableMinutes]
+      properties:
+        date: {type: string, format: date}
+        plannedMinutes: {type: integer}
+        availableMinutes: {type: integer}
+    WorkstationLoadDay:
+      type: object
+      required: [date, plannedMinutes, availableMinutes, blocks]
+      properties:
+        date: {type: string, format: date}
+        plannedMinutes:
+          type: integer
+          description: Sum of the minutes of the blocks starting that day.
+        availableMinutes:
+          type: integer
+          description: >-
+            Shift minus breaks; for a unit minus downtime windows (0 out of service), for a person 0 when not present.
+        blocks:
+          type: array
+          description: Sorted by start.
+          items:
+            $ref: '#/components/schemas/WorkstationLoadBlock'
+    WorkstationLoadUnit:
+      type: object
+      required: [id, name, inService, days]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        inService: {type: boolean}
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadDay'
+    WorkstationLoadType:
+      type: object
+      required: [id, name, units, days]
+      properties:
+        id:
+          type: string
+          description: '"" for the pseudo type "Bez mašine".'
+        name: {type: string}
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadUnit'
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadTotal'
+    WorkstationLoadPerson:
+      type: object
+      required: [userId, username, days]
+      properties:
+        userId: {type: string}
+        username: {type: string}
+        days:
+          type: array
+          description: Blocks the person leads or crews.
+          items:
+            $ref: '#/components/schemas/WorkstationLoadDay'
+    WorkstationLoad:
+      type: object
+      required: [from, to, source, days, machineTypes, people]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        source:
+          type: string
+          enum: [published, draft]
+        days:
+          type: array
+          description: Working days of the range plus days off that still carry planned blocks.
+          items: {type: string, format: date}
+        machineTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadType'
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadPerson'
     PlanGenerateInput:
       type: object
       required: [date]
