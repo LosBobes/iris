@@ -92,6 +92,7 @@ import type {
   WorkingHours,
 } from '@/types/planning'
 import type { MaterialNeeds, MaterialNeedsQuery } from '@/types/planning'
+import type { WorkstationLoad, WorkstationLoadQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -305,6 +306,8 @@ declare global {
       getPlanningForecast: () => Promise<OrderForecast[]>
       /** Input material per week from the published horizon against stock (D-028; planning + stock modules). */
       getMaterialNeeds: (query?: MaterialNeedsQuery) => Promise<MaterialNeeds>
+      /** Workstation load per machine type, unit and person per day (D-028); plan "draft" is admin-only. */
+      getPlanningLoad: (query?: WorkstationLoadQuery) => Promise<WorkstationLoad>
     }
   }
 }

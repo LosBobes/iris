@@ -341,3 +341,76 @@ export interface MaterialNeedsQuery {
 export const MAX_MATERIAL_NEEDS_WEEKS = 8
 /** Default window without a published horizon: four weeks from the start. */
 export const DEFAULT_MATERIAL_NEEDS_DAYS = 28
+
+// ---- Workstation load ("Zauzetost", D-028; `GET /planning/load`) ----
+
+/** Which plans supplied a load report: the published plans, or today's draft in place of today's published plan (admins). */
+export type LoadSource = 'published' | 'draft'
+
+/** One planned block of a unit-day or person-day. `start`/`end` are local "YYYY-MM-DDTHH:MM". */
+export interface WorkstationLoadBlock {
+  workOrderId: string
+  orderNumber: string
+  stepNodeId: string
+  stepLabel: string
+  /** Empty for a step without a machine. */
+  machineName: string
+  start: string
+  end: string
+  minutes: number
+  leadUserId?: string
+}
+
+/** A machine type's day, summed over its units. */
+export interface WorkstationLoadTotal {
+  date: string
+  plannedMinutes: number
+  availableMinutes: number
+}
+
+/**
+ * A unit's or person's day: planned = minutes of the blocks starting that day;
+ * available = shift minus breaks (minus downtime for a unit; 0 out of service or not present).
+ */
+export interface WorkstationLoadDay extends WorkstationLoadTotal {
+  blocks: WorkstationLoadBlock[]
+}
+
+export interface WorkstationLoadUnit {
+  id: string
+  name: string
+  inService: boolean
+  days: WorkstationLoadDay[]
+}
+
+/** A machine type with its units; `id: ""` is the pseudo type "Bez mašine". */
+export interface WorkstationLoadType {
+  id: string
+  name: string
+  units: WorkstationLoadUnit[]
+  days: WorkstationLoadTotal[]
+}
+
+export interface WorkstationLoadPerson {
+  userId: string
+  username: string
+  days: WorkstationLoadDay[]
+}
+
+/** `GET /planning/load`: every `days` list of a type, unit or person follows `days`. */
+export interface WorkstationLoad {
+  from: string
+  to: string
+  source: LoadSource
+  /** Working days of the range plus days off that still carry planned blocks. */
+  days: string[]
+  machineTypes: WorkstationLoadType[]
+  people: WorkstationLoadPerson[]
+}
+
+/** Query of `GET /planning/load` (all optional: from = today, to = the kept horizon's end). */
+export interface WorkstationLoadQuery {
+  from?: string
+  to?: string
+  plan?: LoadSource
+}

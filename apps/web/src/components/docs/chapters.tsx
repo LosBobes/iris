@@ -901,6 +901,15 @@ function PlanningChapter(): React.JSX.Element {
         označena, pa se zna do kada treba naručiti. Materijal koji nije povezan sa artiklom
         vidi se samo po nazivu, bez stanja.
       </P>
+      <H2>Zauzetost</H2>
+      <P>
+        Kartica <Ui>Zauzetost</Ui> na stranici plana pokazuje, za svaki dan objavljenog plana,
+        koliko je vremena planirano na svakom tipu mašine (i na svakoj mašini, kad se tip
+        otvori) i na svakom radniku, u odnosu na raspoloživo vreme smene. Stubić je siv do 80 %,
+        narandžast od 80 do 100 %, a crven preko 100 % (<strong>preopterećeno</strong>).
+        Neradni dani, mašine van pogona i odsutni radnici su prugasti. Dodir na stubić prikazuje
+        blokove tog dana, a datum u zaglavlju otvara dnevni plan za taj dan. Opseg je najviše 31 dan.
+      </P>
     </>
   );
 }

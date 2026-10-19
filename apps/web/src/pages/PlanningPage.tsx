@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/planning/ConfirmDialog'
 import { ForecastBadges } from '@/components/planning/ForecastBadges'
 import { ForecastTable } from '@/components/planning/ForecastTable'
+import { LoadTab } from '@/components/planning/LoadTab'
 import { MaterialNeedsTab } from '@/components/planning/MaterialNeedsTab'
 import { PlanBlockDialog } from '@/components/planning/PlanBlockDialog'
 import { PlanTimeline, type TimelineView } from '@/components/planning/PlanTimeline'
@@ -27,8 +28,11 @@ import type { PlanAssignment, ProductionPlan } from '@/types/planning'
 
 type PlanSource = 'draft' | 'published'
 type PendingConfirm = 'generate' | 'replan' | 'publish' | 'discard' | null
-/** Page sections: the day plan and, with Magacin on, material needs (D-028). */
-type PlanningSection = 'plan' | 'materials'
+/**
+ * Page sections (D-028): the day plan, the workstation load ("Zauzetost") and,
+ * with Magacin on, material needs.
+ */
+type PlanningSection = 'plan' | 'load' | 'materials'
 
 function PlanMeta({ plan, source }: { plan: ProductionPlan; source: PlanSource }): React.JSX.Element {
   const { t } = useTranslation()
@@ -69,7 +73,7 @@ function PlanningPage(): React.JSX.Element {
   const { modules } = useOrganization()
   const showMaterials = modules.planning && modules.stock
   const [section, setSection] = useState<PlanningSection>('plan')
-  const activeSection: PlanningSection = showMaterials ? section : 'plan'
+  const activeSection: PlanningSection = section === 'materials' && !showMaterials ? 'plan' : section
 
   const dayQuery = usePlanDay(date)
   const hoursQuery = useWorkingHours()
@@ -176,8 +180,9 @@ function PlanningPage(): React.JSX.Element {
     { value: 'published', label: t('planning.plan.published'), disabled: !published },
   ]
   const sectionTabs: TabItem<PlanningSection>[] = [
-    { value: 'plan', label: t('planning.materials.tabPlan') },
-    { value: 'materials', label: t('planning.materials.tab') },
+    { value: 'plan', label: t('planning.load.planTab') },
+    { value: 'load', label: t('planning.load.tab') },
+    ...(showMaterials ? [{ value: 'materials' as const, label: t('planning.materials.tab') }] : []),
   ]
   const viewTabs: TabItem<TimelineView>[] = [
     { value: 'machines', label: t('planning.timeline.byMachine') },
@@ -249,9 +254,21 @@ function PlanningPage(): React.JSX.Element {
         </div>
       </div>
 
-      {showMaterials && (
+      {modules.planning && (
         <div className="px-5 sm:px-8">
-          <Tabs tabs={sectionTabs} value={activeSection} onValueChange={setSection} aria-label={t('planning.materials.sectionsAria')} />
+          <Tabs tabs={sectionTabs} value={activeSection} onValueChange={setSection} aria-label={t('planning.load.pageTabsAria')} />
+        </div>
+      )}
+      {modules.planning && activeSection === 'load' && (
+        <div className="px-5 pb-8 sm:px-8">
+          <LoadTab
+            isAdmin={isAdmin}
+            today={today}
+            onOpenDay={(next) => {
+              changeDate(next)
+              setSection('plan')
+            }}
+          />
         </div>
       )}
       {activeSection === 'materials' && (
