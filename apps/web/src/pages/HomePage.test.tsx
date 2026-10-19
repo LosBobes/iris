@@ -31,7 +31,8 @@ describe("HomePage", () => {
     for (const name of [
       "Sve što štamparija radi svaki dan",
       "Nalog uvek ide u jednom smeru",
-      "Dodaci koje uključite kad zatrebaju",
+      "Kako Iris računa cenu",
+      "Sastavite svoj Iris",
       "Administrator vidi sve, operater ono što mu treba",
       "Vaši podaci su vaši",
       "Od prvog razgovora do prvog naloga",
@@ -39,15 +40,15 @@ describe("HomePage", () => {
     ]) {
       expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
     }
-    // Every optional module is described, with its requirements.
+    // Every optional module is a switch, with its requirements spelled out.
     for (const module of ["Magacin", "Procesi rada", "Prisustvo", "Planiranje"]) {
-      expect(screen.getByRole("heading", { level: 3, name: module })).toBeInTheDocument();
+      expect(screen.getByRole("switch", { name: module })).toBeInTheDocument();
     }
-    expect(screen.getByText("zahteva: Magacin")).toBeInTheDocument();
-    expect(screen.getByText("zahteva: Procesi rada i Prisustvo")).toBeInTheDocument();
-    // The status flow lists the lifecycle in order, with the side exit.
-    const flow = screen.getByRole("list", { name: "Statusi naloga" });
-    expect(within(flow).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+    expect(screen.getByText("Prvo uključite: Magacin")).toBeInTheDocument();
+    expect(screen.getByText("Prvo uključite: Procesi rada i Prisustvo")).toBeInTheDocument();
+    // The status explorer lists the lifecycle in order, with the side exit.
+    const flow = screen.getByRole("tablist", { name: "Statusi naloga" });
+    expect(within(flow).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Nov",
       "Dodeljen",
       "U toku",
@@ -55,6 +56,11 @@ describe("HomePage", () => {
       "Fakturisan",
       "Otkazan",
     ]);
+    // The contact address is the product owner's by default.
+    expect(screen.getByRole("link", { name: "vladbatocanin@gmail.com" })).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^mailto:vladbatocanin@gmail\.com/),
+    );
   });
 
   it("sends a signed-out visitor to the organization picker", () => {
