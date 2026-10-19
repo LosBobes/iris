@@ -30,11 +30,13 @@ export function useQualifications() {
   })
 }
 
-export function useWorkingHours() {
+/** Pass `enabled: false` outside `ModuleGate` (e.g. the process panel while Planiranje is off). */
+export function useWorkingHours(enabled = true) {
   return useQuery({
     queryKey: planningKeys.workingHours,
     queryFn: () => window.api.getWorkingHours(),
     staleTime: REFERENCE_STALE_TIME_MS,
+    enabled,
   })
 }
 

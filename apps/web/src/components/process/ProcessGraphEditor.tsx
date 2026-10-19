@@ -83,6 +83,12 @@ export interface ProcessGraphEditorProps {
   articlesHidden?: boolean
   /** Shows the planning fields of steps in the inspector (Planiranje module on, in-app editor only). */
   planningEnabled?: boolean
+  /** Order mode: factor planned per-unit quantities are multiplied by for this order (default 1). */
+  orderQuantityFactor?: number
+  /** Order mode: the viewer may edit the actual step times (admins). */
+  canEditTimes?: boolean
+  /** IANA zone the actual step times are shown in. */
+  timeZone?: string
 }
 
 function ProcessGraphEditorInner({
@@ -98,6 +104,9 @@ function ProcessGraphEditorInner({
   articleLinking = false,
   articlesHidden = false,
   planningEnabled = false,
+  orderQuantityFactor,
+  canEditTimes,
+  timeZone,
 }: ProcessGraphEditorProps): React.JSX.Element {
   const canEditStructure = canEditStructureProp && !readOnly
   const highlighted = useMemo(() => new Set(highlightIds ?? []), [highlightIds])
@@ -438,6 +447,9 @@ function ProcessGraphEditorInner({
             articleLinking={articleLinking}
             articlesHidden={articlesHidden}
             planningEnabled={planningEnabled}
+            orderQuantityFactor={orderQuantityFactor}
+            canEditTimes={canEditTimes}
+            timeZone={timeZone}
             onNodeChange={patchNode}
             onKindChange={changeKind}
             onEdgeChange={patchEdge}

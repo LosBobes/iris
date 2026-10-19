@@ -768,7 +768,7 @@ func TestPlanningMigration(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT group_concat(version) FROM schema_migrations WHERE version >= 27`).Scan(&versions); err != nil {
 		t.Fatal(err)
 	}
-	if versions != "27,29,30,31" {
+	if versions != "27,29,30,31,32" {
 		t.Fatalf("versions = %s", versions)
 	}
 	mustExec := func(query string, args ...any) {

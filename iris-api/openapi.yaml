@@ -1372,7 +1372,7 @@ paths:
       tags: [Processes]
       summary: Create a process template (admin only)
       description: >-
-        Per-order state (status, actualQuantity) in the graph is stripped. `isDefault: true` clears the flag on the organization's other templates; new work orders get a copy of the default.
+        Per-order state (status, actualQuantity, startedAt, finishedAt) in the graph is stripped. `isDefault: true` clears the flag on the organization's other templates; new work orders get a copy of the default.
       operationId: createProcessTemplate
       requestBody:
         required: true
@@ -1565,7 +1565,7 @@ paths:
       tags: [Processes]
       summary: Attach a copy of a process template to a work order
       description: >-
-        Copies the template graph with every step set to `pending`. Any signed-in user may do this once per work order. Stock is reconciled as for the PUT (a no-op for a fresh copy, since nothing is done yet). The copy is marked stock tracked only when the "Magacin" module is on. POST /work-orders auto-attaches the default template under the same rule, and only while the "Procesi rada" module is on.
+        Copies the template graph with every step set to `pending` and no step times. Any signed-in user may do this once per work order. Stock is reconciled as for the PUT (a no-op for a fresh copy, since nothing is done yet). The copy is marked stock tracked only when the "Magacin" module is on, and always carries per-unit item quantities (`quantitiesPerOrder: false`; D-028) - re-attaching a template to an order whose copy had the flag clears it. POST /work-orders auto-attaches the default template under the same rule, and only while the "Procesi rada" module is on.
       operationId: applyProcessTemplate
       parameters:
         - name: id
@@ -1622,10 +1622,13 @@ paths:
       tags: [Processes]
       summary: Replace a work order's process graph
       description: >-
-        Admins may change anything. Other users may change only per-order state (status, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
+        Admins may change anything. Other users may change only per-order state (status, startedAt, finishedAt, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
 
 
-        **Automatic stock posting.** In the same transaction the server reconciles the warehouse ledger with the graph (only item nodes whose `catalogItemId` links an article). The desired net per node is `+qty` when a step that outputs a product/byproduct node is `done`, plus `-qty` when any step the node feeds (input, or a product/byproduct consumed as input) is `done`; an intermediate product produced and consumed nets out. `qty` is `actualQuantity`, else `quantity`, else 0; `pending`, `in_progress` and `skipped` count as not done. The difference to the net already posted for that work order and node is inserted as one `consumption` (negative) or `production` (positive) movement, so repeating a request posts nothing, un-doing a step reverses it and a changed `actualQuantity` posts only the delta. If a node's article changes (or the node is removed), the old article's net is reversed and the new one posted. Deleting a process or a work order does not reverse movements.
+        **Actual step times (D-028).** For every step whose status changes in this request the server fills the step's times from its clock: to `in_progress` sets `startedAt` when it is empty (and clears a `finishedAt` carried over from a reopened `done`/`skipped` step); to `done` or `skipped` sets `finishedAt` when it is empty; back to `pending` clears both. Values sent explicitly (an admin correction, with or without a status change) are kept as sent, normalized to UTC. `finishedAt` must not be earlier than `startedAt` (422 `Završetak koraka ne može biti pre početka.`); a malformed timestamp is 422 `Vreme koraka nije ispravno.`.
+
+
+        **Automatic stock posting.** In the same transaction the server reconciles the warehouse ledger with the graph (only item nodes whose `catalogItemId` links an article). The desired net per node is `+qty` when a step that outputs a product/byproduct node is `done`, plus `-qty` when any step the node feeds (input, or a product/byproduct consumed as input) is `done`; an intermediate product produced and consumed nets out. `qty` is `actualQuantity` (an absolute amount for the whole order, as the operator entered it), else `quantity × factor`, else 0, where `factor` is the order's `jobDetails.quantity` (at least 1) for a per-unit copy and 1 for a copy with `quantitiesPerOrder: true` (D-028: item quantities are per unit of the order, the same rule step times follow; scaled amounts are rounded to three decimals). Reserved quantities in GET /stock use the same factor. `pending`, `in_progress` and `skipped` count as not done. The difference to the net already posted for that work order and node is inserted as one `consumption` (negative) or `production` (positive) movement, so repeating a request posts nothing, un-doing a step reverses it and a changed `actualQuantity` posts only the delta. If a node's article changes (or the node is removed), the old article's net is reversed and the new one posted. Deleting a process or a work order does not reverse movements.
 
         **Module gating.** Posting happens only while the "Magacin" module is on AND the process is stock tracked (created while "Magacin" was on - by apply or auto-attach; processes created while it was off never post, not even after it is switched on). While "Magacin" is off nothing is posted and article links are neither validated nor unit-filled (kept as-is). Turning it off and on again resumes tracked processes: the next save posts the difference (material really used meanwhile). Reserved quantities in GET /stock count tracked processes only. All routes here answer 403 while "Procesi rada" is off.
 
@@ -4699,7 +4702,11 @@ components:
         quantity:
           type: number
           minimum: 0
-          description: Planned quantity. Item nodes only; dropped on steps.
+          description: >-
+            Planned quantity **per unit of the order** (D-028). Item nodes only; dropped on steps. Wherever a
+            planned amount is consumed (reservations, automatic stock posting, the simulator) it is multiplied
+            by the work order's `jobDetails.quantity` (at least 1), unless the order's process copy carries
+            `quantitiesPerOrder: true`.
         unit:
           type: string
           maxLength: 20
@@ -4748,10 +4755,27 @@ components:
           description: Planning, step nodes only. Structural.
         status:
           $ref: '#/components/schemas/ProcessStepStatus'
+        startedAt:
+          type: string
+          format: date-time
+          description: >-
+            Per-order state (D-028): when the step actually started, RFC 3339 in UTC. Step nodes only; dropped on
+            items and stripped from templates. Set by the server when the status moves to `in_progress` and the
+            field is empty; may be sent explicitly to correct it (operators included). Cleared when the step goes
+            back to `pending`.
+        finishedAt:
+          type: string
+          format: date-time
+          description: >-
+            Per-order state (D-028): when the step actually finished, RFC 3339 in UTC. Step nodes only. Set by the
+            server when the status moves to `done` or `skipped` and the field is empty; cleared when the step is
+            reopened (`in_progress`) or reset to `pending`. Must not be earlier than `startedAt` (422).
         actualQuantity:
           type: number
           minimum: 0
-          description: Per-order state. Item nodes only; stripped from templates.
+          description: >-
+            Per-order state. Item nodes only; stripped from templates. An absolute amount for the whole order as
+            the operator recorded it - unlike `quantity`, it is never multiplied by the order's quantity.
     ProcessStepStatus:
       type: string
       enum: [pending, in_progress, done, skipped]
@@ -4830,7 +4854,7 @@ components:
           $ref: '#/components/schemas/ProcessGraph'
     WorkOrderProcess:
       type: object
-      required: [workOrderId, templateId, templateName, graph, updatedAt, updatedBy]
+      required: [workOrderId, templateId, templateName, graph, quantitiesPerOrder, updatedAt, updatedBy]
       properties:
         workOrderId:
           type: string
@@ -4842,6 +4866,13 @@ components:
           description: Template name at the time it was applied.
         graph:
           $ref: '#/components/schemas/ProcessGraph'
+        quantitiesPerOrder:
+          type: boolean
+          description: >-
+            True on process copies that existed before item quantities became per unit (D-028, migration v32):
+            their item-node `quantity` values are absolute amounts for the whole order and are not multiplied by
+            `jobDetails.quantity`. False on every copy created since; re-attaching a template clears it. Read-only
+            (not part of WorkOrderProcessInput).
         updatedAt:
           type: string
           format: date-time

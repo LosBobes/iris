@@ -1,4 +1,5 @@
 import i18n from '@/i18n'
+import { stepTimesOutOfOrder } from '@/lib/process/step-times'
 import { MAX_CREW_SIZE, MAX_STEP_MINUTES } from '@/types/planning'
 import type {
   ProcessEdge,
@@ -203,6 +204,12 @@ export function validateGraph(graph: ProcessGraph): string[] {
           errors.push(t('stepMinutesRange', { label, max: MAX_STEP_MINUTES }))
         }
       }
+      for (const time of [node.startedAt, node.finishedAt]) {
+        if (time !== undefined && time !== '' && Number.isNaN(new Date(time).getTime())) {
+          errors.push(t('stepTimeInvalid', { label }))
+        }
+      }
+      if (stepTimesOutOfOrder(node)) errors.push(t('stepTimesOrder', { label }))
     }
     if (node.note !== undefined && node.note.length > MAX_NOTE_LENGTH) {
       errors.push(t('noteTooLong', { label, max: MAX_NOTE_LENGTH }))
@@ -357,7 +364,9 @@ function sameText(a: string | undefined | null, b: string | undefined | null): b
 /**
  * True when `next` differs from `prev` in anything an operator may not change:
  * the node set, kind, label, quantity, unit, catalogItemId, the planning step
- * fields (machine type, crew size, times), the start/final markers, or the edge set (including labels). Status, actual quantity, note and position are free.
+ * fields (machine type, crew size, times), the start/final markers, or the edge
+ * set (including labels). Status, actual quantity, the actual step times
+ * (startedAt / finishedAt), note and position are free.
  */
 export function hasStructuralChange(prev: ProcessGraph, next: ProcessGraph): boolean {
   if (prev.nodes.length !== next.nodes.length || prev.edges.length !== next.edges.length) return true
@@ -406,12 +415,14 @@ function cloneGraph(graph: ProcessGraph): ProcessGraph {
   }
 }
 
-/** Template → order copy: same structure, all steps pending, no actual quantities. */
+/** Template → order copy: same structure, all steps pending, no actual quantities or step times. */
 export function copyTemplateToOrder(graph: ProcessGraph): ProcessGraph {
   const copy = cloneGraph(graph)
   copy.nodes = copy.nodes.map((node) => {
     const next: ProcessNode = { ...node }
     delete next.actualQuantity
+    delete next.startedAt
+    delete next.finishedAt
     if (node.kind === 'step') next.status = 'pending'
     else delete next.status
     return next
@@ -426,6 +437,8 @@ export function stripOrderState(graph: ProcessGraph): ProcessGraph {
     const next: ProcessNode = { ...node }
     delete next.status
     delete next.actualQuantity
+    delete next.startedAt
+    delete next.finishedAt
     return next
   })
   return copy
@@ -444,6 +457,8 @@ export function normalizeGraphForKinds(graph: ProcessGraph): ProcessGraph {
       delete next.final
     } else {
       delete next.status
+      delete next.startedAt
+      delete next.finishedAt
       delete next.start
       delete next.machineTypeId
       delete next.crewSize

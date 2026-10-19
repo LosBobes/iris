@@ -1,3 +1,4 @@
+import { scalePlannedQuantity } from '@/lib/process/quantities'
 import type { ProcessGraph, ProcessNode } from '@/types/process'
 import type { StockLevel } from '@/types/stock'
 
@@ -6,6 +7,11 @@ import type { StockLevel } from '@/types/stock'
 // linked item node compute the DESIRED net movement from step statuses, then
 // post only the difference to what is already booked. Nothing here touches the
 // API or mutates its inputs.
+//
+// Planned quantities are per unit of the order (D-028): every function that
+// reads `node.quantity` takes the order's `factor` (see
+// `plannedQuantityFactor`; default 1) and multiplies exactly once. Actual
+// quantities are absolute and never scale.
 
 /** Quantities closer to zero than this are treated as zero. */
 export const STOCK_EPSILON = 1e-9
@@ -42,9 +48,14 @@ export function isProduced(graph: ProcessGraph, nodeId: string): boolean {
   )
 }
 
-/** Quantity that gets booked for a node: actual, else planned, else 0. */
-export function postedQuantity(node: ProcessNode): number {
-  return node.actualQuantity ?? node.quantity ?? 0
+/** Planned amount for the order: per-unit quantity × factor (0 when unplanned). */
+export function plannedQuantity(node: ProcessNode, factor = 1): number {
+  return scalePlannedQuantity(node.quantity, factor) ?? 0
+}
+
+/** Quantity that gets booked for a node: actual (absolute), else planned × factor, else 0. */
+export function postedQuantity(node: ProcessNode, factor = 1): number {
+  return node.actualQuantity ?? plannedQuantity(node, factor)
 }
 
 /**
@@ -52,9 +63,9 @@ export function postedQuantity(node: ProcessNode): number {
  * done, -qty once a consuming step is done (an intermediate product that is
  * made by one step and used by another nets to zero).
  */
-export function desiredNet(graph: ProcessGraph, node: ProcessNode): number {
+export function desiredNet(graph: ProcessGraph, node: ProcessNode, factor = 1): number {
   if (!isItem(node)) return 0
-  const qty = postedQuantity(node)
+  const qty = postedQuantity(node, factor)
   if (qty === 0) return 0
   let net = 0
   if (node.kind !== 'input' && isProduced(graph, node.id)) net += qty
@@ -84,7 +95,7 @@ export interface PlannedMovement {
  * node's article changed since it was booked, the old article is reversed and
  * the new one gets the full desired amount.
  */
-export function planProcessPosting(graph: ProcessGraph, existing: readonly ExistingNet[]): PlannedMovement[] {
+export function planProcessPosting(graph: ProcessGraph, existing: readonly ExistingNet[], factor = 1): PlannedMovement[] {
   const movements: PlannedMovement[] = []
   // Material taken by a done consuming step is consumption and output of a done
   // producing step is production; anything else (a step undone, a lower actual
@@ -117,7 +128,7 @@ export function planProcessPosting(graph: ProcessGraph, existing: readonly Exist
     const booked = existing
       .filter((net) => net.processNodeId === node.id && net.catalogItemId === target)
       .reduce((sum, net) => sum + net.quantity, 0)
-    push(node.id, target, desiredNet(graph, node) - booked)
+    push(node.id, target, desiredNet(graph, node, factor) - booked)
   }
   // A node removed from the graph (admin structural edit) has its booking
   // reversed, matching the API.
@@ -133,21 +144,29 @@ export function planProcessPosting(graph: ProcessGraph, existing: readonly Exist
  * nodes whose consuming step is not done yet. This is the contract's per-order
  * `reserved` contribution.
  */
-export function reservedByArticle(graph: ProcessGraph): Map<string, number> {
+export function reservedByArticle(graph: ProcessGraph, factor = 1): Map<string, number> {
   const reserved = new Map<string, number>()
   for (const node of graph.nodes) {
     if (node.kind !== 'input' || !node.catalogItemId) continue
     if (isConsumed(graph, node.id)) continue
-    reserved.set(node.catalogItemId, (reserved.get(node.catalogItemId) ?? 0) + (node.quantity ?? 0))
+    reserved.set(node.catalogItemId, (reserved.get(node.catalogItemId) ?? 0) + plannedQuantity(node, factor))
   }
   return reserved
 }
 
+/** One open order's graph with its planned-quantity factor. */
+export interface ReservingGraph {
+  graph: ProcessGraph
+  /** `plannedQuantityFactor` of the order; absent = 1. */
+  factor?: number
+}
+
 /** Sums `reservedByArticle` over the graphs of all open work orders. */
-export function reservedAcrossGraphs(graphs: readonly ProcessGraph[]): Map<string, number> {
+export function reservedAcrossGraphs(graphs: readonly (ProcessGraph | ReservingGraph)[]): Map<string, number> {
   const total = new Map<string, number>()
-  for (const graph of graphs) {
-    for (const [id, qty] of reservedByArticle(graph)) total.set(id, (total.get(id) ?? 0) + qty)
+  for (const entry of graphs) {
+    const { graph, factor } = 'graph' in entry ? entry : { graph: entry, factor: 1 }
+    for (const [id, qty] of reservedByArticle(graph, factor ?? 1)) total.set(id, (total.get(id) ?? 0) + qty)
   }
   return total
 }
@@ -236,10 +255,11 @@ export interface MaterialRow {
 /**
  * The "Materijal" view of a graph: one row per linked article that has an input
  * node. Articles whose level is not (yet) known are left out rather than
- * guessed. Pure; the caller supplies the levels.
+ * guessed. Planned amounts are per-unit quantities × `factor`. Pure; the caller
+ * supplies the levels.
  */
-export function materialRows(graph: ProcessGraph, mode: StockMode, levels: StockLevelMap): MaterialRow[] {
-  const own = reservedByArticle(graph)
+export function materialRows(graph: ProcessGraph, mode: StockMode, levels: StockLevelMap, factor = 1): MaterialRow[] {
+  const own = reservedByArticle(graph, factor)
   const rows = new Map<string, MaterialRow>()
   for (const node of graph.nodes) {
     if (node.kind !== 'input' || !node.catalogItemId) continue
@@ -264,11 +284,11 @@ export function materialRows(graph: ProcessGraph, mode: StockMode, levels: Stock
       } satisfies MaterialRow)
     row.nodeIds.push(node.id)
     row.nodeLabels.push(node.label)
-    row.planned += node.quantity ?? 0
+    row.planned += plannedQuantity(node, factor)
     if (node.actualQuantity !== undefined) row.actual = (row.actual ?? 0) + node.actualQuantity
     if (!consumed) {
       row.consumed = false
-      row.required += node.actualQuantity ?? node.quantity ?? 0
+      row.required += postedQuantity(node, factor)
     }
     rows.set(level.catalogItemId, row)
   }
@@ -316,8 +336,8 @@ export interface StockContext {
 }
 
 /** Builds the simulator's stock context from loaded levels (see `materialRows` for the availability rule). */
-export function stockContextFor(graph: ProcessGraph, mode: StockMode, levels: StockLevelMap): StockContext {
-  const own = mode === 'order' ? reservedByArticle(graph) : new Map<string, number>()
+export function stockContextFor(graph: ProcessGraph, mode: StockMode, levels: StockLevelMap, factor = 1): StockContext {
+  const own = mode === 'order' ? reservedByArticle(graph, factor) : new Map<string, number>()
   const items: Record<string, StockAvailabilityEntry> = {}
   for (const id of linkedArticleIds(graph)) {
     const level = levels[id]

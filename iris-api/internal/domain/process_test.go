@@ -308,7 +308,7 @@ func TestDesiredStockNetSameArticleInAndOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	net := DesiredStockNet(normalized)
+	net := DesiredStockNet(normalized, 1)
 	for id, want := range map[string]float64{"paper": -10, "leftover": 3, "flyers": 6} {
 		if got := net[id]; got.CatalogItemID != "cat-paper" || got.Net != want {
 			t.Errorf("%s = %+v, want %v", id, got, want)

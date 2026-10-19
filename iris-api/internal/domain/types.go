@@ -1256,6 +1256,12 @@ type ProcessNode struct {
 	MinutesPerUnit *float64          `json:"minutesPerUnit,omitempty"`
 	Status         ProcessStepStatus `json:"status,omitempty"`
 	ActualQuantity *float64          `json:"actualQuantity,omitempty"`
+	// Actual step times (D-028), step nodes only, RFC 3339 UTC. Per-order
+	// state like Status: the server fills them when a step moves to
+	// in_progress / done (see ApplyStepTimestamps); clients may send explicit
+	// values to correct them. Stripped from templates.
+	StartedAt  string `json:"startedAt,omitempty"`
+	FinishedAt string `json:"finishedAt,omitempty"`
 }
 
 // ProcessEdge is a directed connection between two process nodes.
@@ -1298,8 +1304,14 @@ type WorkOrderProcess struct {
 	TemplateID   *string      `json:"templateId"`
 	TemplateName string       `json:"templateName"`
 	Graph        ProcessGraph `json:"graph"`
-	UpdatedAt    string       `json:"updatedAt"`
-	UpdatedBy    string       `json:"updatedBy"`
+	// QuantitiesPerOrder marks a copy whose item-node quantities are absolute
+	// amounts for the whole order (copies created before D-028). Copies made
+	// since carry per-unit quantities that are scaled by the order's
+	// jobDetails.quantity (see PlannedQuantityFactor); re-attaching a template
+	// clears the flag.
+	QuantitiesPerOrder bool   `json:"quantitiesPerOrder"`
+	UpdatedAt          string `json:"updatedAt"`
+	UpdatedBy          string `json:"updatedBy"`
 }
 
 // ApplyProcessTemplateInput attaches a template to a work order.

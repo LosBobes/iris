@@ -113,15 +113,28 @@ func (s *FixtureStore) decorateMovementLocked(movement domain.StockMovement) dom
 	return movement
 }
 
+// quantityFactorLocked mirrors workOrderQuantityFactor for the fixture store.
+func (s *FixtureStore) quantityFactorLocked(workOrderID string, quantitiesPerOrder bool) float64 {
+	if quantitiesPerOrder || s.ensureWorkOrdersLoaded() != nil {
+		return 1
+	}
+	for i := range s.workOrders {
+		if s.workOrders[i].ID == workOrderID {
+			return domain.WorkOrderQuantityFactor(&s.workOrders[i], false)
+		}
+	}
+	return 1
+}
+
 // postWorkOrderStockLocked mirrors postWorkOrderStock for the fixture store.
-func (s *FixtureStore) postWorkOrderStockLocked(workOrderID string, graph domain.ProcessGraph, username, now string) {
+func (s *FixtureStore) postWorkOrderStockLocked(workOrderID string, graph domain.ProcessGraph, factor float64, username, now string) {
 	existing := map[domain.StockNodeKey]float64{}
 	for _, movement := range s.stockMovements {
 		if movement.WorkOrderID != nil && *movement.WorkOrderID == workOrderID && movement.ProcessNodeID != nil {
 			existing[domain.StockNodeKey{NodeID: *movement.ProcessNodeID, CatalogItemID: movement.CatalogItemID}] += movement.Quantity
 		}
 	}
-	for _, planned := range domain.PlanStockPostings(graph, existing) {
+	for _, planned := range domain.PlanStockPostings(graph, factor, existing) {
 		article, ok := s.articleLocked(planned.CatalogItemID)
 		if !ok {
 			continue
@@ -140,7 +153,7 @@ func (s *FixtureStore) openReservationsLocked() map[string]float64 {
 			continue
 		}
 		if process, ok := s.workOrderProcesses[order.ID]; ok && s.stockTracked[order.ID] {
-			sumReserved(reserved, process.Graph)
+			sumReserved(reserved, process.Graph, domain.WorkOrderQuantityFactor(&order, process.QuantitiesPerOrder))
 		}
 	}
 	return reserved

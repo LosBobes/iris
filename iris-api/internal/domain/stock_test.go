@@ -46,7 +46,7 @@ func setStatus(graph ProcessGraph, id string, status ProcessStepStatus) ProcessG
 
 func nets(graph ProcessGraph) map[string]float64 {
 	out := map[string]float64{}
-	for id, want := range DesiredStockNet(graph) {
+	for id, want := range DesiredStockNet(graph, 1) {
 		out[id] = want.Net
 	}
 	return out
@@ -142,28 +142,28 @@ func TestDesiredStockNetConsumedOnceWhenFeedingTwoSteps(t *testing.T) {
 
 func TestReservedInputs(t *testing.T) {
 	graph := stockGraph()
-	got := ReservedInputs(graph)
+	got := ReservedInputs(graph, 1)
 	if got["a-paper"] != 100 || got["a-ink"] != 2 || len(got) != 2 {
 		t.Errorf("reserved = %v (products/byproducts and unlinked inputs must not reserve)", got)
 	}
-	consumed := ReservedInputs(setStatus(graph, "print", ProcessStepDone))
+	consumed := ReservedInputs(setStatus(graph, "print", ProcessStepDone), 1)
 	if len(consumed) != 0 {
 		t.Errorf("after print done = %v, want none", consumed)
 	}
-	if skipped := ReservedInputs(setStatus(graph, "print", ProcessStepSkipped)); skipped["a-paper"] != 100 {
+	if skipped := ReservedInputs(setStatus(graph, "print", ProcessStepSkipped), 1); skipped["a-paper"] != 100 {
 		t.Errorf("skipped step still reserves: %v", skipped)
 	}
 	// Two nodes of the same article add up; planned quantity, not actual.
 	graph.Nodes = append(graph.Nodes, ProcessNode{ID: "paper2", Kind: ProcessNodeInput, Label: "Papir 2", Quantity: qty(5), ActualQuantity: qty(50), CatalogItemID: "a-paper"})
 	graph.Edges = append(graph.Edges, ProcessEdge{ID: "e9", Source: "paper2", Target: "cut"})
-	if got := ReservedInputs(graph)["a-paper"]; got != 105 {
+	if got := ReservedInputs(graph, 1)["a-paper"]; got != 105 {
 		t.Errorf("summed = %v, want 105", got)
 	}
 }
 
 func TestPlanStockPostingsIsIdempotentAndReversible(t *testing.T) {
 	graph := setStatus(stockGraph(), "print", ProcessStepDone)
-	first := PlanStockPostings(graph, nil)
+	first := PlanStockPostings(graph, 1, nil)
 	if len(first) != 3 { // paper, ink, sheets
 		t.Fatalf("plan = %+v", first)
 	}
@@ -178,12 +178,12 @@ func TestPlanStockPostingsIsIdempotentAndReversible(t *testing.T) {
 			t.Errorf("%s kind = %s", m.NodeID, m.Kind)
 		}
 	}
-	if again := PlanStockPostings(graph, existing); len(again) != 0 {
+	if again := PlanStockPostings(graph, 1, existing); len(again) != 0 {
 		t.Fatalf("second plan = %+v, want none", again)
 	}
 
 	// Undo reverses everything.
-	reverse := PlanStockPostings(setStatus(graph, "print", ProcessStepPending), existing)
+	reverse := PlanStockPostings(setStatus(graph, "print", ProcessStepPending), 1, existing)
 	if len(reverse) != 3 {
 		t.Fatalf("reverse = %+v", reverse)
 	}
@@ -203,7 +203,7 @@ func TestPlanStockPostingsIsIdempotentAndReversible(t *testing.T) {
 			changed.Nodes[i].ActualQuantity = qty(95)
 		}
 	}
-	delta := PlanStockPostings(changed, existing)
+	delta := PlanStockPostings(changed, 1, existing)
 	// Using less paper than posted gives material back: a correction, not production.
 	if len(delta) != 1 || delta[0].NodeID != "paper" || delta[0].Quantity != 5 || delta[0].Kind != StockMovementAdjustment {
 		t.Fatalf("delta = %+v, want +5 adjustment on paper", delta)
@@ -218,7 +218,7 @@ func TestPlanStockPostingsRelinkAndRemovedNodes(t *testing.T) {
 		{NodeID: "sheets", CatalogItemID: "a-sheets"}:   90,
 		{NodeID: "gone", CatalogItemID: "a-gone"}:       -7, // node no longer in the graph
 	}
-	plan := PlanStockPostings(graph, existing)
+	plan := PlanStockPostings(graph, 1, existing)
 	got := map[StockNodeKey]float64{}
 	for _, m := range plan {
 		got[StockNodeKey{NodeID: m.NodeID, CatalogItemID: m.CatalogItemID}] = m.Quantity
@@ -305,5 +305,38 @@ func TestStockLowAndValidation(t *testing.T) {
 	}
 	if got := ValidateStockCount(StockCountInput{Lines: []StockCountLine{{CatalogItemID: "a", CountedQuantity: 0}}}); got != "" {
 		t.Errorf("zero count rejected: %q", got)
+	}
+}
+
+// Planned quantities are per unit of the order and scale by the order's
+// quantity factor (D-028); actual quantities are absolute and never scale.
+func TestStockQuantitiesScaleByOrderFactor(t *testing.T) {
+	graph := stockGraph()
+	reserved := ReservedInputs(graph, 3)
+	if reserved["a-paper"] != 300 || reserved["a-ink"] != 6 {
+		t.Fatalf("reserved ×3 = %v", reserved)
+	}
+	done := setStatus(setStatus(graph, "print", ProcessStepDone), "cut", ProcessStepDone)
+	for i := range done.Nodes {
+		if done.Nodes[i].ID == "ink" {
+			done.Nodes[i].ActualQuantity = qty(5) // absolute, entered by the operator
+		}
+	}
+	net := DesiredStockNet(done, 3)
+	want := map[string]float64{"paper": -300, "ink": -5, "sheets": 0, "waste": 9, "done": 240}
+	for id, expected := range want {
+		if got := net[id].Net; math.Abs(got-expected) > 1e-9 {
+			t.Errorf("%s net ×3 = %v, want %v", id, got, expected)
+		}
+	}
+	// A legacy per-order copy (factor 1) keeps the stored amounts as they are.
+	if legacy := DesiredStockNet(done, 1); legacy["paper"].Net != -100 || legacy["done"].Net != 80 {
+		t.Fatalf("legacy net = %v", legacy)
+	}
+	// Fractional per-unit amounts round to three decimals once scaled.
+	fractional := CloneProcessGraph(graph)
+	fractional.Nodes[0].Quantity = qty(1100.0 / 3000.0)
+	if got := ReservedInputs(fractional, 3000)["a-paper"]; got != 1100 {
+		t.Fatalf("fractional reserved = %v, want 1100", got)
 	}
 }

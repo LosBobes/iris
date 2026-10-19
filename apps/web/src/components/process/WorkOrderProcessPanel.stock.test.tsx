@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { renderWithQueryClient } from '@/test/query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import '@testing-library/jest-dom/vitest'
@@ -56,7 +57,7 @@ function level(id: string, name: string, unit: string, onHand: number, reserved:
 }
 
 function renderPanel() {
-  return render(
+  return renderWithQueryClient(
     <MemoryRouter>
       <WithModules modules={ALL_MODULES}>
         <WorkOrderProcessPanel workOrderId="wo-1" canEditStructure />

@@ -781,6 +781,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
   const processStore = createProcessFixtureStore({
     currentUser: currentFixtureUser,
     workOrderExists: (id) => workOrders.some((order) => order.id === id),
+    workOrderQuantity: (id) => workOrders.find((order) => order.id === id)?.jobDetails?.quantity,
     tenantSlug: FIXTURE_ORGANIZATION.slug,
     platformSignedIn: () => platformSignedIn,
     modules: () => modules,

@@ -10,7 +10,7 @@ import (
 func TestReservedCacheIsBounded(t *testing.T) {
 	for i := 0; i < 3*reservedCacheMaxEntries; i++ {
 		raw := fmt.Sprintf(`{"nodes":[],"edges":[],"note":"%d"}`, i)
-		if _, err := reservedInputsForGraph(raw); err != nil {
+		if _, err := reservedInputsForGraph(raw, 1); err != nil {
 			t.Fatalf("reservedInputsForGraph: %v", err)
 		}
 		reservedCache.Lock()
@@ -22,8 +22,8 @@ func TestReservedCacheIsBounded(t *testing.T) {
 	}
 	// The same text hits the cache.
 	raw := `{"nodes":[],"edges":[]}`
-	first, _ := reservedInputsForGraph(raw)
-	second, _ := reservedInputsForGraph(raw)
+	first, _ := reservedInputsForGraph(raw, 1)
+	second, _ := reservedInputsForGraph(raw, 1)
 	if fmt.Sprintf("%p", first) != fmt.Sprintf("%p", second) {
 		t.Fatal("identical graph text missed the cache")
 	}
