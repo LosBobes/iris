@@ -1713,6 +1713,8 @@ export const en: typeof sr = {
       unplannable: 'Cannot be planned',
       empty: 'No open orders with a process.',
       loadError: 'Failed to load the forecast.',
+      latestStart: 'Latest start',
+      latestStartPassed: 'the latest start has passed',
     },
     myQueue: {
       link: 'My queue',

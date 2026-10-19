@@ -4807,7 +4807,7 @@ components:
         message: {type: string, description: User-facing Serbian text.}
     OrderForecast:
       type: object
-      required: [workOrderId, orderNumber, clientName, dueDate, priority, estimatedFinish, late, unplannable]
+      required: [workOrderId, orderNumber, clientName, dueDate, priority, estimatedFinish, late, unplannable, latestStart, latestStartPassed]
       properties:
         workOrderId: {type: string}
         orderNumber: {type: string}
@@ -4823,6 +4823,19 @@ components:
           nullable: true
         late: {type: boolean}
         unplannable: {type: boolean}
+        latestStart:
+          type: string
+          format: date
+          nullable: true
+          description: >-
+            Local date the order's remaining steps must start by to finish by the end of its due date's shift (the last
+            working shift on or before it when the due date is a day off; D-028). A backward pass over the longest
+            remaining chain of open steps: durations plus the inter-operation time `transferMinutes`, in working time
+            only (machines and people are not considered). Informational. Null when the order has no due date, no open
+            step, or an open step has no duration set.
+        latestStartPassed:
+          type: boolean
+          description: True when `latestStart` is before the forecast's start date (today for the forecast).
     ProductionPlan:
       type: object
       description: >-

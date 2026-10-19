@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { usePlanningForecast } from '@/hooks/usePlanning'
 import { formatWorkOrderDate, getWorkOrderPriorityLabel } from '@/shared/utils/work-orders'
 import { ForecastBadges } from './ForecastBadges'
+import { LatestStartDate } from './LatestStartDate'
 
 /** "Prognoza": estimated finish of every open order with a process. */
 export function ForecastTable(): React.JSX.Element {
@@ -32,7 +33,7 @@ export function ForecastTable(): React.JSX.Element {
         </p>
       ) : (
         <div className="overflow-x-auto border border-border bg-card">
-          <table className="w-full min-w-[640px] border-collapse text-left text-[12px]">
+          <table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
             <thead>
               <tr className="border-b border-border text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)]">
                 <th scope="col" className="px-4 py-2 font-normal">{t('planning.forecast.order')}</th>
@@ -40,6 +41,7 @@ export function ForecastTable(): React.JSX.Element {
                 <th scope="col" className="px-4 py-2 font-normal">{t('planning.forecast.dueDate')}</th>
                 <th scope="col" className="px-4 py-2 font-normal">{t('planning.forecast.priority')}</th>
                 <th scope="col" className="px-4 py-2 font-normal">{t('planning.forecast.estimatedFinish')}</th>
+                <th scope="col" className="px-4 py-2 font-normal">{t('planning.forecast.latestStart')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[color:var(--iris-border-soft)]">
@@ -60,6 +62,9 @@ export function ForecastTable(): React.JSX.Element {
                       </span>
                       <ForecastBadges forecast={entry} />
                     </span>
+                  </td>
+                  <td className="px-4 py-2">
+                    <LatestStartDate forecast={entry} fallback="—" />
                   </td>
                 </tr>
               ))}

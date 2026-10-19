@@ -1713,6 +1713,8 @@ export const sr = {
       unplannable: 'Ne može se planirati',
       empty: 'Nema otvorenih naloga sa procesom.',
       loadError: 'Greška pri učitavanju prognoze.',
+      latestStart: 'Najkasniji početak',
+      latestStartPassed: 'najkasniji početak je prošao',
     },
     myQueue: {
       link: 'Moj red',

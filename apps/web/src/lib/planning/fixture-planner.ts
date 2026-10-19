@@ -24,6 +24,7 @@
 // - the horizon is PLANNING_FORECAST_DAYS working days.
 
 import { predecessorSteps, stepStatus } from '@/lib/process/graph'
+import { latestStartOf } from '@/lib/planning/latest-start'
 import type { ProcessGraph, ProcessNode } from '@/types/process'
 import {
   PLANNING_FORECAST_DAYS,
@@ -772,6 +773,17 @@ export function planDay(input: PlannerInput): PlannerResult {
     const unfinished = pending.some((item) => item.order.id === order.id && !finish.has(item.key))
     const unplannable = blocking || unfinished
     const estimated = unplannable ? null : (lastBlock.get(order.id) ?? fallbackDate)
+    // D-028: backward pass from the due date (calendar only, see latest-start.ts).
+    const latestStart = latestStartOf(
+      order.graph,
+      order.dueDate,
+      lag,
+      (step) => (hasTimes(step) ? stepDurationMinutes(step, order.quantity) : null),
+      (date) => {
+        const day = shiftOn(input.hours, date)
+        return day ? shiftSegments(day) : []
+      },
+    )
     return {
       workOrderId: order.id,
       orderNumber: order.number,
@@ -781,6 +793,8 @@ export function planDay(input: PlannerInput): PlannerResult {
       estimatedFinish: estimated,
       late: estimated !== null && order.dueDate !== null && estimated > order.dueDate,
       unplannable,
+      latestStart,
+      latestStartPassed: latestStart !== null && latestStart < fallbackDate,
     }
   })
   forecast.sort((a, b) => {

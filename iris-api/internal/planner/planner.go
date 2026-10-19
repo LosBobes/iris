@@ -125,7 +125,8 @@ var ErrInvalidHours = errors.New("planner: invalid working hours")
 // Forecast: EstimatedFinish is the local date of the order's last block
 // (or of Start's date when nothing is left to do); Late when that is after
 // DueDate; Unplannable (and EstimatedFinish nil) when any of its steps has an
-// issue other than PlanIssueMissingDuration.
+// issue other than PlanIssueMissingDuration. LatestStart is a backward pass
+// from DueDate over the open steps in working time (see latest_start.go).
 func Plan(in Input) (Result, error) {
 	return plan(in)
 }
