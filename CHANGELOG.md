@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.8.1 — 2026-10-19
+
+### Patch
+
+- The Iris logo now shows on the sign-in screen and at the top of the mobile menu, and the mobile menu opens below the impersonation and announcement banners instead of under them.
+
 ## 2.8.0 — 2026-10-19
 
 ### Minor
