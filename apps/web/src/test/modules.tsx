@@ -3,15 +3,15 @@ import { OrganizationContext } from '@/contexts/OrganizationContext'
 import type { OrganizationModules } from '@/types/settings'
 
 /** Magacin and Procesi rada on, Planiranje and Prisustvo off (processes requires stock). */
-export const ALL_MODULES: OrganizationModules = { processes: true, stock: true, planning: false, attendance: false }
+export const ALL_MODULES: OrganizationModules = { processes: true, stock: true, planning: false, attendance: false, einvoicing: false, edispatch: false }
 /** Every module on (planning requires processes and attendance). */
-export const PLANNING_MODULES: OrganizationModules = { processes: true, stock: true, planning: true, attendance: true }
+export const PLANNING_MODULES: OrganizationModules = { processes: true, stock: true, planning: true, attendance: true, einvoicing: false, edispatch: false }
 /** Only the Magacin module on. */
-export const STOCK_ONLY: OrganizationModules = { processes: false, stock: true, planning: false, attendance: false }
+export const STOCK_ONLY: OrganizationModules = { processes: false, stock: true, planning: false, attendance: false, einvoicing: false, edispatch: false }
 /** Only the Prisustvo module on (it has no requirements). */
-export const ATTENDANCE_ONLY: OrganizationModules = { processes: false, stock: false, planning: false, attendance: true }
+export const ATTENDANCE_ONLY: OrganizationModules = { processes: false, stock: false, planning: false, attendance: true, einvoicing: false, edispatch: false }
 /** Fresh-organization default. */
-export const NO_MODULES: OrganizationModules = { processes: false, stock: false, planning: false, attendance: false }
+export const NO_MODULES: OrganizationModules = { processes: false, stock: false, planning: false, attendance: false, einvoicing: false, edispatch: false }
 
 /**
  * Test wrapper that provides the organization context with the given modules

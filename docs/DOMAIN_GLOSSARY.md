@@ -120,6 +120,16 @@ setting needs no migration.
 | **Billing Defaults** | `billingDefaults` | `Podrazumevani obračun` | Default `documentType` for new orders. Default `proforma`; operators can always change it per order. |
 | **Priority Defaults** | `priorityDefaults` | `Podrazumevani prioritet` | Default `priority` for new orders + `allowOverride`. Default `normal`, not overridable. |
 | **Show Shipping Options** | `showShippingOptions` | `Prikaži opcije otpreme` | Toggles the extra shipping/handling fields on the work-order form. Off by default. |
+| **Seller identity** | `sellerIdentity` | `Podaci o firmi za e-Fakture i e-Otpremnice` | The organization's own legal name, PIB, MB, structured address, bank account and VAT-payer flag as sent on government documents (D-030). `null` until saved; edited by admins while `einvoicing` or `edispatch` is on. Key `seller_identity`. |
+
+## Government documents (D-030)
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **E-invoicing module** | `einvoicing` | `e-Fakture` | Per-organization module (off by default, Backoffice-only, no requirements) for sending invoices to SEF. |
+| **E-dispatch module** | `edispatch` | `e-Otpremnice` | Per-organization module (off by default, Backoffice-only, no requirements, independent of `einvoicing`) for electronic dispatch notes. |
+| **SEF** | — | `Sistem elektronskih faktura` | The Ministry of Finance's e-invoicing system; B2B/B2G invoices go through it as UBL 2.1 with the Serbian CIUS. |
+| **eOtpremnica / prijemnica** | — | `eOtpremnica` / `prijemnica` | Electronic dispatch note and the buyer's confirming receipt; mandatory for the public sector and its suppliers since 1 Jan 2026, for every firm from 1 Oct 2027. |
 
 ## Work-Order Processes
 

@@ -34,6 +34,7 @@ import {
   type BillingDefaults,
   type OrganizationModules,
   type OrganizationSettings,
+  type SellerIdentity,
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
@@ -187,6 +188,9 @@ function AppContent(): React.JSX.Element {
   const [showShippingOptions, setShowShippingOptions] = useState(
     DEFAULT_SHOW_SHIPPING_OPTIONS,
   );
+  const [sellerIdentity, setSellerIdentity] = useState<SellerIdentity | null>(
+    null,
+  );
   const [modules, setModules] = useState<OrganizationModules>(
     DEFAULT_ORGANIZATION_MODULES,
   );
@@ -214,6 +218,7 @@ function AppContent(): React.JSX.Element {
           ? settings.showShippingOptions
           : DEFAULT_SHOW_SHIPPING_OPTIONS,
       );
+      setSellerIdentity(settings?.sellerIdentity ?? null);
       // Optional modules are off unless the server says otherwise.
       setModules(normalizeOrganizationModules(settings?.modules));
     },
@@ -399,6 +404,8 @@ function AppContent(): React.JSX.Element {
       setPrintItemColumns,
       showShippingOptions,
       setShowShippingOptions,
+      sellerIdentity,
+      setSellerIdentity,
       modules,
     }),
     [
@@ -408,6 +415,7 @@ function AppContent(): React.JSX.Element {
       priorityDefaults,
       printItemColumns,
       showShippingOptions,
+      sellerIdentity,
       modules,
     ],
   );

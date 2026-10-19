@@ -12,6 +12,7 @@ import {
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
+  type SellerIdentity,
 } from '@/types/settings'
 
 export interface OrganizationContextValue {
@@ -39,6 +40,10 @@ export interface OrganizationContextValue {
   showShippingOptions: boolean
   /** Updates the in-memory shipping-options toggle after a successful save. */
   setShowShippingOptions: (showShippingOptions: boolean) => void
+  /** Legal identity for e-invoices and e-dispatch notes (D-030); null until saved. */
+  sellerIdentity: SellerIdentity | null
+  /** Updates the in-memory seller identity after a successful save. */
+  setSellerIdentity: (sellerIdentity: SellerIdentity | null) => void
   /**
    * Optional modules enabled for the organization (Backoffice-controlled, both
    * off by default and while settings are loading or unknown).
@@ -59,5 +64,7 @@ export const OrganizationContext = createContext<OrganizationContextValue>({
   setPrintItemColumns: () => {},
   showShippingOptions: DEFAULT_SHOW_SHIPPING_OPTIONS,
   setShowShippingOptions: () => {},
+  sellerIdentity: null,
+  setSellerIdentity: () => {},
   modules: DEFAULT_ORGANIZATION_MODULES,
 })

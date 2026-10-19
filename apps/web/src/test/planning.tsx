@@ -8,7 +8,7 @@ import { getLocalIsoDate } from '@/shared/utils/work-orders'
 import { QueryWrapper } from './query'
 import { useContext } from 'react'
 
-export const PLANNING_MODULES: OrganizationModules = { processes: true, stock: true, planning: true, attendance: true }
+export const PLANNING_MODULES: OrganizationModules = { processes: true, stock: true, planning: true, attendance: true, einvoicing: false, edispatch: false }
 
 export function today(): string {
   return getLocalIsoDate()

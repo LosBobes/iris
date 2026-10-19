@@ -2692,11 +2692,12 @@ paths:
       tags: [Platform]
       summary: Switch an organization's optional modules (operator only)
       description: >-
-        Sets all modules ("Procesi rada", "Magacin", "Planiranje", "Prisustvo") of the organization. `processes: true`
+        Sets all modules ("Procesi rada", "Magacin", "Planiranje", "Prisustvo", "e-Fakture", "e-Otpremnice") of the
+        organization; an omitted module is switched off. `processes: true`
         requires `stock: true` (422 `Modul „Procesi rada“ zahteva uključen modul „Magacin“.`, nothing written);
         `planning: true` requires `processes: true` and `attendance: true` (422 naming the missing module).
         Recorded as `tenant.modules` in the activity log, in the same transaction, with detail
-        `{"processes":"on|off","stock":"on|off","planning":"on|off","attendance":"on|off","changed":"attendance,planning"}` (new values; `changed` lists the
+        `{"processes":"on|off","stock":"on|off","planning":"on|off","attendance":"on|off","einvoicing":"on|off","edispatch":"on|off","changed":"attendance,planning"}` (new values; `changed` lists the
         names that differ). Setting the current state is a no-op: 200 and no audit row.
       operationId: setPlatformTenantModules
       security:
@@ -6331,7 +6332,7 @@ components:
       example: [quantity, unitPrice, total]
     OrganizationSettings:
       type: object
-      required: [firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules]
+      required: [firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, sellerIdentity, modules]
       properties:
         modules:
           readOnly: true
@@ -6358,9 +6359,63 @@ components:
             Whether the work-order form exposes the extra shipping/handling
             fields (drives-out, wait-for-payment, packaging, labeling, fragile,
             signature, insurance). Off by default.
+        sellerIdentity:
+          description: >-
+            The organization's legal identity on government e-invoices and e-dispatch notes (D-030); `null` until
+            an admin saves it. Readable by every user (it is printed on documents).
+          oneOf:
+            - $ref: '#/components/schemas/SellerIdentity'
+            - type: 'null'
+    SellerIdentity:
+      type: object
+      required: [legalName, pib, mb, street, city, postalCode, countryCode, bankAccount, vatPayer, email]
+      description: >-
+        The organization as the seller on SEF e-invoices and the sender of eOtpremnica (D-030). Saved whole via
+        `PUT /settings`; every field is trimmed. 422 (Serbian message, nothing written) when the legal name or an
+        address part is empty, the PIB is not 9 digits with a valid ISO 7064 MOD 11,10 control digit, the MB is
+        not 8 digits, a Serbian (`RS`) postal code is not 5 digits, the country code is not two letters, the bank
+        account is not `3-13-2` digits or the e-mail is malformed.
+      properties:
+        legalName:
+          type: string
+          maxLength: 200
+          description: Registered business name (poslovno ime).
+          example: Radionica Novak d.o.o.
+        pib:
+          type: string
+          example: '101234569'
+        mb:
+          type: string
+          example: '12345678'
+        street:
+          type: string
+          maxLength: 200
+          description: Street and number.
+        city:
+          type: string
+          maxLength: 200
+        postalCode:
+          type: string
+          example: '21000'
+        countryCode:
+          type: string
+          description: ISO 3166-1 alpha-2, upper-cased on save; empty input means `RS`.
+          example: RS
+        bankAccount:
+          type: string
+          description: >-
+            Current account (tekući račun). Accepts the short dashed form (`160-12345-67`) or 18 digits; stored
+            and returned as `XXX-XXXXXXXXXXXXX-XX` (middle part zero-padded). Control digits are not recomputed.
+          example: 160-0000000012345-67
+        vatPayer:
+          type: boolean
+          description: Whether the organization is a VAT payer (obveznik PDV-a).
+        email:
+          type: [string, 'null']
+          description: Optional contact e-mail of the seller party; blank becomes `null`.
     OrganizationModules:
       type: object
-      required: [processes, stock, planning, attendance]
+      required: [processes, stock, planning, attendance, einvoicing, edispatch]
       description: >-
         Optional per-organization modules, all off by default. `attendance` ("Prisustvo", D-027: who is at work
         on a date) has no dependencies and can be used alone; a stored value without the key (data from before
@@ -6383,6 +6438,16 @@ components:
           type: boolean
         attendance:
           type: boolean
+        einvoicing:
+          type: boolean
+          description: >-
+            "e-Fakture" (D-030): government e-invoices through SEF. No dependencies; a stored value without the
+            key reads as off.
+        edispatch:
+          type: boolean
+          description: >-
+            "e-Otpremnice" (D-030): electronic dispatch notes (eOtpremnica) and the buyer's prijemnica. No
+            dependencies (independent of `einvoicing`); a stored value without the key reads as off.
     OrganizationSettingsUpdate:
       type: object
       description: >-
@@ -6404,6 +6469,8 @@ components:
         showShippingOptions:
           type: boolean
           description: Whether the work-order form exposes extra shipping/handling fields.
+        sellerIdentity:
+          $ref: '#/components/schemas/SellerIdentity'
     CatalogItemInput:
       type: object
       required: [name, kind, unit]

@@ -60,6 +60,13 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 	if update.ShowShippingOptions != nil {
 		current.ShowShippingOptions = *update.ShowShippingOptions
 	}
+	if update.SellerIdentity != nil {
+		identity, err := normalizeSellerIdentity(*update.SellerIdentity)
+		if err != nil {
+			return domain.OrganizationSettings{}, err
+		}
+		current.SellerIdentity = &identity
+	}
 
 	s.firmName = current.FirmName
 	sections := current.PDFSections
@@ -72,6 +79,7 @@ func (s *FixtureStore) UpdateOrganizationSettings(
 	s.printItemColumns = &printItemColumns
 	showShippingOptions := current.ShowShippingOptions
 	s.showShippingOptions = &showShippingOptions
+	s.sellerIdentity = cloneSellerIdentity(current.SellerIdentity)
 	return current, nil
 }
 
@@ -107,6 +115,7 @@ func (s *FixtureStore) organizationSettingsLocked() domain.OrganizationSettings 
 		PriorityDefaults:    priorityDefaults,
 		PrintItemColumns:    printItemColumns,
 		ShowShippingOptions: showShippingOptions,
+		SellerIdentity:      cloneSellerIdentity(s.sellerIdentity),
 		Modules:             s.modules,
 	}
 }

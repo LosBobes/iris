@@ -9,7 +9,9 @@ import {
   type OrganizationModules,
 } from "@/types/settings";
 
-export type ModuleKey = keyof OrganizationModules;
+// e-Fakture and e-Otpremnice (D-030) join the playground once they can send
+// documents; until then the landing page does not advertise them.
+export type ModuleKey = Exclude<keyof OrganizationModules, "einvoicing" | "edispatch">;
 
 export const MODULE_ORDER: ModuleKey[] = ["stock", "processes", "attendance", "planning"];
 

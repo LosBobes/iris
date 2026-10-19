@@ -92,6 +92,7 @@ func (s *SQLiteStore) invalidateEnums(tenantID string) {
 
 func cloneSettings(settings domain.OrganizationSettings) domain.OrganizationSettings {
 	settings.PrintItemColumns = append([]domain.PrintItemColumn(nil), settings.PrintItemColumns...)
+	settings.SellerIdentity = cloneSellerIdentity(settings.SellerIdentity)
 	return settings
 }
 

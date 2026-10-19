@@ -48,24 +48,24 @@ describe('stock HTTP client', () => {
 
 describe('organization modules HTTP client', () => {
   it('PUTs the modules to the platform route and returns the tenant', async () => {
-    const tenant = { slug: 'demo', modules: { processes: true, stock: true, planning: false, attendance: false } }
+    const tenant = { slug: 'demo', modules: { processes: true, stock: true, planning: false, attendance: false, einvoicing: false, edispatch: false } }
     const { api, fetchMock } = setup(tenant)
-    expect(await api.setPlatformTenantModules('de mo', { processes: true, stock: true, planning: false, attendance: false })).toEqual(tenant)
+    expect(await api.setPlatformTenantModules('de mo', { processes: true, stock: true, planning: false, attendance: false, einvoicing: false, edispatch: false })).toEqual(tenant)
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('http://api.test/platform/tenants/de%20mo/modules')
     expect(init.method).toBe('PUT')
-    expect(JSON.parse(init.body)).toEqual({ processes: true, stock: true, planning: false, attendance: false })
+    expect(JSON.parse(init.body)).toEqual({ processes: true, stock: true, planning: false, attendance: false, einvoicing: false, edispatch: false })
   })
 
   it('never sends modules in updateSettings and defaults missing modules to off', async () => {
     const { api, fetchMock } = setup({ firmName: 'X' })
-    const result = await api.updateSettings({ firmName: 'X', modules: { processes: true, stock: true, planning: false, attendance: false } } as never)
+    const result = await api.updateSettings({ firmName: 'X', modules: { processes: true, stock: true, planning: false, attendance: false, einvoicing: false, edispatch: false } } as never)
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ firmName: 'X' })
-    expect(result.modules).toEqual({ processes: false, stock: false, planning: false, attendance: false })
+    expect(result.modules).toEqual({ processes: false, stock: false, planning: false, attendance: false, einvoicing: false, edispatch: false })
   })
 
   it('treats processes without stock as processes off when reading settings', async () => {
-    const { api } = setup({ firmName: 'X', modules: { processes: true, stock: false, planning: false, attendance: false } })
-    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: false, planning: false, attendance: false })
+    const { api } = setup({ firmName: 'X', modules: { processes: true, stock: false, planning: false, attendance: false, einvoicing: false, edispatch: false } })
+    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: false, planning: false, attendance: false, einvoicing: false, edispatch: false })
   })
 })

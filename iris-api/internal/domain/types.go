@@ -293,6 +293,10 @@ type OrganizationSettings struct {
 	// fields (drives-out, wait-for-payment, packaging, labeling, fragile,
 	// signature, insurance). Off by default so the form stays compact.
 	ShowShippingOptions bool `json:"showShippingOptions"`
+	// SellerIdentity is the organization's own legal identity as it appears on
+	// government e-invoices and e-dispatch notes (D-030). nil until an admin
+	// saves it.
+	SellerIdentity *SellerIdentity `json:"sellerIdentity"`
 	// Modules reports which optional modules the organization has. Read-only
 	// here: only Backoffice superadmins switch them (PUT /platform/tenants/{slug}/modules),
 	// and PUT /settings ignores it.
@@ -304,7 +308,9 @@ type OrganizationSettings struct {
 // process templates, per-order processes and the simulator (requires Stock;
 // with both on, process item nodes link to articles and steps post stock
 // movements); "attendance" enables daily attendance on its own ("Prisustvo",
-// D-027); "planning" requires Processes and Attendance.
+// D-027); "planning" requires Processes and Attendance; "einvoicing" and
+// "edispatch" (D-030) enable government e-invoices (SEF) and e-dispatch notes
+// (eOtpremnica), each on its own.
 type OrganizationModules struct {
 	Processes bool `json:"processes"`
 	Stock     bool `json:"stock"`
@@ -312,6 +318,10 @@ type OrganizationModules struct {
 	Planning bool `json:"planning"`
 	// Attendance ("Prisustvo", D-027) has no dependencies.
 	Attendance bool `json:"attendance"`
+	// EInvoicing ("e-Fakture", D-030) has no dependencies.
+	EInvoicing bool `json:"einvoicing"`
+	// EDispatch ("e-Otpremnice", D-030) has no dependencies.
+	EDispatch bool `json:"edispatch"`
 }
 
 // OrganizationModulesUpdate is a partial module switch used by irisctl
@@ -321,6 +331,34 @@ type OrganizationModulesUpdate struct {
 	Stock      *bool
 	Planning   *bool
 	Attendance *bool
+	EInvoicing *bool
+	EDispatch  *bool
+}
+
+// SellerIdentity is the organization as the seller on e-invoices (SEF) and the
+// sender of e-dispatch notes (eOtpremnica), D-030. Every field except Email is
+// required when it is saved; the store normalizes and validates it.
+type SellerIdentity struct {
+	// LegalName is the registered business name (poslovno ime).
+	LegalName string `json:"legalName"`
+	// Pib is the 9-digit tax ID with a valid control digit; Mb the 8-digit
+	// registration number.
+	Pib string `json:"pib"`
+	Mb  string `json:"mb"`
+	// Street (with number), City, PostalCode and CountryCode (ISO 3166-1
+	// alpha-2, "RS") form the structured address SEF requires.
+	Street      string `json:"street"`
+	City        string `json:"city"`
+	PostalCode  string `json:"postalCode"`
+	CountryCode string `json:"countryCode"`
+	// BankAccount is the current account (tekući račun) in the canonical
+	// "XXX-XXXXXXXXXXXXX-XX" form; shorter input is zero-padded in the middle.
+	BankAccount string `json:"bankAccount"`
+	// VatPayer reports whether the organization is in the VAT system (obveznik
+	// PDV-a); it decides the default VAT category of invoice lines.
+	VatPayer bool `json:"vatPayer"`
+	// Email is an optional contact address for the seller party.
+	Email *string `json:"email"`
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.
@@ -333,6 +371,7 @@ type OrganizationSettingsUpdate struct {
 	PriorityDefaults    *PriorityDefaults  `json:"priorityDefaults"`
 	PrintItemColumns    *[]PrintItemColumn `json:"printItemColumns"`
 	ShowShippingOptions *bool              `json:"showShippingOptions"`
+	SellerIdentity      *SellerIdentity    `json:"sellerIdentity"`
 }
 
 // LoginLogo is the image an organization shows on its sign-in screen. Admins

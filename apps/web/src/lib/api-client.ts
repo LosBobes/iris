@@ -926,6 +926,8 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
           stock: modules.stock,
           planning: modules.planning,
           attendance: modules.attendance,
+          einvoicing: modules.einvoicing,
+          edispatch: modules.edispatch,
         }),
       )
       return readJSON<PlatformTenant>(response)

@@ -53,7 +53,8 @@ export type PrintItemColumn = 'quantity' | 'unitPrice' | 'total'
 /**
  * Optional feature modules, switched per organization by Backoffice superadmins
  * only. All are off by default; processes requires stock, planning requires
- * processes and attendance, and attendance works on its own.
+ * processes and attendance, and attendance, einvoicing and edispatch work on
+ * their own.
  */
 export interface OrganizationModules {
   /** "Procesi rada": process templates, order processes and the simulator. Requires `stock`. */
@@ -64,6 +65,36 @@ export interface OrganizationModules {
   planning: boolean
   /** "Prisustvo": who is at work on a date. No dependencies, usable on its own. */
   attendance: boolean
+  /** "e-Fakture" (D-030): government e-invoices through SEF. No dependencies. */
+  einvoicing: boolean
+  /** "e-Otpremnice" (D-030): electronic dispatch notes and the buyer's prijemnica. No dependencies. */
+  edispatch: boolean
+}
+
+/**
+ * The organization as the seller on SEF e-invoices and the sender of
+ * eOtpremnica (D-030). Saved whole; the API trims, upper-cases the country
+ * code (empty = "RS") and returns the bank account as XXX-XXXXXXXXXXXXX-XX.
+ */
+export interface SellerIdentity {
+  /** Registered business name (poslovno ime). */
+  legalName: string
+  /** 9 digits with a valid control digit. */
+  pib: string
+  /** 8 digits. */
+  mb: string
+  /** Street and number. */
+  street: string
+  city: string
+  /** 5 digits for a Serbian address. */
+  postalCode: string
+  /** ISO 3166-1 alpha-2, e.g. "RS". */
+  countryCode: string
+  /** Current account (tekući račun). */
+  bankAccount: string
+  /** Obveznik PDV-a. */
+  vatPayer: boolean
+  email: string | null
 }
 
 export interface OrganizationSettings {
@@ -86,6 +117,8 @@ export interface OrganizationSettings {
    * insurance). Off by default so the form stays compact.
    */
   showShippingOptions: boolean
+  /** Legal identity for e-invoices and e-dispatch notes; null until saved. */
+  sellerIdentity: SellerIdentity | null
   /**
    * Optional modules enabled for this organization. Read-only here: tenant
    * admins cannot change it (PUT /settings ignores it), so it is never sent.
@@ -128,6 +161,8 @@ export const DEFAULT_ORGANIZATION_MODULES: OrganizationModules = {
   stock: false,
   planning: false,
   attendance: false,
+  einvoicing: false,
+  edispatch: false,
 }
 
 /**
@@ -147,6 +182,8 @@ export function normalizeOrganizationModules(
     stock,
     planning: processes && attendance && modules?.planning === true,
     attendance,
+    einvoicing: modules?.einvoicing === true,
+    edispatch: modules?.edispatch === true,
   }
 }
 
