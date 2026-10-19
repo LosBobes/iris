@@ -83,6 +83,11 @@ vars and must not be committed.
   top of `fixture-planner.ts`, a pure TS twin of `iris-api/internal/planner` (keep rules in sync). Nav "Planiranje"
   (admins) and "Moj red" (everyone) and the step fields in the process inspector (machine type, crew, times) show
   only while `useOrganization().modules.planning` is on; the Backoffice template editor never shows them.
+- **Dokumentacija** (`/docs`, `/docs/:chapterId`, nav for everyone): `pages/DocsPage.tsx` over
+  `components/docs/` — chapters in `chapters.tsx` (long-form Serbian only; just the page chrome is in
+  i18n), inline SVG diagrams in `diagrams.tsx` built from `diagram-kit.tsx` (theme CSS variables, no
+  palette of their own), searchable `Glossary.tsx`. When a feature changes behavior users see, update its
+  chapter, diagram and glossary entry in the same PR.
 - Forms: `react-hook-form` + `zod` (`src/lib/work-orders/validation.ts`).
 - Visible UI text and messages in Serbian (`sr-Latn`); code/tests in English.
 - Dates: `YYYY-MM-DD` stored, `DD.MM.YYYY` displayed (`src/lib/i18n-date.ts`).

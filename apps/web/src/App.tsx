@@ -75,6 +75,7 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const ProcessTemplatePage = lazy(() => import("@/pages/ProcessTemplatePage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const HelpPage = lazy(() => import("@/pages/HelpPage"));
+const DocsPage = lazy(() => import("@/pages/DocsPage"));
 const PlatformConsole = lazy(() => import("@/components/platform/PlatformConsole"));
 
 type AppBootstrapState =
@@ -467,6 +468,8 @@ function AppContent(): React.JSX.Element {
                             <Route path="/work-orders/:id/edit" element={<WorkOrderEditPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
                             <Route path="/help" element={<HelpPage />} />
+                            <Route path="/docs" element={<DocsPage />} />
+                            <Route path="/docs/:chapterId" element={<DocsPage />} />
                             {currentUser.role === "admin" && (
                               <>
                                 <Route path="/cost-review" element={<CostReviewPage />} />
