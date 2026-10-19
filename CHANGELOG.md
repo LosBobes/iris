@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.14.1 — 2026-10-19
+
+### Patch
+
+- Proposed decision D-030 on integrating with SEF e-invoicing and eOtpremnica.
+
 ## 2.14.0 — 2026-10-19
 
 ### Minor
