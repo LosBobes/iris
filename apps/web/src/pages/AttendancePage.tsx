@@ -14,10 +14,13 @@ function AttendancePage(): React.JSX.Element {
   return (
     <div className="space-y-6">
       <div className="animate-iris-enter border-b border-border px-5 pt-7 pb-5 sm:px-8 lg:px-10">
-        <h1 className="text-[30px] font-normal tracking-[-0.8px] text-foreground">{t('attendance.title')}</h1>
-        {!canEdit && (
-          <p className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">{t('attendance.subtitleReadOnly')}</p>
-        )}
+        <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
+          {t('attendance.eyebrow')}
+        </div>
+        <h1 className="mt-1 text-[30px] font-normal tracking-[-0.8px] text-foreground">{t('attendance.title')}</h1>
+        <p className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]">
+          {canEdit ? t('attendance.hint') : t('attendance.subtitleReadOnly')}
+        </p>
       </div>
       <div className="px-5 pb-8 sm:px-8">
         <AttendanceTable canEdit={canEdit} />

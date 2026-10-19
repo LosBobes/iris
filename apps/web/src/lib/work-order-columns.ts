@@ -36,15 +36,15 @@ export interface WorkOrderColumnMeta {
 }
 
 export const WORK_ORDER_COLUMNS: WorkOrderColumnMeta[] = [
-  { key: "orderNumber", labelKey: "workOrders.columns.orderNumber", sortField: "orderNumber", width: "110px", locked: true },
+  { key: "orderNumber", labelKey: "workOrders.columns.orderNumber", sortField: "orderNumber", width: "128px", locked: true },
   { key: "clientName", labelKey: "workOrders.columns.clientName", sortField: "clientName", width: "140px" },
   { key: "jobDescription", labelKey: "workOrders.columns.jobDescription", sortField: "jobDescription" },
-  { key: "assigned", labelKey: "workOrders.columns.assigned", sortField: "assignment.assignedTo", width: "120px" },
+  { key: "assigned", labelKey: "workOrders.columns.assigned", sortField: "assignment.assignedTo", width: "110px" },
   { key: "priority", labelKey: "workOrders.columns.priority", sortField: "assignment.priority", width: "90px" },
-  { key: "billing", labelKey: "workOrders.columns.billing", sortField: "billingDocumentType", width: "130px" },
+  { key: "billing", labelKey: "workOrders.columns.billing", sortField: "billingDocumentType", width: "120px" },
   { key: "schedule", labelKey: "workOrders.columns.schedule", sortField: "dueDate", width: "110px" },
   { key: "price", labelKey: "workOrders.columns.price", sortField: "price", width: "110px", align: "right" },
-  { key: "status", labelKey: "workOrders.columns.status", sortField: "status", width: "130px" },
+  { key: "status", labelKey: "workOrders.columns.status", sortField: "status", width: "120px" },
 ];
 
 /** Resolves a column's display label in the active language. */

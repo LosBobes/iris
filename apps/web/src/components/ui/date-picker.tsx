@@ -2,7 +2,7 @@ import { useState } from "react";
 import { format, isAfter, isBefore, parse, startOfDay } from "date-fns";
 import { CalendarBlank } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
-import { calendarLocale, dateLocale } from "@/lib/i18n-date";
+import { calendarLocale } from "@/lib/i18n-date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -74,9 +74,8 @@ export function DatePicker({
           )}
         >
           <CalendarBlank className="mr-1.5 size-3.5" />
-          {selected
-            ? format(selected, "PPP", { locale: dateLocale })
-            : placeholder}
+          {/* DD.MM.YYYY, like every other date in the app. */}
+          {selected ? format(selected, "dd.MM.yyyy") : placeholder}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">

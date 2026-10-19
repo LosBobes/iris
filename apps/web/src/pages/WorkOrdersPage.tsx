@@ -212,7 +212,7 @@ function WorkOrdersPage(): React.JSX.Element {
                     })}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
               {isAdmin && (
                 <button
                   type="button"
@@ -220,7 +220,7 @@ function WorkOrdersPage(): React.JSX.Element {
                     updateFilters({ needsCostReview: !filters.needsCostReview })
                   }
                   aria-pressed={filters.needsCostReview}
-                  className={`iris-focusable iris-press flex items-center gap-1.5 border px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] ${
+                  className={`iris-focusable iris-press flex items-center justify-center gap-1.5 border px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] sm:justify-start ${
                     filters.needsCostReview
                       ? "border-[color:var(--iris-accent)] bg-[color:var(--iris-accent)]/10 text-[color:var(--iris-accent)]"
                       : "border-border bg-card text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground"
@@ -234,7 +234,7 @@ function WorkOrdersPage(): React.JSX.Element {
                 type="button"
                 onClick={() => void handleExportCsv()}
                 disabled={totalFiltered === 0}
-                className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                className="iris-focusable iris-press flex items-center justify-center gap-1.5 border border-border bg-card px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-[color:var(--iris-ink-soft)] hover:bg-black/[0.02] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:justify-start"
               >
                 <Download className="h-3.5 w-3.5" />
                 {t("workOrders.list.exportCsv")}
@@ -243,7 +243,7 @@ function WorkOrdersPage(): React.JSX.Element {
                 type="button"
                 data-tour="new-work-order"
                 onClick={() => navigate("/work-orders/new")}
-                className="iris-focusable iris-press group flex items-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90"
+                className="iris-focusable iris-press group col-span-2 flex items-center justify-center gap-1.5 bg-foreground px-4 py-2.5 text-[12px] font-medium tracking-[0.3px] text-background hover:bg-foreground/90 sm:col-span-1 sm:justify-start"
               >
                 <Plus className="h-3.5 w-3.5 transition-transform duration-200 ease-out group-hover:rotate-90" />
                 {t("workOrders.list.newOrder")}
