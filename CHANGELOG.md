@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.8.0 — 2026-10-19
+
+### Minor
+
+- Prisustvo (attendance) is now its own organization module: it can be switched on alone in the Backoffice and has its own page; Planiranje now requires it.
+
 ## 2.7.0 — 2026-10-19
 
 ### Minor
