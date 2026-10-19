@@ -84,8 +84,8 @@ describe("OrganizationsPanel health", () => {
 
     const items = await screen.findAllByTestId("org-health");
     expect(items).toHaveLength(3);
-    expect(screen.getByText("Aktivni: 3 (7 d) · 5 (30 d)")).toBeInTheDocument();
-    expect(screen.getByText("Nalozi: 12 novih (30 d) · 4 otvorenih")).toBeInTheDocument();
+    expect(screen.getByText("3 (7 d) · 5 (30 d)")).toBeInTheDocument();
+    expect(screen.getByText("12 novih (30 d) · 4 otvorenih")).toBeInTheDocument();
     expect(screen.getAllByText(strings.health.neverLoggedIn)).toHaveLength(1);
     // Only the dormant, not suspended organization gets the badge.
     const badges = screen.getAllByTestId("dormant-badge");
@@ -110,7 +110,8 @@ describe("OrganizationsPanel health", () => {
     vi.stubGlobal("api", { getPlatformTenants, setPlatformTenantNotes });
     render(<OrganizationsPanel />);
 
-    await userEvent.click(await screen.findByRole("button", { name: strings.notes.button }));
+    await userEvent.click(await screen.findByRole("button", { name: strings.moreActions }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: strings.notes.button }));
     const dialog = screen.getByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText(strings.notes.plan), "Godišnji");
     await userEvent.click(within(dialog).getByRole("button", { name: sr.common.save }));

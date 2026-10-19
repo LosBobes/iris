@@ -6,19 +6,7 @@ import { PlatformChangePassword } from "./PlatformChangePassword";
 import { PlatformTwoFactorDialog } from "./PlatformTwoFactorDialog";
 import { BackofficeScreen } from "./BackofficeScreen";
 import type { PlatformAdmin } from "@/types/platform";
-
-// Dashboard surfaces. Always dark, like an ops console, whatever the app
-// theme; the chart palette in series.ts is validated against --pf-panel.
-const CONSOLE_VARS = {
-  "--pf-bg": "#111214",
-  "--pf-panel": "#1a1b1e",
-  "--pf-border": "#2a2c31",
-  "--pf-grid": "#24262b",
-  "--pf-text": "#e8e9ea",
-  "--pf-text-2": "#a1a4ab",
-  "--pf-muted": "#6f737b",
-  colorScheme: "dark",
-} as React.CSSProperties;
+import { CONSOLE_VARS } from "./console-theme";
 
 type ConsoleState = { kind: "checking" } | { kind: "signedOut" } | { kind: "signedIn"; admin: PlatformAdmin };
 

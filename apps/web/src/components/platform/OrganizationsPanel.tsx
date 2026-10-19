@@ -12,6 +12,7 @@ import {
   backofficeSecondaryButtonClass,
   backofficeSmallButtonClass,
 } from "./BackofficeDialog";
+import { BackofficeActionsMenu } from "./BackofficeActionsMenu";
 import { OrganizationDeleteDialog } from "./OrganizationDeleteDialog";
 import { downloadTenantExport } from "./tenant-export";
 import { OrganizationFormDialog } from "./OrganizationFormDialog";
@@ -19,9 +20,6 @@ import { OrganizationModulesDialog } from "./OrganizationModulesDialog";
 import { OrganizationNotesDialog } from "./OrganizationNotesDialog";
 import { OrganizationProcessesDialog } from "./OrganizationProcessesDialog";
 import { OrganizationUsersDialog } from "./OrganizationUsersDialog";
-
-const ghostButtonBase = "iris-focusable flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] hover:bg-white/5";
-const ghostButtonClass = `${ghostButtonBase} text-[color:var(--pf-text-2)] hover:text-[color:var(--pf-text)]`;
 
 type OpenDialog =
   | { kind: "create" }
@@ -153,12 +151,12 @@ export function OrganizationsPanel(): React.JSX.Element {
   const status = (tenant: PlatformTenant): React.JSX.Element =>
     tenant.suspendedAt ? (
       <span className="inline-flex items-center gap-1.5 text-[#e66767]">
-        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#e66767]" />
+        <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e66767]" />
         {t("platform.orgs.suspendedSince", { date: formatDateTime(tenant.suspendedAt) })}
       </span>
     ) : (
       <span className="inline-flex items-center gap-1.5 text-[color:var(--pf-text-2)]">
-        <span aria-hidden className="relative flex h-1.5 w-1.5">
+        <span aria-hidden className="relative flex h-1.5 w-1.5 shrink-0">
           <span className="iris-dot-ping absolute inset-0 rounded-full bg-[#5fb88a]" />
           <span className="relative h-1.5 w-1.5 rounded-full bg-[#5fb88a]" />
         </span>
@@ -166,9 +164,9 @@ export function OrganizationsPanel(): React.JSX.Element {
       </span>
     );
 
-  // Compact "which modules are on" badges (off ones are simply absent).
-  const moduleBadges = (tenant: PlatformTenant): React.JSX.Element => {
-    const on = [
+  // Names of the modules that are on (off ones are simply absent).
+  const modulesOn = (tenant: PlatformTenant): string[] =>
+    [
       tenant.modules.stock ? t("platform.orgs.modules.stock") : null,
       tenant.modules.stock && tenant.modules.processes ? t("platform.orgs.modules.processes") : null,
       tenant.modules.stock && tenant.modules.processes && tenant.modules.attendance && tenant.modules.planning
@@ -176,6 +174,10 @@ export function OrganizationsPanel(): React.JSX.Element {
         : null,
       tenant.modules.attendance ? t("platform.orgs.modules.attendance") : null,
     ].filter((label): label is string => label !== null);
+
+  // Compact "which modules are on" badges for the table.
+  const moduleBadges = (tenant: PlatformTenant): React.JSX.Element => {
+    const on = modulesOn(tenant);
     return on.length === 0 ? (
       <span data-testid="module-badges" className="text-[11px] text-[color:var(--pf-muted)]">
         {t("platform.orgs.modules.none")}
@@ -203,7 +205,18 @@ export function OrganizationsPanel(): React.JSX.Element {
       </span>
     ) : null;
 
-  // Activity at a glance: last sign-in, active users, work orders.
+  const activeUsersValue = (tenant: PlatformTenant): string =>
+    t("platform.orgs.health.activeUsersValue", {
+      week: formatCount(tenant.health.activeUsers7d),
+      month: formatCount(tenant.health.activeUsers30d),
+    });
+  const workOrdersValue = (tenant: PlatformTenant): string =>
+    t("platform.orgs.health.workOrdersValue", {
+      created: formatCount(tenant.health.workOrdersCreated30d),
+      open: formatCount(tenant.health.openWorkOrders),
+    });
+
+  // Activity at a glance for the table: last sign-in, active users, work orders.
   const healthSummary = (tenant: PlatformTenant): React.JSX.Element => (
     <div data-testid="org-health" className="space-y-0.5">
       <div className="text-[color:var(--pf-text)]">
@@ -217,41 +230,54 @@ export function OrganizationsPanel(): React.JSX.Element {
         )}
       </div>
       <div className="text-[11px] text-[color:var(--pf-text-2)]">
-        {t("platform.orgs.health.activeUsers", {
-          week: formatCount(tenant.health.activeUsers7d),
-          month: formatCount(tenant.health.activeUsers30d),
-        })}
+        {t("platform.orgs.health.activeUsers")}: {activeUsersValue(tenant)}
       </div>
       <div className="text-[11px] text-[color:var(--pf-text-2)]">
-        {t("platform.orgs.health.workOrders", {
-          created: formatCount(tenant.health.workOrdersCreated30d),
-          open: formatCount(tenant.health.openWorkOrders),
-        })}
+        {t("platform.orgs.health.workOrders")}: {workOrdersValue(tenant)}
       </div>
     </div>
   );
 
-  const notesButton = (tenant: PlatformTenant): React.JSX.Element => (
-    <button type="button" onClick={() => setDialog({ kind: "notes", tenant })} className={ghostButtonClass}>
-      <span className="relative">
-        <StickyNote className="h-3.5 w-3.5" />
-        {tenant.notes.updatedAt ? (
-          <span
-            aria-label={t("platform.orgs.notes.hasNotes")}
-            role="img"
-            className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-[#5fb88a]"
-          />
-        ) : null}
-      </span>
-      {t("platform.orgs.notes.button")}
-    </button>
-  );
+  // The phone card's facts, one aligned label/value grid instead of a stack of
+  // sentences and chips: quick to scan, and the same shape on every card.
+  const factsGrid = (tenant: PlatformTenant): React.JSX.Element => {
+    const on = modulesOn(tenant);
+    const label = "text-[color:var(--pf-muted)]";
+    const value = "min-w-0 text-[color:var(--pf-text)]";
+    return (
+      <dl data-testid="org-health" className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[12px] leading-4">
+        <dt className={label}>{t("platform.orgs.health.lastLogin")}</dt>
+        <dd className={value}>
+          {tenant.health.lastLoginAt ? (
+            formatDateTime(tenant.health.lastLoginAt)
+          ) : (
+            <span className="text-[color:var(--pf-muted)]">{t("platform.orgs.health.neverLoggedIn")}</span>
+          )}
+        </dd>
+        <dt className={label}>{t("platform.orgs.health.activeUsers")}</dt>
+        <dd className={`${value} tabular-nums`}>{activeUsersValue(tenant)}</dd>
+        <dt className={label}>{t("platform.orgs.health.workOrders")}</dt>
+        <dd className={`${value} tabular-nums`}>{workOrdersValue(tenant)}</dd>
+        <dt className={label}>{t("platform.orgs.users")}</dt>
+        <dd className={`${value} tabular-nums`}>
+          {formatCount(tenant.users)}
+          <span className="text-[color:var(--pf-muted)]"> / {formatCount(tenant.admins)}</span>
+        </dd>
+        <dt className={label}>{t("platform.orgs.created")}</dt>
+        <dd className={`${value} tabular-nums`}>{formatDate(tenant.createdAt)}</dd>
+        <dt className={label}>{t("platform.orgs.modules.column")}</dt>
+        <dd data-testid="module-badges" className={on.length === 0 ? "text-[color:var(--pf-muted)]" : value}>
+          {on.length === 0 ? t("platform.orgs.modules.none") : on.join(" · ")}
+        </dd>
+      </dl>
+    );
+  };
 
   const selectClass =
-    "iris-focusable h-9 rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-2.5 text-[13px] text-[color:var(--pf-text)]";
+    "iris-focusable h-9 w-full rounded-md border border-[color:var(--pf-border)] bg-[color:var(--pf-panel)] px-2.5 text-[13px] text-[color:var(--pf-text)] sm:w-auto";
   const viewControls = (
-    <div className="flex flex-wrap items-center gap-3 px-4 pt-3">
-      <label className="flex items-center gap-2 text-[12px] text-[color:var(--pf-text-2)]">
+    <div className="grid grid-cols-2 gap-2 px-4 pt-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+      <label className="flex min-w-0 flex-col gap-1 text-[12px] text-[color:var(--pf-text-2)] sm:flex-row sm:items-center sm:gap-2">
         {t("platform.orgs.view.filterLabel")}
         <select aria-label={t("platform.orgs.view.filterLabel")} value={filter} onChange={(event) => setFilter(event.target.value as OrganizationFilter)} className={selectClass}>
           {FILTERS.map((value) => (
@@ -261,7 +287,7 @@ export function OrganizationsPanel(): React.JSX.Element {
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-2 text-[12px] text-[color:var(--pf-text-2)]">
+      <label className="flex min-w-0 flex-col gap-1 text-[12px] text-[color:var(--pf-text-2)] sm:flex-row sm:items-center sm:gap-2">
         {t("platform.orgs.view.sortLabel")}
         <select aria-label={t("platform.orgs.view.sortLabel")} value={sort} onChange={(event) => setSort(event.target.value as OrganizationSort)} className={selectClass}>
           {SORTS.map((value) => (
@@ -274,52 +300,78 @@ export function OrganizationsPanel(): React.JSX.Element {
     </div>
   );
 
-  // The actions fall into two groups: the three ways into an organization
-  // (users, processes, modules) get equal weight; editing and suspending are
-  // housekeeping, set apart and quieter, with suspend in the danger colour.
+  // The three ways into an organization (users, processes, modules) get a
+  // button each; housekeeping (edit, notes, export) and the dangerous actions
+  // (suspend, delete) live behind one "⋯" menu, so a row reads as its facts
+  // plus three entries rather than eight controls.
   const openActions: { kind: "users" | "processes" | "modules"; label: string; icon: React.JSX.Element }[] = [
     { kind: "users", label: t("platform.orgs.manageUsers"), icon: <Users className="h-4 w-4" /> },
     { kind: "processes", label: t("platform.orgs.processes"), icon: <Workflow className="h-4 w-4" /> },
     { kind: "modules", label: t("platform.orgs.modules.button"), icon: <Blocks className="h-4 w-4" /> },
   ];
 
-  const editButton = (tenant: PlatformTenant): React.JSX.Element => (
-    <button type="button" onClick={() => setDialog({ kind: "edit", tenant })} className={ghostButtonClass}>
-      <Pencil className="h-3.5 w-3.5" />
-      {t("platform.orgs.edit")}
-    </button>
-  );
-
-  const suspendButton = (tenant: PlatformTenant): React.JSX.Element => (
-    <button
-      type="button"
-      onClick={() => setDialog({ kind: "suspend", tenant })}
-      className={tenant.suspendedAt ? ghostButtonClass : `${ghostButtonBase} text-[#e66767]`}
+  const openActionGroup = (tenant: PlatformTenant, className: string): React.JSX.Element => (
+    <div
+      role="group"
+      aria-label={t("platform.orgs.actionsLabel")}
+      className={`divide-x divide-[color:var(--pf-border)] overflow-hidden rounded-md border border-[color:var(--pf-border)] ${className}`}
     >
-      {tenant.suspendedAt ? <RotateCcw className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
-      {tenant.suspendedAt ? t("platform.orgs.reactivate") : t("platform.orgs.suspend")}
-    </button>
+      {openActions.map((action) => (
+        <button
+          key={action.kind}
+          type="button"
+          onClick={() => setDialog({ kind: action.kind, tenant })}
+          className="iris-focusable flex h-10 min-w-0 items-center justify-center gap-1.5 px-2 text-[13px] text-[color:var(--pf-text)] hover:bg-white/5 md:h-9 md:px-3"
+        >
+          <span className="shrink-0 text-[color:var(--pf-text-2)]">{action.icon}</span>
+          <span className="truncate">{action.label}</span>
+        </button>
+      ))}
+    </div>
   );
 
-  const exportButton = (tenant: PlatformTenant): React.JSX.Element => (
-    <button type="button" disabled={busy} onClick={() => void exportTenant(tenant)} className={`${ghostButtonClass} disabled:opacity-60`}>
-      <Download className="h-3.5 w-3.5" />
-      {t("platform.orgs.exportData")}
-    </button>
-  );
-
-  // Deleting is only offered once the organization is suspended.
-  const deleteButton = (tenant: PlatformTenant): React.JSX.Element => (
-    <button
-      type="button"
-      disabled={!tenant.suspendedAt}
-      title={tenant.suspendedAt ? undefined : t("platform.orgs.deleteNeedsSuspend")}
-      onClick={() => setDialog({ kind: "delete", tenant })}
-      className={`${ghostButtonBase} text-[#e66767] disabled:opacity-40 disabled:hover:bg-transparent`}
-    >
-      <Trash2 className="h-3.5 w-3.5" />
-      {t("platform.orgs.deleteOrg")}
-    </button>
+  const moreMenu = (tenant: PlatformTenant): React.JSX.Element => (
+    <BackofficeActionsMenu
+      label={t("platform.orgs.moreActions")}
+      indicator={tenant.notes.updatedAt ? t("platform.orgs.notes.hasNotes") : undefined}
+      actions={[
+        { key: "edit", label: t("platform.orgs.edit"), icon: <Pencil />, onSelect: () => setDialog({ kind: "edit", tenant }) },
+        { key: "notes", label: t("platform.orgs.notes.button"), icon: <StickyNote />, onSelect: () => setDialog({ kind: "notes", tenant }) },
+        {
+          key: "export",
+          label: t("platform.orgs.exportData"),
+          icon: <Download />,
+          disabled: busy,
+          onSelect: () => void exportTenant(tenant),
+        },
+        tenant.suspendedAt
+          ? {
+              key: "suspend",
+              label: t("platform.orgs.reactivate"),
+              icon: <RotateCcw />,
+              separator: true,
+              onSelect: () => setDialog({ kind: "suspend", tenant }),
+            }
+          : {
+              key: "suspend",
+              label: t("platform.orgs.suspend"),
+              icon: <Ban />,
+              danger: true,
+              separator: true,
+              onSelect: () => setDialog({ kind: "suspend", tenant }),
+            },
+        // Deleting is only offered once the organization is suspended.
+        {
+          key: "delete",
+          label: t("platform.orgs.deleteOrg"),
+          icon: <Trash2 />,
+          danger: true,
+          disabled: !tenant.suspendedAt,
+          hint: tenant.suspendedAt ? undefined : t("platform.orgs.deleteHint"),
+          onSelect: () => setDialog({ kind: "delete", tenant }),
+        },
+      ]}
+    />
   );
 
   return (
@@ -351,55 +403,29 @@ export function OrganizationsPanel(): React.JSX.Element {
       ) : visible.length === 0 ? (
         <p className="py-16 text-center text-[13px] text-[color:var(--pf-muted)]">{t("platform.orgs.view.noMatch")}</p>
       ) : !isWide ? (
-        <ul className="mt-1">
+        <ul className="mt-2">
           {visible.map((tenant, index) => (
-            <li key={tenant.id} style={staggerStyle(index)} className="animate-iris-rise iris-stagger space-y-2.5 border-t border-[color:var(--pf-border)] px-4 py-3 first:border-t-0 text-[13px]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+            <li
+              key={tenant.id}
+              style={staggerStyle(index)}
+              className="animate-iris-rise iris-stagger space-y-3 border-t border-[color:var(--pf-border)] px-4 py-3.5 first:border-t-0"
+            >
+              {/* Identity line: the name, and the one menu for everything that is not a way in. */}
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[14px] text-[color:var(--pf-text)]">{tenant.name}</span>
+                    <span className="truncate text-[15px] font-medium text-[color:var(--pf-text)]">{tenant.name}</span>
                     {dormantBadge(tenant)}
                   </div>
-                  <div className="truncate text-[11px] text-[color:var(--pf-muted)]">/login/{tenant.slug}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px]">
+                    {status(tenant)}
+                    <span className="truncate text-[color:var(--pf-muted)]">/login/{tenant.slug}</span>
+                  </div>
                 </div>
-                <div className="shrink-0 text-right text-[12px]">{status(tenant)}</div>
+                {moreMenu(tenant)}
               </div>
-              <div className="text-[12px]">{healthSummary(tenant)}</div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[color:var(--pf-text-2)]">
-                <span>
-                  {t("platform.orgs.users")}:{" "}
-                  <span className="tabular-nums text-[color:var(--pf-text)]">{formatCount(tenant.users)}</span>
-                  <span className="text-[color:var(--pf-muted)]"> / {formatCount(tenant.admins)}</span>
-                </span>
-                <span>
-                  {t("platform.orgs.created")}: {formatDate(tenant.createdAt)}
-                </span>
-                {moduleBadges(tenant)}
-              </div>
-              <div className="grid grid-cols-3 gap-1.5 pt-1">
-                {openActions.map((action) => (
-                  <button
-                    key={action.kind}
-                    type="button"
-                    onClick={() => setDialog({ kind: action.kind, tenant })}
-                    className="iris-focusable flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-md border border-[color:var(--pf-border)] px-1 text-[12px] text-[color:var(--pf-text)] hover:bg-white/5"
-                  >
-                    <span className="text-[color:var(--pf-text-2)]">{action.icon}</span>
-                    <span className="max-w-full truncate">{action.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-y-1">
-                <div className="flex items-center gap-1">
-                  {editButton(tenant)}
-                  {notesButton(tenant)}
-                  {exportButton(tenant)}
-                </div>
-                <div className="flex items-center gap-1">
-                  {suspendButton(tenant)}
-                  {deleteButton(tenant)}
-                </div>
-              </div>
+              {factsGrid(tenant)}
+              {openActionGroup(tenant, "grid grid-cols-3")}
             </li>
           ))}
         </ul>
@@ -408,7 +434,7 @@ export function OrganizationsPanel(): React.JSX.Element {
         // inside the scroller; without it the label sits at the table's right
         // edge and widens the whole page on a phone.
         <div className="relative mt-1 overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-[13px]">
+          <table className="w-full min-w-[960px] text-[13px]">
             <thead className="text-left text-[12px] text-[color:var(--pf-muted)]">
               <tr>
                 <th className="px-4 py-2.5 font-normal">{t("platform.orgs.name")}</th>
@@ -446,25 +472,8 @@ export function OrganizationsPanel(): React.JSX.Element {
                   <td className="whitespace-nowrap px-3 py-2">{status(tenant)}</td>
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-2">
-                      <div role="group" className="flex divide-x divide-[color:var(--pf-border)] overflow-hidden rounded-md border border-[color:var(--pf-border)]">
-                        {openActions.map((action) => (
-                          <button
-                            key={action.kind}
-                            type="button"
-                            onClick={() => setDialog({ kind: action.kind, tenant })}
-                            className="iris-focusable flex h-9 items-center gap-1.5 px-3 text-[13px] text-[color:var(--pf-text)] hover:bg-white/5"
-                          >
-                            <span className="text-[color:var(--pf-text-2)]">{action.icon}</span>
-                            {action.label}
-                          </button>
-                        ))}
-                      </div>
-                      {editButton(tenant)}
-                      {notesButton(tenant)}
-                      {exportButton(tenant)}
-                      <span aria-hidden className="h-5 w-px bg-[color:var(--pf-border)]" />
-                      {suspendButton(tenant)}
-                      {deleteButton(tenant)}
+                      {openActionGroup(tenant, "flex")}
+                      {moreMenu(tenant)}
                     </div>
                   </td>
                 </tr>

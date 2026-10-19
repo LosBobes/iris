@@ -13,6 +13,12 @@ import { emptyHealth, emptyNotes } from "./test-tenants";
 
 const strings = sr.platform.orgs;
 
+/** Opens the row's "⋯" menu and returns the entry with the given name. */
+async function menuItem(name: string | RegExp): Promise<HTMLElement> {
+  await userEvent.click(await screen.findByRole("button", { name: strings.moreActions }));
+  return screen.findByRole("menuitem", { name });
+}
+
 const demo: PlatformTenant = {
   id: "tenant-demo",
   slug: "demo",
@@ -84,7 +90,7 @@ describe("OrganizationsPanel", () => {
     const updatePlatformTenant = vi.fn(async () => ({ ...demo, slug: "demo-2" }));
     vi.stubGlobal("api", { getPlatformTenants: vi.fn(async () => [demo]), updatePlatformTenant });
     render(<OrganizationsPanel />);
-    await userEvent.click(await screen.findByRole("button", { name: strings.edit }));
+    await userEvent.click(await menuItem(strings.edit));
     const dialog = screen.getByRole("dialog");
 
     expect(within(dialog).queryByText(strings.slugChangeWarning)).not.toBeInTheDocument();
@@ -106,21 +112,23 @@ describe("OrganizationsPanel", () => {
     vi.stubGlobal("api", { getPlatformTenants, setPlatformTenantSuspended });
 
     render(<OrganizationsPanel />);
-    await userEvent.click(await screen.findByRole("button", { name: strings.suspend }));
+    await userEvent.click(await menuItem(strings.suspend));
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent(strings.suspendBody);
     expect(setPlatformTenantSuspended).not.toHaveBeenCalled();
 
     await userEvent.click(within(dialog).getByRole("button", { name: strings.suspend }));
     expect(setPlatformTenantSuspended).toHaveBeenCalledWith("demo", true);
-    expect(await screen.findByRole("button", { name: strings.reactivate })).toBeInTheDocument();
-    expect(screen.getByText(/Suspendovana/)).toBeInTheDocument();
+    expect(await screen.findByText(/Suspendovana/)).toBeInTheDocument();
+    expect(await menuItem(strings.reactivate)).toBeInTheDocument();
   });
 
   it("does not offer deleting an organization that is not suspended", async () => {
     vi.stubGlobal("api", { getPlatformTenants: vi.fn(async () => [demo]) });
     render(<OrganizationsPanel />);
-    expect(await screen.findByRole("button", { name: strings.deleteOrg })).toBeDisabled();
+    const item = await menuItem(new RegExp(strings.deleteOrg));
+    expect(item).toHaveAttribute("aria-disabled", "true");
+    expect(item).toHaveTextContent(strings.deleteHint);
   });
 
   it("exports an organization's data", async () => {
@@ -130,7 +138,7 @@ describe("OrganizationsPanel", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     render(<OrganizationsPanel />);
-    await userEvent.click(await screen.findByRole("button", { name: strings.exportData }));
+    await userEvent.click(await menuItem(strings.exportData));
     expect(platformExportTenant).toHaveBeenCalledWith("demo");
     expect(await screen.findByRole("status")).toHaveTextContent("Demo Štamparija");
     expect(click).toHaveBeenCalled();
@@ -150,7 +158,7 @@ describe("OrganizationsPanel", () => {
     vi.stubGlobal("api", { getPlatformTenants, platformDeleteTenant });
 
     render(<OrganizationsPanel />);
-    await userEvent.click(await screen.findByRole("button", { name: strings.deleteOrg }));
+    await userEvent.click(await menuItem(strings.deleteOrg));
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent(strings.deleteIrreversible);
     const confirm = within(dialog).getByRole("button", { name: strings.deleteConfirm });
@@ -181,7 +189,7 @@ describe("OrganizationsPanel", () => {
       }),
     });
     render(<OrganizationsPanel />);
-    await userEvent.click(await screen.findByRole("button", { name: strings.deleteOrg }));
+    await userEvent.click(await menuItem(strings.deleteOrg));
     const dialog = screen.getByRole("dialog");
     await userEvent.type(within(dialog).getByRole("textbox"), "demo");
     await userEvent.click(within(dialog).getByRole("button", { name: strings.deleteConfirm }));
