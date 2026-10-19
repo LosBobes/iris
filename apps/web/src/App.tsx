@@ -64,6 +64,7 @@ const StockHistoryPage = lazy(() => import("@/pages/StockHistoryPage"));
 const PlanningPage = lazy(() => import("@/pages/PlanningPage"));
 const PlanningResourcesPage = lazy(() => import("@/pages/PlanningResourcesPage"));
 const MyQueuePage = lazy(() => import("@/pages/MyQueuePage"));
+const PlanningPrintPage = lazy(() => import("@/pages/PlanningPrintPage"));
 const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
 const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
 const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
@@ -448,6 +449,8 @@ function AppContent(): React.JSX.Element {
                         <Routes>
                           {/* Already signed in: the sign-in pages have nothing to show. */}
                           <Route path="/login/*" element={<Navigate to="/" replace />} />
+                          {/* Printable dispatch list: outside the shell so only the sheets print. */}
+                          <Route path="/planning/print" element={<ModuleGate module="planning"><PlanningPrintPage /></ModuleGate>} />
                           <Route element={<AppShellLayout />}>
                             <Route path="/" element={<DashboardPage />} />
                             <Route path="/customers" element={<CustomersPage />} />

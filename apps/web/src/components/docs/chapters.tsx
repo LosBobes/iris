@@ -870,6 +870,7 @@ function PlanningChapter(): React.JSX.Element {
           <>U nacrtu admin može da pomeri blok na drugu mašinu istog tipa, promeni početak ili ekipu. Ako napravi sukob (npr. isti čovek na dva mesta), Iris upozori, ali ne zabranjuje.</>,
           <><Ui>Objavi</Ui>: nacrt postaje važeći plan.</>,
           <><Ui>Moj red</Ui>: svako vidi svoje blokove za taj dan, redom kojim ih radi, sa dugmićima <Ui>Počni</Ui> i <Ui>Završi</Ui>.</>,
+          <><Ui>Štampaj raspored</Ui>: radni raspored za kačenje pored mašine, po jedna strana za svaku mašinu (ili <Ui>Po radniku</Ui>, za svakog radnika): nalog, korak, količina, početak, kraj, trajanje i ko vodi, sa ukupnim vremenom za dan. Admin može da odštampa nacrt i do 7 dana unapred; kasniji dani su procena dok se ne objave.</>,
           <><Ui>Preplaniraj</Ui>: kad se dan pokvari (mašina stala, neko otišao kući), novi nacrt kreće od ovog trenutka, a blokovi koji su već u toku ostaju gde jesu. Iris sam javi kad rad odstupa od plana.</>,
         ]}
       />

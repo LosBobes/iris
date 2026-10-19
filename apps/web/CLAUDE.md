@@ -83,6 +83,9 @@ vars and must not be committed.
   top of `fixture-planner.ts`, a pure TS twin of `iris-api/internal/planner` (keep rules in sync). Nav "Planiranje"
   (admins) and "Moj red" (everyone) and the step fields in the process inspector (machine type, crew, times) show
   only while `useOrganization().modules.planning` is on; the Backoffice template editor never shows them.
+  The printable dispatch list ("Štampaj raspored", D-028) is `/planning/print?date=&to=&by=machine|person&source=`
+  (`pages/PlanningPrintPage.tsx`, rendered outside the app shell; grouping in pure `lib/planning/dispatch.ts`,
+  sheets in `components/planning/DispatchList.tsx`, print rules `dispatch-print-*` in `main.css`).
 - **Dokumentacija** (`/docs`, `/docs/:chapterId`, nav for everyone): `pages/DocsPage.tsx` over
   `components/docs/` — chapters in `chapters.tsx` (long-form Serbian only; just the page chrome is in
   i18n), inline SVG diagrams in `diagrams.tsx` built from `diagram-kit.tsx` (theme CSS variables, no

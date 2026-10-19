@@ -1106,3 +1106,78 @@
   background: var(--iris-accent);
   border-color: var(--iris-accent);
 }
+
+/* Printable dispatch list ("Radni raspored", /planning/print, D-028). On
+   screen the sheets are cards; printed, each machine (or person) starts a new
+   A4 page in the same black-on-white Arial style as the work-order nalog. */
+.dispatch-print-table th,
+.dispatch-print-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  vertical-align: top;
+}
+
+.dispatch-print-table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--iris-ink-soft);
+}
+
+.dispatch-print-table tfoot th,
+.dispatch-print-table tfoot td {
+  border-bottom: 0;
+  border-top: 2px solid var(--foreground);
+}
+
+@media print {
+  @page dispatch {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
+  .dispatch-print-root {
+    page: dispatch;
+  }
+
+  .dispatch-print-root,
+  .dispatch-print-root *,
+  .dispatch-print-root *::before,
+  .dispatch-print-root *::after {
+    background-color: #fff !important;
+    color: #000 !important;
+    border-color: #000 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+  }
+
+  .dispatch-print-section {
+    margin: 0 !important;
+    border: 0 !important;
+    padding: 0 !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .dispatch-print-section:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .dispatch-print-table {
+    font-size: 11pt;
+  }
+
+  .dispatch-print-table th,
+  .dispatch-print-table td {
+    border: 1px solid #000;
+    padding: 1.5mm 2mm;
+  }
+
+  .dispatch-print-table thead {
+    display: table-header-group;
+  }
+
+  .dispatch-print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

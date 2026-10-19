@@ -50,10 +50,20 @@ export function useWorkingHours(enabled = true) {
   })
 }
 
-export function usePlanDay(date: string) {
+export function usePlanDay(date: string, enabled = true) {
   return useQuery({
     queryKey: planningKeys.planDay(date),
     queryFn: () => window.api.getPlanDay(date),
+    enabled,
+  })
+}
+
+/** The kept horizon of the date's draft and published plan (admins only, D-028). */
+export function usePlanHorizon(date: string, enabled = true) {
+  return useQuery({
+    queryKey: planningKeys.planHorizon(date),
+    queryFn: () => window.api.getPlanHorizon(date),
+    enabled,
   })
 }
 

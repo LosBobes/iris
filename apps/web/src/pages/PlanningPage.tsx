@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ListChecks, Loader2, Settings2 } from 'lucide-react'
+import { AlertTriangle, ListChecks, Loader2, Printer, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/planning/ConfirmDialog'
 import { ForecastBadges } from '@/components/planning/ForecastBadges'
@@ -200,6 +200,11 @@ function PlanningPage(): React.JSX.Element {
     },
   }
   const current = confirm ? confirmCopy[confirm] : null
+  const printLink = `/planning/print?${new URLSearchParams({
+    date,
+    ...(view === 'people' ? { by: 'person' } : {}),
+    ...(effective === 'draft' ? { source: 'draft' } : {}),
+  })}`
 
   return (
     <div className="space-y-6">
@@ -214,6 +219,11 @@ function PlanningPage(): React.JSX.Element {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline">
+            <Link to={printLink}>
+              <Printer aria-hidden /> {t('planning.print.action')}
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link to="/planning/my-queue">
               <ListChecks aria-hidden /> {t('planning.myQueue.link')}
