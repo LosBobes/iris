@@ -175,6 +175,24 @@ Web client
   (`modules`). The API returns 403 on disabled module routes; the web hides dependent
   UI. Stock posting only applies to processes created while Magacin was
   on (`stock_tracked`, migration v22). See [D-019](docs/DECISIONS.md).
+- `planning` (Planiranje, requires Procesi rada) is the third module, also off by
+  default and Backoffice-only. See the next section and [D-026](docs/DECISIONS.md).
+
+### Production planning (Planiranje)
+
+- Resources (migration v31): `machine_types`, `machines` (units, in service or not),
+  `worker_qualifications` (who may lead a step on a type), `attendance_overrides`;
+  working hours in `app_settings` (`working_hours`). Process step nodes carry
+  `machineTypeId`, `crewSize`, `setupMinutes`, `minutesPerUnit`.
+- `internal/planner` is a pure, deterministic list scheduler (no I/O, no clock):
+  the store builds its input from open orders with a process and stores the plan
+  date's blocks in `production_plans` (one draft + one published per date). Admins
+  generate, edit and publish (`/planning/plan…`); operators read `GET /planning/my-queue`.
+  Re-plan keeps locked blocks; drift and the 14-working-day forecast are computed on read.
+- Web: `/planning` (day timeline by machine / by person, issues, late orders, forecast),
+  `/planning/my-queue` ("Moj red"), `/planning/resources` (types, machines,
+  qualifications, attendance, working hours); step fields in the process inspector.
+  Fixture mode has its own simplified TS planner (`src/lib/planning/fixture-planner.ts`).
 
 ### Backoffice (superadmins, `/platform/*`)
 

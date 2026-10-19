@@ -16,31 +16,31 @@ async function rejection(promise: Promise<unknown>): Promise<{ status?: number; 
   throw new Error('expected a rejection')
 }
 
-async function platformApi(modules?: { processes: boolean; stock: boolean }) {
+async function platformApi(modules?: { processes: boolean; stock: boolean; planning?: boolean }) {
   const api = createFixtureApi()
   await api.platformLogin({ username: 'operater', password: 'operater-demo' })
-  if (modules) await api.setPlatformTenantModules('demo', modules)
+  if (modules) await api.setPlatformTenantModules('demo', { planning: false, ...modules })
   return api
 }
 
 describe('fixture modules: defaults', () => {
   it('starts with both modules off and exposes them in settings and the tenant list', async () => {
     const api = createFixtureApi()
-    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: false })
+    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: false, planning: false })
     await api.platformLogin({ username: 'operater', password: 'operater-demo' })
-    expect((await api.getPlatformTenants())[0].modules).toEqual({ processes: false, stock: false })
+    expect((await api.getPlatformTenants())[0].modules).toEqual({ processes: false, stock: false, planning: false })
   })
 
   it('ignores modules in updateSettings', async () => {
     const api = createFixtureApi()
-    await api.updateSettings({ firmName: 'X', modules: { processes: true, stock: true } } as never)
-    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: false })
+    await api.updateSettings({ firmName: 'X', modules: { processes: true, stock: true, planning: false } } as never)
+    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: false, planning: false })
   })
 
   it('treats processes without stock as processes off', () => {
-    expect(normalizeOrganizationModules({ processes: true, stock: false })).toEqual({ processes: false, stock: false })
-    expect(normalizeOrganizationModules(undefined)).toEqual({ processes: false, stock: false })
-    expect(normalizeOrganizationModules({ processes: true, stock: true })).toEqual({ processes: true, stock: true })
+    expect(normalizeOrganizationModules({ processes: true, stock: false, planning: false })).toEqual({ processes: false, stock: false, planning: false })
+    expect(normalizeOrganizationModules(undefined)).toEqual({ processes: false, stock: false, planning: false })
+    expect(normalizeOrganizationModules({ processes: true, stock: true, planning: false })).toEqual({ processes: true, stock: true, planning: false })
   })
 })
 
@@ -48,22 +48,22 @@ describe('fixture modules: switching', () => {
   it('requires a Backoffice session and rejects processes without stock with 422', async () => {
     const anonymous = createFixtureApi()
     await anonymous.platformLogout()
-    await expect(anonymous.setPlatformTenantModules('demo', { processes: false, stock: true })).rejects.toThrow()
+    await expect(anonymous.setPlatformTenantModules('demo', { processes: false, stock: true, planning: false })).rejects.toThrow()
 
     const api = await platformApi()
-    const error = await rejection(api.setPlatformTenantModules('demo', { processes: true, stock: false }))
+    const error = await rejection(api.setPlatformTenantModules('demo', { processes: true, stock: false, planning: false }))
     expect(error.status).toBe(422)
     expect(error.message).toBe(PROCESSES_REQUIRE_STOCK_MESSAGE)
 
-    const saved = await api.setPlatformTenantModules('demo', { processes: true, stock: true })
-    expect(saved.modules).toEqual({ processes: true, stock: true })
-    expect((await api.getSettings()).modules).toEqual({ processes: true, stock: true })
+    const saved = await api.setPlatformTenantModules('demo', { processes: true, stock: true, planning: false })
+    expect(saved.modules).toEqual({ processes: true, stock: true, planning: false })
+    expect((await api.getSettings()).modules).toEqual({ processes: true, stock: true, planning: false })
   })
 })
 
 describe('fixture modules: enforcement', () => {
   it('answers 403 with the exact Serbian message for process calls while processes are off', async () => {
-    const api = await platformApi({ processes: false, stock: true })
+    const api = await platformApi({ processes: false, stock: true, planning: false })
     for (const call of [
       () => api.getProcessTemplates(),
       () => api.getWorkOrderProcess(OPEN_ORDER),
@@ -93,18 +93,18 @@ describe('fixture modules: enforcement', () => {
   })
 
   it('does not auto-attach the default template while processes are off', async () => {
-    const api = await platformApi({ processes: false, stock: true })
+    const api = await platformApi({ processes: false, stock: true, planning: false })
     const [order] = (await api.getWorkOrders({ limit: 1 })).items
     const created = await api.createWorkOrder({ ...order, id: undefined, orderNumber: undefined, issuedBy: 'admin', jobDescription: 'Test', clientName: 'Klijent', issueDate: '2026-03-01' } as never)
     await api.platformLogin({ username: 'operater', password: 'operater-demo' })
-    await api.setPlatformTenantModules('demo', { processes: true, stock: true })
+    await api.setPlatformTenantModules('demo', { processes: true, stock: true, planning: false })
     expect(await api.getWorkOrderProcess(created.id)).toBeNull()
   })
 
   it('returns stockOnHand null while stock is off and the number when on', async () => {
     const api = await platformApi()
     expect((await api.getCatalogItemById(PAPER))?.stockOnHand).toBeNull()
-    await api.setPlatformTenantModules('demo', { processes: false, stock: true })
+    await api.setPlatformTenantModules('demo', { processes: false, stock: true, planning: false })
     expect((await api.getCatalogItemById(PAPER))?.stockOnHand).toBe(620)
   })
 })
@@ -119,7 +119,7 @@ describe('fixture modules: stock tracking', () => {
   }
 
   it('posts for a process created while stock is on', async () => {
-    const api = await platformApi({ processes: true, stock: true })
+    const api = await platformApi({ processes: true, stock: true, planning: false })
     // Created under (processes on, stock on) -> tracked and posts.
     await api.applyProcessTemplate(OPEN_ORDER, 'pt-offset')
     await doneStep(api)

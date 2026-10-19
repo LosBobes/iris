@@ -58,6 +58,12 @@ var tenantDataTables = []tenantDataTable{
 	{name: "impersonation_actions", where: `impersonation_id IN (SELECT id FROM impersonation_events WHERE tenant_id = ?)`, keepOnDelete: true},
 	{name: "impersonation_events", where: tenantRows, keepOnDelete: true},
 	{name: "login_events", where: tenantRows},
+	// Planiranje (D-026): children of users and machine types first.
+	{name: "production_plans", where: tenantRows, jsonColumns: []string{"data"}},
+	{name: "attendance_overrides", where: tenantRows},
+	{name: "worker_qualifications", where: tenantRows},
+	{name: "machines", where: tenantRows},
+	{name: "machine_types", where: tenantRows},
 	// Superadmin-internal notes about the organization (D-022): removed with
 	// it, but never handed to the organization in its export.
 	{name: "tenant_notes", where: tenantRows, noExport: true},

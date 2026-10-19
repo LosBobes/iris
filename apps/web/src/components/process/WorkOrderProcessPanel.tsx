@@ -442,6 +442,7 @@ function WorkOrderProcessPanelBody({
               stock={stockEnabled ? levels : undefined}
               articleLinking={stockEnabled}
               articlesHidden={!stockEnabled}
+              planningEnabled={modules.planning}
             />
           </Suspense>
         )}

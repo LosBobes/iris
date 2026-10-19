@@ -27,6 +27,8 @@ type SQLStore struct {
 	db      *sql.DB
 	dialect dialect
 	caches  metaCaches
+	// clock overrides time.Now for the planning features (SetClock, tests).
+	clock func() time.Time
 }
 
 // SQLiteStore is the original name of this type, kept as an alias so existing

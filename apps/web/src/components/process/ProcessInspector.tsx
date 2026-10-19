@@ -14,6 +14,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CatalogPickerDialog } from '@/components/WorkOrders/CatalogPickerDialog'
+import { useMachineTypes } from '@/hooks/usePlanning'
+import { MAX_CREW_SIZE, MAX_STEP_MINUTES } from '@/types/planning'
 import { formatStockQuantity } from '@/lib/stock/format'
 import type { StockLevelMap } from '@/lib/stock/posting'
 import {
@@ -49,6 +51,12 @@ interface ProcessInspectorProps {
   articleLinking?: boolean
   /** Hides the article section entirely (Magacin module off). */
   articlesHidden?: boolean
+  /**
+   * Shows the planning fields of step nodes (machine type, crew, times). Only
+   * for the in-app editor while the Planiranje module is on: it also fetches the
+   * machine types, so it must stay false everywhere else.
+   */
+  planningEnabled?: boolean
   onNodeChange: (id: string, patch: Partial<ProcessNode>) => void
   /** Switches an item node's role in place (input / product / byproduct). */
   onKindChange?: (id: string, kind: ProcessNodeKind) => void
@@ -70,6 +78,7 @@ export function ProcessInspector({
   stock,
   articleLinking = false,
   articlesHidden = false,
+  planningEnabled = false,
   onNodeChange,
   onKindChange,
   onEdgeChange,
@@ -197,6 +206,15 @@ export function ProcessInspector({
           label={t('process.inspector.final')}
           hint={t('process.inspector.finalHint')}
           onChange={(final) => onNodeChange(current.id, { final: final || undefined })}
+        />
+      )}
+
+      {isStep && planningEnabled && (
+        <StepPlanningFields
+          idPrefix={uid}
+          node={current}
+          editable={canEditStructure}
+          onChange={(patch) => onNodeChange(current.id, patch)}
         />
       )}
 
@@ -342,6 +360,119 @@ export function ProcessInspector({
         </Button>
       )}
     </>,
+  )
+}
+
+const NO_MACHINE_TYPE = '__none__'
+
+function parseMinutes(raw: string): number | undefined {
+  const parsed = parseQuantity(raw)
+  return parsed === undefined ? undefined : Math.min(Math.max(parsed, 0), MAX_STEP_MINUTES)
+}
+
+/** Duration of a step for `quantity` units: setup + per-unit time x quantity. */
+export function stepMinutesFor(node: ProcessNode, quantity = 1): number {
+  return Math.ceil((node.setupMinutes ?? 0) + (node.minutesPerUnit ?? 0) * Math.max(1, quantity) - 1e-9)
+}
+
+/** Planning fields (D-026) of a step node; mounted only while the module is on. */
+function StepPlanningFields({
+  idPrefix,
+  node,
+  editable,
+  onChange,
+}: {
+  idPrefix: string
+  node: ProcessNode
+  editable: boolean
+  onChange: (patch: Partial<ProcessNode>) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const { data: machineTypes } = useMachineTypes()
+  const typeId = node.machineTypeId
+  const known = !typeId || (machineTypes ?? []).some((type) => type.id === typeId)
+  const timed = node.setupMinutes !== undefined || node.minutesPerUnit !== undefined
+
+  return (
+    <div className="space-y-3" data-testid="inspector-planning">
+      <div className="space-y-1.5">
+        <Label htmlFor={`${idPrefix}-machine-type`}>{t('process.inspector.machineType')}</Label>
+        <Select
+          value={typeId ?? NO_MACHINE_TYPE}
+          disabled={!editable}
+          onValueChange={(value) => onChange({ machineTypeId: value === NO_MACHINE_TYPE ? undefined : value })}
+        >
+          <SelectTrigger id={`${idPrefix}-machine-type`} className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_MACHINE_TYPE}>{t('process.inspector.machineTypeNone')}</SelectItem>
+            {(machineTypes ?? []).map((type) => (
+              <SelectItem key={type.id} value={type.id}>
+                {type.name}
+              </SelectItem>
+            ))}
+            {machineTypes && !known && typeId && (
+              <SelectItem value={typeId}>{t('process.inspector.machineTypeUnknown')}</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-crew`}>{t('process.inspector.crewSize')}</Label>
+          <Input
+            id={`${idPrefix}-crew`}
+            type="number"
+            min={1}
+            max={MAX_CREW_SIZE}
+            step={1}
+            inputMode="numeric"
+            value={node.crewSize ?? ''}
+            readOnly={!editable}
+            onChange={(event) => {
+              const parsed = parseQuantity(event.target.value)
+              onChange({
+                crewSize: parsed === undefined ? undefined : Math.min(Math.max(Math.round(parsed), 1), MAX_CREW_SIZE),
+              })
+            }}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-setup`}>{t('process.inspector.setupMinutes')}</Label>
+          <Input
+            id={`${idPrefix}-setup`}
+            type="number"
+            min={0}
+            max={MAX_STEP_MINUTES}
+            step="any"
+            inputMode="decimal"
+            value={node.setupMinutes ?? ''}
+            readOnly={!editable}
+            onChange={(event) => onChange({ setupMinutes: parseMinutes(event.target.value) })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${idPrefix}-per-unit`}>{t('process.inspector.minutesPerUnit')}</Label>
+          <Input
+            id={`${idPrefix}-per-unit`}
+            type="number"
+            min={0}
+            max={MAX_STEP_MINUTES}
+            step="any"
+            inputMode="decimal"
+            value={node.minutesPerUnit ?? ''}
+            readOnly={!editable}
+            onChange={(event) => onChange({ minutesPerUnit: parseMinutes(event.target.value) })}
+          />
+        </div>
+      </div>
+      <p className="text-[10px] text-[color:var(--iris-ink-soft)]" data-testid="inspector-duration">
+        {timed
+          ? t('process.inspector.durationHint', { minutes: stepMinutesFor(node) })
+          : t('process.inspector.durationMissing')}
+      </p>
+    </div>
   )
 }
 

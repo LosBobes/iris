@@ -29,6 +29,14 @@ export interface ProcessNode {
    * step also consumes it; product and byproduct nodes only.
    */
   final?: boolean
+  /** Planning (D-026), step nodes only: the machine type the step runs on. */
+  machineTypeId?: string
+  /** Planning, step nodes only: people the step needs (1-50; absent = 1). */
+  crewSize?: number
+  /** Planning, step nodes only: fixed minutes per order. */
+  setupMinutes?: number
+  /** Planning, step nodes only: minutes per unit of the order's quantity. */
+  minutesPerUnit?: number
   /** Per-order state; step nodes only. */
   status?: ProcessStepStatus
   /** Per-order state; item nodes only. */

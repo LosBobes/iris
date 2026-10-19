@@ -12,8 +12,8 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
-// Optional per-organization modules ("processes" and "stock"). Both are off by
-// default and only Backoffice superadmins switch them. The flags live in the
+// Optional per-organization modules ("processes", "stock" and "planning"). All
+// are off by default and only Backoffice superadmins switch them. The flags live in the
 // app_settings key/value table (no migration); a missing row or key means off.
 //
 // Stock posting safety (migration v22): a work-order process is "stock tracked"
@@ -42,16 +42,25 @@ func parseModules(raw string) domain.OrganizationModules {
 // "stock": the process module needs the warehouse.
 const ModulesDependencyMessage = "Modul „Procesi rada“ zahteva uključen modul „Magacin“."
 
-// effectiveModules applies the dependency on read: processes only count while
-// stock is on, even if stored data says otherwise.
+// ModulesPlanningDependencyMessage is the 422 for switching "planning" on
+// without "processes": the planner schedules process steps.
+const ModulesPlanningDependencyMessage = "Modul „Planiranje“ zahteva uključen modul „Procesi rada“."
+
+// effectiveModules applies the dependencies on read: processes only count
+// while stock is on, and planning only while processes is, even if stored data
+// says otherwise.
 func effectiveModules(modules domain.OrganizationModules) domain.OrganizationModules {
 	modules.Processes = modules.Processes && modules.Stock
+	modules.Planning = modules.Planning && modules.Processes
 	return modules
 }
 
 func validateModules(modules domain.OrganizationModules) error {
 	if modules.Processes && !modules.Stock {
 		return newValidationError(ModulesDependencyMessage)
+	}
+	if modules.Planning && !modules.Processes {
+		return newValidationError(ModulesPlanningDependencyMessage)
 	}
 	return nil
 }
@@ -98,7 +107,7 @@ func onOff(value bool) string {
 }
 
 // moduleChangeDetail builds the audit detail of a module switch and reports
-// whether anything changed. "processes"/"stock" carry the new values and
+// whether anything changed. "processes"/"stock"/"planning" carry the new values and
 // "changed" the comma-joined names that differ.
 func moduleChangeDetail(current, next domain.OrganizationModules) (map[string]string, bool) {
 	changed := []string{}
@@ -108,10 +117,14 @@ func moduleChangeDetail(current, next domain.OrganizationModules) (map[string]st
 	if current.Stock != next.Stock {
 		changed = append(changed, "stock")
 	}
+	if current.Planning != next.Planning {
+		changed = append(changed, "planning")
+	}
 	sort.Strings(changed)
 	return map[string]string{
 		"processes": onOff(next.Processes),
 		"stock":     onOff(next.Stock),
+		"planning":  onOff(next.Planning),
 		"changed":   strings.Join(changed, ","),
 	}, len(changed) > 0
 }
@@ -180,6 +193,9 @@ func (s *SQLiteStore) SetTenantModules(ctx context.Context, slug string, update 
 	}
 	if update.Stock != nil {
 		modules.Stock = *update.Stock
+	}
+	if update.Planning != nil {
+		modules.Planning = *update.Planning
 	}
 	if err := validateModules(modules); err != nil {
 		return nil, err

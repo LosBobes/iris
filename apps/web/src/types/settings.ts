@@ -52,13 +52,16 @@ export type PrintItemColumn = 'quantity' | 'unitPrice' | 'total'
 
 /**
  * Optional feature modules, switched per organization by Backoffice superadmins
- * only. Both are off by default; processes requires stock (stock may be on alone).
+ * only. All are off by default; processes requires stock and planning requires
+ * processes.
  */
 export interface OrganizationModules {
   /** "Procesi rada": process templates, order processes and the simulator. Requires `stock`. */
   processes: boolean
   /** "Magacin": the stock ledger, receipts, counts and stock in the catalog. */
   stock: boolean
+  /** "Planiranje": machines, qualifications, attendance and day plans. Requires `processes`. */
+  planning: boolean
 }
 
 export interface OrganizationSettings {
@@ -114,24 +117,27 @@ export const DEFAULT_PRIORITY_DEFAULTS: PriorityDefaults = {
   allowOverride: false,
 }
 
-/** Both optional modules are off until a Backoffice superadmin enables them. */
+/** Every optional module is off until a Backoffice superadmin enables it. */
 export const DEFAULT_ORGANIZATION_MODULES: OrganizationModules = {
   processes: false,
   stock: false,
+  planning: false,
 }
 
 /**
  * Coerces a received value into the effective modules (missing = off).
- * "Procesi rada" requires "Magacin", so processes is only on while stock is on
- * (an inconsistent stored value counts as processes off).
+ * "Procesi rada" requires "Magacin" and "Planiranje" requires "Procesi rada",
+ * so an inconsistent stored value counts the dependent module as off.
  */
 export function normalizeOrganizationModules(
   modules: Partial<OrganizationModules> | null | undefined,
 ): OrganizationModules {
   const stock = modules?.stock === true
+  const processes = stock && modules?.processes === true
   return {
-    processes: stock && modules?.processes === true,
+    processes,
     stock,
+    planning: processes && modules?.planning === true,
   }
 }
 

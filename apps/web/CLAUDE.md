@@ -72,6 +72,13 @@ vars and must not be committed.
   disabled module's endpoints (the API answers 403). Fixture mode: `createFixtureApi({ modules })`
   or Backoffice (`/backoffice`, operater / operater-demo) → Organizacije → Moduli. Tests use
   `src/test/modules.tsx` (`WithModules`).
+- **Planiranje** (D-026, third module `planning`, requires `processes`): contract types in
+  `src/types/planning.ts`; `window.api` methods `listMachineTypes` … `getPlanningForecast`; query keys in
+  `src/lib/planning/query-keys.ts` (all under `['planning']`, invalidations in `query-client.ts`). Fixture mode:
+  `src/lib/planning/fixture-store.ts` (seeded machines, in-memory plans, 403 `PLANNING_DISABLED_MESSAGE` when off) on
+  top of `fixture-planner.ts`, a pure TS twin of `iris-api/internal/planner` (keep rules in sync). Nav "Planiranje"
+  (admins) and "Moj red" (everyone) and the step fields in the process inspector (machine type, crew, times) show
+  only while `useOrganization().modules.planning` is on; the Backoffice template editor never shows them.
 - Forms: `react-hook-form` + `zod` (`src/lib/work-orders/validation.ts`).
 - Visible UI text and messages in Serbian (`sr-Latn`); code/tests in English.
 - Dates: `YYYY-MM-DD` stored, `DD.MM.YYYY` displayed (`src/lib/i18n-date.ts`).

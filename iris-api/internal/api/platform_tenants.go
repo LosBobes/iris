@@ -123,8 +123,8 @@ func (s *Server) handlePlatformSetTenantModules(w http.ResponseWriter, r *http.R
 		writeAPIError(w, r, http.StatusNotFound, tenantNotFoundMessage, nil)
 		return
 	}
-	log.Printf("platform admin %q set modules of organization %q: processes=%t stock=%t",
-		currentPlatformAdmin(r).Username, tenant.Slug, input.Processes, input.Stock)
+	log.Printf("platform admin %q set modules of organization %q: processes=%t stock=%t planning=%t",
+		currentPlatformAdmin(r).Username, tenant.Slug, input.Processes, input.Stock, input.Planning)
 	writeJSON(w, http.StatusOK, tenant)
 }
 

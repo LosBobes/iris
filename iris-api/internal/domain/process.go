@@ -109,12 +109,28 @@ func NormalizeProcessGraph(graph ProcessGraph) (ProcessGraph, error) {
 			node.Quantity, node.ActualQuantity = nil, nil
 			node.Unit, node.CatalogItemID = "", ""
 			node.Final = false
+			node.MachineTypeID = strings.TrimSpace(node.MachineTypeID)
+			if utf8.RuneCountInString(node.MachineTypeID) > MaxProcessIDLength {
+				return ProcessGraph{}, graphError("Oznaka tipa mašine je predugačka.")
+			}
+			if node.CrewSize != nil && (*node.CrewSize < 1 || *node.CrewSize > MaxCrewSize) {
+				return ProcessGraph{}, graphError("Broj ljudi na koraku mora biti između 1 i 50.")
+			}
+			for _, minutes := range []*float64{node.SetupMinutes, node.MinutesPerUnit} {
+				if minutes != nil && (*minutes < 0 || *minutes > MaxStepMinutes || math.IsNaN(*minutes) || math.IsInf(*minutes, 0)) {
+					return ProcessGraph{}, graphError("Trajanje koraka mora biti između 0 i 100000 minuta.")
+				}
+			}
+			node.CrewSize = copyInt(node.CrewSize)
+			node.SetupMinutes = copyFloat(node.SetupMinutes)
+			node.MinutesPerUnit = copyFloat(node.MinutesPerUnit)
 			if node.Status != "" && !node.Status.valid() {
 				return ProcessGraph{}, graphError("Nepoznat status koraka.")
 			}
 		} else {
 			node.Status = ""
 			node.Start = false
+			node.MachineTypeID, node.CrewSize, node.SetupMinutes, node.MinutesPerUnit = "", nil, nil, nil
 			if node.Kind == ProcessNodeInput {
 				node.Final = false
 			}
@@ -175,6 +191,14 @@ func NormalizeProcessGraph(graph ProcessGraph) (ProcessGraph, error) {
 		return ProcessGraph{}, graphError("Proces ne sme sadržati cikluse.")
 	}
 	return out, nil
+}
+
+func copyInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
 }
 
 func copyFloat(value *float64) *float64 {
@@ -271,6 +295,9 @@ func CloneProcessGraph(graph ProcessGraph) ProcessGraph {
 	for i, node := range graph.Nodes {
 		node.Quantity = copyFloat(node.Quantity)
 		node.ActualQuantity = copyFloat(node.ActualQuantity)
+		node.CrewSize = copyInt(node.CrewSize)
+		node.SetupMinutes = copyFloat(node.SetupMinutes)
+		node.MinutesPerUnit = copyFloat(node.MinutesPerUnit)
 		out.Nodes[i] = node
 	}
 	copy(out.Edges, graph.Edges)
@@ -280,7 +307,8 @@ func CloneProcessGraph(graph ProcessGraph) ProcessGraph {
 // ProcessStructureChanged reports whether next differs from current in more
 // than per-order state and layout. Status, actualQuantity, note and the x/y
 // position may change freely; the node set, kind, label, quantity, unit,
-// catalogItemId, the start/final markers and the edge set (including labels)
+// catalogItemId, the start/final markers, the planning fields (machine type,
+// crew size, setup and per-unit minutes) and the edge set (including labels)
 // may not. Both graphs
 // should already be normalized.
 func ProcessStructureChanged(current, next ProcessGraph) bool {
@@ -295,7 +323,9 @@ func ProcessStructureChanged(current, next ProcessGraph) bool {
 		old, ok := nodes[node.ID]
 		if !ok || old.Kind != node.Kind || old.Label != node.Label || old.Unit != node.Unit ||
 			old.CatalogItemID != node.CatalogItemID || old.Start != node.Start || old.Final != node.Final ||
-			!sameFloat(old.Quantity, node.Quantity) {
+			!sameFloat(old.Quantity, node.Quantity) || old.MachineTypeID != node.MachineTypeID ||
+			!sameInt(old.CrewSize, node.CrewSize) || !sameFloat(old.SetupMinutes, node.SetupMinutes) ||
+			!sameFloat(old.MinutesPerUnit, node.MinutesPerUnit) {
 			return true
 		}
 	}
@@ -311,9 +341,44 @@ func ProcessStructureChanged(current, next ProcessGraph) bool {
 	return false
 }
 
+func sameInt(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
 func sameFloat(a, b *float64) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
 	return *a == *b
+}
+
+// StepDurationMinutes is a step's planned working time for an order of the
+// given quantity (a quantity below 1 counts as 1): setup + per-unit × quantity,
+// rounded up to whole minutes. ok is false when the step has neither time set.
+func StepDurationMinutes(node ProcessNode, quantity int) (minutes int, ok bool) {
+	if node.SetupMinutes == nil && node.MinutesPerUnit == nil {
+		return 0, false
+	}
+	if quantity < 1 {
+		quantity = 1
+	}
+	total := 0.0
+	if node.SetupMinutes != nil {
+		total += *node.SetupMinutes
+	}
+	if node.MinutesPerUnit != nil {
+		total += *node.MinutesPerUnit * float64(quantity)
+	}
+	return int(math.Ceil(total - 1e-9)), true
+}
+
+// StepCrewSize is the number of people a step needs (at least 1).
+func StepCrewSize(node ProcessNode) int {
+	if node.CrewSize == nil || *node.CrewSize < 1 {
+		return 1
+	}
+	return *node.CrewSize
 }

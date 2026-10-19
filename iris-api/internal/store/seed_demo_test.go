@@ -58,8 +58,8 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 	}
 	tctx := ContextWithTenant(ctx, tenant.ID)
 
-	// Both modules are on for the merged org.
-	if modules, err := s.OrganizationModules(tctx); err != nil || !modules.Stock || !modules.Processes {
+	// All three modules are on for the merged org.
+	if modules, err := s.OrganizationModules(tctx); err != nil || !modules.Stock || !modules.Processes || !modules.Planning {
 		t.Fatalf("modules = %+v, %v", modules, err)
 	}
 	// The fixture admin login and the content operator login both work.
@@ -213,6 +213,8 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 		t.Fatal("no node with actual above planned quantity")
 	}
 
+	checkDemoPlanning(t, s, tctx, result, withProcess)
+
 	// A second run re-runs the (idempotent) fixture half but leaves the process
 	// and stock content untouched.
 	beforeMovements := movements.Total
@@ -229,6 +231,9 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 	}
 	if templates, _ := s.ProcessTemplates(tctx); len(templates) != 4 {
 		t.Fatalf("templates changed on re-run = %d", len(templates))
+	}
+	if machines, _ := s.Machines(tctx); len(machines) != result.Machines {
+		t.Fatalf("machines changed on re-run = %d, want %d", len(machines), result.Machines)
 	}
 }
 
@@ -401,6 +406,88 @@ func TestDeleteTenantCascades(t *testing.T) {
 		}
 		if count != 0 {
 			t.Errorf("table %s still has %d rows after tenant delete", table, count)
+		}
+	}
+}
+
+// checkDemoPlanning verifies the planning content: machines, qualifications,
+// timed steps on templates and order copies, and that a plan for the next
+// working day (everyone counts as present) books machines and people.
+func checkDemoPlanning(t *testing.T, s *SQLiteStore, tctx context.Context, result DemoSeedResult, withProcess []domain.WorkOrder) {
+	t.Helper()
+	types, err := s.MachineTypes(tctx)
+	if err != nil || len(types) != len(demoMachineTypes) || result.MachineTypes != len(types) {
+		t.Fatalf("machine types = %d (result %d), %v", len(types), result.MachineTypes, err)
+	}
+	machines, err := s.Machines(tctx)
+	if err != nil || len(machines) != 8 || result.Machines != 8 {
+		t.Fatalf("machines = %d (result %d), %v", len(machines), result.Machines, err)
+	}
+	workers, err := s.Qualifications(tctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qualified := map[string]int{}
+	for _, worker := range workers {
+		qualified[worker.Username] = len(worker.MachineTypeIDs)
+	}
+	for username, keys := range demoQualifications {
+		if qualified[username] != len(keys) {
+			t.Fatalf("%s qualifications = %d, want %d", username, qualified[username], len(keys))
+		}
+	}
+	templates, err := s.ProcessTemplates(tctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, template := range templates {
+		for _, node := range template.Graph.Nodes {
+			if _, ok := domain.StepDurationMinutes(node, 1); node.Kind == domain.ProcessNodeStep && !ok {
+				t.Fatalf("template %s step %s has no duration", template.Name, node.ID)
+			}
+		}
+	}
+	timedCopies := 0
+	for _, order := range withProcess {
+		process, _ := s.WorkOrderProcess(tctx, order.ID)
+		for _, node := range process.Graph.Nodes {
+			if node.Kind == domain.ProcessNodeStep && node.MachineTypeID != "" {
+				timedCopies++
+				break
+			}
+		}
+	}
+	if timedCopies != len(withProcess) {
+		t.Fatalf("orders whose process carries machine types = %d of %d", timedCopies, len(withProcess))
+	}
+
+	// Plan the next working day after a fixed Monday morning.
+	location, err := time.LoadLocation(domain.DefaultPlanningTimeZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetClock(func() time.Time { return time.Date(2026, 10, 19, 6, 0, 0, 0, location) })
+	t.Cleanup(func() { s.SetClock(nil) })
+	plan, err := s.GeneratePlan(tctx, domain.PlanGenerateInput{Date: "2026-10-20"}, demoAdminUsername)
+	if err != nil {
+		t.Fatalf("GeneratePlan = %v", err)
+	}
+	usedMachines, usedPeople := map[string]bool{}, map[string]bool{}
+	for _, assignment := range plan.Assignments {
+		if assignment.MachineID != nil {
+			usedMachines[*assignment.MachineID] = true
+		}
+		for _, user := range assignment.UserIDs {
+			usedPeople[user] = true
+		}
+	}
+	if len(plan.Assignments) < 5 || len(usedMachines) < 3 || len(usedPeople) < 3 {
+		t.Fatalf("demo plan: %d blocks, %d machines, %d people; issues %+v",
+			len(plan.Assignments), len(usedMachines), len(usedPeople), plan.Issues)
+	}
+	for _, issue := range plan.Issues {
+		if issue.Code != domain.PlanIssueNoCapacity {
+			t.Fatalf("unexpected demo plan issue %+v", issue)
 		}
 	}
 }

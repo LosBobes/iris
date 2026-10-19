@@ -1,4 +1,5 @@
 import i18n from '@/i18n'
+import { MAX_CREW_SIZE, MAX_STEP_MINUTES } from '@/types/planning'
 import type {
   ProcessEdge,
   ProcessGraph,
@@ -190,6 +191,19 @@ export function validateGraph(graph: ProcessGraph): string[] {
         errors.push(t('unitTooLong', { label, max: MAX_UNIT_LENGTH }))
       }
     }
+    if (node.kind === 'step') {
+      if (
+        node.crewSize !== undefined &&
+        (!Number.isInteger(node.crewSize) || node.crewSize < 1 || node.crewSize > MAX_CREW_SIZE)
+      ) {
+        errors.push(t('stepCrewRange', { label, max: MAX_CREW_SIZE }))
+      }
+      for (const minutes of [node.setupMinutes, node.minutesPerUnit]) {
+        if (minutes !== undefined && (!Number.isFinite(minutes) || minutes < 0 || minutes > MAX_STEP_MINUTES)) {
+          errors.push(t('stepMinutesRange', { label, max: MAX_STEP_MINUTES }))
+        }
+      }
+    }
     if (node.note !== undefined && node.note.length > MAX_NOTE_LENGTH) {
       errors.push(t('noteTooLong', { label, max: MAX_NOTE_LENGTH }))
     }
@@ -342,8 +356,8 @@ function sameText(a: string | undefined | null, b: string | undefined | null): b
 
 /**
  * True when `next` differs from `prev` in anything an operator may not change:
- * the node set, kind, label, quantity, unit, catalogItemId, the start/final
- * markers, or the edge set (including labels). Status, actual quantity, note and position are free.
+ * the node set, kind, label, quantity, unit, catalogItemId, the planning step
+ * fields (machine type, crew size, times), the start/final markers, or the edge set (including labels). Status, actual quantity, note and position are free.
  */
 export function hasStructuralChange(prev: ProcessGraph, next: ProcessGraph): boolean {
   if (prev.nodes.length !== next.nodes.length || prev.edges.length !== next.edges.length) return true
@@ -358,6 +372,10 @@ export function hasStructuralChange(prev: ProcessGraph, next: ProcessGraph): boo
       !sameNumber(old.quantity, node.quantity) ||
       !sameText(old.unit, node.unit) ||
       !sameText(old.catalogItemId, node.catalogItemId) ||
+      !sameText(old.machineTypeId, node.machineTypeId) ||
+      !sameNumber(old.crewSize, node.crewSize) ||
+      !sameNumber(old.setupMinutes, node.setupMinutes) ||
+      !sameNumber(old.minutesPerUnit, node.minutesPerUnit) ||
       Boolean(old.start) !== Boolean(node.start) ||
       Boolean(old.final) !== Boolean(node.final)
     ) {
@@ -427,6 +445,10 @@ export function normalizeGraphForKinds(graph: ProcessGraph): ProcessGraph {
     } else {
       delete next.status
       delete next.start
+      delete next.machineTypeId
+      delete next.crewSize
+      delete next.setupMinutes
+      delete next.minutesPerUnit
       if (!canBeFinal(node.kind)) delete next.final
     }
     return next

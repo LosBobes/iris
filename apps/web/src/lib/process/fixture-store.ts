@@ -59,10 +59,17 @@ function seedGraph(): ProcessGraph {
   })
   return {
     nodes: [
-      node('step-prep', 'step', 'Priprema', 0, 150),
-      node('step-print', 'step', 'Štampa', 280, 150),
-      node('step-cut', 'step', 'Sečenje', 560, 150),
-      node('step-pack', 'step', 'Pakovanje', 840, 150),
+      // Planning fields (machine type ids match src/lib/planning/fixture-store.ts)
+      // are stored always and only shown while the Planiranje module is on.
+      node('step-prep', 'step', 'Priprema', 0, 150, { machineTypeId: 'mt-ctp', setupMinutes: 20 }),
+      node('step-print', 'step', 'Štampa', 280, 150, {
+        machineTypeId: 'mt-offset',
+        crewSize: 2,
+        setupMinutes: 45,
+        minutesPerUnit: 0.05,
+      }),
+      node('step-cut', 'step', 'Sečenje', 560, 150, { machineTypeId: 'mt-cutter', setupMinutes: 15, minutesPerUnit: 0.02 }),
+      node('step-pack', 'step', 'Pakovanje', 840, 150, { setupMinutes: 10, minutesPerUnit: 0.03 }),
       // Inputs and Makulatura are linked to the demo warehouse articles (see
       // fixture-api.ts); the finished product and paper scrap stay unlinked.
       node('in-plates', 'input', 'Ploče', 0, 0, { quantity: 4, unit: 'kom', catalogItemId: 'cat-6' }),
@@ -127,6 +134,8 @@ export interface ProcessFixtureStore {
   attachDefaultProcess: (workOrderId: string) => void
   /** Every order's current process graph (the stock ledger derives reservations from it). */
   listOrderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
+  /** Every order's process, tracked by stock or not (the fixture planner reads it). */
+  listAllOrderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
 }
 
 export function createProcessFixtureStore(context: ProcessFixtureContext): ProcessFixtureStore {
@@ -286,6 +295,10 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
       return [...processes]
         .filter(([workOrderId]) => stockTracked.has(workOrderId))
         .map(([workOrderId, process]) => ({ workOrderId, graph: clone(process.graph) }))
+    },
+
+    listAllOrderProcesses() {
+      return [...processes].map(([workOrderId, process]) => ({ workOrderId, graph: clone(process.graph) }))
     },
 
     attachDefaultProcess(workOrderId) {

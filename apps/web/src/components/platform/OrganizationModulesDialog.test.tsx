@@ -21,7 +21,7 @@ const demo: PlatformTenant = {
   suspendedAt: null,
   users: 2,
   admins: 1,
-  modules: { processes: false, stock: false },
+  modules: { processes: false, stock: false, planning: false },
   health: emptyHealth,
   notes: emptyNotes,
 };
@@ -36,6 +36,7 @@ function open(tenant: PlatformTenant = demo, onSaved = vi.fn()) {
   return {
     stock: screen.getByRole("switch", { name: strings.stock }),
     processes: screen.getByRole("switch", { name: strings.processes }),
+    planning: screen.getByRole("switch", { name: strings.planning }),
     onSaved,
   };
 }
@@ -54,10 +55,10 @@ describe("OrganizationModulesDialog", () => {
   });
 
   it("turns processes off together with stock and saves both values", async () => {
-    const saved = { ...demo, modules: { processes: false, stock: false } };
+    const saved = { ...demo, modules: { processes: false, stock: false, planning: false } };
     const setPlatformTenantModules = vi.fn().mockResolvedValue(saved);
     vi.stubGlobal("api", { setPlatformTenantModules });
-    const { stock, processes, onSaved } = open({ ...demo, modules: { processes: true, stock: true } });
+    const { stock, processes, onSaved } = open({ ...demo, modules: { processes: true, stock: true, planning: false } });
     expect(processes).toBeChecked();
 
     await userEvent.click(stock);
@@ -65,7 +66,7 @@ describe("OrganizationModulesDialog", () => {
     expect(processes).toBeDisabled();
 
     await userEvent.click(screen.getByRole("button", { name: sr.common.save }));
-    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: false, stock: false });
+    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: false, stock: false, planning: false });
     expect(onSaved).toHaveBeenCalledWith(saved);
   });
 
@@ -78,15 +79,53 @@ describe("OrganizationModulesDialog", () => {
     await userEvent.click(stock);
     await userEvent.click(processes);
     await userEvent.click(screen.getByRole("button", { name: sr.common.save }));
-    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: true, stock: true });
+    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: true, stock: true, planning: false });
     expect(await screen.findByRole("alert")).toHaveTextContent("Nešto nije u redu.");
     expect(onSaved).not.toHaveBeenCalled();
   });
 });
 
+describe("OrganizationModulesDialog planning", () => {
+  it("disables planning until processes are on and says why", async () => {
+    const { stock, processes, planning } = open();
+    expect(planning).toBeDisabled();
+    expect(screen.getByText(strings.requiresProcesses)).toBeInTheDocument();
+    await userEvent.click(stock);
+    expect(planning).toBeDisabled();
+    await userEvent.click(processes);
+    expect(planning).toBeEnabled();
+  });
+
+  it("turns planning off when processes or stock are switched off", async () => {
+    const all = { ...demo, modules: { processes: true, stock: true, planning: true } };
+    const first = open(all);
+    expect(first.planning).toBeChecked();
+    await userEvent.click(first.processes);
+    expect(first.planning).not.toBeChecked();
+    expect(first.planning).toBeDisabled();
+    cleanup();
+
+    const second = open(all);
+    await userEvent.click(second.stock);
+    expect(second.processes).not.toBeChecked();
+    expect(second.planning).not.toBeChecked();
+  });
+
+  it("sends planning with the other modules", async () => {
+    const setPlatformTenantModules = vi.fn().mockResolvedValue(demo);
+    vi.stubGlobal("api", { setPlatformTenantModules });
+    const { stock, processes, planning } = open();
+    await userEvent.click(stock);
+    await userEvent.click(processes);
+    await userEvent.click(planning);
+    await userEvent.click(screen.getByRole("button", { name: sr.common.save }));
+    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: true, stock: true, planning: true });
+  });
+});
+
 describe("OrganizationsPanel modules", () => {
   it("shows module badges and the Moduli button, and refreshes after saving", async () => {
-    const enabled = { ...demo, modules: { processes: true, stock: true } };
+    const enabled = { ...demo, modules: { processes: true, stock: true, planning: false } };
     vi.stubGlobal("api", {
       getPlatformTenants: vi.fn().mockResolvedValueOnce([demo]).mockResolvedValueOnce([enabled]),
       setPlatformTenantModules: vi.fn().mockResolvedValue(enabled),

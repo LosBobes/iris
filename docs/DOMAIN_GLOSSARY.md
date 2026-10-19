@@ -150,6 +150,25 @@ Stock of catalog **articles**, kept as a movement ledger (see [D-018](DECISIONS.
 | **Stock count** | `adjustment` / `opening` | `Popis` / `Početno stanje` | Admin enters counted quantities; the difference is posted. The first count of an article is its opening balance. |
 | **Consumption / Production** | `consumption` / `production` | `Utrošak` / `Proizvodnja` | Posted automatically from work-order processes when steps are done. |
 
+## Production Planning (Planiranje)
+
+Daily scheduling of process steps onto machines and people (see [D-026](DECISIONS.md#d-026-production-planning-planiranje-is-a-module-with-its-own-resources-and-a-deterministic-heuristic-planner)). Module `planning`, requires `processes`.
+
+| English Term | Code Token | Serbian UI Label | Meaning & Context |
+| --- | --- | --- | --- |
+| **Machine type** | `MachineType` | `Tip mašine` | Group of interchangeable units. Steps and qualifications reference a type. |
+| **Machine** | `Machine` | `Mašina` | One physical unit of a type; `inService` false = never planned. |
+| **Qualification** | `WorkerQualifications` | `Kvalifikacije` | Machine types a user may lead a step on. Helpers need none. |
+| **Attendance** | `AttendanceEntry` | `Prisustvo` | Present on a date = admin override if set, else (today) signed in that day; later dates count everyone present. |
+| **Working hours** | `WorkingHours` | `Radno vreme` | Org-wide shift per weekday with breaks, in one time zone. |
+| **Crew size** | `crewSize` | `Broj ljudi` | People a step needs (default 1); one must be qualified for its machine type. |
+| **Setup / per-unit time** | `setupMinutes` / `minutesPerUnit` | `Priprema` / `Po komadu` | Step duration = setup + per-unit × the order's quantity. |
+| **Plan** | `ProductionPlan` | `Plan` | One date's schedule; `draft` (admin edits) then `published`. |
+| **Block** | `PlanAssignment` | `Blok` | A step on one machine with one crew for one day; carried-over steps have a block per day (`part`/`parts`). |
+| **Re-plan** | `replan` | `Preplaniraj` | New draft from now; locked (in progress) blocks stay. |
+| **My queue** | `MyQueue` | `Moj red` | The signed-in user's blocks of the published plan. |
+| **Forecast** | `OrderForecast` | `Prognoza` | Estimated finish date per open order over 14 working days; late / unplannable flags. |
+
 ## Concurrency & Reservation
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |

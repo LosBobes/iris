@@ -279,4 +279,21 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-*Last verified against the checked-in repository state on 2026-10-18.*
+## D-026: Production planning ("Planiranje") is a module with its own resources and a deterministic heuristic planner
+- **Status**: `accepted` (extends [D-017](#d-017-model-work-order-processes-as-a-separate-graph-not-as-new-statuses), [D-019](#d-019-processes-and-magacin-are-per-organization-modules-off-by-default))
+- **Context**: Owners want the app to decide, for each day, which work-order steps run where and by whom, so the right orders finish in time and as many as possible get done. That needs things Iris did not model: machines, who can run them, who is at work, shift hours, and how long a step takes.
+- **Decision**:
+  - A third module, `planning` ("Planiranje"), **requires `processes`**, is off by default and is switched only in the Backoffice (same `modules` key, no migration for the flag). Disabled routes answer 403; the web app hides every planning surface, including the step fields in the process inspector.
+  - **Resources** (migration v31): `machine_types`; `machines` (individual units of a type, `in_service`); `worker_qualifications` (user × machine type: who may *lead* a step on that type; helpers can be anyone); `attendance_overrides` (user × date). Presence today is the admin override when set, else "signed in that local day" (`login_events`; impersonation is not a login). Later dates — a plan generated for tomorrow and the forecast's look-ahead — count everyone present unless overridden (nobody can have signed in yet, so the sign-in rule would leave them empty; clarified during implementation). **Working hours** are one organization-wide calendar (time zone + per-weekday shift with breaks) in `app_settings` (`working_hours`).
+  - **Step fields** on process step nodes (templates and per-order copies): `machineTypeId` (at most one type per step), `crewSize` (default 1), `setupMinutes` and `minutesPerUnit`; duration = setup + per-unit × the order's `jobDetails.quantity` (at least 1). They are structure (admins only on an order) and are dropped on item nodes.
+  - **Plans** (`production_plans`, migration v31) are per date and status (at most one `draft` and one `published`). The planner proposes a draft over all open orders that have a process; an admin edits it (conflicts are reported, not blocked), then publishes it; each operator sees their own queue ("Moj red"). "Preplaniraj" generates a new draft starting now and keeps the locked (in progress) blocks of the published plan. The app suggests a re-plan when today drifts from the published plan (computed on read).
+  - **Planner** (`internal/planner`) is a pure, deterministic Go list-scheduling heuristic: steps in dependency order, most urgent first (slack to the due date over the remaining chain of work; urgent/high priority first at equal slack; older order first), each placed at the earliest time a machine unit and a crew (lead qualified) are free inside shifts. A step that does not finish by the end of a shift **carries over** to the next working day on the same machine and crew and is never interleaved with other work. It looks ahead 14 working days: the plan date is stored, the rest becomes the per-order **forecast** (estimated finish, late, unplannable), computed on read.
+- **Consequences**:
+  - No solver or cgo dependency; plans are reproducible and fast at print-shop scale, but not proven optimal. A solver could replace `planner.Plan` behind the same input/output later.
+  - Plans store denormalized names (order number, client, step, machine) so they stay readable after edits; they do not follow later changes until re-planned.
+  - Steps without times are planned as zero minutes and flagged, so turning the module on does not block planning while times are filled in.
+  - All new tables are tenant data (`tenantDataTables`): exported and deleted with the organization.
+
+---
+
+*Last verified against the checked-in repository state on 2026-10-19.*

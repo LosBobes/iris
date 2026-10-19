@@ -9,7 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppShell } from './AppShell'
 import { AuthContext } from '@/contexts/AuthContext'
 import { sr } from '@/i18n/locales/sr'
-import { ALL_MODULES, NO_MODULES, STOCK_ONLY, WithModules } from '@/test/modules'
+import { ALL_MODULES, NO_MODULES, PLANNING_MODULES, STOCK_ONLY, WithModules } from '@/test/modules'
 import '@/i18n'
 
 afterEach(() => {
@@ -17,7 +17,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderShell(modules: typeof ALL_MODULES) {
+function renderShell(modules: typeof ALL_MODULES, role: 'admin' | 'user' = 'admin') {
   vi.stubGlobal('api', { getWorkOrders: vi.fn().mockResolvedValue({ items: [], total: 0 }) })
   vi.stubGlobal(
     'matchMedia',
@@ -25,7 +25,7 @@ function renderShell(modules: typeof ALL_MODULES) {
   )
   render(
     <MemoryRouter>
-      <AuthContext.Provider value={{ currentUser: { id: 'u', username: 'a', role: 'admin' }, onLogout: vi.fn() }}>
+      <AuthContext.Provider value={{ currentUser: { id: 'u', username: 'a', role }, onLogout: vi.fn() }}>
         <WithModules modules={modules}>
           <TooltipProvider>
             <AppShell>
@@ -48,5 +48,17 @@ describe('AppShell navigation and modules', () => {
     expect(screen.getAllByRole('link', { name: sr.nav.catalog }).length).toBeGreaterThan(0)
     const stock = screen.queryAllByRole('link', { name: sr.nav.stock })
     expect(stock.length > 0).toBe(visible)
+  })
+
+  it.each([
+    [ALL_MODULES, 'admin', false, false],
+    [PLANNING_MODULES, 'admin', true, true],
+    [PLANNING_MODULES, 'user', false, true],
+  ] as const)('planning nav with %j for %s: Planiranje %s, Moj red %s', (modules, role, planning, queue) => {
+    renderShell(modules, role)
+    expect(screen.queryAllByRole('link', { name: sr.nav.planning }).length > 0).toBe(planning)
+    const mine = screen.queryAllByRole('link', { name: sr.nav.myQueue })
+    expect(mine.length > 0).toBe(queue)
+    if (queue) expect(mine[0]).toHaveAttribute('href', '/planning/my-queue')
   })
 })

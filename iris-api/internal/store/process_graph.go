@@ -204,6 +204,9 @@ func createProcessTemplate(ctx context.Context, q dbExecQuerier, tenantID string
 	if prepared.graph, err = resolveGraphLinks(ctx, q, tenantID, prepared.graph, nil); err != nil {
 		return nil, err
 	}
+	if err := validateGraphMachineTypes(ctx, q, tenantID, prepared.graph, nil); err != nil {
+		return nil, err
+	}
 	id, err := newProcessTemplateID()
 	if err != nil {
 		return nil, err
@@ -250,6 +253,9 @@ func updateProcessTemplate(ctx context.Context, q dbExecQuerier, tenantID, id st
 		return nil, ErrProcessTemplateNotFound
 	}
 	if prepared.graph, err = resolveGraphLinks(ctx, q, tenantID, prepared.graph, existingLinkSkip(current.Graph)); err != nil {
+		return nil, err
+	}
+	if err := validateGraphMachineTypes(ctx, q, tenantID, prepared.graph, machineTypeLinkSkip(current.Graph)); err != nil {
 		return nil, err
 	}
 	graph, err := encodeProcessGraph(prepared.graph)
@@ -543,6 +549,9 @@ func (s *SQLiteStore) UpdateWorkOrderProcess(ctx context.Context, workOrderID st
 		return nil, ErrProcessStructureLocked
 	}
 	if next, err = resolveGraphLinks(ctx, tx, tenantID, next, existingLinkSkip(current.Graph)); err != nil {
+		return nil, err
+	}
+	if err := validateGraphMachineTypes(ctx, tx, tenantID, next, machineTypeLinkSkip(current.Graph)); err != nil {
 		return nil, err
 	}
 	raw, err := encodeProcessGraph(next)

@@ -59,7 +59,8 @@ import type {
   PlatformTenantNotes,
 } from '@/types/platform'
 import { createAnnouncementFixtureStore } from '@/lib/announcements-fixture'
-import { PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
+import { PLANNING_REQUIRES_PROCESSES_MESSAGE, PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
+import { createPlanningFixtureStore } from '@/lib/planning/fixture-store'
 import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
 import { ApiError } from '@/lib/errors'
@@ -783,6 +784,27 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
     onOrderProcessSaved: stockStore.onProcessSaved,
   })
 
+  const planningStore = createPlanningFixtureStore({
+    currentUser: () => {
+      const user = currentFixtureUser()
+      return user ? { id: user.id, username: user.username, role: user.role } : null
+    },
+    users: () => users.map((user) => ({ id: user.id, username: user.username })),
+    modules: () => modules,
+    orders: () =>
+      workOrders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        clientName: order.clientName,
+        dueDate: order.dueDate,
+        priority: order.assignment?.priority ?? "normal",
+        status: order.status,
+        quantity: order.jobDetails?.quantity ?? null,
+        createdAt: order.createdAt,
+      })),
+    processes: () => processStore.listAllOrderProcesses(),
+  })
+
   // Opening balances of the demo articles ("Početno stanje").
   for (const [id, quantity] of [
     ['cat-3', 25],
@@ -809,6 +831,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
   return {
     ...processStore.api,
     ...stockStore.api,
+    ...planningStore.api,
     ...announcementStore.api,
     async getAppVersion() {
       return APP_VERSION
@@ -1284,6 +1307,13 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       if (slug !== FIXTURE_ORGANIZATION.slug) throw new Error('Organizacija ne postoji.')
       if (next.processes && !next.stock) {
         throw new ApiError(PROCESSES_REQUIRE_STOCK_MESSAGE, {
+          status: 422,
+          url: 'fixture://platform/modules',
+          method: 'PUT',
+        })
+      }
+      if (next.planning && !next.processes) {
+        throw new ApiError(PLANNING_REQUIRES_PROCESSES_MESSAGE, {
           status: 422,
           url: 'fixture://platform/modules',
           method: 'PUT',

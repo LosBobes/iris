@@ -61,6 +61,9 @@ const CatalogPage = lazy(() => import("@/pages/CatalogPage"));
 const CatalogDetailPage = lazy(() => import("@/pages/CatalogDetailPage"));
 const StockPage = lazy(() => import("@/pages/StockPage"));
 const StockHistoryPage = lazy(() => import("@/pages/StockHistoryPage"));
+const PlanningPage = lazy(() => import("@/pages/PlanningPage"));
+const PlanningResourcesPage = lazy(() => import("@/pages/PlanningResourcesPage"));
+const MyQueuePage = lazy(() => import("@/pages/MyQueuePage"));
 const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
 const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
@@ -453,6 +456,9 @@ function AppContent(): React.JSX.Element {
                             <Route path="/catalog/:id" element={<CatalogDetailPage />} />
                             <Route path="/stock" element={<ModuleGate module="stock"><StockPage /></ModuleGate>} />
                             <Route path="/stock/:catalogItemId" element={<ModuleGate module="stock"><StockHistoryPage /></ModuleGate>} />
+                            <Route path="/planning" element={<ModuleGate module="planning"><PlanningPage /></ModuleGate>} />
+                            <Route path="/planning/resources" element={<ModuleGate module="planning"><PlanningResourcesPage /></ModuleGate>} />
+                            <Route path="/planning/my-queue" element={<ModuleGate module="planning"><MyQueuePage /></ModuleGate>} />
                             <Route path="/work-orders" element={<WorkOrdersPage />} />
                             <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
                             <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />

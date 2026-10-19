@@ -2,12 +2,14 @@ import { useContext } from 'react'
 import { OrganizationContext } from '@/contexts/OrganizationContext'
 import type { OrganizationModules } from '@/types/settings'
 
-/** Both optional modules on (processes requires stock). */
-export const ALL_MODULES: OrganizationModules = { processes: true, stock: true }
+/** Magacin and Procesi rada on, Planiranje off (processes requires stock). */
+export const ALL_MODULES: OrganizationModules = { processes: true, stock: true, planning: false }
+/** Every module on (planning requires processes). */
+export const PLANNING_MODULES: OrganizationModules = { processes: true, stock: true, planning: true }
 /** Only the Magacin module on. */
-export const STOCK_ONLY: OrganizationModules = { processes: false, stock: true }
+export const STOCK_ONLY: OrganizationModules = { processes: false, stock: true, planning: false }
 /** Fresh-organization default. */
-export const NO_MODULES: OrganizationModules = { processes: false, stock: false }
+export const NO_MODULES: OrganizationModules = { processes: false, stock: false, planning: false }
 
 /**
  * Test wrapper that provides the organization context with the given modules
