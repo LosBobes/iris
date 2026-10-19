@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createFixtureApi } from './fixture-api'
-import { PLANNING_DISABLED_MESSAGE, PLANNING_REQUIRES_PROCESSES_MESSAGE } from './modules'
+import {
+  ATTENDANCE_DISABLED_MESSAGE,
+  PLANNING_DISABLED_MESSAGE,
+  PLANNING_REQUIRES_ATTENDANCE_MESSAGE,
+  PLANNING_REQUIRES_PROCESSES_MESSAGE,
+} from './modules'
 
 const ORDER = '3'
 
@@ -14,7 +19,7 @@ async function rejection(promise: Promise<unknown>): Promise<{ status?: number; 
 }
 
 async function planningApi(on = true) {
-  const api = createFixtureApi({ modules: { stock: true, processes: true, planning: on } })
+  const api = createFixtureApi({ modules: { stock: true, processes: true, attendance: true, planning: on } })
   await api.login({ orgSlug: 'demo', username: 'admin', password: 'admin123' })
   return api
 }
@@ -27,7 +32,6 @@ describe('fixture planning: module gate', () => {
       () => api.createMachineType({ name: 'X' }),
       () => api.listMachines(),
       () => api.listQualifications(),
-      () => api.listAttendance('2026-10-19'),
       () => api.getWorkingHours(),
       () => api.getPlanDay('2026-10-19'),
       () => api.generatePlan({ date: '2099-01-05', replan: false }),
@@ -44,12 +48,48 @@ describe('fixture planning: module gate', () => {
   it('rejects planning without processes in the Backoffice with 422 and counts it as off', async () => {
     const api = createFixtureApi()
     await api.platformLogin({ username: 'operater', password: 'operater-demo' })
-    const error = await rejection(api.setPlatformTenantModules('demo', { stock: true, processes: false, planning: true }))
+    const error = await rejection(
+      api.setPlatformTenantModules('demo', { stock: true, processes: false, attendance: true, planning: true }),
+    )
     expect(error.status).toBe(422)
     expect(error.message).toBe(PLANNING_REQUIRES_PROCESSES_MESSAGE)
-    const saved = await api.setPlatformTenantModules('demo', { stock: true, processes: true, planning: true })
+    const noAttendance = await rejection(
+      api.setPlatformTenantModules('demo', { stock: true, processes: true, attendance: false, planning: true }),
+    )
+    expect(noAttendance.status).toBe(422)
+    expect(noAttendance.message).toBe(PLANNING_REQUIRES_ATTENDANCE_MESSAGE)
+    const saved = await api.setPlatformTenantModules('demo', { stock: true, processes: true, attendance: true, planning: true })
     expect(saved.modules.planning).toBe(true)
     expect((await api.getSettings()).modules.planning).toBe(true)
+  })
+})
+
+describe('fixture attendance: its own module', () => {
+  it('answers 403 while attendance is off, even with planning prerequisites on', async () => {
+    const api = createFixtureApi({ modules: { stock: true, processes: true } })
+    await api.login({ orgSlug: 'demo', username: 'admin', password: 'admin123' })
+    for (const run of [
+      () => api.listAttendance('2026-10-19'),
+      () => api.setAttendance('u1', { date: '2026-10-19', present: true }),
+    ]) {
+      const error = await rejection(run())
+      expect(error.status).toBe(403)
+      expect(error.message).toBe(ATTENDANCE_DISABLED_MESSAGE)
+    }
+  })
+
+  it('works with attendance alone and keeps overrides admin-only', async () => {
+    const api = createFixtureApi({ modules: { attendance: true } })
+    await api.login({ orgSlug: 'demo', username: 'admin', password: 'admin123' })
+    expect((await rejection(api.listMachineTypes())).message).toBe(PLANNING_DISABLED_MESSAGE)
+    const [first] = await api.listAttendance('2026-10-19')
+    const entry = await api.setAttendance(first.userId, { date: '2026-10-19', present: false })
+    expect(entry).toMatchObject({ override: false, present: false })
+
+    const operator = createFixtureApi({ modules: { attendance: true } })
+    await operator.login({ orgSlug: 'demo', username: 'user', password: 'user123' })
+    expect((await operator.listAttendance('2026-10-19')).length).toBeGreaterThan(0)
+    expect((await rejection(operator.setAttendance(first.userId, { date: '2026-10-19', present: true }))).status).toBe(403)
   })
 })
 
@@ -72,7 +112,7 @@ describe('fixture planning: resources', () => {
   })
 
   it('keeps writes admin-only', async () => {
-    const api = createFixtureApi({ modules: { stock: true, processes: true, planning: true } })
+    const api = createFixtureApi({ modules: { stock: true, processes: true, attendance: true, planning: true } })
     await api.login({ orgSlug: 'demo', username: 'user', password: 'user123' })
     expect((await rejection(api.createMachineType({ name: 'X' }))).status).toBe(403)
     expect((await api.listMachineTypes()).length).toBeGreaterThan(0)

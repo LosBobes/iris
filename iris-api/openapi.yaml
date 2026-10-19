@@ -23,9 +23,14 @@ tags:
       processes post consumption/production automatically. A single warehouse per organization; negative stock is allowed.
   - name: Planning
     description: >-
-      Production planning (Planiranje, D-026): machine types and units, worker qualifications, attendance, working
+      Production planning (Planiranje, D-026): machine types and units, worker qualifications, working
       hours, and day plans the planner proposes, admins edit and publish, and operators follow. Behind the
-      `planning` module (off by default; requires `processes`).
+      `planning` module (off by default; requires `processes` and `attendance`).
+  - name: Attendance
+    description: >-
+      Daily attendance (Prisustvo, D-027): who is at work on a date, from sign-ins plus admin overrides. Behind
+      its own `attendance` module (off by default, no dependencies), so it can be used without planning;
+      planning requires it and reads the same data.
   - name: Platform
     description: Backoffice (/backoffice in the web app). Superadmin accounts stored apart from organization users (own table, sessions and cookie); aggregate metrics only.
 paths:
@@ -2684,10 +2689,11 @@ paths:
       tags: [Platform]
       summary: Switch an organization's optional modules (operator only)
       description: >-
-        Sets both modules ("Procesi rada" and "Magacin") of the organization. `processes: true` requires
-        `stock: true` (422 `Modul „Procesi rada“ zahteva uključen modul „Magacin“.`, nothing written). Recorded as
-        `tenant.modules` in the activity log, in the same transaction, with detail
-        `{"processes":"on|off","stock":"on|off","changed":"processes,stock"}` (new values; `changed` lists the
+        Sets all modules ("Procesi rada", "Magacin", "Planiranje", "Prisustvo") of the organization. `processes: true`
+        requires `stock: true` (422 `Modul „Procesi rada“ zahteva uključen modul „Magacin“.`, nothing written);
+        `planning: true` requires `processes: true` and `attendance: true` (422 naming the missing module).
+        Recorded as `tenant.modules` in the activity log, in the same transaction, with detail
+        `{"processes":"on|off","stock":"on|off","planning":"on|off","attendance":"on|off","changed":"attendance,planning"}` (new values; `changed` lists the
         names that differ). Setting the current state is a no-op: 200 and no audit row.
       operationId: setPlatformTenantModules
       security:
@@ -3738,6 +3744,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /attendance:
+    get:
+      tags: [Attendance]
+      summary: Attendance of every organization user on a date
+      operationId: listAttendance
+      description: >-
+        `signedIn` is true when the user signed in that local day (impersonated sessions do not count); an admin
+        override wins. The planner (when the planning module is on) uses `present` for the plan date.
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: One entry per user, sorted by username
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AttendanceEntry'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/AttendanceModuleDisabled'
   /planning/qualifications:
     get:
       tags: [Planning]
@@ -3814,45 +3859,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /planning/attendance:
-    get:
-      tags: [Planning]
-      summary: Attendance of every organization user on a date
-      operationId: listAttendance
-      description: >-
-        `signedIn` is true when the user signed in that local day (impersonated sessions do not count); an admin
-        override wins. The planner uses `present` for the plan date.
-      parameters:
-        - name: date
-          in: query
-          required: false
-          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
-          schema:
-            type: string
-            format: date
-      responses:
-        '200':
-          description: One entry per user, sorted by username
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AttendanceEntry'
-        '400':
-          description: Malformed date
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Not signed in
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          $ref: '#/components/responses/PlanningModuleDisabled'
   /planning/attendance/{userId}:
     put:
       tags: [Planning]
@@ -4281,7 +4287,15 @@ components:
     PlanningModuleDisabled:
       description: >-
         The organization has not enabled the "Planiranje" module (Backoffice-controlled, off by default; it also
-        counts as off while "Procesi rada" is off). Body: `{"error":"Modul „Planiranje“ nije uključen za ovu organizaciju."}`.
+        counts as off while "Procesi rada" or "Prisustvo" is off). Body: `{"error":"Modul „Planiranje“ nije uključen za ovu organizaciju."}`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    AttendanceModuleDisabled:
+      description: >-
+        The organization has not enabled the "Prisustvo" module (Backoffice-controlled, off by default). Body:
+        `{"error":"Modul „Prisustvo“ nije uključen za ovu organizaciju."}`.
       content:
         application/json:
           schema:
@@ -5576,10 +5590,13 @@ components:
             signature, insurance). Off by default.
     OrganizationModules:
       type: object
-      required: [processes, stock, planning]
+      required: [processes, stock, planning, attendance]
       description: >-
-        Optional per-organization modules, all off by default. `planning` ("Planiranje", D-026: machines,
-        qualifications, attendance, day plans) requires `processes` and counts as off while it is off. The others are and switched only by Backoffice superadmins
+        Optional per-organization modules, all off by default. `attendance` ("Prisustvo", D-027: who is at work
+        on a date) has no dependencies and can be used alone; a stored value without the key (data from before
+        D-027) reads as `attendance` = `planning`. `planning` ("Planiranje", D-026: machines, qualifications,
+        working hours, day plans) requires `processes` and `attendance` and counts as off while either is off.
+        All are switched only by Backoffice superadmins
         (`PUT /platform/tenants/{slug}/modules`); organization admins cannot change them. `processes`
         ("Procesi rada": process templates, work-order processes, simulator) requires `stock` ("Magacin":
         stock ledger, receipts, counts, catalog stock). Valid combinations: both off, stock only, both on;
@@ -5593,6 +5610,8 @@ components:
         stock:
           type: boolean
         planning:
+          type: boolean
+        attendance:
           type: boolean
     OrganizationSettingsUpdate:
       type: object

@@ -59,7 +59,11 @@ import type {
   PlatformTenantNotes,
 } from '@/types/platform'
 import { createAnnouncementFixtureStore } from '@/lib/announcements-fixture'
-import { PLANNING_REQUIRES_PROCESSES_MESSAGE, PROCESSES_REQUIRE_STOCK_MESSAGE } from '@/lib/modules'
+import {
+  PLANNING_REQUIRES_ATTENDANCE_MESSAGE,
+  PLANNING_REQUIRES_PROCESSES_MESSAGE,
+  PROCESSES_REQUIRE_STOCK_MESSAGE,
+} from '@/lib/modules'
 import { createPlanningFixtureStore } from '@/lib/planning/fixture-store'
 import { createProcessFixtureStore } from '@/lib/process/fixture-store'
 import { ARTICLE_HAS_STOCK_MESSAGE, createStockFixtureStore } from '@/lib/stock/fixture-store'
@@ -1314,6 +1318,13 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       }
       if (next.planning && !next.processes) {
         throw new ApiError(PLANNING_REQUIRES_PROCESSES_MESSAGE, {
+          status: 422,
+          url: 'fixture://platform/modules',
+          method: 'PUT',
+        })
+      }
+      if (next.planning && !next.attendance) {
+        throw new ApiError(PLANNING_REQUIRES_ATTENDANCE_MESSAGE, {
           status: 422,
           url: 'fixture://platform/modules',
           method: 'PUT',

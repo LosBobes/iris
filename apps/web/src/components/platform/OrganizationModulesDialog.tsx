@@ -53,9 +53,10 @@ function ModuleSwitch({
 
 /**
  * Switches an organization's optional modules (Backoffice superadmins only).
- * "Procesi rada" requires "Magacin" and "Planiranje" requires "Procesi rada":
- * a dependent switch is disabled while its requirement is off, and turning the
- * requirement off turns the dependent module off too.
+ * "Procesi rada" requires "Magacin" and "Planiranje" requires "Procesi rada"
+ * and "Prisustvo" ("Prisustvo" itself has no requirement): a dependent switch
+ * is disabled while a requirement is off, and turning a requirement off turns
+ * the dependent module off too.
  */
 export function OrganizationModulesDialog({
   tenant,
@@ -70,7 +71,8 @@ export function OrganizationModulesDialog({
   const [modules, setModules] = useState<OrganizationModules>({
     stock: tenant.modules.stock,
     processes: tenant.modules.stock && tenant.modules.processes,
-    planning: tenant.modules.stock && tenant.modules.processes && tenant.modules.planning,
+    planning: tenant.modules.stock && tenant.modules.processes && tenant.modules.attendance && tenant.modules.planning,
+    attendance: tenant.modules.attendance,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +104,7 @@ export function OrganizationModulesDialog({
           label={t("platform.orgs.modules.stock")}
           description={t("platform.orgs.modules.stockHint")}
           onChange={(stock) => setModules((current) => ({
+              ...current,
               stock,
               processes: stock && current.processes,
               planning: stock && current.processes && current.planning,
@@ -117,8 +120,14 @@ export function OrganizationModulesDialog({
           onChange={(processes) => setModules((current) => ({ ...current, processes, planning: processes && current.planning }))}
         />
         <ModuleSwitch
+          checked={modules.attendance}
+          label={t("platform.orgs.modules.attendance")}
+          description={t("platform.orgs.modules.attendanceHint")}
+          onChange={(attendance) => setModules((current) => ({ ...current, attendance, planning: attendance && current.planning }))}
+        />
+        <ModuleSwitch
           checked={modules.planning}
-          disabled={!modules.processes}
+          disabled={!modules.processes || !modules.attendance}
           label={t("platform.orgs.modules.planning")}
           description={t("platform.orgs.modules.planningHint")}
           helper={t("platform.orgs.modules.requiresProcesses")}

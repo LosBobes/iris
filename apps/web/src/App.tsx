@@ -64,6 +64,7 @@ const StockHistoryPage = lazy(() => import("@/pages/StockHistoryPage"));
 const PlanningPage = lazy(() => import("@/pages/PlanningPage"));
 const PlanningResourcesPage = lazy(() => import("@/pages/PlanningResourcesPage"));
 const MyQueuePage = lazy(() => import("@/pages/MyQueuePage"));
+const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
 const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
 const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
@@ -459,6 +460,7 @@ function AppContent(): React.JSX.Element {
                             <Route path="/planning" element={<ModuleGate module="planning"><PlanningPage /></ModuleGate>} />
                             <Route path="/planning/resources" element={<ModuleGate module="planning"><PlanningResourcesPage /></ModuleGate>} />
                             <Route path="/planning/my-queue" element={<ModuleGate module="planning"><MyQueuePage /></ModuleGate>} />
+                            <Route path="/attendance" element={<ModuleGate module="attendance"><AttendancePage /></ModuleGate>} />
                             <Route path="/work-orders" element={<WorkOrdersPage />} />
                             <Route path="/work-orders/new" element={<WorkOrderCreatePage />} />
                             <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />

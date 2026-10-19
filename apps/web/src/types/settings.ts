@@ -52,16 +52,18 @@ export type PrintItemColumn = 'quantity' | 'unitPrice' | 'total'
 
 /**
  * Optional feature modules, switched per organization by Backoffice superadmins
- * only. All are off by default; processes requires stock and planning requires
- * processes.
+ * only. All are off by default; processes requires stock, planning requires
+ * processes and attendance, and attendance works on its own.
  */
 export interface OrganizationModules {
   /** "Procesi rada": process templates, order processes and the simulator. Requires `stock`. */
   processes: boolean
   /** "Magacin": the stock ledger, receipts, counts and stock in the catalog. */
   stock: boolean
-  /** "Planiranje": machines, qualifications, attendance and day plans. Requires `processes`. */
+  /** "Planiranje": machines, qualifications, working hours and day plans. Requires `processes` and `attendance`. */
   planning: boolean
+  /** "Prisustvo": who is at work on a date. No dependencies, usable on its own. */
+  attendance: boolean
 }
 
 export interface OrganizationSettings {
@@ -122,22 +124,26 @@ export const DEFAULT_ORGANIZATION_MODULES: OrganizationModules = {
   processes: false,
   stock: false,
   planning: false,
+  attendance: false,
 }
 
 /**
  * Coerces a received value into the effective modules (missing = off).
- * "Procesi rada" requires "Magacin" and "Planiranje" requires "Procesi rada",
- * so an inconsistent stored value counts the dependent module as off.
+ * "Procesi rada" requires "Magacin" and "Planiranje" requires "Procesi rada"
+ * and "Prisustvo", so an inconsistent stored value counts the dependent module
+ * as off.
  */
 export function normalizeOrganizationModules(
   modules: Partial<OrganizationModules> | null | undefined,
 ): OrganizationModules {
   const stock = modules?.stock === true
   const processes = stock && modules?.processes === true
+  const attendance = modules?.attendance === true
   return {
     processes,
     stock,
-    planning: processes && modules?.planning === true,
+    planning: processes && attendance && modules?.planning === true,
+    attendance,
   }
 }
 

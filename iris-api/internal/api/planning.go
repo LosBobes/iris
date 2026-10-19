@@ -11,7 +11,8 @@ import (
 )
 
 // Production planning ("Planiranje", D-026): machine types and units, worker
-// qualifications, attendance, working hours and day plans. Everything sits
+// qualifications, working hours and day plans (attendance is its own module,
+// see attendance.go). Everything sits
 // behind the planning module; reads are open to every signed-in user (except
 // the draft plan, which is admin-only) and writes are admin-only. All rules
 // live in the store (internal/store/planning*.go) and the planner.
@@ -184,32 +185,6 @@ func (s *Server) handleSetQualifications(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	writeJSON(w, http.StatusOK, qualifications)
-}
-
-func (s *Server) handleAttendance(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
-	date, ok := queryDate(w, r)
-	if !ok {
-		return
-	}
-	entries, err := planning.Attendance(r.Context(), date)
-	if err != nil {
-		writeServerError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, entries)
-}
-
-func (s *Server) handleSetAttendance(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
-	var input domain.AttendanceInput
-	if !decodeJSONBody(w, r, &input) {
-		return
-	}
-	entry, err := planning.SetAttendance(r.Context(), chi.URLParam(r, "userId"), input)
-	if err != nil {
-		writePlanningError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, entry)
 }
 
 func (s *Server) handleWorkingHours(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {

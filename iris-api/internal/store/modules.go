@@ -12,7 +12,8 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
-// Optional per-organization modules ("processes", "stock" and "planning"). All
+// Optional per-organization modules ("processes", "stock", "planning" and
+// "attendance"). All
 // are off by default and only Backoffice superadmins switch them. The flags live in the
 // app_settings key/value table (no migration); a missing row or key means off.
 //
@@ -30,10 +31,21 @@ ALTER TABLE work_order_processes ADD COLUMN stock_tracked INTEGER NOT NULL DEFAU
 `
 
 // parseModules decodes the stored JSON; anything unreadable means all off.
+// Attendance was part of planning before it became its own module (D-027), so
+// a stored value without the "attendance" key keeps it on wherever planning is.
 func parseModules(raw string) domain.OrganizationModules {
-	var modules domain.OrganizationModules
-	if err := json.Unmarshal([]byte(raw), &modules); err != nil {
+	var stored struct {
+		domain.OrganizationModules
+		Attendance *bool `json:"attendance"`
+	}
+	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
 		return domain.OrganizationModules{}
+	}
+	modules := stored.OrganizationModules
+	if stored.Attendance != nil {
+		modules.Attendance = *stored.Attendance
+	} else {
+		modules.Attendance = modules.Planning
 	}
 	return effectiveModules(modules)
 }
@@ -46,12 +58,16 @@ const ModulesDependencyMessage = "Modul „Procesi rada“ zahteva uključen mod
 // without "processes": the planner schedules process steps.
 const ModulesPlanningDependencyMessage = "Modul „Planiranje“ zahteva uključen modul „Procesi rada“."
 
+// ModulesPlanningAttendanceMessage is the 422 for switching "planning" on
+// without "attendance": the planner only assigns workers who are present.
+const ModulesPlanningAttendanceMessage = "Modul „Planiranje“ zahteva uključen modul „Prisustvo“."
+
 // effectiveModules applies the dependencies on read: processes only count
-// while stock is on, and planning only while processes is, even if stored data
-// says otherwise.
+// while stock is on, and planning only while processes and attendance are,
+// even if stored data says otherwise.
 func effectiveModules(modules domain.OrganizationModules) domain.OrganizationModules {
 	modules.Processes = modules.Processes && modules.Stock
-	modules.Planning = modules.Planning && modules.Processes
+	modules.Planning = modules.Planning && modules.Processes && modules.Attendance
 	return modules
 }
 
@@ -61,6 +77,9 @@ func validateModules(modules domain.OrganizationModules) error {
 	}
 	if modules.Planning && !modules.Processes {
 		return newValidationError(ModulesPlanningDependencyMessage)
+	}
+	if modules.Planning && !modules.Attendance {
+		return newValidationError(ModulesPlanningAttendanceMessage)
 	}
 	return nil
 }
@@ -107,7 +126,7 @@ func onOff(value bool) string {
 }
 
 // moduleChangeDetail builds the audit detail of a module switch and reports
-// whether anything changed. "processes"/"stock"/"planning" carry the new values and
+// whether anything changed. "processes"/"stock"/"planning"/"attendance" carry the new values and
 // "changed" the comma-joined names that differ.
 func moduleChangeDetail(current, next domain.OrganizationModules) (map[string]string, bool) {
 	changed := []string{}
@@ -120,12 +139,16 @@ func moduleChangeDetail(current, next domain.OrganizationModules) (map[string]st
 	if current.Planning != next.Planning {
 		changed = append(changed, "planning")
 	}
+	if current.Attendance != next.Attendance {
+		changed = append(changed, "attendance")
+	}
 	sort.Strings(changed)
 	return map[string]string{
-		"processes": onOff(next.Processes),
-		"stock":     onOff(next.Stock),
-		"planning":  onOff(next.Planning),
-		"changed":   strings.Join(changed, ","),
+		"processes":  onOff(next.Processes),
+		"stock":      onOff(next.Stock),
+		"planning":   onOff(next.Planning),
+		"attendance": onOff(next.Attendance),
+		"changed":    strings.Join(changed, ","),
 	}, len(changed) > 0
 }
 
@@ -138,7 +161,7 @@ func (s *SQLiteStore) OrganizationModules(ctx context.Context) (domain.Organizat
 	return readModules(ctx, s.db, tenantID)
 }
 
-// PlatformSetTenantModules sets both modules of the organization with that slug
+// PlatformSetTenantModules sets all modules of the organization with that slug
 // and writes a "tenant.modules" audit row in the same transaction. It returns
 // nil when no organization has that slug; switching to the current state
 // changes nothing and writes no audit row.
@@ -196,6 +219,9 @@ func (s *SQLiteStore) SetTenantModules(ctx context.Context, slug string, update 
 	}
 	if update.Planning != nil {
 		modules.Planning = *update.Planning
+	}
+	if update.Attendance != nil {
+		modules.Attendance = *update.Attendance
 	}
 	if err := validateModules(modules); err != nil {
 		return nil, err

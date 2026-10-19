@@ -902,6 +902,7 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
           processes: modules.processes,
           stock: modules.stock,
           planning: modules.planning,
+          attendance: modules.attendance,
         }),
       )
       return readJSON<PlatformTenant>(response)
@@ -1310,7 +1311,7 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
 
     async listAttendance(date: string) {
       const response = await fetchImpl(
-        url(`/planning/attendance?${new URLSearchParams({ date })}`),
+        url(`/attendance?${new URLSearchParams({ date })}`),
         credentialedRequest(),
       )
       return readArray(await readJSON<AttendanceEntry[]>(response))
@@ -1318,7 +1319,7 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
 
     async setAttendance(userId: string, input: AttendanceInput) {
       const response = await fetchImpl(
-        url(`/planning/attendance/${encodeURIComponent(userId)}`),
+        url(`/attendance/${encodeURIComponent(userId)}`),
         jsonRequest('PUT', input),
       )
       return readJSON<AttendanceEntry>(response)

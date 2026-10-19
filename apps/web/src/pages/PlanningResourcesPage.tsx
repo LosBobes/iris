@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { AttendanceTab } from '@/components/planning/AttendanceTab'
 import { MachineTypesTab } from '@/components/planning/MachineTypesTab'
 import { MachinesTab } from '@/components/planning/MachinesTab'
 import { QualificationsTab } from '@/components/planning/QualificationsTab'
@@ -10,7 +9,7 @@ import { WorkingHoursTab } from '@/components/planning/WorkingHoursTab'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/useAuth'
 
-type ResourceTab = 'types' | 'machines' | 'qualifications' | 'attendance' | 'hours'
+type ResourceTab = 'types' | 'machines' | 'qualifications' | 'hours'
 
 /**
  * "Resursi" of the Planiranje module (route is wrapped in ModuleGate by App).
@@ -27,7 +26,6 @@ function PlanningResourcesPage(): React.JSX.Element {
     { value: 'types', label: t('planning.resources.tabs.types') },
     { value: 'machines', label: t('planning.resources.tabs.machines') },
     { value: 'qualifications', label: t('planning.resources.tabs.qualifications') },
-    { value: 'attendance', label: t('planning.resources.tabs.attendance') },
     { value: 'hours', label: t('planning.resources.tabs.hours') },
   ]
 
@@ -58,7 +56,6 @@ function PlanningResourcesPage(): React.JSX.Element {
           {tab === 'types' && <MachineTypesTab canEdit={canEdit} />}
           {tab === 'machines' && <MachinesTab canEdit={canEdit} />}
           {tab === 'qualifications' && <QualificationsTab canEdit={canEdit} />}
-          {tab === 'attendance' && <AttendanceTab canEdit={canEdit} />}
           {tab === 'hours' && <WorkingHoursTab canEdit={canEdit} />}
         </div>
       </div>

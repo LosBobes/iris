@@ -1,5 +1,5 @@
 import { ApiError } from '@/lib/errors'
-import { PLANNING_DISABLED_MESSAGE } from '@/lib/modules'
+import { ATTENDANCE_DISABLED_MESSAGE, PLANNING_DISABLED_MESSAGE } from '@/lib/modules'
 import {
   addDays,
   checkDraft,
@@ -205,17 +205,21 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
   // Everyone in the demo shop may run every machine type until an admin narrows it.
   const qualificationsOf = (userId: string): string[] => qualifications.get(userId) ?? types.map((type) => type.id)
 
-  const requireModule = (): void => {
-    if (!context.modules().planning) throw fixtureError(403, PLANNING_DISABLED_MESSAGE)
+  // Attendance is its own module (Prisustvo) but shares this store, since the
+  // planner reads its overrides; every other route needs planning.
+  type Gate = 'planning' | 'attendance'
+  const requireModule = (gate: Gate): void => {
+    if (gate === 'attendance' && !context.modules().attendance) throw fixtureError(403, ATTENDANCE_DISABLED_MESSAGE)
+    if (gate === 'planning' && !context.modules().planning) throw fixtureError(403, PLANNING_DISABLED_MESSAGE)
   }
-  const requireUser = (): { id: string; username: string; role: 'admin' | 'user' } => {
-    requireModule()
+  const requireUser = (gate: Gate = 'planning'): { id: string; username: string; role: 'admin' | 'user' } => {
+    requireModule(gate)
     const user = context.currentUser()
     if (!user) throw fixtureError(401, MESSAGES.loginRequired)
     return user
   }
-  const requireAdmin = (): { id: string; username: string; role: 'admin' | 'user' } => {
-    const user = requireUser()
+  const requireAdmin = (gate: Gate = 'planning'): { id: string; username: string; role: 'admin' | 'user' } => {
+    const user = requireUser(gate)
     if (user.role !== 'admin') throw fixtureError(403, MESSAGES.adminOnly)
     return user
   }
@@ -445,12 +449,12 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         return { userId, username: user.username, machineTypeIds: [...unique] }
       },
       async listAttendance(date) {
-        requireUser()
+        requireUser('attendance')
         checkDate(date)
         return context.users().map((user) => attendanceEntry(user, date))
       },
       async setAttendance(userId, input) {
-        requireAdmin()
+        requireAdmin('attendance')
         checkDate(input.date)
         const user = context.users().find((candidate) => candidate.id === userId)
         if (!user) throw fixtureError(404, MESSAGES.userMissing)

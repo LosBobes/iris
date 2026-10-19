@@ -199,7 +199,7 @@ func (b *demoContentBuilder) users() error {
 
 func (b *demoContentBuilder) modules() error {
 	on := true
-	if _, err := b.s.SetTenantModules(b.ctx, b.slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &on}); err != nil {
+	if _, err := b.s.SetTenantModules(b.ctx, b.slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &on, Attendance: &on}); err != nil {
 		return fmt.Errorf("demo modules: %w", err)
 	}
 	return nil

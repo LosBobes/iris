@@ -1,5 +1,5 @@
 import { QueryClient, type QueryKey } from '@tanstack/react-query'
-import { planningKeys } from '@/lib/planning/query-keys'
+import { attendanceKeys, planningKeys } from '@/lib/planning/query-keys'
 import { broadcastAuthChange, type AuthChange } from '@/lib/auth-broadcast'
 
 /** Lists (work orders, catalog) refetch after 30 s; reference data after 5 min. */
@@ -77,7 +77,7 @@ const INVALIDATIONS: Partial<Record<keyof Window['api'], readonly QueryKey[]>> =
   updateMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
   deleteMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
   setQualifications: [planningKeys.qualifications, planningKeys.planRoot, planningKeys.forecast],
-  setAttendance: [planningKeys.attendanceRoot, planningKeys.planRoot, planningKeys.forecast],
+  setAttendance: [attendanceKeys.root, planningKeys.planRoot, planningKeys.forecast],
   setWorkingHours: [
     planningKeys.workingHours,
     planningKeys.planRoot,

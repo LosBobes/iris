@@ -72,7 +72,11 @@ vars and must not be committed.
   disabled module's endpoints (the API answers 403). Fixture mode: `createFixtureApi({ modules })`
   or Backoffice (`/backoffice`, operater / operater-demo) → Organizacije → Moduli. Tests use
   `src/test/modules.tsx` (`WithModules`).
-- **Planiranje** (D-026, third module `planning`, requires `processes`): contract types in
+- **Prisustvo** (D-027, module `attendance`, no requirements): `/attendance` page
+  (`pages/AttendancePage.tsx`, `components/attendance/`), nav "Prisustvo" for everyone, hook
+  `hooks/useAttendance.ts`, keys `attendanceKeys` (root `['attendance']`). Fixture mode keeps it in the
+  planning fixture store (the planner reads its overrides) behind `ATTENDANCE_DISABLED_MESSAGE`.
+- **Planiranje** (D-026, third module `planning`, requires `processes` and `attendance`): contract types in
   `src/types/planning.ts`; `window.api` methods `listMachineTypes` … `getPlanningForecast`; query keys in
   `src/lib/planning/query-keys.ts` (all under `['planning']`, invalidations in `query-client.ts`). Fixture mode:
   `src/lib/planning/fixture-store.ts` (seeded machines, in-memory plans, 403 `PLANNING_DISABLED_MESSAGE` when off) on
