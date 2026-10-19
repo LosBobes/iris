@@ -248,7 +248,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
             // only `transform` left the drawer snapping open with no motion.
             // `absolute`, not `fixed`: the drawer opens under the impersonation
             // and announcement banners instead of sliding beneath them.
-            "absolute inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-5 py-4 transition-[translate,width,padding] duration-300 ease-[var(--iris-ease-out-decisive)]",
+            // `overflow-y-auto`: those banners eat height, so on a phone (or a
+            // short window) the items below the fold must scroll, not be clipped.
+            // `overscroll-contain` keeps the swipe from chaining to the page.
+            "absolute inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-r border-sidebar-border bg-sidebar px-5 py-4 transition-[translate,width,padding] duration-300 ease-[var(--iris-ease-out-decisive)]",
             mobileMenuOpen
               ? "translate-x-0"
               : "-translate-x-full pointer-events-none",
