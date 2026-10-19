@@ -2,6 +2,27 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.11.0 — 2026-10-19
+
+### Minor
+
+- Planning: working hours gain an inter-operation time (međuoperacijsko vreme, 0–480 min, default 0) that the planner inserts, in working time, between a step and its successors; hand-edited blocks that start sooner are flagged.
+- Plan generation keeps the whole 14-working-day horizon on the plan (new horizonEnd field and admin GET /planning/plan/horizon grouped by day); the plan date remains what is published and shown. Planning a later day pins the still-open steps of the days published before it, and the forecast pins the published plans, so consecutive days and the forecast never contradict each other.
+- Planning: machines can carry downtime windows (from–to, note) that the planner treats as busy and reports as machine_down / conflicts, and working hours gain exception dates (days off and one-off hours) that override the weekly pattern.
+- Item-node quantities in process templates are now per unit of the order: reservations, automatic stock posting and the simulator multiply them by the work order quantity (behaviour change for processes attached from now on). Existing per-order process copies are flagged quantitiesPerOrder and keep their absolute amounts until a template is re-attached.
+- Process steps now record when they actually started and finished: moving a step to in progress / done (for example from Moj red) stamps startedAt / finishedAt on the step, shown in the step details of the process page and correctable by administrators.
+- Planning: a printable dispatch list (Radni raspored) per machine per day, with a per-worker variant, order quantities and daily totals; admins can print the draft and up to seven days.
+- Planning: new workstation load endpoint (GET /planning/load) reports planned against available minutes per machine type, machine and person for each day of up to 31 days, read from the published plans' kept horizon.
+- Planning forecast shows each open order's latest start date (Najkasniji početak), worked back from its due date over the remaining steps and the inter-operation time, in red once it has passed; also on the work-order page.
+- Planning shows material needs by week: the input material the published plans will consume, per week and unplanned, against warehouse stock, with shortages first (Potrebe materijala, GET /planning/material-needs).
+- Planning gains a read-only calibration report: it recommends the inter-operation time from measured step times and lists steps whose actual minutes deviate from the plan.
+- Planning page: new Zauzetost tab shows per-day load bars for every machine type, machine and worker (under 80 %, 80-100 %, overloaded), with the day's blocks on tap and a click-through to that day's plan.
+
+### Patch
+
+- Planner ranks urgent orders above high ones at equal slack; the API contract documents PUT /attendance/{userId} under the attendance module instead of the retired /planning/attendance path.
+- Re-planning places a step that is already in progress only for its remaining working minutes, and flags steps running longer than planned.
+
 ## 2.10.2 — 2026-10-19
 
 ### Patch
