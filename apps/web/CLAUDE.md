@@ -86,6 +86,10 @@ vars and must not be committed.
   The printable dispatch list ("Štampaj raspored", D-028) is `/planning/print?date=&to=&by=machine|person&source=`
   (`pages/PlanningPrintPage.tsx`, rendered outside the app shell; grouping in pure `lib/planning/dispatch.ts`,
   sheets in `components/planning/DispatchList.tsx`, print rules `dispatch-print-*` in `main.css`).
+- **Landing page** (`/home`, public, outside the auth gate next to the public tracking route):
+  `pages/HomePage.tsx`, long-form Serbian only (no i18n keys), no API calls. Its call to action
+  goes to the sign-in (or into the app when `signedIn`); the optional contact address comes from
+  `VITE_HOME_CONTACT_EMAIL`. When a feature new clients should hear about ships, add it there too.
 - **Dokumentacija** (`/docs`, `/docs/:chapterId`, nav for everyone): `pages/DocsPage.tsx` over
   `components/docs/` — chapters in `chapters.tsx` (long-form Serbian only; just the page chrome is in
   i18n), inline SVG diagrams in `diagrams.tsx` built from `diagram-kit.tsx` (theme CSS variables, no
