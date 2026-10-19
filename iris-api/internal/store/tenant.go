@@ -19,7 +19,7 @@ const (
 const (
 	DemoTenantID   = "tenant-demo"
 	DemoTenantSlug = "demo"
-	DemoTenantName = "Demo Štamparija"
+	DemoTenantName = "Demo Firma"
 )
 
 // ErrNoTenant is returned when a tenant-scoped store method is called without a

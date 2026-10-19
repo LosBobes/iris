@@ -26,7 +26,7 @@
 
 ## Brzi pregled — šta je Iris?
 
-**Iris** je operativni sistem za štampariju **Grafika Čobanović**. Pokriva ceo tok posla:
+**Iris** je operativna platforma za male proizvodne i uslužne firme (proizvodnja, radionice, reklame, stolarija, prehrana…) — svaka firma je zasebna organizacija u sistemu. U ovom demou je prikazujemo na primeru firme **Grafika Čobanović**, prve organizacije koja je koristi u proizvodnji. Pokriva ceo tok posla:
 
 - prijem i vođenje **radnih naloga** (od novog naloga do fakturisanja),
 - **klijente i adrese isporuke**,
@@ -313,7 +313,7 @@ sequenceDiagram
 
 **Šta reći:**
 
-> „Danas vam pokazujem **Iris** — sistem koji smo napravili za vođenje radnih naloga u štampariji. Sve je na srpskom, prilagođeno vašem poslu: vizitkarte, katalozi, plakati, isporuka, fakturisanje. Radi u pretraživaču — i u kancelariji i u štampariji, nad istom bazom.“
+> „Danas vam pokazujem **Iris** — sistem koji smo napravili za vođenje radnih naloga, od upita do fakture. Sve je na srpskom, prilagođeno vašem poslu: nalozi, katalog, isporuka, fakturisanje. Radi u pretraživaču — i u kancelariji i u proizvodnji, nad istom bazom.“
 
 **Ne otvaraj još aplikaciju** dok ne kažeš kontekst.
 
@@ -326,7 +326,7 @@ sequenceDiagram
 **Akcije:**
 - Unesi `admin` / `admin123`
 - Opciono pokaži „Zapamti uređaj“
-- Ukazati na tagline: *„Sistem za vođenje radnih naloga u štampariji. Svaki posao je evidentiran.“*
+- Ukazati na tagline: *„Sistem za vođenje radnih naloga, od upita do fakture. Svaki posao je evidentiran.“*
 
 **Šta reći:**
 
@@ -420,7 +420,7 @@ sequenceDiagram
 
 **Šta reći:**
 
-> „Ono što klijent vidi na telefonu — bez naloga. Vi šaljete link; on vidi status i rok. Sve osetljivo ostaje u štampariji.“
+> „Ono što klijent vidi na telefonu — bez naloga. Vi šaljete link; on vidi status i rok. Sve osetljivo ostaje kod vas.“
 
 ---
 
@@ -469,7 +469,7 @@ sequenceDiagram
 
 **Šta reći:**
 
-> „Operater u štampariji može uvećati ceo prikaz i prebaciti na tamnu temu — pamti se na uređaju. Admin kroz **šifarnike** dodaje sopstvene vrednosti, npr. novu **jedinicu mere** (tabak, paleta…) ili način dostave — bez izmene koda.“
+> „Operater u proizvodnji može uvećati ceo prikaz i prebaciti na tamnu temu — pamti se na uređaju. Admin kroz **šifarnike** dodaje sopstvene vrednosti, npr. novu **jedinicu mere** (tabak, paleta…) ili način dostave — bez izmene koda.“
 
 ---
 
@@ -489,7 +489,7 @@ sequenceDiagram
 
 **Šta reći:**
 
-> „Iris pokriva put od **poziva klijenta** do **fakturisanog naloga**, sa **javnim praćenjem** za klijenta i **tablom** za vas. Ista aplikacija u kancelariji i u štampariji — ista baza, isti podaci. Spremni smo za vaše specifične zahteve oko integracija i obuke tima.“
+> „Iris pokriva put od **poziva klijenta** do **fakturisanog naloga**, sa **javnim praćenjem** za klijenta i **tablom** za vas. Ista aplikacija u kancelariji i u proizvodnji — ista baza, isti podaci. Spremni smo za vaše specifične zahteve oko integracija i obuke tima.“
 
 **Odjava** — pokaži da sesija sigurno izlazi.
 
@@ -601,7 +601,7 @@ sequenceDiagram
 
 ## Jedna rečenica za ceo proizvod
 
-> **Iris je digitalni radni sto štamparije: vidite šta je hitno, vodite nalog od prijema do fakture, a klijent prati status preko linka — bez haosa u porukama i tabelama.**
+> **Iris je digitalni radni sto vaše firme: vidite šta je hitno, vodite nalog od prijema do fakture, a klijent prati status preko linka — bez haosa u porukama i tabelama.**
 
 ---
 

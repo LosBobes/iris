@@ -222,8 +222,9 @@ func TestOrganizationSettings(t *testing.T) {
 	if err := json.Unmarshal(getRec.Body.Bytes(), &settings); err != nil {
 		t.Fatalf("decode settings: %v", err)
 	}
-	if settings.FirmName != domain.DefaultFirmName {
-		t.Fatalf("default firmName = %q, want %q", settings.FirmName, domain.DefaultFirmName)
+	// With no firm name saved, the organization's own name is shown.
+	if settings.FirmName != store.DemoTenantName {
+		t.Fatalf("default firmName = %q, want tenant name %q", settings.FirmName, store.DemoTenantName)
 	}
 	if settings.PDFSections != domain.DefaultPDFSections() {
 		t.Fatalf("default pdfSections = %+v, want defaults", settings.PDFSections)

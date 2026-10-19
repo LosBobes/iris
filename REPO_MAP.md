@@ -4,7 +4,7 @@ Onboarding snapshot for senior engineers. **Last verified:** 2026-07-10.
 
 ## 1. What this app does
 
-**Iris** is the operations workspace for **Stamparija Cobanovic** (a print shop). It manages:
+**Iris** is a multi-tenant operations platform for small manufacturing and service businesses (production shops, workshops, signage, joinery, food production and similar job shops). Its first production organization is **Grafika Čobanović**. It manages:
 
 - **Work orders** - lifecycle from `new` through `invoiced`, with assignment, materials, notes, events, invoice drafts, order-number reservation, and a per-order edit lock
 - **Customers and locations** - normalized master data (web client; API-backed)

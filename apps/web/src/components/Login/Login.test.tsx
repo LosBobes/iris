@@ -8,7 +8,7 @@ import { sr } from "@/i18n/locales/sr";
 import "@/i18n";
 
 const strings = sr.auth;
-const organization = { slug: "demo", name: "Demo Štamparija", logoVersion: null };
+const organization = { slug: "demo", name: "Demo Firma", logoVersion: null };
 
 function renderLogin(props: Partial<React.ComponentProps<typeof Login>> = {}) {
   return render(
@@ -119,7 +119,7 @@ describe("Login", () => {
     renderLogin({ organization: { ...organization, logoVersion: "abc" } });
 
     expect(getPublicOrganizationLogoUrl).toHaveBeenCalledWith("demo", "abc");
-    expect(screen.getByRole("img", { name: "Demo Štamparija" })).toHaveAttribute(
+    expect(screen.getByRole("img", { name: "Demo Firma" })).toHaveAttribute(
       "src",
       "/api/public/organizations/demo/logo?v=abc",
     );

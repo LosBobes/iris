@@ -164,7 +164,7 @@ auto-attached process and the catalog's `stockOnHand` is `null`. Work-order proc
 stock only if they were created while stock was on, so enabling stock later never posts retroactively.
 (`seed-demo`, below, turns every module on for the `demo` organization it builds.)
 
-`seed-demo` creates the single `demo` organization ("Demo Štamparija") and fills it in two halves
+`seed-demo` creates the single `demo` organization ("Demo Firma") and fills it in two halves
 against one tenant. First the fixture logins and master data from `testdata/fixtures` — the `admin`
 login (`admin` / `admin123`) with four operator logins, customers and locations; the fixture work
 orders are test data and are not loaded. Then it turns every module on and adds, through the real

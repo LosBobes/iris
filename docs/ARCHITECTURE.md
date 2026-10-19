@@ -1,7 +1,8 @@
 # Architecture Overview
 
-Iris contains two runtime surfaces for Stamparija Cobanovic operations: the
-browser web client and the shared Go API.
+Iris, a multi-tenant operations platform for small manufacturing and service
+businesses, contains two runtime surfaces: the browser web client and the
+shared Go API.
 
 ## System Topology
 

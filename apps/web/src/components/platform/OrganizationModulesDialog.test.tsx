@@ -16,7 +16,7 @@ const strings = sr.platform.orgs.modules;
 const demo: PlatformTenant = {
   id: "t1",
   slug: "demo",
-  name: "Demo Štamparija",
+  name: "Demo Firma",
   createdAt: "2026-02-01 00:00:00",
   suspendedAt: null,
   users: 2,
@@ -161,7 +161,7 @@ describe("OrganizationsPanel modules", () => {
     await userEvent.click(within(dialog).getByRole("switch", { name: strings.processes }));
     await userEvent.click(within(dialog).getByRole("button", { name: sr.common.save }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Demo Štamparija");
+    expect(await screen.findByRole("status")).toHaveTextContent("Demo Firma");
     const badges = await screen.findByTestId("module-badges");
     expect(badges).toHaveTextContent(strings.stock);
     expect(badges).toHaveTextContent(strings.processes);

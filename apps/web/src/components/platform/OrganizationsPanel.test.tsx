@@ -22,7 +22,7 @@ async function menuItem(name: string | RegExp): Promise<HTMLElement> {
 const demo: PlatformTenant = {
   id: "tenant-demo",
   slug: "demo",
-  name: "Demo Štamparija",
+  name: "Demo Firma",
   createdAt: "2026-02-01 00:00:00",
   suspendedAt: null,
   users: 2,
@@ -102,7 +102,7 @@ describe("OrganizationsPanel", () => {
     expect(within(dialog).queryByLabelText(strings.adminPassword)).not.toBeInTheDocument();
 
     await userEvent.click(within(dialog).getByRole("button", { name: strings.save }));
-    expect(updatePlatformTenant).toHaveBeenCalledWith("demo", { name: "Demo Štamparija", slug: "demo-2" });
+    expect(updatePlatformTenant).toHaveBeenCalledWith("demo", { name: "Demo Firma", slug: "demo-2" });
   });
 
   it("suspends only after confirming, and offers reactivation after", async () => {
@@ -140,7 +140,7 @@ describe("OrganizationsPanel", () => {
     render(<OrganizationsPanel />);
     await userEvent.click(await menuItem(strings.exportData));
     expect(platformExportTenant).toHaveBeenCalledWith("demo");
-    expect(await screen.findByRole("status")).toHaveTextContent("Demo Štamparija");
+    expect(await screen.findByRole("status")).toHaveTextContent("Demo Firma");
     expect(click).toHaveBeenCalled();
     click.mockRestore();
   });

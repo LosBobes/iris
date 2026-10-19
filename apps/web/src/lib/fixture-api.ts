@@ -569,7 +569,7 @@ let printItemColumns: PrintItemColumn[] = [...DEFAULT_PRINT_ITEM_COLUMNS]
 let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
 // Fixture mode models the single demo organization (mirrors the Go fixture
 // store's TenantBySlug); its sign-in logo lives here as a data URL.
-const FIXTURE_ORGANIZATION = { slug: 'demo', name: 'Demo Štamparija' }
+const FIXTURE_ORGANIZATION = { slug: 'demo', name: 'Demo Firma' }
 let fixtureLoginLogo: { dataUrl: string; version: string } | null = null
 // Fixture mode's Backoffice (dev only, no backend): one fixed superadmin,
 // and metrics derived from the fixture data so the dashboard has real shapes.

@@ -36,7 +36,7 @@ export function BigPictureDiagram(): React.JSX.Element {
     },
     {
       title: "Proizvodnja",
-      sub: "priprema, štampa,\ndorada",
+      sub: "priprema, izrada,\ndorada",
       screens: ["Procesi, Magacin,", "Planiranje"],
       status: [["U toku", "active"]],
     },
@@ -91,7 +91,7 @@ export function TenantDiagram(): React.JSX.Element {
         Vaša organizacija
       </Text>
       <Text x={28} y={64} anchor="start" size={11}>
-        oznaka za prijavu: grafika-cobanovic
+        oznaka za prijavu: moja-firma
       </Text>
       <Box x={28} y={84} w={130} h={56} title="Administrator" sub="vidi sve" tone="accent" />
       <Box x={28} y={154} w={130} h={56} title="Operateri" sub="rade naloge" />
@@ -107,7 +107,7 @@ export function TenantDiagram(): React.JSX.Element {
       <g opacity={0.5}>
         <rect x={470} y={20} width={240} height={210} rx={10} style={{ fill: CARD, stroke: RULE, strokeWidth: 1.2 }} />
         <Text x={488} y={46} anchor="start" size={14} weight={500} color={INK}>
-          Neka druga štamparija
+          Neka druga firma
         </Text>
         <Text x={488} y={64} anchor="start" size={11}>
           svoja oznaka, svoji ljudi
@@ -165,17 +165,17 @@ export function JobJourneyDiagram(): React.JSX.Element {
     { title: "Upit", sub: "klijent pita: šta,\nkoliko i do kada" },
     { title: "Ponuda / predračun", sub: "cena unapred,\nprofaktura za avans" },
     { title: "Radni nalog", sub: "interni dokument:\nšta tačno radimo" },
-    { title: "Priprema", sub: "fajl, montaža,\nprobni otisak" },
+    { title: "Priprema", sub: "materijal, mašina,\nuzorak" },
   ];
   const bottom = [
     { title: "Naplata", sub: "faktura ili otkup\n(pouzeće)" },
     { title: "Isporuka", sub: "lično, kurirom\nili na terenu" },
-    { title: "Dorada", sub: "sečenje, savijanje,\nplastifikacija, povez" },
-    { title: "Štampa", sub: "digitalna ili\nofset mašina" },
+    { title: "Dorada", sub: "završna obrada,\nsklapanje, pakovanje" },
+    { title: "Izrada", sub: "na mašini, u radionici\nili na terenu" },
   ];
   const xs = [10, 190, 370, 550];
   return (
-    <Diagram title="Kako jedan posao putuje kroz štampariju" width={720} height={280}>
+    <Diagram title="Kako jedan posao putuje" width={720} height={280}>
       {top.map((b, i) => (
         <g key={b.title}>
           <Badge x={xs[i] + 14} y={24} n={i + 1} tone={i === 2 ? "accent" : "neutral"} />
@@ -193,89 +193,6 @@ export function JobJourneyDiagram(): React.JSX.Element {
       ))}
       <Text x={10} y={266} anchor="start" size={11} color={INK_MUTE}>
         Radni nalog je u sredini svega: od njega kreće proizvodnja, a na njemu se vidi i kako se posao naplaćuje.
-      </Text>
-    </Diagram>
-  );
-}
-
-export function PaperSizesDiagram(): React.JSX.Element {
-  const scale = 0.6;
-  const bottom = 286;
-  const sizes: Array<[string, number, number]> = [
-    ["A3", 297, 420],
-    ["A4", 210, 297],
-    ["A5", 148, 210],
-    ["A6", 105, 148],
-  ];
-  const g2x = (g: number) => 330 + (g - 50) * (360 / 350);
-  const bands: Array<[number, number, string, string, Tone]> = [
-    [70, 100, "70–100 g", "kancelarijski papir,\nobrasci, koverte", "draft"],
-    [115, 170, "115–170 g", "flajeri, plakati,\nbrošure (unutra)", "active"],
-    [250, 350, "250–350 g", "vizit karte, korice,\nrazglednice, kutije", "accent"],
-  ];
-  return (
-    <Diagram title="Formati papira i gramatura" width={720} height={300}>
-      <Text x={30} y={18} anchor="start" size={11} color={INK_MUTE}>
-        FORMATI (svaki je pola prethodnog)
-      </Text>
-      {sizes.map(([name, w, h], i) => (
-        <g key={name}>
-          <rect
-            x={30}
-            y={bottom - h * scale}
-            width={w * scale}
-            height={h * scale}
-            style={{ fill: tint("accent", 5 + i * 5), stroke: TONE.accent, strokeWidth: 1 }}
-          />
-          <Text x={30 + w * scale - 6} y={bottom - h * scale + 16} anchor="end" size={12} weight={500} color={INK}>
-            {name}
-          </Text>
-          <Text x={30 + w * scale - 6} y={bottom - h * scale + 30} anchor="end" size={10}>
-            {w}×{h}
-          </Text>
-        </g>
-      ))}
-      <rect x={232} y={bottom - 55 * scale} width={85 * scale} height={55 * scale} style={{ fill: tint("step", 18), stroke: TONE.step }} />
-      <Text x={232 + 25} y={bottom - 55 * scale - 8} size={10} color={TONE.step}>
-        vizit karta 85×55
-      </Text>
-
-      <Text x={330} y={18} anchor="start" size={11} color={INK_MUTE}>
-        GRAMATURA (težina papira, g/m²)
-      </Text>
-      <line x1={g2x(50)} y1={170} x2={g2x(400)} y2={170} style={{ stroke: INK_MUTE, strokeWidth: 1.2 }} />
-      {[50, 100, 150, 200, 250, 300, 350, 400].map((g) => (
-        <g key={g}>
-          <line x1={g2x(g)} y1={166} x2={g2x(g)} y2={174} style={{ stroke: INK_MUTE }} />
-          <Text x={g2x(g)} y={190} size={10}>
-            {g}
-          </Text>
-        </g>
-      ))}
-      {bands.map(([from, to, label, sub, tone], i) => (
-        <g key={label}>
-          <rect x={g2x(from)} y={150} width={g2x(to) - g2x(from)} height={14} rx={3} style={{ fill: tint(tone, 45) }} />
-          <Text x={(g2x(from) + g2x(to)) / 2} y={60 + (i % 2) * 44} size={12} weight={500} color={TONE[tone]}>
-            {label}
-          </Text>
-          {sub.split("\n").map((line, j) => (
-            <Text key={line} x={(g2x(from) + g2x(to)) / 2} y={74 + (i % 2) * 44 + j * 13} size={10.5}>
-              {line}
-            </Text>
-          ))}
-        </g>
-      ))}
-      <Text x={330} y={222} anchor="start" size={11}>
-        Što je veća gramatura, papir je deblji i čvršći.
-      </Text>
-      <Text x={330} y={238} anchor="start" size={11}>
-        Vizit karta na papiru od 80 g savijala bi se kao list iz sveske.
-      </Text>
-      {[1, 1.8, 3, 4.6].map((t, i) => (
-        <rect key={t} x={330 + i * 60} y={258} width={44} height={t * 2} style={{ fill: INK_SOFT }} />
-      ))}
-      <Text x={600} y={268} anchor="start" size={10} color={INK_MUTE}>
-        tanje → deblje
       </Text>
     </Diagram>
   );
@@ -475,7 +392,7 @@ export function SignInDiagram(): React.JSX.Element {
   return (
     <Diagram title="Prijava u dva koraka i koliko traje sesija" width={720} height={270}>
       <Badge x={22} y={26} n={1} />
-      <Box x={10} y={32} w={200} h={84} title="Organizacija" sub={"upišeš oznaku firme\nnpr. grafika-cobanovic"} />
+      <Box x={10} y={32} w={200} h={84} title="Organizacija" sub={"upišeš oznaku firme\nnpr. moja-firma"} />
       <Arrow points={[[212, 74], [258, 74]]} />
       <Badge x={272} y={26} n={2} />
       <Box x={260} y={32} w={210} h={84} title="Korisnik i lozinka" sub={"plus, po želji:\n„Zapamti me na ovom uređaju“"} />
@@ -650,7 +567,7 @@ export function PublicLinkDiagram(): React.JSX.Element {
   const hidden = ["interne napomene", "cene, troškovi i zarada", "drugi nalozi i klijenti", "ko je šta menjao"];
   return (
     <Diagram title="Šta klijent vidi preko javnog linka" width={720} height={270}>
-      <Box x={10} y={30} w={220} h={70} title="Radni nalog u Irisu" sub="sve podatke vidi samo štamparija" tone="accent" strong />
+      <Box x={10} y={30} w={220} h={70} title="Radni nalog u Irisu" sub="sve podatke vidi samo vaša firma" tone="accent" strong />
       <Arrow points={[[232, 65], [466, 65]]} label="javni link (tajna adresa)" labelAt={[349, 56]} tone="accent" />
       <rect x={480} y={14} width={120} height={102} rx={14} style={{ fill: CARD, stroke: INK_MUTE, strokeWidth: 1.4 }} />
       <rect x={492} y={30} width={96} height={70} rx={3} style={{ fill: tint("done", 14) }} />
@@ -793,12 +710,12 @@ export function CatalogDiagram(): React.JSX.Element {
   );
   return (
     <Diagram title="Usluga i artikal, i istorija cena" width={720} height={270}>
-      {card(10, "step", "Usluga", "rad koji prodajemo: štampa, plastifikacija, dizajn", [
+      {card(10, "step", "Usluga", "rad koji prodajemo: izrada, dizajn, ugradnja", [
         "cena rada (naš trošak)",
         "prodajna cena",
         "nema zalihu, ne ide u magacin",
       ])}
-      {card(370, "input", "Artikal", "roba: papir, koverte, folija, gotovi proizvodi", [
+      {card(370, "input", "Artikal", "roba: materijal, delovi, gotovi proizvodi", [
         "nabavna cena (koliko smo platili)",
         "prodajna cena",
         "ima stanje u Magacinu",
