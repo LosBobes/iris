@@ -104,7 +104,7 @@ iris-api/
 | `IRIS_BACKUP_INTERVAL` | Turns on automatic backups in the server, as a Go duration (`24h`, `12h`; at least `15m`). A copy is taken when the newest one (from any source) is that old, never sooner than a minute after start. | empty (off) |
 | `IRIS_BACKUP_STALE_HOURS` | The Backoffice dashboard warns when the newest copy is older than this many hours (SQLite only). | `24` |
 | `IRIS_DEMO_ADMIN_PASSWORD`, `IRIS_DEMO_OPERATOR_PASSWORD` | Passwords for the demo organization's `admin` / operator logins, read by `irisctl seed-demo`. Required in production (12+ characters, not a public demo password); outside production the public demo passwords are kept. Nothing on server start reads them — the demo org is created only when you run `seed-demo`. | empty |
-| `IRIS_DEMO_ID_PREFIX` | Prefix added to the demo **fixture** record ids by `irisctl seed-demo` (same as `-id-prefix`). Set it (e.g. `demo-`) when the database already holds another tenant seeded from the same fixed ids (customers `cust-N`, work orders `1`…), such as a real Grafika Čobanović data set, so the demo org can coexist without an id collision. | empty |
+| `IRIS_DEMO_ID_PREFIX` | Prefix added to the demo **fixture** record ids (users, customers, locations) by `irisctl seed-demo` (same as `-id-prefix`). Set it (e.g. `demo-`) when the database already holds another tenant seeded from the same fixed ids (customers `cust-N`…), such as a real Grafika Čobanović data set, so the demo org can coexist without an id collision. | empty |
 
 ## Commands
 
@@ -112,8 +112,8 @@ Run commands from `iris-api/`.
 
 ```bash
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
-# Demo organization: fixture work orders + "Procesi rada"/"Magacin" content, both
-# modules on (non-production only). Idempotent; see the note below.
+# Demo organization: every module on, showcase data dated relative to today
+# (non-production only). Idempotent; see the note below.
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
 # Real Grafika Čobanović data set (≈2657 clients, ≈3575 catalog items). The data
 # is large and NOT committed — generate it first from the legacy export (see
@@ -162,22 +162,51 @@ Backoffice (`PUT /platform/tenants/{slug}/modules`) it writes no audit row. All 
 for new organizations by default; with a module off its routes answer `403`, new orders get no
 auto-attached process and the catalog's `stockOnHand` is `null`. Work-order processes post/reserve
 stock only if they were created while stock was on, so enabling stock later never posts retroactively.
-(`seed-demo`, below, turns both modules on for the `demo` organization it builds.)
+(`seed-demo`, below, turns every module on for the `demo` organization it builds.)
 
 `seed-demo` creates the single `demo` organization ("Demo Štamparija") and fills it in two halves
-against one tenant. First the fixture data set from `testdata/fixtures` — the `admin` login
-(`admin` / `admin123`) with four operator logins, customers, locations and 43 plain work orders with
-no process (modules are still off at this point). Then it turns on both modules and adds, through the
-real store methods: an `operater` login (`operater` / `operater123`), customers and services, 10
-articles with minimum stock, an opening balance (stock count) and three goods receipts, four process
-templates (default "Offset štampa", "Digitalna štampa", "Brošura sa šivenjem" with an intermediate
-product and parallel steps, "Veliki format (baner)") and eight process-driven work orders (2 new, 2 in
-progress with one actual quantity above plan, 2 completed, 1 whose planned paper exceeds stock, 1
-cancelled), with step progress posted so consumption and production movements come from the normal
-posting logic. Article codes and order numbers are unique per tenant, so the fixtures are seeded first
-and these orders take the next free `RN-<year>-<seq>` numbers after them. It is idempotent: the fixture
-half re-upserts and the process/stock content is added only once (a re-run reports it is already
-present and leaves it untouched). The Backoffice default account is created on the first server start.
+against one tenant. First the fixture logins and master data from `testdata/fixtures` — the `admin`
+login (`admin` / `admin123`) with four operator logins, customers and locations; the fixture work
+orders are test data and are not loaded. Then it turns every module on and adds, through the real
+store methods, a data set in which every date is relative to the day the seed runs, so the dashboard
+signals, the planning horizon and the sign-in history stay meaningful:
+
+- **Settings:** firm name, the extra shipping options on the form, a changeable priority, invoices
+  as the default document, custom picklist values (delivery "Kurir (Bex)", unit "Tabak", postage
+  "Mesečni obračun") and a generated sign-in logo.
+- **Customers:** eight content customers with PIB / matični broj, extra e-mail addresses, contacts
+  and one or two locations, plus the five fixture customers; thirteen in all.
+- **Catalog:** eight services (with the cost of labor, so service profit shows) and fifteen articles
+  (barcodes, tax groups, descriptions, minimum stock), one inactive, two without prices for
+  Katalog → Čišćenje, and a kunstdruk price rise scheduled two weeks out (Istorija cena).
+- **Magacin:** an opening balance, four goods receipts, consumption and production posted by the
+  live orders, and a monthly count that corrects two articles; several articles below minimum.
+- **Processes:** five templates — default "Offset štampa", "Digitalna štampa", "Brošura sa
+  šivenjem" (intermediate product, two parallel starting steps), "Veliki format (baner)" and
+  "Zidni kalendar" (two starting steps, two final outputs) — with machine type, crew and times on
+  every step.
+- **History:** 44 finished orders over the past twelve months (invoiced and mostly paid, a few
+  completed or cancelled), with catalog invoice lines carrying frozen costs, time entries, notes,
+  attachments and a customer sign-off, for the twelve-month charts and profit tables.
+- **Live orders:** 14 orders with processes in every status: new, assigned, in progress (one with
+  an actual quantity above plan, one with a skipped step, one with a step in progress), completed
+  and signed off by the customer, invoiced and paid, cancelled; one overdue and urgent, one due
+  today, one unassigned with an ad-hoc line awaiting its cost (`/cost-review`), one whose planned
+  paper exceeds stock, one proforma with its own deadline and every shipping option. Their
+  timelines are backdated to run from the issue date.
+- **Planning and attendance:** eight machine types with ten units (one out of service), worker
+  qualifications, working hours with a Saturday shift, two weeks of sign-ins (which also feed the
+  Backoffice activity counts), one override present today and one on leave the next working day,
+  published plans for today and the next working day and a draft for the day after.
+- **Platform:** a welcome announcement targeted at the demo organization (shown in the app and on
+  `/login/demo`) and the superadmins' internal notes on its Backoffice card, both recorded in the
+  activity log as `irisctl`.
+
+Order numbers follow the issue year (the oldest year starts mid-sequence, later years from 1) and
+the live orders take the next free `RN-<year>-<seq>` numbers through the normal allocator. It is
+idempotent: the fixture half re-upserts and the content is added only once (a re-run reports it is
+already present and leaves it untouched). The command prints which orders to open for each feature.
+The Backoffice default account is created on the first server start.
 
 Outside production the logins use the public demo passwords (`admin` / `admin123`, `operater` /
 `operater123`). In production a server refuses to start when any tenant has the demo `admin` /
@@ -186,12 +215,12 @@ Outside production the logins use the public demo passwords (`admin` / `admin123
 characters and not a public demo password. The admin password replaces the fixture admin's; the
 operator password replaces every non-admin login's (the fixture operators and the content `operater`).
 
-The fixture half uses fixed record ids (`cust-1`, `loc-1`, work order `1`, …) and record ids are
-globally unique, so if the database already holds another tenant seeded from the same ids — e.g. the
-real Grafika Čobanović data, whose customers are also `cust-N` — the plain seed collides. Pass
-`-id-prefix demo-` (or set `IRIS_DEMO_ID_PREFIX`) to namespace the fixture ids and their references so
-the demo org coexists with that tenant. The process/stock half already uses its own `cust-demo-*` /
-`cat-demo-*` ids and is unaffected.
+The fixture half uses fixed record ids (`cust-1`, `loc-1`, …) and record ids are globally unique, so
+if the database already holds another tenant seeded from the same ids — e.g. the real Grafika
+Čobanović data, whose customers are also `cust-N` — the plain seed collides. Pass `-id-prefix demo-`
+(or set `IRIS_DEMO_ID_PREFIX`) to namespace the fixture ids and their references so the demo org
+coexists with that tenant. The content half already uses its own `cust-demo-*` / `cat-demo-*` /
+`demo-h-*` ids and is unaffected.
 
 Verification:
 

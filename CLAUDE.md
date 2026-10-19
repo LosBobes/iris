@@ -197,14 +197,22 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`
   need `-tenant <slug>`; `create-tenant` provisions a new organization.
 - Demo seed (`irisctl seed-demo`): one `demo` org with all four modules **on**
-  (stock, processes, planning, attendance).
+  (stock, processes, planning, attendance), built to showcase every feature.
   Logins `admin` / `admin123` (+ four fixture operators) and `operater` /
-  `operater123`. It loads the `testdata/fixtures` work orders (no process) first,
-  then adds process- and stock-driven content (4 templates, 8 orders, warehouse
-  stock) that takes the next order numbers after the fixtures, plus planning
-  resources (7 machine types, 8 machines, qualifications for every demo user;
-  template steps carry machine type, crew and times; default working hours). Idempotent: the
-  content is added once (a re-run reports it already present). In production the
-  server refuses to start on the demo `admin`/`admin123` login, so `seed-demo`
+  `operater123`. It loads the `testdata/fixtures` users, customers and locations
+  (not the fixture work orders), then adds content dated relative to the run
+  (`internal/store/seed_demo_*.go`): settings, custom enum values and a generated
+  login logo; customers with PIB/MB, contacts and several locations; a catalog
+  with stock, a scheduled price change and cleanup candidates; 5 templates (steps
+  carry machine type, crew and times; start/final flags); 44 invoiced history
+  orders over 12 months (direct writes, frozen line costs); 14 live orders with
+  processes covering every status and dashboard signal (overdue, due today,
+  unassigned + cost review, signed off, paid, cancelled, shortage, skipped and
+  in-progress steps), timelines backdated; 8 machine types / 10 machines (one out
+  of service), qualifications, a Saturday shift, 14 days of sign-ins, attendance
+  overrides, published plans for today and the next working day and a draft
+  after; a welcome announcement and tenant notes (actor `irisctl`). Idempotent:
+  the content is added once (a re-run reports it already present). In production
+  the server refuses to start on the demo `admin`/`admin123` login, so `seed-demo`
   requires `IRIS_DEMO_ADMIN_PASSWORD` / `IRIS_DEMO_OPERATOR_PASSWORD` (12+ chars)
   there — `store.DemoPasswords` enforces it.

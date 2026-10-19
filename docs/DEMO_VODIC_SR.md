@@ -90,20 +90,30 @@ VITE_IRIS_API_MODE=fixtures npm run dev
 - [ ] U Notes: jedan **javni link** kopiran sa detalja naloga (dugme *Javni link*)
 - [ ] Zatvoren nepotreban tab, notifikacije na „Do Not Disturb“
 - [ ] Rezolucija ekrana min. **1280px** (sidebar + tabele; na mobilnom hamburger meni)
-- [ ] Znaš bar **2–3 broja naloga** iz seed-a (npr. `RN-2024-0001`, `RN-2024-0002`)
+- [ ] Znaš bar **2–3 broja naloga** iz seed-a (ispisuje ih `seed-demo` na kraju)
 - [ ] Proverio si da **PDF** otvara bar jednom (chromedp može kasniti 5–10 s)
 
 ### Demo podaci (seed-demo)
 
 | Entitet | Broj |
 |---------|------|
-| Korisnici | 1 (`admin`) |
-| Klijenti | 5 |
-| Lokacije | 5 |
-| Radni nalozi | 28 |
+| Korisnici | 6 (`admin`, `operater` i 4 operatera) |
+| Klijenti | 13 (8 sa PIB-om, kontaktima i više lokacija) |
+| Katalog | 8 usluga i 15 artikala sa magacinom |
+| Radni nalozi | 44 završena iz protekle godine + 14 otvorenih sa procesima |
+| Šabloni procesa | 5 |
+| Mašine | 8 tipova, 10 mašina |
 
-Primeri klijenata: Firma Doo, Kompanija AB, Studio XYZ, Agencija Pro…  
-Poslovi: vizitkarte, katalozi, plakati, flajeri — sve na srpskom.
+Svi datumi su relativni u odnosu na dan kada je `seed-demo` pokrenut, pa
+kontrolna tabla uvek ima naloge koji kasne, ističu danas i ove nedelje, jedan
+nedodeljen koji čeka unos troška, potpisan, plaćen i otkazan nalog. Komanda na
+kraju ispisuje brojeve naloga koje vredi otvoriti. Uključeni su svi moduli
+(Magacin, Procesi rada, Planiranje, Prisustvo), a na prijavi stoji logo i
+obaveštenje dobrodošlice.
+
+Primeri klijenata: Pekara Zlatni klas, Opština Novi Grad, Knjižara Slovo,
+Vinarija Dolina, Firma Doo…  
+Poslovi: etikete, katalozi, baneri, kalendari, flajeri — sve na srpskom.
 
 ---
 
