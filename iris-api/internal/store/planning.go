@@ -93,6 +93,9 @@ type PlanningStore interface {
 	PublishPlan(ctx context.Context, input domain.PlanPublishInput, username string) (*domain.ProductionPlan, error)
 	MyQueue(ctx context.Context, userID, date string) (domain.MyQueue, error)
 	Forecast(ctx context.Context) ([]domain.OrderForecast, error)
+	// PlanningCalibration is the read-only calibration report over a local
+	// date window ("" = default; D-028, admins only).
+	PlanningCalibration(ctx context.Context, from, to string) (domain.PlanningCalibration, error)
 }
 
 var _ PlanningStore = (*SQLiteStore)(nil)

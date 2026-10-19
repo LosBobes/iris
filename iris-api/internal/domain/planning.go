@@ -264,6 +264,10 @@ const (
 	// A locked (kept) block lies in a downtime window of its machine (D-028):
 	// the machine is not available while the step is planned on it.
 	PlanIssueMachineDown PlanIssueCode = "machine_down"
+	// An in-progress step has been worked on (working minutes since its
+	// startedAt) longer than its planned duration (D-028). Informational: the
+	// step is still planned and the order stays plannable.
+	PlanIssueOverrun PlanIssueCode = "overrun"
 )
 
 // PlanIssue is a step the plan could not place, or a conflict in an edited
@@ -494,4 +498,46 @@ type WorkstationLoad struct {
 	Days         []string                `json:"days"`
 	MachineTypes []WorkstationLoadType   `json:"machineTypes"`
 	People       []WorkstationLoadPerson `json:"people"`
+}
+
+// Calibration report (D-028, "Actual step times"): read-only, nothing is
+// applied automatically.
+
+// Calibration limits.
+const (
+	// CalibrationDefaultDays is the default report window: the last 60 days
+	// (today included).
+	CalibrationDefaultDays = 60
+	// CalibrationMaxDays caps the report window.
+	CalibrationMaxDays = 366
+)
+
+// PlanningCalibrationWindow is the report's inclusive local date range.
+type PlanningCalibrationWindow struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// PlanningCalibrationStep compares planned with measured working minutes of
+// the done steps sharing one label. Ratio is actual / planned.
+type PlanningCalibrationStep struct {
+	Label             string  `json:"label"`
+	Count             int     `json:"count"`
+	PlannedMinutesAvg float64 `json:"plannedMinutesAvg"`
+	ActualMinutesAvg  float64 `json:"actualMinutesAvg"`
+	Ratio             float64 `json:"ratio"`
+}
+
+// PlanningCalibration is the answer of GET /planning/calibration: over the
+// orders whose process finished in the window, the measured inter-operation
+// time (recommended transferMinutes) and planned vs actual minutes per step
+// label, sorted by how far the ratio is from 1.
+type PlanningCalibration struct {
+	Window                 PlanningCalibrationWindow `json:"window"`
+	Orders                 int                       `json:"orders"`
+	OrdersWithTimes        int                       `json:"ordersWithTimes"`
+	AvgTransferMinutes     *int                      `json:"avgTransferMinutes"`
+	MedianTransferMinutes  *int                      `json:"medianTransferMinutes"`
+	CurrentTransferMinutes int                       `json:"currentTransferMinutes"`
+	Steps                  []PlanningCalibrationStep `json:"steps"`
 }

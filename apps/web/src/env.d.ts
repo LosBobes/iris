@@ -93,6 +93,7 @@ import type {
 } from '@/types/planning'
 import type { MaterialNeeds, MaterialNeedsQuery } from '@/types/planning'
 import type { WorkstationLoad, WorkstationLoadQuery } from '@/types/planning'
+import type { PlanningCalibration, PlanningCalibrationQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -308,6 +309,8 @@ declare global {
       getMaterialNeeds: (query?: MaterialNeedsQuery) => Promise<MaterialNeeds>
       /** Workstation load per machine type, unit and person per day (D-028); plan "draft" is admin-only. */
       getPlanningLoad: (query?: WorkstationLoadQuery) => Promise<WorkstationLoad>
+      /** Read-only calibration report (admins; D-028): recommended transferMinutes and planned vs actual step minutes. */
+      getPlanningCalibration: (query?: PlanningCalibrationQuery) => Promise<PlanningCalibration>
     }
   }
 }

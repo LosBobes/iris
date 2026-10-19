@@ -290,6 +290,7 @@ func (s *Server) Routes() http.Handler {
 		planning.Get("/planning/forecast", s.planningHandler(s.handlePlanningForecast))
 		planning.With(s.requireModule(moduleStock)).Get("/planning/material-needs", s.handleMaterialNeeds)
 		planning.Get("/planning/load", s.planningHandler(s.handlePlanningLoad))
+		planning.Get("/planning/calibration", s.requireAdmin(s.planningHandler(s.handlePlanningCalibration)))
 		attendance.Get("/attendance", s.attendanceHandler(s.handleAttendance))
 		attendance.Put("/attendance/{userId}", s.requireAdmin(s.attendanceHandler(s.handleSetAttendance)))
 		protected.Get("/announcements", s.handleAnnouncements)

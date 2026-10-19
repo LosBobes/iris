@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useFieldArray,
   useForm,
@@ -273,9 +273,12 @@ function ExceptionRow({
 function WorkingHoursForm({
   initial,
   canEdit,
+  suggestedTransferMinutes = null,
 }: {
   initial: WorkingHoursFormValues
   canEdit: boolean
+  /** A transfer time to prefill once (the calibration link, D-028); saved only with the form. */
+  suggestedTransferMinutes?: number | null
 }): React.JSX.Element {
   const { t } = useTranslation()
   const invalidate = useInvalidatePlanning()
@@ -286,6 +289,7 @@ function WorkingHoursForm({
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<WorkingHoursFormValues>({ resolver: zodResolver(schema), defaultValues: initial })
 
@@ -294,6 +298,15 @@ function WorkingHoursForm({
   useEffect(() => {
     reset(initial)
   }, [initial, reset])
+
+  // Prefill the suggested transfer time once, after the first reset; a later
+  // refetch (e.g. after saving) shows the stored value again.
+  const suggestionApplied = useRef(false)
+  useEffect(() => {
+    if (suggestionApplied.current || suggestedTransferMinutes === null || !canEdit) return
+    suggestionApplied.current = true
+    setValue('transferMinutes', suggestedTransferMinutes, { shouldDirty: true })
+  }, [suggestedTransferMinutes, canEdit, setValue])
 
   const submit = handleSubmit(async (values) => {
     setServerError(null)
@@ -342,6 +355,11 @@ function WorkingHoursForm({
         <p id="hours-transfer-minutes-hint" className="text-[11px] text-[color:var(--iris-ink-soft)]">
           {t('planning.hours.transferMinutesHint')}
         </p>
+        {canEdit && suggestedTransferMinutes !== null && (
+          <p role="status" className="text-[11px] text-amber-700 dark:text-amber-400">
+            {t('planning.calibration.suggestedNotice', { value: suggestedTransferMinutes })}
+          </p>
+        )}
         {errors.transferMinutes && (
           <p role="alert" className="text-[11px] text-destructive">
             {errors.transferMinutes.message}
@@ -420,7 +438,14 @@ function WorkingHoursForm({
 }
 
 /** "Radno vreme": time zone, inter-operation time, per-weekday shift and breaks, and exception dates (D-028). */
-export function WorkingHoursTab({ canEdit }: { canEdit: boolean }): React.JSX.Element {
+export function WorkingHoursTab({
+  canEdit,
+  suggestedTransferMinutes = null,
+}: {
+  canEdit: boolean
+  /** Prefilled transfer time from the calibration card (D-028); not saved by itself. */
+  suggestedTransferMinutes?: number | null
+}): React.JSX.Element {
   const { t } = useTranslation()
   const query = useWorkingHours()
   const initial = useMemo(() => (query.data ? hoursToForm(query.data) : null), [query.data])
@@ -442,7 +467,7 @@ export function WorkingHoursTab({ canEdit }: { canEdit: boolean }): React.JSX.El
           {t('planning.loadError')}
         </p>
       ) : (
-        <WorkingHoursForm initial={initial} canEdit={canEdit} />
+        <WorkingHoursForm initial={initial} canEdit={canEdit} suggestedTransferMinutes={suggestedTransferMinutes} />
       )}
     </section>
   )

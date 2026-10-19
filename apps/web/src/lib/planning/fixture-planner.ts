@@ -6,7 +6,10 @@
 //   plus the inter-operation time `hours.transferMinutes` (D-028) in working
 //   time (the lag pauses for breaks and the end of the shift and may cross a day
 //   boundary; 0 chains steps back to back); done/skipped steps are finished,
-//   in-progress steps are placed first and locked (never shifted by the lag);
+//   in-progress steps are placed first and locked (never shifted by the lag),
+//   for their remaining minutes when they carry a `startedAt` (duration minus
+//   the working time since then, at least 1 minute; worked longer than the
+//   duration = an informational `overrun` issue; D-028);
 // - duration = setup + per-unit x quantity (quantity < 1 counts as 1); a step
 //   with no times is placed with 0 minutes and flagged `missing_duration`;
 // - a machine-bound step needs one in-service unit of its type plus a crew whose
@@ -262,6 +265,38 @@ export function workingDays(hours: WorkingHours, date: string, count: number): W
   return result
 }
 
+/**
+ * Working minutes (shift segments, breaks and days off excluded) from one
+ * local moment to another; 0 when `to` is not after `from`. Walks at most 400
+ * civil days back from `to`.
+ */
+export function workingMinutesBetween(hours: WorkingHours, from: LocalMoment, to: LocalMoment): number {
+  if (from.date > to.date || (from.date === to.date && from.minutes >= to.minutes)) return 0
+  let date = from.date
+  const span = Math.round((parseDate(to.date) - parseDate(from.date)) / DAY_MS)
+  if (span > 400) date = addDays(to.date, -400)
+  let total = 0
+  for (; date <= to.date; date = addDays(date, 1)) {
+    const day = shiftOn(hours, date)
+    if (!day) continue
+    const low = date === from.date ? from.minutes : 0
+    const high = date === to.date ? to.minutes : AXIS
+    for (const segment of shiftSegments(day)) {
+      const begin = Math.max(segment.start, low)
+      const end = Math.min(segment.end, high)
+      if (end > begin) total += end - begin
+    }
+  }
+  return total
+}
+
+/** The local moment of a step timestamp (RFC 3339), or null when it is missing or malformed. */
+export function stepMoment(value: string | undefined, timeZone: string): LocalMoment | null {
+  if (!value) return null
+  const instant = new Date(value)
+  return Number.isNaN(instant.getTime()) ? null : localMoment(instant, timeZone)
+}
+
 // ---- planner ----------------------------------------------------------------
 
 interface Interval {
@@ -322,6 +357,8 @@ function messageFor(code: PlanIssueCode, order: PlannerOrder, step?: ProcessNode
       return `${what}: konflikt u rasporedu.`
     case 'machine_down':
       return `${what}: mašina je van pogona u planiranom periodu.`
+    case 'overrun':
+      return `${what}: u toku je duže od planiranog trajanja.`
   }
 }
 
@@ -662,13 +699,41 @@ export function planDay(input: PlannerInput): PlannerResult {
     key: string
     tail: number
     preds: ProcessNode[]
+    /** In-progress steps with a startedAt: the remaining minutes (D-028). */
+    minutes?: number
+    /** Nothing left: the 1-minute block ends, for successors, where it starts. */
+    finishAtStart?: boolean
   }
   const pending: Pending[] = []
   const inProgress: Pending[] = []
+  // The moment the remaining minutes of in-progress steps are measured to (D-028).
+  const reference: LocalMoment | null = start ?? (days[0] ? { date: days[0].date, minutes: days[0].shiftStart } : null)
   for (const order of input.orders) {
     const stepMinutes = new Map<string, number>()
     const steps = order.graph.nodes.filter((node) => node.kind === 'step')
     for (const step of steps) stepMinutes.set(step.id, stepDurationMinutes(step, order.quantity))
+    // In-progress steps with a startedAt keep only their remaining minutes (D-028).
+    const remainingOf = new Map<string, { minutes: number; finishAtStart: boolean }>()
+    for (const step of steps) {
+      if (stepStatus(step) !== 'in_progress' || !hasTimes(step) || !reference) continue
+      const full = stepMinutes.get(step.id) ?? 0
+      const began = stepMoment(step.startedAt, input.hours.timeZone)
+      if (full <= 0 || !began) continue
+      const worked = workingMinutesBetween(input.hours, began, reference)
+      const left = Math.max(full - worked, 0)
+      remainingOf.set(step.id, { minutes: Math.max(left, 1), finishAtStart: left === 0 })
+      stepMinutes.set(step.id, Math.max(left, 1))
+      if (worked > full) {
+        issues.push({
+          code: 'overrun',
+          workOrderId: order.id,
+          orderNumber: order.number,
+          stepNodeId: step.id,
+          stepLabel: step.label,
+          message: `Radni nalog ${order.number}, korak „${step.label}“: u toku je već ${worked} min rada, a planirano trajanje je ${full} min.`,
+        })
+      }
+    }
     // Longest remaining chain of work starting at each open step.
     const successors = new Map<string, string[]>()
     for (const step of steps) {
@@ -695,7 +760,7 @@ export function planDay(input: PlannerInput): PlannerResult {
       if (status === 'done' || status === 'skipped') continue
       const key = `${order.id}:${step.id}`
       if (pinnedSteps.has(key)) continue
-      const item: Pending = { order, step, key, tail: tailOf(step.id), preds: predecessorSteps(order.graph, step.id) }
+      const item: Pending = { order, step, key, tail: tailOf(step.id), preds: predecessorSteps(order.graph, step.id), ...remainingOf.get(step.id) }
       if (status === 'in_progress') inProgress.push(item)
       else pending.push(item)
     }
@@ -704,7 +769,7 @@ export function planDay(input: PlannerInput): PlannerResult {
   const toCtx = (item: Pending): StepCtx => ({
     order: item.order,
     step: item.step,
-    minutes: stepDurationMinutes(item.step, item.order.quantity),
+    minutes: item.minutes ?? stepDurationMinutes(item.step, item.order.quantity),
     crewSize: stepCrew(item.step),
   })
 
@@ -712,7 +777,8 @@ export function planDay(input: PlannerInput): PlannerResult {
     const ctx = toCtx(item)
     if (!hasTimes(item.step)) flag('missing_duration', item.order, item.step)
     const end = ctx.minutes === 0 ? placeZero(ctx, earliest) : place(ctx, earliest, locked)
-    if (end !== null) finish.set(item.key, end)
+    // A step with nothing left sits in a 1-minute block and counts as finished at its start (D-028).
+    if (end !== null) finish.set(item.key, item.finishAtStart ? end - 1 : end)
   }
 
   // In-progress steps first, at Start, locked.

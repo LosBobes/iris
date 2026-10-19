@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, ListChecks, Loader2, Printer, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { CalibrationCard } from '@/components/planning/CalibrationCard'
 import { ConfirmDialog } from '@/components/planning/ConfirmDialog'
 import { ForecastBadges } from '@/components/planning/ForecastBadges'
 import { ForecastTable } from '@/components/planning/ForecastTable'
@@ -439,6 +440,8 @@ function PlanningPage(): React.JSX.Element {
         )}
 
         <ForecastTable />
+
+        {isAdmin && <CalibrationCard />}
       </div>
 
       <PlanBlockDialog

@@ -16,6 +16,7 @@ import {
 } from '@/lib/planning/fixture-planner'
 import { LOAD_MESSAGES, MAX_LOAD_DAYS, computeLoad, defaultLoadTo, loadBlocks } from '@/lib/planning/fixture-load'
 import { stepStatus } from '@/lib/process/graph'
+import { calibrate, calibrationWindow, ordersCompletedIn } from '@/lib/planning/calibration'
 import type { ProcessGraph } from '@/types/process'
 import type { OrganizationModules } from '@/types/settings'
 import {
@@ -40,6 +41,7 @@ import {
 } from '@/types/planning'
 import { DEFAULT_MATERIAL_NEEDS_DAYS } from '@/types/planning'
 import type { StockLevel } from '@/types/stock'
+import type { PlanningCalibration } from '@/types/planning'
 
 // In-memory Planiranje store for fixture mode. It mirrors the API's validation,
 // permissions and module gate closely enough for demos and UI development; the
@@ -143,6 +145,7 @@ type PlanningApi = Pick<
   | 'getPlanningForecast'
   | 'getMaterialNeeds'
   | 'getPlanningLoad'
+  | 'getPlanningCalibration'
 >
 
 export interface PlanningFixtureStore {
@@ -880,6 +883,26 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
             source: wantsDraft ? 'draft' : 'published',
           }),
         )
+      },
+      async getPlanningCalibration(query = {}) {
+        requireAdmin()
+        const resolved = calibrationWindow(query, today())
+        if ('message' in resolved) throw fixtureError(resolved.status, resolved.message)
+        const graphs = new Map(context.processes().map((entry) => [entry.workOrderId, entry.graph]))
+        const sources = [...context.orders()]
+          .sort((a, b) => a.orderNumber.localeCompare(b.orderNumber) || a.id.localeCompare(b.id))
+          .flatMap((order) => {
+            const graph = graphs.get(order.id)
+            return graph ? [{ status: order.status, quantity: order.quantity, graph }] : []
+          })
+        const orders = ordersCompletedIn(resolved.window, hours.timeZone, sources, (instant, timeZone) => localMoment(instant, timeZone).date)
+        const report: PlanningCalibration = {
+          window: resolved.window,
+          orders: orders.length,
+          currentTransferMinutes: hours.transferMinutes,
+          ...calibrate(hours, orders),
+        }
+        return clone(report)
       },
     },
   }

@@ -27,6 +27,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Interne napomene", body: "Napomene samo za štampariju. Klijent ih nikad ne vidi.", chapter: "nalozi" },
   { term: "Izvršilac", body: "Osoba koja radi posao na nalogu.", chapter: "nalozi" },
   { term: "Javni link", body: "Adresa preko koje klijent bez prijave prati status svog naloga.", chapter: "nalozi" },
+  { term: "Kalibracija", body: "Poređenje izmerenih vremena koraka sa planiranim; predlaže međuoperacijsko vreme.", chapter: "planiranje" },
   { term: "Katalog", body: "Cenovnik štamparije: sve usluge i artikli sa cenama.", chapter: "katalog" },
   { term: "Klijent", body: "Firma ili osoba za koju radimo, upisana jednom sa PIB-om i kontaktima.", chapter: "klijenti" },
   { term: "Korak", body: "Jedna faza procesa rada, npr. štampa ili sečenje.", chapter: "procesi" },

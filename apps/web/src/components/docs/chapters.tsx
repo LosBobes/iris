@@ -871,7 +871,7 @@ function PlanningChapter(): React.JSX.Element {
           <><Ui>Objavi</Ui>: nacrt postaje važeći plan.</>,
           <><Ui>Moj red</Ui>: svako vidi svoje blokove za taj dan, redom kojim ih radi, sa dugmićima <Ui>Počni</Ui> i <Ui>Završi</Ui>.</>,
           <><Ui>Štampaj raspored</Ui>: radni raspored za kačenje pored mašine, po jedna strana za svaku mašinu (ili <Ui>Po radniku</Ui>, za svakog radnika): nalog, korak, količina, početak, kraj, trajanje i ko vodi, sa ukupnim vremenom za dan. Admin može da odštampa nacrt i do 7 dana unapred; kasniji dani su procena dok se ne objave.</>,
-          <><Ui>Preplaniraj</Ui>: kad se dan pokvari (mašina stala, neko otišao kući), novi nacrt kreće od ovog trenutka, a blokovi koji su već u toku ostaju gde jesu. Iris sam javi kad rad odstupa od plana.</>,
+          <><Ui>Preplaniraj</Ui>: kad se dan pokvari (mašina stala, neko otišao kući), novi nacrt kreće od ovog trenutka, a blokovi koji su već u toku ostaju gde jesu. Korak koji je započet, a nije u objavljenom planu, planira se samo za vreme koje mu je preostalo (od trenutka kad je operater pritisnuo <Ui>Počni</Ui>, bez pauza i noći); ako traje duže od planiranog, Iris to javi kao prekoračenje. Iris sam javi kad rad odstupa od plana.</>,
         ]}
       />
       <H2>Prognoza</H2>
@@ -909,6 +909,16 @@ function PlanningChapter(): React.JSX.Element {
         narandžast od 80 do 100 %, a crven preko 100 % (<strong>preopterećeno</strong>).
         Neradni dani, mašine van pogona i odsutni radnici su prugasti. Dodir na stubić prikazuje
         blokove tog dana, a datum u zaglavlju otvara dnevni plan za taj dan. Opseg je najviše 31 dan.
+      </P>
+      <H2>Kalibracija</H2>
+      <P>
+        Kad operateri u <Ui>Moj red</Ui> pritiskaju <Ui>Počni</Ui> i <Ui>Završi</Ui>, Iris
+        beleži koliko je svaki korak stvarno trajao. Kartica <strong>Kalibracija</strong> (samo
+        za administratore) za naloge završene u poslednjih 60 dana poredi stvarno vreme od
+        prvog do poslednjeg koraka sa zbirom vremena samih koraka i iz razlike predlaže
+        međuoperacijsko vreme. Dugme vodi na radno vreme sa upisanim predlogom, ali ništa se
+        ne menja dok ne sačuvaš. Ispod je spisak koraka čije se stvarno trajanje razlikuje od
+        planiranog za više od 25 %, da bi se popravila vremena u šablonima.
       </P>
     </>
   );
