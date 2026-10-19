@@ -56,7 +56,8 @@ export interface StockFixtureContext {
   enabled: () => boolean
   catalogItems: () => StockCatalogArticle[]
   workOrder: (id: string) => { number: string; status: WorkOrderStatus } | null
-  orderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
+  /** Stock-tracked order graphs with their planned-quantity factor (see posting.reservedAcrossGraphs). */
+  orderProcesses: () => { workOrderId: string; graph: ProcessGraph; factor?: number }[]
 }
 
 type StockApi = Pick<
@@ -79,8 +80,11 @@ interface LedgerRow {
 
 export interface StockFixtureStore {
   api: StockApi
-  /** Brings the ledger in line with an order's saved process graph (automatic posting). */
-  onProcessSaved: (workOrderId: string, graph: ProcessGraph, username: string) => void
+  /**
+   * Brings the ledger in line with an order's saved process graph (automatic
+   * posting); planned quantities are multiplied by `factor` (default 1).
+   */
+  onProcessSaved: (workOrderId: string, graph: ProcessGraph, username: string, factor?: number) => void
   /** Seeds an opening balance without a session (demo data). */
   seedOpening: (catalogItemId: string, quantity: number, createdBy: string, note?: string) => void
   hasMovements: (catalogItemId: string) => boolean
@@ -142,7 +146,7 @@ export function createStockFixtureStore(context: StockFixtureContext): StockFixt
           const order = context.workOrder(entry.workOrderId)
           return order !== null && !CLOSED_ORDER_STATUSES.includes(order.status)
         })
-        .map((entry) => entry.graph),
+        .map((entry) => ({ graph: entry.graph, factor: entry.factor ?? 1 })),
     )
 
   const levelOf = (item: StockCatalogArticle, reserved: Map<string, number>): StockLevel => {
@@ -186,7 +190,7 @@ export function createStockFixtureStore(context: StockFixtureContext): StockFixt
       })
     },
 
-    onProcessSaved(workOrderId, graph, username) {
+    onProcessSaved(workOrderId, graph, username, factor = 1) {
       const nets = new Map<string, ExistingNet>()
       for (const row of rows) {
         if (row.workOrderId !== workOrderId || !row.processNodeId) continue
@@ -195,7 +199,7 @@ export function createStockFixtureStore(context: StockFixtureContext): StockFixt
         if (net) net.quantity += row.quantity
         else nets.set(key, { processNodeId: row.processNodeId, catalogItemId: row.catalogItemId, quantity: row.quantity })
       }
-      for (const planned of planProcessPosting(graph, [...nets.values()])) {
+      for (const planned of planProcessPosting(graph, [...nets.values()], factor)) {
         insert({
           catalogItemId: planned.catalogItemId,
           kind: planned.kind,

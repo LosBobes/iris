@@ -37,6 +37,14 @@ describe('planning HTTP client: resources', () => {
     expect(call(fetchMock, 3)).toMatchObject({ url: 'http://api.test/machines', method: 'POST', body: machine })
     expect(call(fetchMock, 4)).toMatchObject({ url: 'http://api.test/machines/m1', method: 'PUT' })
     expect(call(fetchMock, 5)).toMatchObject({ url: 'http://api.test/machines/m1', method: 'DELETE' })
+
+    const downtime = { from: '2026-10-21T08:00', to: '2026-10-22T15:00', note: 'Servis' }
+    await api.listMachineDowntimes('m 1')
+    await api.createMachineDowntime('m1', downtime)
+    await api.deleteMachineDowntime('m1', 'd 1')
+    expect(call(fetchMock, 6)).toMatchObject({ url: 'http://api.test/machines/m%201/downtimes', method: 'GET' })
+    expect(call(fetchMock, 7)).toMatchObject({ url: 'http://api.test/machines/m1/downtimes', method: 'POST', body: downtime })
+    expect(call(fetchMock, 8)).toMatchObject({ url: 'http://api.test/machines/m1/downtimes/d%201', method: 'DELETE' })
   })
 
   it('tolerates null lists', async () => {
@@ -68,9 +76,12 @@ describe('planning HTTP client: resources', () => {
       method: 'PUT',
       body: { date: '2026-10-19', present: null },
     })
-    const hours = { timeZone: 'Europe/Belgrade', days: [{ weekday: 1, start: '07:00', end: '15:00', breaks: [] }] }
-    await api.setWorkingHours(hours)
+    const hours = { timeZone: 'Europe/Belgrade', days: [{ weekday: 1, start: '07:00', end: '15:00', breaks: [] }], transferMinutes: 15 }
+    const saved = await api.setWorkingHours(hours)
     expect(call(fetchMock, 3)).toMatchObject({ url: 'http://api.test/planning/working-hours', method: 'PUT', body: hours })
+    // A server from before D-028 sends no inter-operation time or exceptions.
+    expect(saved.transferMinutes).toBe(0)
+    expect(saved.exceptions).toEqual([])
   })
 })
 
@@ -83,6 +94,8 @@ describe('planning HTTP client: plans', () => {
     expect(generated.assignments).toEqual([])
     expect(generated.issues).toEqual([])
     expect(generated.lateOrders).toEqual([])
+    // A plan stored before the horizon was kept has no horizonEnd: the date stands in.
+    expect(generated.horizonEnd).toBe('2026-10-19')
     expect(call(fetchMock)).toMatchObject({
       url: 'http://api.test/planning/plan/generate',
       method: 'POST',
@@ -95,6 +108,26 @@ describe('planning HTTP client: plans', () => {
     expect(loaded.draft?.assignments).toEqual([])
     expect(loaded.published).toBeNull()
     expect(loaded.drift).toEqual({ suggested: true, reasons: [] })
+  })
+
+  it('requests the kept horizon of a date and normalizes its days', async () => {
+    const horizon = {
+      planId: 'p1',
+      status: 'draft',
+      date: '2026-10-19',
+      horizonEnd: '2026-11-05',
+      generatedAt: '2026-10-19T05:00:00Z',
+      updatedAt: '2026-10-19T05:00:00Z',
+      days: [{ date: '2026-10-20', assignments: [{ id: 'a', userIds: null }] }],
+      issues: null,
+    }
+    const { api, fetchMock } = setup({ date: '2026-10-19', draft: horizon, published: null })
+    const loaded = await api.getPlanHorizon('2026-10-19')
+    expect(call(fetchMock).url).toBe('http://api.test/planning/plan/horizon?date=2026-10-19')
+    expect(loaded.published).toBeNull()
+    expect(loaded.draft?.horizonEnd).toBe('2026-11-05')
+    expect(loaded.draft?.days).toEqual([{ date: '2026-10-20', assignments: [{ id: 'a', userIds: [] }] }])
+    expect(loaded.draft?.issues).toEqual([])
   })
 
   it('saves, discards and publishes drafts', async () => {

@@ -27,6 +27,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Interne napomene", body: "Napomene samo za štampariju. Klijent ih nikad ne vidi.", chapter: "nalozi" },
   { term: "Izvršilac", body: "Osoba koja radi posao na nalogu.", chapter: "nalozi" },
   { term: "Javni link", body: "Adresa preko koje klijent bez prijave prati status svog naloga.", chapter: "nalozi" },
+  { term: "Kalibracija", body: "Poređenje izmerenih vremena koraka sa planiranim; predlaže međuoperacijsko vreme.", chapter: "planiranje" },
   { term: "Katalog", body: "Cenovnik štamparije: sve usluge i artikli sa cenama.", chapter: "katalog" },
   { term: "Klijent", body: "Firma ili osoba za koju radimo, upisana jednom sa PIB-om i kontaktima.", chapter: "klijenti" },
   { term: "Korak", body: "Jedna faza procesa rada, npr. štampa ili sečenje.", chapter: "procesi" },
@@ -42,6 +43,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Nabavna cena", body: "Koliko smo platili artikal.", chapter: "novac" },
   { term: "Na stanju", body: "Koliko čega fizički imamo; zbir svih promena u magacinu.", chapter: "magacin" },
   { term: "Nacrt plana", body: "Predlog plana na kome radi administrator pre objave.", chapter: "planiranje" },
+  { term: "Najkasniji početak", body: "Dan do kog preostali koraci naloga moraju da počnu da bi bio gotov do roka. Crveno kad je prošao.", chapter: "planiranje" },
   { term: "Napomene za klijenta", body: "Ono što klijent vidi na javnom linku.", chapter: "nalozi" },
   { term: "Neto", body: "Cena bez PDV-a. Sve cene u katalogu su neto.", chapter: "novac" },
   { term: "Nusproizvod", body: "Ono što korak napravi sa strane: makulatura, okrajci.", chapter: "procesi" },
@@ -54,6 +56,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Planirani datum", body: "Interni datum rada; koristi se za signale kad rok nije upisan.", chapter: "nalozi" },
   { term: "Popis", body: "Brojanje stvarnog stanja; razlika se knjiži kao korekcija.", chapter: "magacin" },
   { term: "Početno stanje", body: "Prvi popis artikla u magacinu.", chapter: "magacin" },
+  { term: "Potrebe materijala", body: "Koliko materijala objavljeni planovi troše po nedeljama, u odnosu na stanje.", chapter: "planiranje" },
   { term: "Preplaniraj", body: "Novi nacrt plana od ovog trenutka; blokovi u toku ostaju.", chapter: "planiranje" },
   { term: "Prijem", body: "Roba koja je stigla od dobavljača; povećava stanje.", chapter: "magacin" },
   { term: "Prioritet", body: "Nizak, normalan, visok ili hitno.", chapter: "nalozi" },
@@ -78,6 +81,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Usluga", body: "Rad koji prodajemo: štampa, dizajn, plastifikacija.", chapter: "katalog" },
   { term: "Utrošak", body: "Materijal potrošen u proizvodnji; knjiži se sam kad se korak završi.", chapter: "magacin" },
   { term: "Zarada", body: "Prodajna cena minus nabavna cena (ili cena rada).", chapter: "novac" },
+  { term: "Zauzetost", body: "Planirano vreme mašine ili radnika u odnosu na raspoloživo, po danu; preko 100 % je preopterećeno.", chapter: "planiranje" },
 ];
 
 /** Lowercases and strips Serbian diacritics, so "cesto" finds "često". */

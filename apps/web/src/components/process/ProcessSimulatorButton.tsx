@@ -19,6 +19,8 @@ interface ProcessSimulatorButtonProps {
   disabled?: boolean
   /** Warehouse state; enables the stock table and the stock checks. Omit where stock does not apply. */
   stock?: StockContext
+  /** Units the simulation starts with (a work order's planned-quantity factor); default 1. */
+  defaultQuantity?: number
 }
 
 /** "Simuliraj" button that opens the process simulator in a large dialog. */
@@ -27,6 +29,7 @@ export function ProcessSimulatorButton({
   variant = 'app',
   disabled,
   stock,
+  defaultQuantity,
 }: ProcessSimulatorButtonProps): React.JSX.Element {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -39,7 +42,7 @@ export function ProcessSimulatorButton({
         </div>
       }
     >
-      <ProcessSimulator graph={graph} stock={stock} />
+      <ProcessSimulator graph={graph} stock={stock} defaultQuantity={defaultQuantity} />
     </Suspense>
   )
 

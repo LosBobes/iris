@@ -186,7 +186,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 		t.Fatalf("shortage order %q = %+v", result.ShortageOrder, shortage)
 	}
 	process, _ := s.WorkOrderProcess(tctx, shortage.ID)
-	planned := domain.ReservedInputs(process.Graph)
+	planned := domain.ReservedInputs(process.Graph, domain.WorkOrderQuantityFactor(&shortage, process.QuantitiesPerOrder))
 	paper := byName["Papir 80g A3"]
 	if need := planned[paper.CatalogItemID]; need != 8000 || need <= paper.OnHand || paper.Available >= 0 {
 		t.Fatalf("planned %v vs on hand %v / available %v", need, paper.OnHand, paper.Available)
@@ -200,7 +200,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 		if p == nil || order.Status == domain.WorkOrderStatusCancelled || order.Status == domain.WorkOrderStatusCompleted || order.Status == domain.WorkOrderStatusInvoiced {
 			continue
 		}
-		for id, qty := range domain.ReservedInputs(p.Graph) {
+		for id, qty := range domain.ReservedInputs(p.Graph, domain.WorkOrderQuantityFactor(&order, p.QuantitiesPerOrder)) {
 			wantReserved[id] += qty
 		}
 	}
@@ -209,7 +209,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 		t.Fatalf("cancelled order = %+v", cancelled)
 	}
 	cp, _ := s.WorkOrderProcess(tctx, cancelled.ID)
-	if len(domain.ReservedInputs(cp.Graph)) == 0 {
+	if len(domain.ReservedInputs(cp.Graph, 1)) == 0 {
 		t.Fatal("cancelled order plans no inputs; the check would be vacuous")
 	}
 	for _, level := range levels.Items {
@@ -746,7 +746,31 @@ func checkDemoPlanning(t *testing.T, s *SQLiteStore, tctx context.Context, resul
 		t.Fatalf("orders whose process carries machine types = %d of %d", timedCopies, len(withProcess))
 	}
 
-	// Plan the next working day after a fixed Monday morning.
+	// The seed's published plans keep several machines and people busy.
+	blocks := 0
+	usedMachines, usedPeople := map[string]bool{}, map[string]bool{}
+	for _, date := range result.PublishedPlanDates {
+		day, err := s.PlanDay(tctx, date, true)
+		if err != nil || day.Published == nil {
+			t.Fatalf("published plan %s = %+v, %v", date, day, err)
+		}
+		for _, assignment := range day.Published.Assignments {
+			blocks++
+			if assignment.MachineID != nil {
+				usedMachines[*assignment.MachineID] = true
+			}
+			for _, user := range assignment.UserIDs {
+				usedPeople[user] = true
+			}
+		}
+	}
+	if blocks < 5 || len(usedMachines) < 3 || len(usedPeople) < 3 {
+		t.Fatalf("demo published plans: %d blocks, %d machines, %d people", blocks, len(usedMachines), len(usedPeople))
+	}
+
+	// Plan the next working day after a fixed Monday morning. The draft keeps
+	// its whole horizon (D-028) and, when the seed published a plan for the day
+	// before, that day's open steps are pinned rather than planned again.
 	location, err := time.LoadLocation(domain.DefaultPlanningTimeZone)
 	if err != nil {
 		t.Fatal(err)
@@ -757,18 +781,9 @@ func checkDemoPlanning(t *testing.T, s *SQLiteStore, tctx context.Context, resul
 	if err != nil {
 		t.Fatalf("GeneratePlan = %v", err)
 	}
-	usedMachines, usedPeople := map[string]bool{}, map[string]bool{}
-	for _, assignment := range plan.Assignments {
-		if assignment.MachineID != nil {
-			usedMachines[*assignment.MachineID] = true
-		}
-		for _, user := range assignment.UserIDs {
-			usedPeople[user] = true
-		}
-	}
-	if len(plan.Assignments) < 5 || len(usedMachines) < 3 || len(usedPeople) < 3 {
-		t.Fatalf("demo plan: %d blocks, %d machines, %d people; issues %+v",
-			len(plan.Assignments), len(usedMachines), len(usedPeople), plan.Issues)
+	horizon, err := s.PlanHorizon(tctx, "2026-10-20")
+	if err != nil || horizon.Draft == nil || horizon.Draft.PlanID != plan.ID || horizon.Draft.HorizonEnd <= "2026-10-20" {
+		t.Fatalf("PlanHorizon = %+v, %v", horizon, err)
 	}
 	for _, issue := range plan.Issues {
 		if issue.Code != domain.PlanIssueNoCapacity {

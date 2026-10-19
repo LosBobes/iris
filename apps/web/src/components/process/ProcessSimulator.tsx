@@ -56,6 +56,12 @@ export interface ProcessSimulatorProps {
    * nodes already consumed. Omitted = no stock table and no stock checks.
    */
   stock?: StockContext
+  /**
+   * Units the run starts with (default 1). A work order passes its
+   * planned-quantity factor so the preview matches what the server reserves
+   * and posts; the field stays editable for what-if runs.
+   */
+  defaultQuantity?: number
 }
 
 /**
@@ -63,14 +69,14 @@ export interface ProcessSimulatorProps {
  * (running, then finished) next to a read-only graph view, with a tester tab
  * listing structural problems.
  */
-export function ProcessSimulator({ graph, stock }: ProcessSimulatorProps): React.JSX.Element {
+export function ProcessSimulator({ graph, stock, defaultQuantity = 1 }: ProcessSimulatorProps): React.JSX.Element {
   const { t } = useTranslation()
   const uid = useId()
   const [tab, setTab] = useState<Tab>('flow')
   const [position, setPosition] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1)
-  const [quantityText, setQuantityText] = useState('1')
+  const [quantityText, setQuantityText] = useState(String(Math.max(1, Math.floor(defaultQuantity))))
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set())
   const [highlight, setHighlight] = useState<string[]>([])
 

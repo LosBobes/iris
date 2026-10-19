@@ -92,6 +92,16 @@ type stepRun struct {
 	desc       []*stepRun
 	succ       []*stepRun
 	end        int64
+	// lagEnd is end plus the inter-operation time in working minutes: the
+	// earliest a successor may start. Equal to end when the lag is 0.
+	lagEnd int64
+	// In-progress steps with a StartedAt (D-028, remaining.go): fullDur is
+	// the planned duration before dur was cut to the remaining minutes, worked
+	// the working minutes since StartedAt, and finishAtStart marks a step with
+	// nothing left (its 1-minute block ends, for successors, where it starts).
+	fullDur       int
+	worked        int64
+	finishAtStart bool
 }
 
 type orderRun struct {
@@ -117,6 +127,7 @@ type planner struct {
 	segs       []seg
 	types      map[string]domain.MachineType
 	machines   map[string]*resource
+	downtimes  map[string][]downtimeWindow
 	byType     map[string][]*resource
 	workers    []*worker
 	workerByID map[string]*worker
@@ -166,6 +177,7 @@ func plan(in Input) (Result, error) {
 		return Result{}, err
 	}
 	p.flagStatic()
+	p.flagOverruns()
 	p.placeInProgress()
 	p.placePending()
 	return p.result(), nil
@@ -190,6 +202,17 @@ func (p *planner) setupResources() {
 		p.machines[m.ID] = r
 		if _, known := p.types[m.MachineTypeID]; known && m.InService {
 			p.byType[m.MachineTypeID] = append(p.byType[m.MachineTypeID], r)
+		}
+	}
+	// Downtime windows are busy time on the unit (D-028); they add no load.
+	p.downtimes = p.cal.downtimeWindows(p.in.Downtimes)
+	for id, windows := range p.downtimes {
+		r := p.machines[id]
+		if r == nil {
+			continue
+		}
+		for _, w := range windows {
+			r.reserve(w.s, w.e)
 		}
 	}
 	workers := append([]Worker(nil), p.in.Workers...)
@@ -244,11 +267,7 @@ func (p *planner) setupOrders() {
 		}
 		run := &orderRun{order: o, byID: map[string]*stepRun{}}
 		run.avail = p.availFor(o.DueDate)
-		if o.Priority == domain.WorkOrderPriorityUrgent || o.Priority == domain.WorkOrderPriorityHigh {
-			run.rank = 0
-		} else {
-			run.rank = 1
-		}
+		run.rank = priorityRank(o.Priority)
 		gi := indexGraph(o.Graph)
 		for _, id := range gi.stepIDs {
 			node := gi.nodes[id]
@@ -259,6 +278,7 @@ func (p *planner) setupOrders() {
 				s.state = stFinished
 			case domain.ProcessStepInProgress:
 				s.inProgress = true
+				p.applyRemaining(s)
 			}
 			run.steps = append(run.steps, s)
 			run.byID[id] = s
@@ -275,6 +295,21 @@ func (p *planner) setupOrders() {
 		}
 		p.orders = append(p.orders, run)
 		p.orderByID[o.ID] = run
+	}
+}
+
+// priorityRank orders the four work-order priorities for moreUrgent: urgent
+// before high before normal before low (D-028). Unknown values count as normal.
+func priorityRank(priority domain.WorkOrderPriority) int {
+	switch priority {
+	case domain.WorkOrderPriorityUrgent:
+		return 0
+	case domain.WorkOrderPriorityHigh:
+		return 1
+	case domain.WorkOrderPriorityLow:
+		return 3
+	default:
+		return 2
 	}
 }
 
@@ -328,6 +363,16 @@ func (p *planner) applyPinned() error {
 				m = &resource{id: *a.MachineID, name: a.MachineName}
 				p.machines[*a.MachineID] = m
 			}
+			// The block stays where it is, but a downtime of its machine makes
+			// it a machine_down issue the admin has to resolve (D-028).
+			if w, hit := overlapping(p.downtimes[*a.MachineID], s, e); hit {
+				p.issues = append(p.issues, domain.PlanIssue{
+					Code: domain.PlanIssueMachineDown, WorkOrderID: a.WorkOrderID, OrderNumber: a.OrderNumber,
+					StepNodeID: a.StepNodeID, StepLabel: a.StepLabel,
+					Message: fmt.Sprintf("Nalog %s, korak „%s“: mašina „%s“ je van pogona %s – %s, a zaključani blok je planiran u tom periodu.",
+						a.OrderNumber, a.StepLabel, m.name, p.cal.formatHuman(w.s), p.cal.formatHuman(w.e)),
+				})
+			}
 			m.reserve(s, e)
 			m.load += a.Minutes
 		}
@@ -358,14 +403,29 @@ func (p *planner) applyPinned() error {
 			if st := o.byID[a.StepNodeID]; st != nil && st.state == stOpen {
 				st.state = stScheduled
 				if e > st.end {
-					st.end = e
+					st.end, st.lagEnd = e, p.afterLag(e)
 				}
 			} else if st != nil && st.state == stScheduled && e > st.end {
-				st.end = e
+				st.end, st.lagEnd = e, p.afterLag(e)
 			}
 		}
 	}
 	return nil
+}
+
+// afterLag is the earliest a successor may start after a step ending at end:
+// end plus Hours.TransferMinutes of working time (D-028). A lag that never
+// elapses within the calendar pushes the successor past the horizon.
+func (p *planner) afterLag(end int64) int64 {
+	lag := p.in.Hours.TransferMinutes
+	if lag <= 0 {
+		return end
+	}
+	at, ok := p.cal.addWorking(end, lag)
+	if !ok {
+		return farAvail
+	}
+	return at
 }
 
 func (p *planner) message(o *orderRun, s *stepRun, text string) string {
@@ -509,14 +569,17 @@ func (p *planner) placeInProgress() {
 	}
 }
 
+// ready is the earliest start of a pending step: the planning start, or the
+// latest scheduled ancestor's end plus the inter-operation time. ok is false
+// while an ancestor is still unscheduled.
 func (p *planner) ready(s *stepRun) (int64, bool) {
 	at := p.startMin
 	for _, a := range s.ancestors {
 		switch a.state {
 		case stFinished:
 		case stScheduled:
-			if a.end > at {
-				at = a.end
+			if a.lagEnd > at {
+				at = a.lagEnd
 			}
 		default:
 			return 0, false
@@ -525,8 +588,8 @@ func (p *planner) ready(s *stepRun) (int64, bool) {
 	return at, true
 }
 
-// moreUrgent orders candidates: smaller slack, then urgent/high before
-// normal/low, older order, order number, then step id.
+// moreUrgent orders candidates: smaller slack, then priority (urgent, high,
+// normal, low), older order, order number, then step id.
 func moreUrgent(a, b *orderRun, aStep, bStep *stepRun) bool {
 	sa, sb := a.avail-a.remaining, b.avail-b.remaining
 	if sa != sb {
@@ -755,6 +818,10 @@ func (p *planner) commit(o *orderRun, s *stepRun, parts []part, machine *resourc
 	}
 	s.state = stScheduled
 	s.end = parts[len(parts)-1].end
+	if s.finishAtStart {
+		s.end = parts[0].start
+	}
+	s.lagEnd = p.afterLag(s.end)
 	if !o.hasBlock || s.end > o.lastEnd {
 		o.lastEnd, o.hasBlock = s.end, true
 	}
@@ -766,6 +833,10 @@ func (p *planner) result() Result {
 		Assignments: append([]domain.PlanAssignment{}, p.out...),
 		Issues:      append([]domain.PlanIssue{}, p.issues...),
 		Forecast:    make([]domain.OrderForecast, 0, len(p.orders)),
+		HorizonEnd:  p.in.Date,
+	}
+	if len(p.dates) > 0 {
+		res.HorizonEnd = p.dates[len(p.dates)-1]
 	}
 	sort.SliceStable(res.Assignments, func(i, j int) bool {
 		a, b := res.Assignments[i], res.Assignments[j]
@@ -816,6 +887,8 @@ func (p *planner) result() Result {
 			f.EstimatedFinish = &finish
 			f.Late = o.order.DueDate != nil && finish > *o.order.DueDate
 		}
+		f.LatestStart = p.latestStart(o)
+		f.LatestStartPassed = f.LatestStart != nil && *f.LatestStart < startDate
 		res.Forecast = append(res.Forecast, f)
 	}
 	return res

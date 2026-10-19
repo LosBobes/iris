@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -321,6 +322,7 @@ func TestWorkingHoursDefaultAndValidation(t *testing.T) {
 		"repeat": {TimeZone: "UTC", Days: []domain.WorkingDay{
 			{Weekday: 1, Start: "08:00", End: "16:00"}, {Weekday: 1, Start: "08:00", End: "16:00"},
 		}},
+		"lag": {TimeZone: "UTC", Days: custom.Days, TransferMinutes: domain.MaxTransferMinutes + 1},
 	} {
 		_, err := s.SetWorkingHours(ctx, bad)
 		var validation *ValidationError
@@ -330,6 +332,13 @@ func TestWorkingHoursDefaultAndValidation(t *testing.T) {
 	}
 	if got, _ := s.WorkingHours(ctx); got.TimeZone != "UTC" {
 		t.Fatalf("a rejected save changed the hours: %+v", got)
+	}
+	custom.TransferMinutes = 25
+	if saved, err := s.SetWorkingHours(ctx, custom); err != nil || saved.TransferMinutes != 25 {
+		t.Fatalf("saved lag = %+v, %v", saved, err)
+	}
+	if got, _ := s.WorkingHours(ctx); got.TransferMinutes != 25 {
+		t.Fatalf("read back lag = %+v", got)
 	}
 }
 
@@ -403,7 +412,7 @@ func TestPlanningTablesInTenantExport(t *testing.T) {
 	if _, err := s.SetAttendance(ctx, "u-ana", domain.AttendanceInput{Date: "2026-10-19", Present: &present}); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"machine_types", "machines", "worker_qualifications", "attendance_overrides", "production_plans"} {
+	for _, table := range []string{"machine_types", "machines", "machine_downtimes", "worker_qualifications", "attendance_overrides", "production_plans"} {
 		found := false
 		for _, listed := range tenantDataTables {
 			found = found || listed.name == table
@@ -743,6 +752,202 @@ func TestPlanningForecast(t *testing.T) {
 	}
 }
 
+// assertNoDoubleBooking fails when a machine or person is in two blocks at
+// once (local "YYYY-MM-DDTHH:MM" stamps compare as strings).
+func assertNoDoubleBooking(t *testing.T, blocks []domain.PlanAssignment) {
+	t.Helper()
+	type span struct{ start, end, id string }
+	byResource := map[string][]span{}
+	for _, block := range blocks {
+		if block.MachineID != nil {
+			byResource["m:"+*block.MachineID] = append(byResource["m:"+*block.MachineID], span{block.Start, block.End, block.ID})
+		}
+		for _, user := range block.UserIDs {
+			byResource["u:"+user] = append(byResource["u:"+user], span{block.Start, block.End, block.ID})
+		}
+	}
+	for resource, spans := range byResource {
+		sort.Slice(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
+		for i := 1; i < len(spans); i++ {
+			if spans[i].start < spans[i-1].end {
+				t.Fatalf("%s double-booked: %+v and %+v", resource, spans[i-1], spans[i])
+			}
+		}
+	}
+}
+
+func forecastFinish(t *testing.T, forecast []domain.OrderForecast, id string) string {
+	t.Helper()
+	for _, entry := range forecast {
+		if entry.WorkOrderID == id {
+			if entry.EstimatedFinish == nil {
+				t.Fatalf("%s is unplannable: %+v", id, entry)
+			}
+			return *entry.EstimatedFinish
+		}
+	}
+	t.Fatalf("no forecast for %s in %+v", id, forecast)
+	return ""
+}
+
+// TestPlanKeepsHorizonAndPinsPublishedDays: the stored run keeps every day of
+// its horizon while the plan endpoints show the plan date only, and planning
+// the next day pins what the published day anchored instead of planning it
+// again (D-028).
+func TestPlanKeepsHorizonAndPinsPublishedDays(t *testing.T) {
+	p := newPlanningScenario(t)
+	s, ctx := p.s, p.ctx
+	const today, tomorrow = "2026-10-19", "2026-10-20"
+	// Beta (330 min) has less slack than Alfa (130 min): Beta runs 07:00-13:00,
+	// Alfa 13:00-15:00 and carries 10 minutes over to tomorrow morning.
+	beta := p.newOrder(t, "Beta", 3000, nil, p.typeID)
+
+	draft, err := s.GeneratePlan(ctx, domain.PlanGenerateInput{Date: today}, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.HorizonEnd != "2026-11-05" {
+		t.Fatalf("horizonEnd = %q, want the 14th working day", draft.HorizonEnd)
+	}
+	if len(draft.Assignments) != 2 || draft.Assignments[0].WorkOrderID != beta.ID ||
+		draft.Assignments[1].WorkOrderID != p.orderID || draft.Assignments[1].Parts != 2 || draft.Assignments[1].End != today+"T15:00" {
+		t.Fatalf("today's blocks = %+v", draft.Assignments)
+	}
+	horizon, err := s.PlanHorizon(ctx, today)
+	if err != nil || horizon.Date != today || horizon.Published != nil || horizon.Draft == nil ||
+		horizon.Draft.PlanID != draft.ID || horizon.Draft.Status != domain.PlanStatusDraft || horizon.Draft.HorizonEnd != draft.HorizonEnd {
+		t.Fatalf("horizon = %+v, %v", horizon, err)
+	}
+	days := horizon.Draft.Days
+	if len(days) != 2 || days[0].Date != today || len(days[0].Assignments) != 2 || days[1].Date != tomorrow ||
+		len(days[1].Assignments) != 1 || days[1].Assignments[0].Part != 2 || days[1].Assignments[0].Start != tomorrow+"T07:00" ||
+		days[1].Assignments[0].End != tomorrow+"T07:10" {
+		t.Fatalf("horizon days = %+v", days)
+	}
+	if day, _ := s.PlanDay(ctx, today, true); day.Draft == nil || len(day.Draft.Assignments) != 2 || day.Draft.HorizonEnd != draft.HorizonEnd {
+		t.Fatalf("plan day = %+v", day.Draft)
+	}
+
+	// A hand edit replaces the plan date's blocks only: dropping Alfa's first
+	// part leaves tomorrow's carry-over part in the horizon.
+	saved, err := s.SavePlanDraft(ctx, domain.PlanDraftInput{Date: today, Assignments: draft.Assignments[:1]}, "admin")
+	if err != nil || len(saved.Assignments) != 1 || saved.Assignments[0].WorkOrderID != beta.ID {
+		t.Fatalf("saved = %+v, %v", saved, err)
+	}
+	if horizon, _ = s.PlanHorizon(ctx, today); len(horizon.Draft.Days) != 2 || len(horizon.Draft.Days[0].Assignments) != 1 || len(horizon.Draft.Days[1].Assignments) != 1 {
+		t.Fatalf("horizon after the edit = %+v", horizon.Draft.Days)
+	}
+	if _, err := s.SavePlanDraft(ctx, domain.PlanDraftInput{Date: today, Assignments: draft.Assignments}, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	published, err := s.PublishPlan(ctx, domain.PlanPublishInput{Date: today}, "admin")
+	if err != nil || len(published.Assignments) != 2 || published.HorizonEnd != draft.HorizonEnd {
+		t.Fatalf("published = %+v, %v", published, err)
+	}
+	if horizon, _ = s.PlanHorizon(ctx, today); horizon.Draft != nil || horizon.Published == nil || len(horizon.Published.Days) != 2 {
+		t.Fatalf("horizon after publishing = %+v", horizon)
+	}
+	// The queue shows the plan date's blocks only.
+	if queue, _ := s.MyQueue(ctx, "u-ana", today); len(queue.Items) != 2 {
+		t.Fatalf("queue = %+v", queue.Items)
+	}
+
+	// Tomorrow's plan: Gama is new. Today's published steps are pinned, so
+	// only Alfa's carry-over part (07:00-07:10) and Gama (after it) are placed.
+	gama := p.newOrder(t, "Gama", 300, nil, p.typeID) // 60 min
+	next, err := s.GeneratePlan(ctx, domain.PlanGenerateInput{Date: tomorrow}, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(next.Assignments) != 2 {
+		t.Fatalf("tomorrow's blocks = %+v", next.Assignments)
+	}
+	carry, first := next.Assignments[0], next.Assignments[1]
+	if carry.WorkOrderID != p.orderID || carry.Part != 2 || carry.Start != tomorrow+"T07:00" || carry.End != tomorrow+"T07:10" {
+		t.Fatalf("carry-over block = %+v", carry)
+	}
+	if first.WorkOrderID != gama.ID || first.Start != tomorrow+"T07:10" || first.End != tomorrow+"T08:10" {
+		t.Fatalf("gama = %+v", first)
+	}
+	assertNoDoubleBooking(t, append(append([]domain.PlanAssignment{}, published.Assignments...), next.Assignments...))
+	if horizon, _ = s.PlanHorizon(ctx, tomorrow); horizon.Draft == nil || len(horizon.Draft.Days) != 1 || horizon.Draft.Days[0].Date != tomorrow {
+		t.Fatalf("tomorrow's horizon = %+v", horizon)
+	}
+
+	// A finished step is history: with Alfa done nothing of it is pinned and
+	// Gama starts the day.
+	p.setStepStatus(t, p.orderID, domain.ProcessStepDone)
+	next, err = s.GeneratePlan(ctx, domain.PlanGenerateInput{Date: tomorrow}, "admin")
+	if err != nil || len(next.Assignments) != 1 || next.Assignments[0].WorkOrderID != gama.ID || next.Assignments[0].Start != tomorrow+"T07:00" {
+		t.Fatalf("tomorrow after Alfa is done = %+v, %v", next, err)
+	}
+
+	// A plan stored before the horizon was kept reads with its date as horizonEnd.
+	if _, err := s.db.Exec(`UPDATE production_plans SET data = ? WHERE id = ?`, `{"assignments":[],"issues":[],"lateOrders":[]}`, next.ID); err != nil {
+		t.Fatal(err)
+	}
+	if day, err := s.PlanDay(ctx, tomorrow, true); err != nil || day.Draft == nil || day.Draft.HorizonEnd != tomorrow {
+		t.Fatalf("legacy plan = %+v, %v", day.Draft, err)
+	}
+}
+
+// TestForecastPinsPublishedPlan: the forecast keeps what the published plan
+// says and plans the rest around it (D-028).
+func TestForecastPinsPublishedPlan(t *testing.T) {
+	const today, tomorrow = "2026-10-19", "2026-10-20"
+	due := today
+
+	// Without a published plan Beta (due today, 330 min) goes first and Alfa
+	// (130 min, no due date) carries over.
+	p := newPlanningScenario(t)
+	beta := p.newOrder(t, "Beta", 3000, &due, p.typeID)
+	forecast, err := p.s.Forecast(p.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if forecastFinish(t, forecast, beta.ID) != today || forecastFinish(t, forecast, p.orderID) != tomorrow {
+		t.Fatalf("forecast without a plan = %+v", forecast)
+	}
+
+	// With Alfa published at 07:00-09:10 before Beta existed, the forecast
+	// keeps that block: Beta works around it and carries over instead.
+	q := newPlanningScenario(t)
+	if _, err := q.s.GeneratePlan(q.ctx, domain.PlanGenerateInput{Date: today}, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	published, err := q.s.PublishPlan(q.ctx, domain.PlanPublishInput{Date: today}, "admin")
+	if err != nil || len(published.Assignments) != 1 || published.Assignments[0].End != today+"T09:10" {
+		t.Fatalf("published = %+v, %v", published, err)
+	}
+	beta = q.newOrder(t, "Beta", 3000, &due, q.typeID)
+	if forecast, err = q.s.Forecast(q.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if forecastFinish(t, forecast, q.orderID) != today || forecastFinish(t, forecast, beta.ID) != tomorrow {
+		t.Fatalf("forecast with a published plan = %+v", forecast)
+	}
+
+	// A block already over is not pinned: at 10:00 with Alfa still pending the
+	// planner places it again from now, so it no longer finishes today.
+	q.s.SetClock(func() time.Time { return time.Date(2026, 10, 19, 8, 0, 0, 0, time.UTC) })
+	if forecast, err = q.s.Forecast(q.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if forecastFinish(t, forecast, q.orderID) != tomorrow {
+		t.Fatalf("forecast after the block passed = %+v", forecast)
+	}
+
+	// A finished step is history: with Alfa done, Beta takes the morning.
+	q.s.SetClock(func() time.Time { return planningNowFixed })
+	q.setStepStatus(t, q.orderID, domain.ProcessStepDone)
+	if forecast, err = q.s.Forecast(q.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if forecastFinish(t, forecast, beta.ID) != today {
+		t.Fatalf("forecast with Alfa done = %+v", forecast)
+	}
+}
+
 // TestPlanningMigration upgrades a v30 database: v31 adds the planning tables
 // (v28 stays absent), keeps existing rows, and cascades qualifications and
 // overrides when a user goes away.
@@ -768,7 +973,7 @@ func TestPlanningMigration(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT group_concat(version) FROM schema_migrations WHERE version >= 27`).Scan(&versions); err != nil {
 		t.Fatal(err)
 	}
-	if versions != "27,29,30,31" {
+	if versions != "27,29,30,31,32,33" {
 		t.Fatalf("versions = %s", versions)
 	}
 	mustExec := func(query string, args ...any) {

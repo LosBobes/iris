@@ -18,6 +18,14 @@ import { useMachineTypes } from '@/hooks/usePlanning'
 import { MAX_CREW_SIZE, MAX_STEP_MINUTES } from '@/types/planning'
 import { formatStockQuantity } from '@/lib/stock/format'
 import type { StockLevelMap } from '@/lib/stock/posting'
+import { scalePlannedQuantity } from '@/lib/process/quantities'
+import {
+  DEFAULT_STEP_TIME_ZONE,
+  formatStepTime,
+  fromZonedInput,
+  stepTimesOutOfOrder,
+  toZonedInput,
+} from '@/lib/process/step-times'
 import {
   MAX_EDGE_LABEL_LENGTH,
   MAX_LABEL_LENGTH,
@@ -57,6 +65,15 @@ interface ProcessInspectorProps {
    * machine types, so it must stay false everywhere else.
    */
   planningEnabled?: boolean
+  /**
+   * Order mode: what planned (per-unit) quantities are multiplied by for this
+   * order (`plannedQuantityFactor`); shown next to the per-unit figure. Default 1.
+   */
+  orderQuantityFactor?: number
+  /** Order mode: lets the viewer (an admin) edit the actual step times. */
+  canEditTimes?: boolean
+  /** IANA zone the actual step times are shown in (the shop's working-hours zone). */
+  timeZone?: string
   onNodeChange: (id: string, patch: Partial<ProcessNode>) => void
   /** Switches an item node's role in place (input / product / byproduct). */
   onKindChange?: (id: string, kind: ProcessNodeKind) => void
@@ -79,6 +96,9 @@ export function ProcessInspector({
   articleLinking = false,
   articlesHidden = false,
   planningEnabled = false,
+  orderQuantityFactor = 1,
+  canEditTimes = false,
+  timeZone = DEFAULT_STEP_TIME_ZONE,
   onNodeChange,
   onKindChange,
   onEdgeChange,
@@ -230,8 +250,20 @@ export function ProcessInspector({
               inputMode="decimal"
               value={current.quantity ?? ''}
               readOnly={!canEditStructure}
+              aria-describedby={`${uid}-qty-hint`}
               onChange={(event) => onNodeChange(current.id, { quantity: parseQuantity(event.target.value) })}
             />
+            <p id={`${uid}-qty-hint`} className="text-[10px] text-[color:var(--iris-ink-soft)]" data-testid="inspector-quantity-hint">
+              {t('process.inspector.quantityPerUnit')}
+              {mode === 'order' && current.quantity !== undefined && (
+                <span className="block">
+                  {t('process.inspector.plannedForOrder', {
+                    units: orderQuantityFactor,
+                    qty: formatStockQuantity(scalePlannedQuantity(current.quantity, orderQuantityFactor) ?? 0, current.unit),
+                  })}
+                </span>
+              )}
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`${uid}-unit`}>{t('process.inspector.unit')}</Label>
@@ -311,10 +343,14 @@ export function ProcessInspector({
             step="any"
             inputMode="decimal"
             value={current.actualQuantity ?? ''}
+            aria-describedby={`${uid}-actual-hint`}
             onChange={(event) =>
               onNodeChange(current.id, { actualQuantity: parseQuantity(event.target.value) })
             }
           />
+          <p id={`${uid}-actual-hint`} className="text-[10px] text-[color:var(--iris-ink-soft)]">
+            {t('process.inspector.actualQuantityHint')}
+          </p>
         </div>
       )}
 
@@ -340,6 +376,16 @@ export function ProcessInspector({
             {isStepReady(graph, current.id) ? t('process.inspector.readyHint') : t('process.inspector.waitingHint')}
           </p>
         </div>
+      )}
+
+      {mode === 'order' && isStep && (
+        <StepTimesFields
+          idPrefix={uid}
+          node={current}
+          editable={canEditTimes}
+          timeZone={timeZone}
+          onChange={(patch) => onNodeChange(current.id, patch)}
+        />
       )}
 
       <div className="space-y-1.5">
@@ -471,6 +517,64 @@ function StepPlanningFields({
         {timed
           ? t('process.inspector.durationHint', { minutes: stepMinutesFor(node) })
           : t('process.inspector.durationMissing')}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Actual start / finish of a step (D-028). The server fills them from the
+ * status transitions; admins may correct them here. Times are RFC 3339 UTC on
+ * the wire and shown in the shop's working-hours zone.
+ */
+function StepTimesFields({
+  idPrefix,
+  node,
+  editable,
+  timeZone,
+  onChange,
+}: {
+  idPrefix: string
+  node: ProcessNode
+  editable: boolean
+  timeZone: string
+  onChange: (patch: Partial<ProcessNode>) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const outOfOrder = stepTimesOutOfOrder(node)
+  const fields: { key: 'startedAt' | 'finishedAt'; label: string }[] = [
+    { key: 'startedAt', label: t('process.inspector.startedAt') },
+    { key: 'finishedAt', label: t('process.inspector.finishedAt') },
+  ]
+  return (
+    <div className="space-y-2" data-testid="inspector-step-times">
+      <div className="grid grid-cols-2 gap-2">
+        {fields.map(({ key, label }) => (
+          <div key={key} className="space-y-1.5">
+            <Label htmlFor={`${idPrefix}-${key}`}>{label}</Label>
+            {editable ? (
+              <Input
+                id={`${idPrefix}-${key}`}
+                type="datetime-local"
+                value={toZonedInput(node[key], timeZone)}
+                aria-invalid={outOfOrder || undefined}
+                aria-describedby={`${idPrefix}-times-hint`}
+                onChange={(event) => onChange({ [key]: fromZonedInput(event.target.value, timeZone) })}
+              />
+            ) : (
+              <p id={`${idPrefix}-${key}`} className="tnum text-foreground" data-testid={`inspector-${key}`}>
+                {formatStepTime(node[key], timeZone)}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+      <p id={`${idPrefix}-times-hint`} className="text-[10px] text-[color:var(--iris-ink-soft)]">
+        {outOfOrder
+          ? t('process.inspector.timesOutOfOrder')
+          : editable
+            ? t('process.inspector.timesEditHint', { zone: timeZone })
+            : t('process.inspector.timesHint', { zone: timeZone })}
       </p>
     </div>
   )

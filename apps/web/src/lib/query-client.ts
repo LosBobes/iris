@@ -75,7 +75,10 @@ const INVALIDATIONS: Partial<Record<keyof Window['api'], readonly QueryKey[]>> =
   deleteMachineType: [planningKeys.machineTypes, planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
   createMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
   updateMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
-  deleteMachine: [planningKeys.machines, planningKeys.planRoot, planningKeys.forecast],
+  deleteMachine: [planningKeys.machines, planningKeys.machineDowntimesRoot, planningKeys.planRoot, planningKeys.forecast],
+  // A downtime changes the plan (busy machine) and today's drift banner.
+  createMachineDowntime: [planningKeys.machineDowntimesRoot, planningKeys.planRoot, planningKeys.forecast],
+  deleteMachineDowntime: [planningKeys.machineDowntimesRoot, planningKeys.planRoot, planningKeys.forecast],
   setQualifications: [planningKeys.qualifications, planningKeys.planRoot, planningKeys.forecast],
   setAttendance: [attendanceKeys.root, planningKeys.planRoot, planningKeys.forecast],
   setWorkingHours: [

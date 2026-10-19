@@ -111,6 +111,42 @@ describe('fixture planning: resources', () => {
     expect((await api.listMachineTypes()).some((type) => type.id === created.id)).toBe(false)
   })
 
+  it('stores downtime windows per machine and validates them', async () => {
+    const api = await planningApi()
+    const [machine] = await api.listMachines()
+    expect(await api.listMachineDowntimes(machine.id)).toEqual([])
+    expect((await rejection(api.listMachineDowntimes('nope'))).status).toBe(404)
+    expect((await rejection(api.createMachineDowntime(machine.id, { from: '2026-10-20', to: '2026-10-20T10:00' }))).status).toBe(422)
+    expect((await rejection(api.createMachineDowntime(machine.id, { from: '2026-10-20T10:00', to: '2026-10-20T08:00' }))).status).toBe(422)
+    const created = await api.createMachineDowntime(machine.id, { from: '2026-10-21T08:00', to: '2026-10-22T15:00', note: ' Servis ' })
+    expect(created).toMatchObject({ machineId: machine.id, from: '2026-10-21T08:00', to: '2026-10-22T15:00', note: 'Servis' })
+    const earlier = await api.createMachineDowntime(machine.id, { from: '2026-10-20T08:00', to: '2026-10-20T10:00' })
+    expect((await api.listMachineDowntimes(machine.id)).map((d) => d.id)).toEqual([earlier.id, created.id])
+    expect((await rejection(api.deleteMachineDowntime(machine.id, 'nope'))).status).toBe(404)
+    await api.deleteMachineDowntime(machine.id, earlier.id)
+    expect(await api.listMachineDowntimes(machine.id)).toHaveLength(1)
+  })
+
+  it('stores exception dates with the working hours', async () => {
+    const api = await planningApi()
+    const hours = await api.getWorkingHours()
+    expect(hours.exceptions).toEqual([])
+    const saved = await api.setWorkingHours({
+      ...hours,
+      exceptions: [
+        { date: '2026-12-25', off: true, start: '08:00' },
+        { date: '2026-10-24', off: false, start: '08:00', end: '12:00', breaks: [] },
+      ],
+    })
+    expect(saved.exceptions.map((e) => e.date)).toEqual(['2026-10-24', '2026-12-25'])
+    expect(saved.exceptions[1]).toEqual({ date: '2026-12-25', off: true, breaks: [] })
+    expect((await rejection(api.setWorkingHours({ ...hours, exceptions: [{ date: '2026-13-01', off: true }] }))).status).toBe(422)
+    expect(
+      (await rejection(api.setWorkingHours({ ...hours, exceptions: [{ date: '2026-10-24', off: false, start: '12:00', end: '08:00', breaks: [] }] })))
+        .status,
+    ).toBe(422)
+  })
+
   it('keeps writes admin-only', async () => {
     const api = createFixtureApi({ modules: { stock: true, processes: true, attendance: true, planning: true } })
     await api.login({ orgSlug: 'demo', username: 'user', password: 'user123' })
@@ -179,6 +215,32 @@ describe('fixture planning: plans', () => {
     expect((await api.getPlanDay(date)).draft).toBeNull()
   })
 
+  it('keeps the whole horizon, shows the plan date, and pins published days when planning the next', async () => {
+    const api = await planningApi()
+    await api.applyProcessTemplate(ORDER, 'pt-offset')
+    const date = nextWorkingDay()
+    const draft = await api.generatePlan({ date, replan: false })
+    expect(draft.assignments.length).toBeGreaterThan(0)
+    expect(draft.assignments.every((block) => block.start.startsWith(date))).toBe(true)
+    expect(draft.horizonEnd > date).toBe(true)
+
+    const horizon = await api.getPlanHorizon(date)
+    expect(horizon.published).toBeNull()
+    expect(horizon.draft?.planId).toBe(draft.id)
+    expect(horizon.draft?.horizonEnd).toBe(draft.horizonEnd)
+    expect(horizon.draft?.days[0]?.date).toBe(date)
+    const kept = horizon.draft?.days.flatMap((day) => day.assignments) ?? []
+    expect(kept.length).toBeGreaterThanOrEqual(draft.assignments.length)
+    expect(kept.filter((block) => block.start.startsWith(date))).toEqual(draft.assignments)
+
+    await api.publishPlan({ date })
+    expect((await api.getPlanHorizon(date)).published?.planId).toBe(draft.id)
+    // The next day's plan pins what the published day anchored instead of planning it again.
+    const next = await api.generatePlan({ date: workingDayAfter(date), replan: false })
+    const planned = new Set(draft.assignments.map((block) => `${block.workOrderId}:${block.stepNodeId}`))
+    expect(next.assignments.some((block) => block.part === 1 && planned.has(`${block.workOrderId}:${block.stepNodeId}`))).toBe(false)
+  })
+
   it('lists no draft to operators', async () => {
     const admin = await planningApi()
     await admin.applyProcessTemplate(ORDER, 'pt-offset')
@@ -191,5 +253,12 @@ describe('fixture planning: plans', () => {
 function nextWorkingDay(): string {
   const day = new Date(Date.now() + 3 * 86_400_000)
   while (day.getUTCDay() === 0 || day.getUTCDay() === 6) day.setUTCDate(day.getUTCDate() + 1)
+  return day.toISOString().slice(0, 10)
+}
+
+function workingDayAfter(date: string): string {
+  const day = new Date(`${date}T00:00:00Z`)
+  do day.setUTCDate(day.getUTCDate() + 1)
+  while (day.getUTCDay() === 0 || day.getUTCDay() === 6)
   return day.toISOString().slice(0, 10)
 }

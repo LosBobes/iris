@@ -74,12 +74,15 @@ import type {
   AttendanceEntry,
   AttendanceInput,
   Machine,
+  MachineDowntime,
+  MachineDowntimeInput,
   MachineInput,
   MachineType,
   MachineTypeInput,
   MyQueue,
   OrderForecast,
   PlanDay,
+  PlanDayHorizon,
   PlanDraftInput,
   PlanGenerateInput,
   PlanPublishInput,
@@ -88,6 +91,9 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { MaterialNeeds, MaterialNeedsQuery } from '@/types/planning'
+import type { WorkstationLoad, WorkstationLoadQuery } from '@/types/planning'
+import type { PlanningCalibration, PlanningCalibrationQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -276,6 +282,10 @@ declare global {
       createMachine: (input: MachineInput) => Promise<Machine>
       updateMachine: (id: string, input: MachineInput) => Promise<Machine>
       deleteMachine: (id: string) => Promise<void>
+      /** Downtime windows of a machine (D-028); 404 for an unknown machine. */
+      listMachineDowntimes: (machineId: string) => Promise<MachineDowntime[]>
+      createMachineDowntime: (machineId: string, input: MachineDowntimeInput) => Promise<MachineDowntime>
+      deleteMachineDowntime: (machineId: string, downtimeId: string) => Promise<void>
       listQualifications: () => Promise<WorkerQualifications[]>
       setQualifications: (userId: string, input: WorkerQualificationsInput) => Promise<WorkerQualifications>
       /** Presence of every user on a local date "YYYY-MM-DD". */
@@ -283,8 +293,10 @@ declare global {
       setAttendance: (userId: string, input: AttendanceInput) => Promise<AttendanceEntry>
       getWorkingHours: () => Promise<WorkingHours>
       setWorkingHours: (input: WorkingHours) => Promise<WorkingHours>
-      /** Draft (admins only), published plan and drift of a date. */
+      /** Draft (admins only), published plan and drift of a date; each plan holds that date's blocks only. */
       getPlanDay: (date: string) => Promise<PlanDay>
+      /** Every block of the date's draft and published plan over the kept horizon, grouped by day (admins only). */
+      getPlanHorizon: (date: string) => Promise<PlanDayHorizon>
       /** Replaces the date's draft with a freshly planned one. */
       generatePlan: (input: PlanGenerateInput) => Promise<ProductionPlan>
       updatePlanDraft: (input: PlanDraftInput) => Promise<ProductionPlan>
@@ -293,6 +305,12 @@ declare global {
       /** The signed-in user's blocks of the published plan (date defaults to today). */
       getMyQueue: (date?: string) => Promise<MyQueue>
       getPlanningForecast: () => Promise<OrderForecast[]>
+      /** Input material per week from the published horizon against stock (D-028; planning + stock modules). */
+      getMaterialNeeds: (query?: MaterialNeedsQuery) => Promise<MaterialNeeds>
+      /** Workstation load per machine type, unit and person per day (D-028); plan "draft" is admin-only. */
+      getPlanningLoad: (query?: WorkstationLoadQuery) => Promise<WorkstationLoad>
+      /** Read-only calibration report (admins; D-028): recommended transferMinutes and planned vs actual step minutes. */
+      getPlanningCalibration: (query?: PlanningCalibrationQuery) => Promise<PlanningCalibration>
     }
   }
 }

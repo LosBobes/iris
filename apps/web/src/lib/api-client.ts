@@ -75,13 +75,17 @@ import type {
   AttendanceEntry,
   AttendanceInput,
   Machine,
+  MachineDowntime,
+  MachineDowntimeInput,
   MachineInput,
   MachineType,
   MachineTypeInput,
   MyQueue,
   OrderForecast,
   PlanDay,
+  PlanDayHorizon,
   PlanDraftInput,
+  PlanHorizon,
   PlanGenerateInput,
   PlanPublishInput,
   ProductionPlan,
@@ -89,6 +93,9 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { MaterialNeeds, MaterialNeedsItem, MaterialNeedsQuery } from '@/types/planning'
+import type { WorkstationLoad, WorkstationLoadDay, WorkstationLoadQuery } from '@/types/planning'
+import type { PlanningCalibration, PlanningCalibrationQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -114,9 +121,22 @@ function normalizeAssignment<T extends { userIds: string[] }>(a: T): T {
 function normalizePlan(plan: ProductionPlan): ProductionPlan {
   return {
     ...plan,
+    horizonEnd: plan.horizonEnd || plan.date,
     assignments: readArray(plan.assignments).map(normalizeAssignment),
     issues: readArray(plan.issues),
     lateOrders: readArray(plan.lateOrders),
+  }
+}
+
+function normalizePlanHorizon(horizon: PlanHorizon): PlanHorizon {
+  return {
+    ...horizon,
+    horizonEnd: horizon.horizonEnd || horizon.date,
+    days: readArray(horizon.days).map((day) => ({
+      ...day,
+      assignments: readArray(day.assignments).map(normalizeAssignment),
+    })),
+    issues: readArray(horizon.issues),
   }
 }
 
@@ -124,6 +144,9 @@ function normalizeWorkingHours(hours: WorkingHours): WorkingHours {
   return {
     ...hours,
     days: readArray(hours?.days).map((day) => ({ ...day, breaks: readArray(day.breaks) })),
+    // Settings saved before D-028 have no inter-operation time or exceptions.
+    transferMinutes: typeof hours?.transferMinutes === 'number' && Number.isFinite(hours.transferMinutes) ? hours.transferMinutes : 0,
+    exceptions: readArray(hours?.exceptions).map((exception) => ({ ...exception, breaks: readArray(exception.breaks) })),
   }
 }
 
@@ -365,7 +388,7 @@ function normalizeTemplate(template: ProcessTemplate): ProcessTemplate {
 }
 
 function normalizeProcess(process: WorkOrderProcess): WorkOrderProcess {
-  return { ...process, graph: normalizeGraph(process?.graph) }
+  return { ...process, graph: normalizeGraph(process?.graph), quantitiesPerOrder: Boolean(process?.quantitiesPerOrder) }
 }
 
 function jsonRequest(method: string, body: unknown): RequestInit {
@@ -1292,6 +1315,30 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       await readNoContent(response)
     },
 
+    async listMachineDowntimes(machineId: string) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(machineId)}/downtimes`),
+        credentialedRequest(),
+      )
+      return readArray(await readJSON<MachineDowntime[]>(response))
+    },
+
+    async createMachineDowntime(machineId: string, input: MachineDowntimeInput) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(machineId)}/downtimes`),
+        jsonRequest('POST', input),
+      )
+      return readJSON<MachineDowntime>(response)
+    },
+
+    async deleteMachineDowntime(machineId: string, downtimeId: string) {
+      const response = await fetchImpl(
+        url(`/machines/${encodeURIComponent(machineId)}/downtimes/${encodeURIComponent(downtimeId)}`),
+        credentialedRequest({ method: 'DELETE' }),
+      )
+      await readNoContent(response)
+    },
+
     async listQualifications() {
       const response = await fetchImpl(url('/planning/qualifications'), credentialedRequest())
       return readArray(await readJSON<WorkerQualifications[]>(response)).map((entry) => ({
@@ -1349,6 +1396,19 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
       }
     },
 
+    async getPlanHorizon(date: string) {
+      const response = await fetchImpl(
+        url(`/planning/plan/horizon?${new URLSearchParams({ date })}`),
+        credentialedRequest(),
+      )
+      const horizon = await readJSON<PlanDayHorizon>(response)
+      return {
+        ...horizon,
+        draft: horizon.draft ? normalizePlanHorizon(horizon.draft) : null,
+        published: horizon.published ? normalizePlanHorizon(horizon.published) : null,
+      }
+    },
+
     async generatePlan(input: PlanGenerateInput) {
       const response = await fetchImpl(url('/planning/plan/generate'), jsonRequest('POST', input))
       return normalizePlan(await readJSON<ProductionPlan>(response))
@@ -1382,6 +1442,56 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlanningForecast() {
       const response = await fetchImpl(url('/planning/forecast'), credentialedRequest())
       return readArray(await readJSON<OrderForecast[]>(response))
+    },
+
+    async getMaterialNeeds(query?: MaterialNeedsQuery) {
+      const params = new URLSearchParams()
+      if (query?.from) params.set('from', query.from)
+      if (query?.to) params.set('to', query.to)
+      const search = params.toString() ? `?${params}` : ''
+      const response = await fetchImpl(url(`/planning/material-needs${search}`), credentialedRequest())
+      const needs = await readJSON<MaterialNeeds>(response)
+      return {
+        ...needs,
+        weeks: readArray(needs?.weeks),
+        items: readArray<MaterialNeedsItem>(needs?.items).map((item) => ({
+          ...item,
+          weeks: readArray(item.weeks),
+          cumulative: readArray(item.cumulative),
+        })),
+      }
+    },
+
+    async getPlanningLoad(query: WorkstationLoadQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.from) params.set('from', query.from)
+      if (query.to) params.set('to', query.to)
+      if (query.plan) params.set('plan', query.plan)
+      const search = params.size > 0 ? `?${params}` : ''
+      const response = await fetchImpl(url(`/planning/load${search}`), credentialedRequest())
+      const load = await readJSON<WorkstationLoad>(response)
+      const days = (list: WorkstationLoadDay[] | null | undefined): WorkstationLoadDay[] =>
+        readArray(list).map((day) => ({ ...day, blocks: readArray(day.blocks) }))
+      return {
+        ...load,
+        days: readArray(load.days),
+        machineTypes: readArray(load.machineTypes).map((type) => ({
+          ...type,
+          days: readArray(type.days),
+          units: readArray(type.units).map((unit) => ({ ...unit, days: days(unit.days) })),
+        })),
+        people: readArray(load.people).map((person) => ({ ...person, days: days(person.days) })),
+      }
+    },
+
+    async getPlanningCalibration(query: PlanningCalibrationQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.from) params.set('from', query.from)
+      if (query.to) params.set('to', query.to)
+      const search = params.toString() ? `?${params}` : ''
+      const response = await fetchImpl(url(`/planning/calibration${search}`), credentialedRequest())
+      const report = await readJSON<PlanningCalibration>(response)
+      return { ...report, steps: readArray(report?.steps) }
     },
 
     async getAnnouncements() {

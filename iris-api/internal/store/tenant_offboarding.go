@@ -62,6 +62,7 @@ var tenantDataTables = []tenantDataTable{
 	{name: "production_plans", where: tenantRows, jsonColumns: []string{"data"}},
 	{name: "attendance_overrides", where: tenantRows},
 	{name: "worker_qualifications", where: tenantRows},
+	{name: "machine_downtimes", where: tenantRows},
 	{name: "machines", where: tenantRows},
 	{name: "machine_types", where: tenantRows},
 	// Superadmin-internal notes about the organization (D-022): removed with

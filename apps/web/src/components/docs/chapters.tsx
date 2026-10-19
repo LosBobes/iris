@@ -778,7 +778,10 @@ function ProcessesChapter(): React.JSX.Element {
       <Callout kind="note" title="Ko šta sme">
         Administrator menja strukturu (dodaje korake, veze, ulaze). Operater samo pomera
         status koraka i upisuje stvarne količine. Tako operater ne može slučajno da obriše
-        pola procesa.
+        pola procesa. Kad korak krene i kad se završi, Iris sam zapamti stvarno vreme
+        početka i završetka (vidi se u detaljima koraka; administrator ga može ispraviti).
+        Planirane količine ulaza i izlaza unose se po jednom komadu naloga i množe se
+        količinom naloga; stvarna količina je uvek ukupna za ceo nalog.
       </Callout>
       <H2>Procesi i magacin rade zajedno</H2>
       <P>
@@ -827,10 +830,10 @@ function PlanningChapter(): React.JSX.Element {
       <Terms
         items={[
           { term: "Tip mašine", body: "Grupa mašina koje rade isto, npr. „Digitalna štampa“ ili „Sekač“. Korak u procesu kaže koji tip mu treba." },
-          { term: "Mašina", body: "Jedna konkretna mašina tog tipa. Ako je u kvaru, označi se da nije u funkciji i planer je preskače." },
+          { term: "Mašina", body: "Jedna konkretna mašina tog tipa. Ako je u kvaru, označi se da nije u funkciji i planer je preskače; za servis ili kvar sa poznatim krajem unosi se zastoj (od – do) koji planer zaobilazi." },
           { term: "Kvalifikacije", body: "Ko sme da vodi rad na kom tipu mašine. Pomoćniku ne treba kvalifikacija." },
           { term: "Broj ljudi", body: "Koliko ljudi korak traži. Jedan od njih mora biti kvalifikovan." },
-          { term: "Radno vreme", body: "Smena za svaki dan u nedelji, sa pauzama." },
+          { term: "Radno vreme", body: "Smena za svaki dan u nedelji, sa pauzama, i međuoperacijsko vreme: prosečno čekanje i transport između dva koraka, koje planer ubacuje između kraja jednog i početka sledećeg. Izuzeci menjaju pojedinačne datume: praznik je neradan, radna subota dobija svoje sate." },
           { term: "Prisustvo", body: "Ko je tu tog dana (prethodno poglavlje)." },
         ]}
       />
@@ -867,7 +870,8 @@ function PlanningChapter(): React.JSX.Element {
           <>U nacrtu admin može da pomeri blok na drugu mašinu istog tipa, promeni početak ili ekipu. Ako napravi sukob (npr. isti čovek na dva mesta), Iris upozori, ali ne zabranjuje.</>,
           <><Ui>Objavi</Ui>: nacrt postaje važeći plan.</>,
           <><Ui>Moj red</Ui>: svako vidi svoje blokove za taj dan, redom kojim ih radi, sa dugmićima <Ui>Počni</Ui> i <Ui>Završi</Ui>.</>,
-          <><Ui>Preplaniraj</Ui>: kad se dan pokvari (mašina stala, neko otišao kući), novi nacrt kreće od ovog trenutka, a blokovi koji su već u toku ostaju gde jesu. Iris sam javi kad rad odstupa od plana.</>,
+          <><Ui>Štampaj raspored</Ui>: radni raspored za kačenje pored mašine, po jedna strana za svaku mašinu (ili <Ui>Po radniku</Ui>, za svakog radnika): nalog, korak, količina, početak, kraj, trajanje i ko vodi, sa ukupnim vremenom za dan. Admin može da odštampa nacrt i do 7 dana unapred; kasniji dani su procena dok se ne objave.</>,
+          <><Ui>Preplaniraj</Ui>: kad se dan pokvari (mašina stala, neko otišao kući), novi nacrt kreće od ovog trenutka, a blokovi koji su već u toku ostaju gde jesu. Korak koji je započet, a nije u objavljenom planu, planira se samo za vreme koje mu je preostalo (od trenutka kad je operater pritisnuo <Ui>Počni</Ui>, bez pauza i noći); ako traje duže od planiranog, Iris to javi kao prekoračenje. Iris sam javi kad rad odstupa od plana.</>,
         ]}
       />
       <H2>Prognoza</H2>
@@ -877,6 +881,44 @@ function PlanningChapter(): React.JSX.Element {
         <strong>kasni</strong>. Ako uopšte ne može da se isplanira (npr. nema mašine tog
         tipa ili niko nije kvalifikovan), piše <strong>ne može se planirati</strong>. To je
         najbolje mesto da vidiš problem pre nego što klijent pozove.
+      </P>
+      <P>
+        Uz prognozu stoji i <strong>najkasniji početak</strong>: Iris ide unazad od kraja
+        smene na dan roka (ako je rok neradni dan, od poslednje smene pre njega) i oduzima
+        trajanje preostalih koraka i međuoperacijsko vreme, samo u radnom vremenu. Taj dan je
+        poslednji kada posao može da krene da bi stigao na vreme. Mašine i ljudi se tu ne
+        gledaju, pa je to orijentir, ne obećanje. Kad je najkasniji početak već prošao,
+        prikazan je <strong>crveno</strong>. Ne prikazuje se za naloge bez roka ili kada nekom
+        koraku nije uneto trajanje.
+      </P>
+      <H2>Potrebe materijala</H2>
+      <P>
+        Kad je uključen i Magacin, kartica <Ui>Potrebe materijala</Ui> na stranici plana
+        pokazuje koliko će ulaznog materijala otvoreni nalozi potrošiti po nedeljama, prema
+        objavljenim planovima. Materijal se računa u nedelji kada je prvi put zakazan korak
+        koji ga troši; korak bez termina ide u kolonu <strong>Neplanirano</strong>. Red je
+        crven kad zbir do neke nedelje pređe stanje u magacinu, a ta nedelja je posebno
+        označena, pa se zna do kada treba naručiti. Materijal koji nije povezan sa artiklom
+        vidi se samo po nazivu, bez stanja.
+      </P>
+      <H2>Zauzetost</H2>
+      <P>
+        Kartica <Ui>Zauzetost</Ui> na stranici plana pokazuje, za svaki dan objavljenog plana,
+        koliko je vremena planirano na svakom tipu mašine (i na svakoj mašini, kad se tip
+        otvori) i na svakom radniku, u odnosu na raspoloživo vreme smene. Stubić je siv do 80 %,
+        narandžast od 80 do 100 %, a crven preko 100 % (<strong>preopterećeno</strong>).
+        Neradni dani, mašine van pogona i odsutni radnici su prugasti. Dodir na stubić prikazuje
+        blokove tog dana, a datum u zaglavlju otvara dnevni plan za taj dan. Opseg je najviše 31 dan.
+      </P>
+      <H2>Kalibracija</H2>
+      <P>
+        Kad operateri u <Ui>Moj red</Ui> pritiskaju <Ui>Počni</Ui> i <Ui>Završi</Ui>, Iris
+        beleži koliko je svaki korak stvarno trajao. Kartica <strong>Kalibracija</strong> (samo
+        za administratore) za naloge završene u poslednjih 60 dana poredi stvarno vreme od
+        prvog do poslednjeg koraka sa zbirom vremena samih koraka i iz razlike predlaže
+        međuoperacijsko vreme. Dugme vodi na radno vreme sa upisanim predlogom, ali ništa se
+        ne menja dok ne sačuvaš. Ispod je spisak koraka čije se stvarno trajanje razlikuje od
+        planiranog za više od 25 %, da bi se popravila vremena u šablonima.
       </P>
     </>
   );

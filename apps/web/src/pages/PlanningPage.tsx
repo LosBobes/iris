@@ -1,17 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ListChecks, Loader2, Settings2 } from 'lucide-react'
+import { AlertTriangle, ListChecks, Loader2, Printer, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { CalibrationCard } from '@/components/planning/CalibrationCard'
 import { ConfirmDialog } from '@/components/planning/ConfirmDialog'
 import { ForecastBadges } from '@/components/planning/ForecastBadges'
 import { ForecastTable } from '@/components/planning/ForecastTable'
+import { LoadTab } from '@/components/planning/LoadTab'
+import { MaterialNeedsTab } from '@/components/planning/MaterialNeedsTab'
 import { PlanBlockDialog } from '@/components/planning/PlanBlockDialog'
 import { PlanTimeline, type TimelineView } from '@/components/planning/PlanTimeline'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/useAuth'
+import { useOrganization } from '@/hooks/useOrganization'
 import {
   useInvalidatePlanning,
   useMachines,
@@ -25,6 +29,11 @@ import type { PlanAssignment, ProductionPlan } from '@/types/planning'
 
 type PlanSource = 'draft' | 'published'
 type PendingConfirm = 'generate' | 'replan' | 'publish' | 'discard' | null
+/**
+ * Page sections (D-028): the day plan, the workstation load ("Zauzetost") and,
+ * with Magacin on, material needs.
+ */
+type PlanningSection = 'plan' | 'load' | 'materials'
 
 function PlanMeta({ plan, source }: { plan: ProductionPlan; source: PlanSource }): React.JSX.Element {
   const { t } = useTranslation()
@@ -62,6 +71,10 @@ function PlanningPage(): React.JSX.Element {
   const [confirm, setConfirm] = useState<PendingConfirm>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const { modules } = useOrganization()
+  const showMaterials = modules.planning && modules.stock
+  const [section, setSection] = useState<PlanningSection>('plan')
+  const activeSection: PlanningSection = section === 'materials' && !showMaterials ? 'plan' : section
 
   const dayQuery = usePlanDay(date)
   const hoursQuery = useWorkingHours()
@@ -167,6 +180,11 @@ function PlanningPage(): React.JSX.Element {
     { value: 'draft', label: t('planning.plan.draft'), disabled: !draft },
     { value: 'published', label: t('planning.plan.published'), disabled: !published },
   ]
+  const sectionTabs: TabItem<PlanningSection>[] = [
+    { value: 'plan', label: t('planning.load.planTab') },
+    { value: 'load', label: t('planning.load.tab') },
+    ...(showMaterials ? [{ value: 'materials' as const, label: t('planning.materials.tab') }] : []),
+  ]
   const viewTabs: TabItem<TimelineView>[] = [
     { value: 'machines', label: t('planning.timeline.byMachine') },
     { value: 'people', label: t('planning.timeline.byPerson') },
@@ -200,6 +218,11 @@ function PlanningPage(): React.JSX.Element {
     },
   }
   const current = confirm ? confirmCopy[confirm] : null
+  const printLink = `/planning/print?${new URLSearchParams({
+    date,
+    ...(view === 'people' ? { by: 'person' } : {}),
+    ...(effective === 'draft' ? { source: 'draft' } : {}),
+  })}`
 
   return (
     <div className="space-y-6">
@@ -215,6 +238,11 @@ function PlanningPage(): React.JSX.Element {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline">
+            <Link to={printLink}>
+              <Printer aria-hidden /> {t('planning.print.action')}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
             <Link to="/planning/my-queue">
               <ListChecks aria-hidden /> {t('planning.myQueue.link')}
             </Link>
@@ -227,7 +255,30 @@ function PlanningPage(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="space-y-5 px-5 pb-8 sm:px-8">
+      {modules.planning && (
+        <div className="px-5 sm:px-8">
+          <Tabs tabs={sectionTabs} value={activeSection} onValueChange={setSection} aria-label={t('planning.load.pageTabsAria')} />
+        </div>
+      )}
+      {modules.planning && activeSection === 'load' && (
+        <div className="px-5 pb-8 sm:px-8">
+          <LoadTab
+            isAdmin={isAdmin}
+            today={today}
+            onOpenDay={(next) => {
+              changeDate(next)
+              setSection('plan')
+            }}
+          />
+        </div>
+      )}
+      {activeSection === 'materials' && (
+        <div className="px-5 pb-8 sm:px-8">
+          <MaterialNeedsTab />
+        </div>
+      )}
+
+      <div className="space-y-5 px-5 pb-8 sm:px-8" hidden={activeSection !== 'plan'}>
         <div className="flex flex-wrap items-center gap-2">
           <DatePicker
             id="plan-date"
@@ -389,6 +440,8 @@ function PlanningPage(): React.JSX.Element {
         )}
 
         <ForecastTable />
+
+        {isAdmin && <CalibrationCard />}
       </div>
 
       <PlanBlockDialog

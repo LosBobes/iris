@@ -1372,7 +1372,7 @@ paths:
       tags: [Processes]
       summary: Create a process template (admin only)
       description: >-
-        Per-order state (status, actualQuantity) in the graph is stripped. `isDefault: true` clears the flag on the organization's other templates; new work orders get a copy of the default.
+        Per-order state (status, actualQuantity, startedAt, finishedAt) in the graph is stripped. `isDefault: true` clears the flag on the organization's other templates; new work orders get a copy of the default.
       operationId: createProcessTemplate
       requestBody:
         required: true
@@ -1565,7 +1565,7 @@ paths:
       tags: [Processes]
       summary: Attach a copy of a process template to a work order
       description: >-
-        Copies the template graph with every step set to `pending`. Any signed-in user may do this once per work order. Stock is reconciled as for the PUT (a no-op for a fresh copy, since nothing is done yet). The copy is marked stock tracked only when the "Magacin" module is on. POST /work-orders auto-attaches the default template under the same rule, and only while the "Procesi rada" module is on.
+        Copies the template graph with every step set to `pending` and no step times. Any signed-in user may do this once per work order. Stock is reconciled as for the PUT (a no-op for a fresh copy, since nothing is done yet). The copy is marked stock tracked only when the "Magacin" module is on, and always carries per-unit item quantities (`quantitiesPerOrder: false`; D-028) - re-attaching a template to an order whose copy had the flag clears it. POST /work-orders auto-attaches the default template under the same rule, and only while the "Procesi rada" module is on.
       operationId: applyProcessTemplate
       parameters:
         - name: id
@@ -1622,10 +1622,13 @@ paths:
       tags: [Processes]
       summary: Replace a work order's process graph
       description: >-
-        Admins may change anything. Other users may change only per-order state (status, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
+        Admins may change anything. Other users may change only per-order state (status, startedAt, finishedAt, actualQuantity, note) and node positions (x, y); any change to the node set, kind, label, quantity, unit, catalogItemId or the edge set (labels included) is rejected with 403. Step nodes without a status become `pending`.
 
 
-        **Automatic stock posting.** In the same transaction the server reconciles the warehouse ledger with the graph (only item nodes whose `catalogItemId` links an article). The desired net per node is `+qty` when a step that outputs a product/byproduct node is `done`, plus `-qty` when any step the node feeds (input, or a product/byproduct consumed as input) is `done`; an intermediate product produced and consumed nets out. `qty` is `actualQuantity`, else `quantity`, else 0; `pending`, `in_progress` and `skipped` count as not done. The difference to the net already posted for that work order and node is inserted as one `consumption` (negative) or `production` (positive) movement, so repeating a request posts nothing, un-doing a step reverses it and a changed `actualQuantity` posts only the delta. If a node's article changes (or the node is removed), the old article's net is reversed and the new one posted. Deleting a process or a work order does not reverse movements.
+        **Actual step times (D-028).** For every step whose status changes in this request the server fills the step's times from its clock: to `in_progress` sets `startedAt` when it is empty (and clears a `finishedAt` carried over from a reopened `done`/`skipped` step); to `done` or `skipped` sets `finishedAt` when it is empty; back to `pending` clears both. Values sent explicitly (an admin correction, with or without a status change) are kept as sent, normalized to UTC. `finishedAt` must not be earlier than `startedAt` (422 `Završetak koraka ne može biti pre početka.`); a malformed timestamp is 422 `Vreme koraka nije ispravno.`.
+
+
+        **Automatic stock posting.** In the same transaction the server reconciles the warehouse ledger with the graph (only item nodes whose `catalogItemId` links an article). The desired net per node is `+qty` when a step that outputs a product/byproduct node is `done`, plus `-qty` when any step the node feeds (input, or a product/byproduct consumed as input) is `done`; an intermediate product produced and consumed nets out. `qty` is `actualQuantity` (an absolute amount for the whole order, as the operator entered it), else `quantity × factor`, else 0, where `factor` is the order's `jobDetails.quantity` (at least 1) for a per-unit copy and 1 for a copy with `quantitiesPerOrder: true` (D-028: item quantities are per unit of the order, the same rule step times follow; scaled amounts are rounded to three decimals). Reserved quantities in GET /stock use the same factor. `pending`, `in_progress` and `skipped` count as not done. The difference to the net already posted for that work order and node is inserted as one `consumption` (negative) or `production` (positive) movement, so repeating a request posts nothing, un-doing a step reverses it and a changed `actualQuantity` posts only the delta. If a node's article changes (or the node is removed), the old article's net is reversed and the new one posted. Deleting a process or a work order does not reverse movements.
 
         **Module gating.** Posting happens only while the "Magacin" module is on AND the process is stock tracked (created while "Magacin" was on - by apply or auto-attach; processes created while it was off never post, not even after it is switched on). While "Magacin" is off nothing is posted and article links are neither validated nor unit-filled (kept as-is). Turning it off and on again resumes tracked processes: the next save posts the difference (material really used meanwhile). Reserved quantities in GET /stock count tracked processes only. All routes here answer 403 while "Procesi rada" is off.
 
@@ -3744,6 +3747,136 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /machines/{id}/downtimes:
+    get:
+      tags: [Planning]
+      summary: Downtime windows of a machine unit
+      operationId: listMachineDowntimes
+      description: >-
+        Dated windows (D-028) in which the unit is not available: planned maintenance or a breakdown with a known
+        end. The planner treats them as busy time; a locked block overlapping one is reported as `machine_down`
+        and a hand-edited draft block as a `conflict`. Sorted by start.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Downtimes sorted by start
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MachineDowntime'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/PlanningModuleDisabled'
+        '404':
+          description: Unknown machine (`Mašina nije pronađena.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Planning]
+      summary: Add a downtime window to a machine unit (admin only)
+      operationId: createMachineDowntime
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MachineDowntimeInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineDowntime'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            Malformed times (`Početak i kraj zastoja moraju biti u obliku GGGG-MM-DDTHH:MM.`), `from` not before `to`
+            (`Početak zastoja mora biti pre njegovog kraja.`) or a note over 500 characters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /machines/{id}/downtimes/{downtimeId}:
+    delete:
+      tags: [Planning]
+      summary: Remove a downtime window (admin only)
+      operationId: deleteMachineDowntime
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: downtimeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown machine (`Mašina nije pronađena.`) or downtime (`Zastoj mašine nije pronađen.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /attendance:
     get:
       tags: [Attendance]
@@ -3783,6 +3916,63 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           $ref: '#/components/responses/AttendanceModuleDisabled'
+  /attendance/{userId}:
+    put:
+      tags: [Attendance]
+      summary: Set or clear one user's attendance override (admin only)
+      description: >-
+        `present` true/false sets the override, null clears it. The resulting entry is what `GET /attendance`
+        shows for that user and date; the planner reads it for the plan date.
+      operationId: setAttendance
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceInput'
+      responses:
+        '200':
+          description: The resulting entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceEntry'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Prisustvo" module is off (see AttendanceModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /planning/qualifications:
     get:
       tags: [Planning]
@@ -3859,60 +4049,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /planning/attendance/{userId}:
-    put:
-      tags: [Planning]
-      summary: Set or clear one user's attendance override (admin only)
-      operationId: setAttendance
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttendanceInput'
-      responses:
-        '200':
-          description: The resulting entry
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttendanceEntry'
-        '400':
-          description: Invalid JSON payload
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Not signed in
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Unknown user
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: Malformed date
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /planning/working-hours:
     get:
       tags: [Planning]
@@ -3940,7 +4076,8 @@ paths:
       summary: Replace the working hours (admin only)
       operationId: setWorkingHours
       description: >-
-        Stored in `app_settings` (`working_hours`); no migration.
+        Stored in `app_settings` (`working_hours`); no migration. A missing `transferMinutes` is 0; a value
+        outside 0-480 is a 422 (`Međuoperacijsko vreme mora biti između 0 i 480 minuta.`).
       requestBody:
         required: true
         content:
@@ -3985,6 +4122,8 @@ paths:
       operationId: getPlanDay
       description: >-
         `draft` is returned to admins only (null for operators). `drift` is computed for today's published plan only.
+        Each plan carries only the blocks of its own date (the stored run keeps the whole horizon up to `horizonEnd`,
+        see `GET /planning/plan/horizon`) and the issues that concern that day.
       parameters:
         - name: date
           in: query
@@ -4014,6 +4153,134 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/plan/horizon:
+    get:
+      tags: [Planning]
+      summary: Every block of a date's plans over the kept horizon, grouped by day (admin only)
+      operationId: getPlanHorizon
+      description: >-
+        A plan's run covers 14 working days from its date (D-028); `GET /planning/plan` shows the plan date only,
+        this returns the rest: the draft's and the published plan's blocks grouped by day from the plan date to
+        `horizonEnd` (days without a block are left out), plus the run's issues. Only the plan date's blocks are
+        published to operators or editable by hand; later days are the run's projection, consistent with the
+        plans published before it (their open steps are pinned when a later date is generated).
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The horizon of the date's draft and published plan (null when absent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDayHorizon'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/load:
+    get:
+      tags: [Planning]
+      summary: Workstation load ("Zauzetost") - planned vs available minutes per machine and person per day
+      operationId: getPlanningLoad
+      description: >-
+        D-028. For each day of `from`..`to` (at most 31 days): planned minutes per machine type, machine unit and
+        person against the minutes available. **Which plan supplies a day's blocks:** the published plan dated that
+        day when one exists; otherwise the most recent earlier published plan whose kept horizon
+        (`date`..`horizonEnd`) covers the day, i.e. the blocks that plan projected onto it (an older plan's
+        projection is never used once a newer plan covers the day). Only blocks starting on the day are counted
+        (the planner already splits a step into one block per day). With `plan=draft` (admins, `from` must be
+        today) today's draft stands in for today's published plan, also for the later days it projects onto.
+        **Available minutes:** the day's shift minus breaks from the working hours (exception dates included); for
+        a unit also minus its downtime windows, and 0 when the unit is out of service; for a person 0 when not
+        present by the attendance rules (an admin override wins; up to today the day's sign-in counts; later days
+        count as present). Steps without a machine type are reported under the pseudo type `id: ""`,
+        `name: "Bez mašine"` with one pseudo unit `id: ""` (available 0: that work is bounded by people); blocks on a
+        machine that no longer exists appear there too, as an out-of-service unit with the block's machine name.
+        `days` lists the working days of the range plus any day off that still carries planned blocks; every
+        `days` list of a type, unit or person follows it. Types are sorted by name (the pseudo type last), units and
+        people by name.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First local date "YYYY-MM-DD"; defaults to today.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: >-
+            Last local date (inclusive), at most 30 days after `from`. Defaults to the `horizonEnd` of the plan that
+            speaks for `from` (capped at 31 days), or `from` when there is none.
+          schema:
+            type: string
+            format: date
+        - name: plan
+          in: query
+          required: false
+          description: '`draft` (admins only; `from` must be today) uses today''s draft in place of today''s published plan.'
+          schema:
+            type: string
+            enum: [published, draft]
+            default: published
+      responses:
+        '200':
+          description: The load of the range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkstationLoad'
+        '400':
+          description: Malformed date or `plan` value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: '`plan=draft` from an operator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: '`plan=draft` but today has no draft'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: '`to` before `from`, a range longer than 31 days, or `plan=draft` with `from` not today'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /planning/plan/generate:
     post:
       tags: [Planning]
@@ -4024,7 +4291,13 @@ paths:
         replacing the date's draft. Uses machine units in service, qualifications, attendance for the date (others
         present on later days), working hours and each step's machine type, crew size and duration. With `replan`
         (date must be today) planning starts now and the published plan's locked blocks stay. A date that is not a
-        working day returns an empty plan.
+        working day returns an empty plan. The run covers 14 working days and the draft keeps all of it
+        (`horizonEnd`, `GET /planning/plan/horizon`); the answer holds the date's blocks only. For a date after
+        today, the still-open steps that the published plans of today up to the day before anchor on their own
+        dates are pinned first, so consecutive days never book the same work or machine twice. An in-progress step
+        with a `startedAt` (D-028) is placed for its remaining minutes only: its duration minus the working time
+        (breaks and nights excluded) between `startedAt` and the planning start, at least 1 minute; one worked on
+        longer than its duration also gets an `overrun` issue.
       requestBody:
         required: true
         content:
@@ -4068,7 +4341,8 @@ paths:
       summary: Save a hand-edited draft (admin only)
       operationId: updatePlanDraft
       description: >-
-        Replaces the draft's assignments; `issues` are recomputed (conflicts are reported, not rejected).
+        Replaces the draft's assignments of the plan date (the kept horizon's later days are untouched); `issues`
+        are recomputed (conflicts are reported, not rejected). At most 2000 blocks for the plan date.
       requestBody:
         required: true
         content:
@@ -4229,7 +4503,9 @@ paths:
       summary: Estimated finish of every open work order with a process
       operationId: getPlanningForecast
       description: >-
-        Computed on read by a planner run from now over the next 14 working days (nothing is stored).
+        Computed on read by a planner run from now over the next 14 working days (nothing is stored). The
+        published plans from today on are pinned first (the open steps each anchors on its own date, except blocks
+        already over), so the forecast never contradicts what is published.
       responses:
         '200':
           description: Forecasts sorted by estimated finish (unplannable last)
@@ -4247,6 +4523,140 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/calibration:
+    get:
+      tags: [Planning]
+      summary: Calibration report for the inter-operation time and step norms (admin only)
+      operationId: getPlanningCalibration
+      description: >-
+        Read-only report (D-028, "Actual step times"); nothing is applied automatically. An order counts as
+        completed in the window when it is not cancelled, its process is finished (every step `done` or `skipped`,
+        at least one `done`) and the latest step `finishedAt` falls on a local date (working-hours time zone) within
+        the window, whatever the order's status; orders finished before step times were recorded have no
+        `finishedAt` and are not counted. For each such order where every done step has `startedAt` and
+        `finishedAt`: cycle = working minutes (breaks, nights and days off excluded) from the earliest step
+        `startedAt` to the latest `finishedAt`; along the longest chain of done steps (most done steps, then most
+        measured minutes) tech = the chain's measured step minutes and gaps = its done steps − 1; the order's
+        inter-operation time is (cycle − tech) / gaps (orders with gaps 0 are skipped). `avgTransferMinutes` and
+        `medianTransferMinutes` are the mean and median over those orders, rounded to 5 minutes and clamped to
+        0–480. `steps` groups every done step with both timestamps by label: planned = the step's current times
+        × the order quantity (setup + per unit × quantity), actual = measured working minutes.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First local date "YYYY-MM-DD" of the window; defaults to 59 days before `to`.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Last local date "YYYY-MM-DD" of the window (inclusive); defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanningCalibration'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            `from` after `to` (`Početni datum mora biti pre krajnjeg ili isti.`) or a window longer than 366 days
+            (`Period izveštaja može biti najviše 366 dana.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /planning/material-needs:
+    get:
+      tags: [Planning]
+      summary: Input material needed per week from the published plans' kept horizon, against stock
+      operationId: getMaterialNeeds
+      description: >-
+        D-028 "Potrebe materijala". For each date from `from` on, the blocks of that date's published plan stand,
+        else what the most recent earlier published plan projected onto it (its kept horizon). Every open work
+        order's input nodes count while none of the steps they feed is done (posted consumption is excluded) and
+        one of them is open (not skipped); the quantity is the per-unit quantity times the order's quantity
+        (`quantitiesPerOrder` copies are not scaled), and it falls in the week of the first planned block of its
+        consuming steps. Inputs whose steps have no block from `from` on are reported as `unplanned`; those first
+        planned after `to` are left out. Inputs linked to a catalog article are grouped by article and carry its
+        stock figures; unlinked inputs are grouped by name and unit and carry none. `shortFromWeek` is the first
+        week whose cumulative need exceeds the stock on hand (`onHand`; the article's `reserved` already contains
+        these inputs, so comparing with `available` would count them twice). Items: shortages first (earliest week
+        first), then by name. Requires the "Planiranje" and "Magacin" modules; open to every signed-in user.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First local date "YYYY-MM-DD" (working-hours time zone); defaults to today.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: >-
+            Last local date (inclusive). Defaults to the latest `horizonEnd` of the published plans considered, or
+            `from` + 27 days when none reaches `from`, clipped to the end of the eighth week. The window may touch
+            at most 8 calendar weeks.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The material needs of the window
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialNeeds'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: >-
+            The "Planiranje" module (see PlanningModuleDisabled) or the "Magacin" module (see StockModuleDisabled)
+            is off.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: The window ends before it starts or touches more than 8 weeks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
@@ -4452,6 +4862,26 @@ components:
         name: {type: string, minLength: 1, maxLength: 120}
         inService: {type: boolean}
         note: {type: string, maxLength: 500}
+    MachineDowntime:
+      type: object
+      required: [id, machineId, from, to, createdAt]
+      description: >-
+        A window in which the machine unit is not available (D-028). `from`/`to` are local "YYYY-MM-DDTHH:MM" in the
+        working-hours time zone, `from` < `to`; the window may span several days.
+      properties:
+        id: {type: string}
+        machineId: {type: string}
+        from: {type: string, example: '2026-10-21T08:00'}
+        to: {type: string, example: '2026-10-22T15:00'}
+        note: {type: string, maxLength: 500}
+        createdAt: {type: string, format: date-time}
+    MachineDowntimeInput:
+      type: object
+      required: [from, to]
+      properties:
+        from: {type: string, description: 'Local "YYYY-MM-DDTHH:MM".'}
+        to: {type: string, description: 'Local "YYYY-MM-DDTHH:MM", after `from`.'}
+        note: {type: string, maxLength: 500}
     WorkerQualifications:
       type: object
       required: [userId, username, machineTypeIds]
@@ -4507,16 +4937,53 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkingBreak'
+    WorkingHoursException:
+      type: object
+      required: [date, off]
+      description: >-
+        Overrides the weekly pattern on one civil date (D-028): with `off` true the date is a day off whatever its
+        weekday (a holiday); otherwise `start`, `end` and `breaks` are that date's one-off shift, under the same
+        rules as a WorkingDay. The calendar consults exceptions before the weekday pattern. Responses carry
+        `breaks` always (empty for a day off) and omit `start`/`end` for a day off.
+      properties:
+        date: {type: string, format: date}
+        off: {type: boolean}
+        start: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        end: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        breaks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkingBreak'
     WorkingHours:
       type: object
       required: [timeZone, days]
-      description: Organization-wide shifts; weekdays not listed are days off. No shift crosses midnight.
+      description: >-
+        Organization-wide shifts; weekdays not listed are days off. No shift crosses midnight. `exceptions` (at most
+        400, unique dates) override single dates.
       properties:
         timeZone: {type: string, description: 'IANA time zone, e.g. Europe/Belgrade.'}
         days:
           type: array
           items:
             $ref: '#/components/schemas/WorkingDay'
+        exceptions:
+          type: array
+          maxItems: 400
+          description: Exception dates, sorted by date in responses; missing in a request means none (D-028).
+          items:
+            $ref: '#/components/schemas/WorkingHoursException'
+        transferMinutes:
+          type: integer
+          minimum: 0
+          maximum: 480
+          default: 0
+          description: >-
+            Inter-operation time ("međuoperacijsko vreme", D-028): the organization-wide average waiting and
+            transfer time between two consecutive steps, in minutes. The planner starts a step no earlier than this
+            much working time after every upstream step ends (the lag pauses for breaks and the end of the shift and
+            may cross into the next working day); a hand-edited draft block that starts sooner is reported as a
+            `conflict`. 0 (the default, and the value for settings saved before D-028) chains steps back to back.
+            Always present in responses.
     PlanAssignment:
       type: object
       required: [id, workOrderId, orderNumber, clientName, stepNodeId, stepLabel, machineId, machineName, leadUserId, userIds, start, end, minutes, part, parts, locked]
@@ -4551,7 +5018,11 @@ components:
       properties:
         code:
           type: string
-          enum: [unknown_machine_type, no_machine, no_workers, no_capacity, missing_duration, conflict]
+          enum: [unknown_machine_type, no_machine, no_workers, no_capacity, missing_duration, conflict, machine_down, overrun]
+          description: >-
+            `machine_down` (D-028): a locked block the plan keeps lies in a downtime window of its machine.
+            `overrun` (D-028): an in-progress step has been worked on (working minutes since its `startedAt`) longer
+            than its planned duration; informational, the step is still planned and the order stays plannable.
         workOrderId: {type: string}
         orderNumber: {type: string}
         stepNodeId: {type: string}
@@ -4559,7 +5030,7 @@ components:
         message: {type: string, description: User-facing Serbian text.}
     OrderForecast:
       type: object
-      required: [workOrderId, orderNumber, clientName, dueDate, priority, estimatedFinish, late, unplannable]
+      required: [workOrderId, orderNumber, clientName, dueDate, priority, estimatedFinish, late, unplannable, latestStart, latestStartPassed]
       properties:
         workOrderId: {type: string}
         orderNumber: {type: string}
@@ -4575,15 +5046,37 @@ components:
           nullable: true
         late: {type: boolean}
         unplannable: {type: boolean}
+        latestStart:
+          type: string
+          format: date
+          nullable: true
+          description: >-
+            Local date the order's remaining steps must start by to finish by the end of its due date's shift (the last
+            working shift on or before it when the due date is a day off; D-028). A backward pass over the longest
+            remaining chain of open steps: durations plus the inter-operation time `transferMinutes`, in working time
+            only (machines and people are not considered). Informational. Null when the order has no due date, no open
+            step, or an open step has no duration set.
+        latestStartPassed:
+          type: boolean
+          description: True when `latestStart` is before the forecast's start date (today for the forecast).
     ProductionPlan:
       type: object
-      required: [id, date, status, generatedAt, generatedBy, updatedAt, updatedBy, publishedAt, publishedBy, assignments, issues, lateOrders]
+      description: >-
+        A day plan. The stored run keeps every block over the whole horizon (`date` through `horizonEnd`, D-028); the
+        plan endpoints return the blocks of `date` only, `GET /planning/plan/horizon` the rest.
+      required: [id, date, status, horizonEnd, generatedAt, generatedBy, updatedAt, updatedBy, publishedAt, publishedBy, assignments, issues, lateOrders]
       properties:
         id: {type: string}
         date: {type: string, format: date}
         status:
           type: string
           enum: [draft, published]
+        horizonEnd:
+          type: string
+          format: date
+          description: >-
+            Last working day the run could place steps on (14 working days from `date`; `date` itself for a day
+            off, and for plans stored before the horizon was kept).
         generatedAt: {type: string, format: date-time}
         generatedBy: {type: string}
         updatedAt: {type: string, format: date-time}
@@ -4632,6 +5125,152 @@ components:
           allOf:
             - $ref: '#/components/schemas/PlanDrift'
           nullable: true
+    PlanHorizonDay:
+      type: object
+      required: [date, assignments]
+      properties:
+        date: {type: string, format: date}
+        assignments:
+          type: array
+          description: Blocks starting on that day, sorted by start.
+          items:
+            $ref: '#/components/schemas/PlanAssignment'
+    PlanHorizon:
+      type: object
+      description: >-
+        Every block a plan's run produced, grouped by day from the plan date to `horizonEnd`; days without a
+        block are left out. Hand edits only ever touch the plan date's blocks.
+      required: [planId, status, date, horizonEnd, generatedAt, updatedAt, days, issues]
+      properties:
+        planId: {type: string}
+        status:
+          type: string
+          enum: [draft, published]
+        date: {type: string, format: date}
+        horizonEnd: {type: string, format: date}
+        generatedAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanHorizonDay'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanIssue'
+    PlanDayHorizon:
+      type: object
+      required: [date, draft, published]
+      properties:
+        date: {type: string, format: date}
+        draft:
+          allOf:
+            - $ref: '#/components/schemas/PlanHorizon'
+          nullable: true
+        published:
+          allOf:
+            - $ref: '#/components/schemas/PlanHorizon'
+          nullable: true
+    WorkstationLoadBlock:
+      type: object
+      description: One planned block of a unit-day or person-day.
+      required: [workOrderId, orderNumber, stepNodeId, stepLabel, machineName, start, end, minutes]
+      properties:
+        workOrderId: {type: string}
+        orderNumber: {type: string}
+        stepNodeId: {type: string}
+        stepLabel: {type: string}
+        machineName:
+          type: string
+          description: Empty for a step without a machine.
+        start: {type: string, description: 'Local "YYYY-MM-DDTHH:MM".'}
+        end: {type: string, description: 'Local "YYYY-MM-DDTHH:MM".'}
+        minutes: {type: integer, description: Working minutes inside the block.}
+        leadUserId: {type: string}
+    WorkstationLoadTotal:
+      type: object
+      description: A machine type's day, summed over its units.
+      required: [date, plannedMinutes, availableMinutes]
+      properties:
+        date: {type: string, format: date}
+        plannedMinutes: {type: integer}
+        availableMinutes: {type: integer}
+    WorkstationLoadDay:
+      type: object
+      required: [date, plannedMinutes, availableMinutes, blocks]
+      properties:
+        date: {type: string, format: date}
+        plannedMinutes:
+          type: integer
+          description: Sum of the minutes of the blocks starting that day.
+        availableMinutes:
+          type: integer
+          description: >-
+            Shift minus breaks; for a unit minus downtime windows (0 out of service), for a person 0 when not present.
+        blocks:
+          type: array
+          description: Sorted by start.
+          items:
+            $ref: '#/components/schemas/WorkstationLoadBlock'
+    WorkstationLoadUnit:
+      type: object
+      required: [id, name, inService, days]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        inService: {type: boolean}
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadDay'
+    WorkstationLoadType:
+      type: object
+      required: [id, name, units, days]
+      properties:
+        id:
+          type: string
+          description: '"" for the pseudo type "Bez mašine".'
+        name: {type: string}
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadUnit'
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadTotal'
+    WorkstationLoadPerson:
+      type: object
+      required: [userId, username, days]
+      properties:
+        userId: {type: string}
+        username: {type: string}
+        days:
+          type: array
+          description: Blocks the person leads or crews.
+          items:
+            $ref: '#/components/schemas/WorkstationLoadDay'
+    WorkstationLoad:
+      type: object
+      required: [from, to, source, days, machineTypes, people]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        source:
+          type: string
+          enum: [published, draft]
+        days:
+          type: array
+          description: Working days of the range plus days off that still carry planned blocks.
+          items: {type: string, format: date}
+        machineTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadType'
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationLoadPerson'
     PlanGenerateInput:
       type: object
       required: [date]
@@ -4675,6 +5314,107 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MyQueueItem'
+    MaterialNeedsWeek:
+      type: object
+      description: A calendar week (Monday to Sunday) clipped to the window; both dates inclusive.
+      required: [start, end]
+      properties:
+        start: {type: string, format: date}
+        end: {type: string, format: date}
+    MaterialNeedsItem:
+      type: object
+      description: >-
+        One material: a catalog article (with its stock level) or an unlinked input listed by name and unit (null
+        catalogItemId and stock figures). `weeks[i]` is the quantity the steps planned in week i consume,
+        `cumulative` the running total.
+      required: [catalogItemId, name, unit, onHand, reserved, available, weeks, cumulative, unplanned, shortFromWeek]
+      properties:
+        catalogItemId: {type: string, nullable: true}
+        name: {type: string}
+        unit: {type: string}
+        onHand: {type: number, nullable: true}
+        reserved: {type: number, nullable: true}
+        available: {type: number, nullable: true}
+        weeks:
+          type: array
+          items: {type: number}
+        cumulative:
+          type: array
+          items: {type: number}
+        unplanned:
+          type: number
+          description: Quantity of open steps with no block in the horizon from `from` on.
+        shortFromWeek:
+          type: integer
+          nullable: true
+          description: First week index whose cumulative need exceeds `onHand`; null when none (or no stock figures).
+    MaterialNeeds:
+      type: object
+      required: [from, to, weeks, items]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        weeks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialNeedsWeek'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialNeedsItem'
+    PlanningCalibrationWindow:
+      type: object
+      required: [from, to]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+    PlanningCalibrationStep:
+      type: object
+      description: Planned vs measured working minutes of the done steps sharing a label; `ratio` = actual / planned.
+      required: [label, count, plannedMinutesAvg, actualMinutesAvg, ratio]
+      properties:
+        label: {type: string}
+        count: {type: integer, minimum: 1}
+        plannedMinutesAvg: {type: number, description: Rounded to 0.1 minute.}
+        actualMinutesAvg: {type: number, description: Rounded to 0.1 minute.}
+        ratio: {type: number, description: Rounded to 0.01.}
+    PlanningCalibration:
+      type: object
+      description: >-
+        Calibration report (D-028), see `GET /planning/calibration`. `steps` is sorted by |ratio − 1| (largest
+        first), then count (largest first), then label.
+      required: [window, orders, ordersWithTimes, avgTransferMinutes, medianTransferMinutes, currentTransferMinutes, steps]
+      properties:
+        window:
+          $ref: '#/components/schemas/PlanningCalibrationWindow'
+        orders:
+          type: integer
+          minimum: 0
+          description: Orders completed in the window (see the endpoint).
+        ordersWithTimes:
+          type: integer
+          minimum: 0
+          description: Those of them where every done step has `startedAt` and `finishedAt`.
+        avgTransferMinutes:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 480
+          description: Recommended `transferMinutes` (mean); null without an order to measure.
+        medianTransferMinutes:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 480
+        currentTransferMinutes:
+          type: integer
+          minimum: 0
+          maximum: 480
+          description: The `transferMinutes` the working hours currently hold.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningCalibrationStep'
     ProcessNode:
       type: object
       required: [id, kind, label, x, y]
@@ -4699,7 +5439,11 @@ components:
         quantity:
           type: number
           minimum: 0
-          description: Planned quantity. Item nodes only; dropped on steps.
+          description: >-
+            Planned quantity **per unit of the order** (D-028). Item nodes only; dropped on steps. Wherever a
+            planned amount is consumed (reservations, automatic stock posting, the simulator) it is multiplied
+            by the work order's `jobDetails.quantity` (at least 1), unless the order's process copy carries
+            `quantitiesPerOrder: true`.
         unit:
           type: string
           maxLength: 20
@@ -4748,10 +5492,27 @@ components:
           description: Planning, step nodes only. Structural.
         status:
           $ref: '#/components/schemas/ProcessStepStatus'
+        startedAt:
+          type: string
+          format: date-time
+          description: >-
+            Per-order state (D-028): when the step actually started, RFC 3339 in UTC. Step nodes only; dropped on
+            items and stripped from templates. Set by the server when the status moves to `in_progress` and the
+            field is empty; may be sent explicitly to correct it (operators included). Cleared when the step goes
+            back to `pending`.
+        finishedAt:
+          type: string
+          format: date-time
+          description: >-
+            Per-order state (D-028): when the step actually finished, RFC 3339 in UTC. Step nodes only. Set by the
+            server when the status moves to `done` or `skipped` and the field is empty; cleared when the step is
+            reopened (`in_progress`) or reset to `pending`. Must not be earlier than `startedAt` (422).
         actualQuantity:
           type: number
           minimum: 0
-          description: Per-order state. Item nodes only; stripped from templates.
+          description: >-
+            Per-order state. Item nodes only; stripped from templates. An absolute amount for the whole order as
+            the operator recorded it - unlike `quantity`, it is never multiplied by the order's quantity.
     ProcessStepStatus:
       type: string
       enum: [pending, in_progress, done, skipped]
@@ -4830,7 +5591,7 @@ components:
           $ref: '#/components/schemas/ProcessGraph'
     WorkOrderProcess:
       type: object
-      required: [workOrderId, templateId, templateName, graph, updatedAt, updatedBy]
+      required: [workOrderId, templateId, templateName, graph, quantitiesPerOrder, updatedAt, updatedBy]
       properties:
         workOrderId:
           type: string
@@ -4842,6 +5603,13 @@ components:
           description: Template name at the time it was applied.
         graph:
           $ref: '#/components/schemas/ProcessGraph'
+        quantitiesPerOrder:
+          type: boolean
+          description: >-
+            True on process copies that existed before item quantities became per unit (D-028, migration v32):
+            their item-node `quantity` values are absolute amounts for the whole order and are not multiplied by
+            `jobDetails.quantity`. False on every copy created since; re-attaching a template clears it. Read-only
+            (not part of WorkOrderProcessInput).
         updatedAt:
           type: string
           format: date-time

@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createProcessFixtureStore } from './fixture-store'
 import type { ProcessTemplateInput } from '@/types/process'
 
-function setup(role: 'admin' | 'user' = 'admin') {
+function setup(
+  role: 'admin' | 'user' = 'admin',
+  extra: { workOrderQuantity?: (id: string) => number | null; onOrderProcessSaved?: ReturnType<typeof vi.fn> } = {},
+) {
   const orders = new Set(['1'])
   const store = createProcessFixtureStore({
     currentUser: () => ({ username: 'tester', role }),
@@ -10,6 +13,7 @@ function setup(role: 'admin' | 'user' = 'admin') {
     tenantSlug: 'demo',
     platformSignedIn: () => true,
     modules: () => ({ processes: true, stock: true }),
+    ...extra,
   })
   return store
 }
@@ -59,6 +63,53 @@ describe('process fixture store', () => {
     expect(process?.graph.nodes.filter((node) => node.kind === 'step').every((node) => node.status === 'pending')).toBe(true)
     await expect(store.api.applyProcessTemplate('1', 'pt-offset')).rejects.toMatchObject({ status: 409 })
     expect(await store.api.getWorkOrderProcess('2')).toBeNull()
+  })
+
+  it('records when a step actually started and finished, like the server (D-028)', async () => {
+    const store = setup('user')
+    store.attachDefaultProcess('1')
+    const process = (await store.api.getWorkOrderProcess('1'))!
+    expect(process.quantitiesPerOrder).toBe(false)
+    expect(process.graph.nodes.filter((node) => node.kind === 'step').every((node) => !node.startedAt && !node.finishedAt)).toBe(true)
+    const setStatus = (status: 'pending' | 'in_progress' | 'done') => ({
+      graph: {
+        ...process.graph,
+        nodes: process.graph.nodes.map((node) => (node.id === 'step-prep' ? { ...node, status } : node)),
+      },
+    })
+    const started = await store.api.updateWorkOrderProcess('1', setStatus('in_progress'))
+    const prep = (p: typeof started) => p.graph.nodes.find((node) => node.id === 'step-prep')!
+    expect(prep(started).startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
+    expect(prep(started).finishedAt).toBeUndefined()
+    const done = await store.api.updateWorkOrderProcess('1', {
+      graph: { ...started.graph, nodes: started.graph.nodes.map((node) => (node.id === 'step-prep' ? { ...node, status: 'done' as const } : node)) },
+    })
+    expect(prep(done).startedAt).toBe(prep(started).startedAt)
+    expect(prep(done).finishedAt).toBeDefined()
+    // An explicit correction is kept; a finish before the start is rejected.
+    const corrected = await store.api.updateWorkOrderProcess('1', {
+      graph: { ...done.graph, nodes: done.graph.nodes.map((node) => (node.id === 'step-prep' ? { ...node, startedAt: '2026-10-19T06:00:00Z' } : node)) },
+    })
+    expect(prep(corrected).startedAt).toBe('2026-10-19T06:00:00Z')
+    await expect(
+      store.api.updateWorkOrderProcess('1', {
+        graph: { ...corrected.graph, nodes: corrected.graph.nodes.map((node) => (node.id === 'step-prep' ? { ...node, finishedAt: '2026-10-19T05:00:00Z' } : node)) },
+      }),
+    ).rejects.toMatchObject({ status: 422 })
+    const reset = await store.api.updateWorkOrderProcess('1', setStatus('pending'))
+    expect(prep(reset).startedAt).toBeUndefined()
+    expect(prep(reset).finishedAt).toBeUndefined()
+  })
+
+  it('hands the ledger the order quantity as the planned-quantity factor', async () => {
+    const onOrderProcessSaved = vi.fn()
+    const store = setup('admin', { workOrderQuantity: () => 250, onOrderProcessSaved })
+    store.attachDefaultProcess('1')
+    expect(onOrderProcessSaved).toHaveBeenLastCalledWith('1', expect.anything(), 'tester', 250)
+    expect(store.listOrderProcesses()[0]).toMatchObject({ workOrderId: '1', factor: 250 })
+    const process = (await store.api.getWorkOrderProcess('1'))!
+    await store.api.updateWorkOrderProcess('1', { graph: process.graph })
+    expect(onOrderProcessSaved).toHaveBeenLastCalledWith('1', expect.anything(), 'tester', 250)
   })
 
   it('lets operators change state but not structure', async () => {

@@ -14,6 +14,8 @@ vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess } }
 const hours = {
   timeZone: 'Europe/Belgrade',
   days: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '07:00', end: '15:00', breaks: [] })),
+  transferMinutes: 0,
+  exceptions: [],
 }
 
 interface Store {
@@ -77,6 +79,15 @@ function stubApi(store: Store, admin = true) {
     deletePlanDraft: vi.fn(async () => {
       store.draft = null
     }),
+    getPlanningCalibration: vi.fn(async () => ({
+      window: { from: '2026-08-21', to: '2026-10-19' },
+      orders: 0,
+      ordersWithTimes: 0,
+      avgTransferMinutes: null,
+      medianTransferMinutes: null,
+      currentTransferMinutes: 0,
+      steps: [],
+    })),
   }
   vi.stubGlobal('api', api)
   return api

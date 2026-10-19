@@ -36,7 +36,9 @@ type demoOrder struct {
 	materials             []domain.MaterialUsage
 	timeEntries           map[string]int // operator -> minutes
 	notify                bool           // e-mail notifications to the customer's address
-	// scale overrides planned quantities of nodes (after the process is attached).
+	// scale overrides planned quantities of nodes (after the process is
+	// attached) as the amount planned for the WHOLE order; it is divided by
+	// quantity when stored, since item-node quantities are per unit (D-028).
 	scale map[string]float64
 	// status path after creation, e.g. assigned, inProgress.
 	statuses []domain.WorkOrderStatus
@@ -347,10 +349,12 @@ func (b *demoContentBuilder) createOrder(o demoOrder) (string, error) {
 			return "", err
 		}
 	}
-	// Scale planned quantities on the order's own graph (admin, structural).
+	// Scale planned quantities on the order's own graph (admin, structural):
+	// the spec gives per-order totals, the graph stores per-unit amounts.
+	units := float64(max(o.quantity, 1))
 	if err := b.editProcess(order.ID, demoAdminUsername, true, func(node *domain.ProcessNode) {
 		if qty, ok := o.scale[node.ID]; ok {
-			node.Quantity = num(qty)
+			node.Quantity = num(qty / units)
 		}
 	}); err != nil {
 		return "", err

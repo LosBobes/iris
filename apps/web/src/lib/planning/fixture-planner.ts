@@ -2,26 +2,37 @@
 // deterministic greedy list-scheduler. It follows the same rules in a simplified
 // form (see the Go package comment for the authoritative version):
 //
-// - steps start only after every upstream step (through any item nodes) finished;
-//   done/skipped steps are finished, in-progress steps are placed first and locked;
+// - steps start only after every upstream step (through any item nodes) finished
+//   plus the inter-operation time `hours.transferMinutes` (D-028) in working
+//   time (the lag pauses for breaks and the end of the shift and may cross a day
+//   boundary; 0 chains steps back to back); done/skipped steps are finished,
+//   in-progress steps are placed first and locked (never shifted by the lag),
+//   for their remaining minutes when they carry a `startedAt` (duration minus
+//   the working time since then, at least 1 minute; worked longer than the
+//   duration = an informational `overrun` issue; D-028);
 // - duration = setup + per-unit x quantity (quantity < 1 counts as 1); a step
 //   with no times is placed with 0 minutes and flagged `missing_duration`;
 // - a machine-bound step needs one in-service unit of its type plus a crew whose
-//   lead is qualified; machine and crew are busy for the whole block;
-// - work happens inside shifts, pausing for breaks; a step that does not finish
-//   by the end of a shift carries over to the next working day on the same
-//   machine and crew (one block per day);
-// - most urgent first (slack to due date over the remaining chain, urgent/high
-//   priority at equal slack, older order, order number);
+//   lead is qualified; machine and crew are busy for the whole block, and a
+//   machine is busy during its downtime windows too (a pinned block overlapping
+//   one is kept but flagged `machine_down`; D-028);
+// - work happens inside shifts, pausing for breaks; an exception date (a day off
+//   or one-off hours) replaces that date's weekday pattern; a step that does not
+//   finish by the end of a shift carries over to the next working day on the
+//   same machine and crew (one block per day);
+// - most urgent first (slack to due date over the remaining chain, then priority
+//   urgent > high > normal > low at equal slack, older order, order number);
 // - every step goes to the earliest time its machine and crew are free, preferring
 //   the least-loaded machine/people, then the lowest name;
 // - the horizon is PLANNING_FORECAST_DAYS working days.
 
 import { predecessorSteps, stepStatus } from '@/lib/process/graph'
+import { latestStartOf } from '@/lib/planning/latest-start'
 import type { ProcessGraph, ProcessNode } from '@/types/process'
 import {
   PLANNING_FORECAST_DAYS,
   type Machine,
+  type MachineDowntime,
   type MachineType,
   type OrderForecast,
   type PlanAssignment,
@@ -69,6 +80,8 @@ export interface PlannerInput {
   horizonDays?: number
   machineTypes: MachineType[]
   machines: Machine[]
+  /** Machine downtime windows: busy time on the unit (D-028). */
+  downtimes?: MachineDowntime[]
   workers: PlannerWorker[]
   orders: PlannerOrder[]
   /** Blocks kept exactly as they are. */
@@ -119,6 +132,38 @@ function stamp(date: string, minutes: number): string {
 function splitStamp(value: string): LocalMoment {
   const [date, time] = value.split('T')
   return { date, minutes: parseClock(time ?? '00:00') }
+}
+
+/** "YYYY-MM-DDTHH:MM" as "DD.MM.YYYY HH:MM" for messages. */
+function humanStamp(value: string): string {
+  const [date, time] = value.split('T')
+  const [y, m, d] = date.split('-')
+  return `${d}.${m}.${y} ${time ?? '00:00'}`
+}
+
+/** The parsable downtime windows by machine id, each list sorted by start (lexical = chronological). */
+function downtimesByMachine(downtimes: readonly MachineDowntime[] | undefined): Map<string, MachineDowntime[]> {
+  const byMachine = new Map<string, MachineDowntime[]>()
+  for (const downtime of downtimes ?? []) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(downtime.from) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(downtime.to)) continue
+    if (downtime.from >= downtime.to) continue
+    const list = byMachine.get(downtime.machineId) ?? []
+    list.push(downtime)
+    byMachine.set(downtime.machineId, list)
+  }
+  for (const list of byMachine.values()) list.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to))
+  return byMachine
+}
+
+/** The first downtime of a machine overlapping a block (zero-length blocks only when strictly inside). */
+function downtimeHit(
+  byMachine: Map<string, MachineDowntime[]>,
+  machineId: string | null,
+  start: string,
+  end: string,
+): MachineDowntime | undefined {
+  if (!machineId) return undefined
+  return byMachine.get(machineId)?.find((d) => (start === end ? d.from < start && start < d.to : d.from < end && start < d.to))
 }
 
 /** The local date and clock time of an instant in the given IANA time zone. */
@@ -191,14 +236,23 @@ interface WorkDay {
   segments: Segment[]
 }
 
+/** The shift of a civil date: its exception (D-028) first, then the weekday pattern; undefined on a day off. */
+export function shiftOn(hours: WorkingHours, date: string): WorkingDay | undefined {
+  const exception = (hours.exceptions ?? []).find((entry) => entry.date === date)
+  if (exception) {
+    if (exception.off) return undefined
+    return { weekday: isoWeekday(date), start: exception.start ?? '', end: exception.end ?? '', breaks: exception.breaks ?? [] }
+  }
+  return hours.days.find((day) => day.weekday === isoWeekday(date))
+}
+
 /** The first `count` working days from `date` (the date itself when it is one). */
 export function workingDays(hours: WorkingHours, date: string, count: number): WorkDay[] {
-  const byWeekday = new Map(hours.days.map((day) => [day.weekday, day]))
   const result: WorkDay[] = []
-  if (byWeekday.size === 0) return result
+  if (hours.days.length === 0 && (hours.exceptions ?? []).every((exception) => exception.off)) return result
   for (let offset = 0; result.length < count && offset < count * 7 + 14; offset++) {
     const current = addDays(date, offset)
-    const day = byWeekday.get(isoWeekday(current))
+    const day = shiftOn(hours, current)
     if (!day) continue
     result.push({
       index: result.length,
@@ -209,6 +263,38 @@ export function workingDays(hours: WorkingHours, date: string, count: number): W
     })
   }
   return result
+}
+
+/**
+ * Working minutes (shift segments, breaks and days off excluded) from one
+ * local moment to another; 0 when `to` is not after `from`. Walks at most 400
+ * civil days back from `to`.
+ */
+export function workingMinutesBetween(hours: WorkingHours, from: LocalMoment, to: LocalMoment): number {
+  if (from.date > to.date || (from.date === to.date && from.minutes >= to.minutes)) return 0
+  let date = from.date
+  const span = Math.round((parseDate(to.date) - parseDate(from.date)) / DAY_MS)
+  if (span > 400) date = addDays(to.date, -400)
+  let total = 0
+  for (; date <= to.date; date = addDays(date, 1)) {
+    const day = shiftOn(hours, date)
+    if (!day) continue
+    const low = date === from.date ? from.minutes : 0
+    const high = date === to.date ? to.minutes : AXIS
+    for (const segment of shiftSegments(day)) {
+      const begin = Math.max(segment.start, low)
+      const end = Math.min(segment.end, high)
+      if (end > begin) total += end - begin
+    }
+  }
+  return total
+}
+
+/** The local moment of a step timestamp (RFC 3339), or null when it is missing or malformed. */
+export function stepMoment(value: string | undefined, timeZone: string): LocalMoment | null {
+  if (!value) return null
+  const instant = new Date(value)
+  return Number.isNaN(instant.getTime()) ? null : localMoment(instant, timeZone)
 }
 
 // ---- planner ----------------------------------------------------------------
@@ -226,7 +312,33 @@ interface DayPiece {
 }
 
 const AXIS = 1440
-const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 0, normal: 1, low: 1 }
+// Urgent before high before normal before low (D-028); unknown values count as normal.
+const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
+/** An axis moment past every horizon: a lag that never elapses, so nothing fits. */
+const BEYOND_HORIZON = Number.MAX_SAFE_INTEGER / 4
+
+/** The inter-operation time of a calendar as whole minutes (malformed = 0). */
+export function transferMinutesOf(hours: WorkingHours): number {
+  return Number.isFinite(hours.transferMinutes) ? Math.max(0, Math.floor(hours.transferMinutes)) : 0
+}
+
+/**
+ * Consumes `lag` working minutes from `from` over `segments` (each on an
+ * absolute axis), returning the moment the lag has elapsed, or `beyond` when
+ * the segments run out first.
+ */
+function afterWorkingMinutes(segments: readonly Segment[], from: number, lag: number, beyond: number): number {
+  if (lag <= 0) return from
+  let remaining = lag
+  for (const segment of segments) {
+    const begin = Math.max(from, segment.start)
+    if (begin >= segment.end) continue
+    const take = Math.min(remaining, segment.end - begin)
+    remaining -= take
+    if (remaining <= 0) return begin + take
+  }
+  return beyond
+}
 
 function messageFor(code: PlanIssueCode, order: PlannerOrder, step?: ProcessNode): string {
   const what = step ? `Radni nalog ${order.number}, korak „${step.label}“` : `Radni nalog ${order.number}`
@@ -243,6 +355,10 @@ function messageFor(code: PlanIssueCode, order: PlannerOrder, step?: ProcessNode
       return `${what}: nije uneto trajanje (podešavanje i minuta po komadu).`
     case 'conflict':
       return `${what}: konflikt u rasporedu.`
+    case 'machine_down':
+      return `${what}: mašina je van pogona u planiranom periodu.`
+    case 'overrun':
+      return `${what}: u toku je duže od planiranog trajanja.`
   }
 }
 
@@ -255,6 +371,13 @@ export function planDay(input: PlannerInput): PlannerResult {
   const horizon = input.horizonDays && input.horizonDays > 0 ? input.horizonDays : PLANNING_FORECAST_DAYS
   const days = workingDays(input.hours, input.date, horizon)
   const dayByDate = new Map(days.map((day) => [day.date, day]))
+  // Every working segment of the horizon on the axis, for the inter-operation lag.
+  const axisSegments: Segment[] = days.flatMap((day) =>
+    day.segments.map((segment) => ({ start: day.index * AXIS + segment.start, end: day.index * AXIS + segment.end })),
+  )
+  const lag = transferMinutesOf(input.hours)
+  /** The earliest a successor may start after a step ending at `axis` (D-028). */
+  const afterLag = (axis: number): number => afterWorkingMinutes(axisSegments, axis, lag, BEYOND_HORIZON)
   const start: LocalMoment | undefined = input.start
   const startAxis = ((): number => {
     const first = days[0]
@@ -283,6 +406,23 @@ export function planDay(input: PlannerInput): PlannerResult {
     const list = machinesByType.get(machine.machineTypeId) ?? []
     list.push(machine)
     machinesByType.set(machine.machineTypeId, list)
+  }
+  // The axis moment of any local stamp: inside a horizon day exactly; on a day
+  // outside the horizon, just before the first day or just after the preceding one.
+  const axisOf = (moment: LocalMoment): number => {
+    const exact = dayByDate.get(moment.date)
+    if (exact) return exact.index * AXIS + moment.minutes
+    let previous: WorkDay | undefined
+    for (const day of days) if (day.date < moment.date) previous = day
+    return previous ? previous.index * AXIS + AXIS : -1
+  }
+  // Downtime windows are busy time on the unit (D-028); they add no load.
+  const downtimes = downtimesByMachine(input.downtimes)
+  for (const [machineId, list] of downtimes) {
+    const key = `m:${machineId}`
+    const existing = busy.get(key) ?? []
+    for (const downtime of list) existing.push({ start: axisOf(splitStamp(downtime.from)), end: axisOf(splitStamp(downtime.to)) })
+    busy.set(key, existing)
   }
   const workerOrder = (a: PlannerWorker, b: PlannerWorker): number =>
     (planned.get(a.userId) ?? 0) - (planned.get(b.userId) ?? 0) || a.username.localeCompare(b.username, 'sr')
@@ -518,10 +658,31 @@ export function planDay(input: PlannerInput): PlannerResult {
     const from = splitStamp(block.start)
     const to = splitStamp(block.end)
     const day = dayByDate.get(from.date)
-    if (!day) continue
+    if (!day) {
+      // A block before the horizon (an earlier day's published work, D-028):
+      // its step counts as finished by the start; nothing is booked or echoed.
+      if (days[0] && from.date < days[0].date) {
+        const stepKey = `${block.workOrderId}:${block.stepNodeId}`
+        pinnedSteps.add(stepKey)
+        pinnedFinish.set(stepKey, pinnedFinish.get(stepKey) ?? 0)
+      }
+      continue
+    }
     const base = day.index * AXIS
     for (const key of [...block.userIds.map((id) => `u:${id}`), ...(block.machineId ? [`m:${block.machineId}`] : [])]) {
       addBusy(key, base + from.minutes, base + to.minutes)
+    }
+    // Kept as it is, but a downtime of its machine is an issue the admin must resolve.
+    const down = downtimeHit(downtimes, block.machineId, block.start, block.end)
+    if (down) {
+      issues.push({
+        code: 'machine_down',
+        workOrderId: block.workOrderId,
+        orderNumber: block.orderNumber,
+        stepNodeId: block.stepNodeId,
+        stepLabel: block.stepLabel,
+        message: `Radni nalog ${block.orderNumber}, korak „${block.stepLabel}“: mašina „${block.machineName}“ je van pogona ${humanStamp(down.from)} – ${humanStamp(down.to)}, a zaključani blok je planiran u tom periodu.`,
+      })
     }
     assignments.push({ ...block })
     const stepKey = `${block.workOrderId}:${block.stepNodeId}`
@@ -538,13 +699,41 @@ export function planDay(input: PlannerInput): PlannerResult {
     key: string
     tail: number
     preds: ProcessNode[]
+    /** In-progress steps with a startedAt: the remaining minutes (D-028). */
+    minutes?: number
+    /** Nothing left: the 1-minute block ends, for successors, where it starts. */
+    finishAtStart?: boolean
   }
   const pending: Pending[] = []
   const inProgress: Pending[] = []
+  // The moment the remaining minutes of in-progress steps are measured to (D-028).
+  const reference: LocalMoment | null = start ?? (days[0] ? { date: days[0].date, minutes: days[0].shiftStart } : null)
   for (const order of input.orders) {
     const stepMinutes = new Map<string, number>()
     const steps = order.graph.nodes.filter((node) => node.kind === 'step')
     for (const step of steps) stepMinutes.set(step.id, stepDurationMinutes(step, order.quantity))
+    // In-progress steps with a startedAt keep only their remaining minutes (D-028).
+    const remainingOf = new Map<string, { minutes: number; finishAtStart: boolean }>()
+    for (const step of steps) {
+      if (stepStatus(step) !== 'in_progress' || !hasTimes(step) || !reference) continue
+      const full = stepMinutes.get(step.id) ?? 0
+      const began = stepMoment(step.startedAt, input.hours.timeZone)
+      if (full <= 0 || !began) continue
+      const worked = workingMinutesBetween(input.hours, began, reference)
+      const left = Math.max(full - worked, 0)
+      remainingOf.set(step.id, { minutes: Math.max(left, 1), finishAtStart: left === 0 })
+      stepMinutes.set(step.id, Math.max(left, 1))
+      if (worked > full) {
+        issues.push({
+          code: 'overrun',
+          workOrderId: order.id,
+          orderNumber: order.number,
+          stepNodeId: step.id,
+          stepLabel: step.label,
+          message: `Radni nalog ${order.number}, korak „${step.label}“: u toku je već ${worked} min rada, a planirano trajanje je ${full} min.`,
+        })
+      }
+    }
     // Longest remaining chain of work starting at each open step.
     const successors = new Map<string, string[]>()
     for (const step of steps) {
@@ -571,7 +760,7 @@ export function planDay(input: PlannerInput): PlannerResult {
       if (status === 'done' || status === 'skipped') continue
       const key = `${order.id}:${step.id}`
       if (pinnedSteps.has(key)) continue
-      const item: Pending = { order, step, key, tail: tailOf(step.id), preds: predecessorSteps(order.graph, step.id) }
+      const item: Pending = { order, step, key, tail: tailOf(step.id), preds: predecessorSteps(order.graph, step.id), ...remainingOf.get(step.id) }
       if (status === 'in_progress') inProgress.push(item)
       else pending.push(item)
     }
@@ -580,7 +769,7 @@ export function planDay(input: PlannerInput): PlannerResult {
   const toCtx = (item: Pending): StepCtx => ({
     order: item.order,
     step: item.step,
-    minutes: stepDurationMinutes(item.step, item.order.quantity),
+    minutes: item.minutes ?? stepDurationMinutes(item.step, item.order.quantity),
     crewSize: stepCrew(item.step),
   })
 
@@ -588,7 +777,8 @@ export function planDay(input: PlannerInput): PlannerResult {
     const ctx = toCtx(item)
     if (!hasTimes(item.step)) flag('missing_duration', item.order, item.step)
     const end = ctx.minutes === 0 ? placeZero(ctx, earliest) : place(ctx, earliest, locked)
-    if (end !== null) finish.set(item.key, end)
+    // A step with nothing left sits in a 1-minute block and counts as finished at its start (D-028).
+    if (end !== null) finish.set(item.key, item.finishAtStart ? end - 1 : end)
   }
 
   // In-progress steps first, at Start, locked.
@@ -608,7 +798,7 @@ export function planDay(input: PlannerInput): PlannerResult {
       const key = `${item.order.id}:${pred.id}`
       const end = finish.get(key)
       if (end === undefined) return null
-      earliest = Math.max(earliest, end)
+      earliest = Math.max(earliest, afterLag(end))
     }
     return earliest
   }
@@ -649,6 +839,17 @@ export function planDay(input: PlannerInput): PlannerResult {
     const unfinished = pending.some((item) => item.order.id === order.id && !finish.has(item.key))
     const unplannable = blocking || unfinished
     const estimated = unplannable ? null : (lastBlock.get(order.id) ?? fallbackDate)
+    // D-028: backward pass from the due date (calendar only, see latest-start.ts).
+    const latestStart = latestStartOf(
+      order.graph,
+      order.dueDate,
+      lag,
+      (step) => (hasTimes(step) ? stepDurationMinutes(step, order.quantity) : null),
+      (date) => {
+        const day = shiftOn(input.hours, date)
+        return day ? shiftSegments(day) : []
+      },
+    )
     return {
       workOrderId: order.id,
       orderNumber: order.number,
@@ -658,6 +859,8 @@ export function planDay(input: PlannerInput): PlannerResult {
       estimatedFinish: estimated,
       late: estimated !== null && order.dueDate !== null && estimated > order.dueDate,
       unplannable,
+      latestStart,
+      latestStartPassed: latestStart !== null && latestStart < fallbackDate,
     }
   })
   forecast.sort((a, b) => {
@@ -677,7 +880,7 @@ export function planDay(input: PlannerInput): PlannerResult {
 
   function compareCandidates(a: { item: Pending; slack: number }, b: { item: Pending; slack: number }): number {
     if (a.slack !== b.slack) return a.slack - b.slack
-    const rank = (PRIORITY_RANK[a.item.order.priority] ?? 1) - (PRIORITY_RANK[b.item.order.priority] ?? 1)
+    const rank = (PRIORITY_RANK[a.item.order.priority] ?? 2) - (PRIORITY_RANK[b.item.order.priority] ?? 2)
     return rank || compareOrders(a.item, b.item)
   }
 }
@@ -686,12 +889,17 @@ export function planDay(input: PlannerInput): PlannerResult {
 
 /** Conflicts in hand-edited blocks of one day (a simplified `planner.CheckDraft`). */
 export function checkDraft(
-  input: Pick<PlannerInput, 'hours' | 'date' | 'machineTypes' | 'machines' | 'workers' | 'orders'>,
+  input: Pick<PlannerInput, 'hours' | 'date' | 'machineTypes' | 'machines' | 'workers' | 'orders' | 'downtimes'>,
   assignments: PlanAssignment[],
 ): PlanIssue[] {
   const issues: PlanIssue[] = []
-  const day = input.hours.days.find((candidate) => candidate.weekday === isoWeekday(input.date))
+  const day = shiftOn(input.hours, input.date)
   const segments = day ? shiftSegments(day) : []
+  const downtimes = downtimesByMachine(input.downtimes)
+  const lag = transferMinutesOf(input.hours)
+  // The inter-operation time after an upstream end, within the day (a lag that
+  // does not elapse before the shift ends blocks every later start that day).
+  const afterLag = (minutes: number): number => afterWorkingMinutes(segments, minutes, lag, Number.POSITIVE_INFINITY)
   const machines = new Map(input.machines.map((machine) => [machine.id, machine]))
   const workers = new Map(input.workers.map((worker) => [worker.userId, worker]))
   const orders = new Map(input.orders.map((order) => [order.id, order]))
@@ -715,6 +923,8 @@ export function checkDraft(
     const order = orders.get(a.workOrderId)
     const step = order?.graph.nodes.find((node) => node.id === a.stepNodeId)
     if (a.machineId && (!machine || !machine.inService)) conflict(a, 'mašina nije u upotrebi.')
+    const down = downtimeHit(downtimes, a.machineId, a.start, a.end)
+    if (machine && down) conflict(a, `mašina „${machine.name}“ je van pogona ${humanStamp(down.from)} – ${humanStamp(down.to)}.`)
     if (machine && step?.machineTypeId && machine.machineTypeId !== step.machineTypeId) conflict(a, 'mašina je pogrešnog tipa.')
     if (step && a.userIds.length < stepCrew(step)) conflict(a, 'ekipa je manja od potrebne.')
     const lead = workers.get(a.leadUserId)
@@ -724,7 +934,11 @@ export function checkDraft(
     if (order && step) {
       for (const pred of predecessorSteps(order.graph, step.id)) {
         const upstream = assignments.filter((other) => other.workOrderId === a.workOrderId && other.stepNodeId === pred.id)
-        if (upstream.some((other) => other.end > a.start)) conflict(a, 'počinje pre završetka prethodnog koraka.')
+        if (upstream.some((other) => other.end > a.start)) {
+          conflict(a, 'počinje pre završetka prethodnog koraka.')
+        } else if (upstream.some((other) => afterLag(splitStamp(other.end).minutes) > start)) {
+          conflict(a, `počinje pre isteka međuoperacijskog vremena (${lag} min).`)
+        }
       }
     }
   }
@@ -743,9 +957,19 @@ export function checkDraft(
 
 // ---- drift ------------------------------------------------------------------
 
-/** Suggests a re-plan when today's published plan no longer matches the orders (see `planner.Drift`). */
-export function computeDrift(plan: ProductionPlan, orders: PlannerOrder[], now: LocalMoment): PlanDrift {
+/**
+ * Suggests a re-plan when today's published plan no longer matches the orders
+ * (see `planner.Drift`), or a block of an unfinished step lies in a downtime
+ * window of its machine (D-028).
+ */
+export function computeDrift(
+  plan: ProductionPlan,
+  orders: PlannerOrder[],
+  now: LocalMoment,
+  downtimes: readonly MachineDowntime[] = [],
+): PlanDrift {
   const reasons: string[] = []
+  const byMachine = downtimesByMachine(downtimes)
   const statusOf = (workOrderId: string, stepNodeId: string): string | null => {
     const step = orders.find((order) => order.id === workOrderId)?.graph.nodes.find((node) => node.id === stepNodeId)
     return step ? stepStatus(step) : null
@@ -761,6 +985,13 @@ export function computeDrift(plan: ProductionPlan, orders: PlannerOrder[], now: 
       reasons.push(`Korak „${block.stepLabel}“ (nalog ${block.orderNumber}) je trebalo da počne u ${clock(from.minutes)}.`)
     } else if (ended && status !== 'done' && status !== 'skipped') {
       reasons.push(`Korak „${block.stepLabel}“ (nalog ${block.orderNumber}) nije završen u planiranom roku.`)
+    }
+    if (status === 'done' || status === 'skipped') continue
+    const down = downtimeHit(byMachine, block.machineId, block.start, block.end)
+    if (down) {
+      reasons.push(
+        `Korak „${block.stepLabel}“ (nalog ${block.orderNumber}): mašina „${block.machineName}“ je van pogona ${humanStamp(down.from)} – ${humanStamp(down.to)}.`,
+      )
     }
   }
   for (const order of orders) {

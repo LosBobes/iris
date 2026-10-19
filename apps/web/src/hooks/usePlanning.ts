@@ -22,6 +22,16 @@ export function useMachines() {
   })
 }
 
+/** Downtime windows of one machine (D-028); fetched only while `enabled`. */
+export function useMachineDowntimes(machineId: string, enabled = true) {
+  return useQuery({
+    queryKey: planningKeys.machineDowntimes(machineId),
+    queryFn: () => window.api.listMachineDowntimes(machineId),
+    staleTime: REFERENCE_STALE_TIME_MS,
+    enabled,
+  })
+}
+
 export function useQualifications() {
   return useQuery({
     queryKey: planningKeys.qualifications,
@@ -30,18 +40,30 @@ export function useQualifications() {
   })
 }
 
-export function useWorkingHours() {
+/** Pass `enabled: false` outside `ModuleGate` (e.g. the process panel while Planiranje is off). */
+export function useWorkingHours(enabled = true) {
   return useQuery({
     queryKey: planningKeys.workingHours,
     queryFn: () => window.api.getWorkingHours(),
     staleTime: REFERENCE_STALE_TIME_MS,
+    enabled,
   })
 }
 
-export function usePlanDay(date: string) {
+export function usePlanDay(date: string, enabled = true) {
   return useQuery({
     queryKey: planningKeys.planDay(date),
     queryFn: () => window.api.getPlanDay(date),
+    enabled,
+  })
+}
+
+/** The kept horizon of the date's draft and published plan (admins only, D-028). */
+export function usePlanHorizon(date: string, enabled = true) {
+  return useQuery({
+    queryKey: planningKeys.planHorizon(date),
+    queryFn: () => window.api.getPlanHorizon(date),
+    enabled,
   })
 }
 

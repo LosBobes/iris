@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // Production planning ("Planiranje", D-026): machines, worker qualifications,
 // attendance, working hours and day plans produced by internal/planner. The
 // whole feature sits behind the "planning" organization module (off by
@@ -16,6 +18,13 @@ const (
 	PlanningForecastDays    = 14     // working days the forecast looks ahead
 	MaxPlanAssignments      = 2000
 	DefaultPlanningTimeZone = "Europe/Belgrade"
+	// MaxTransferMinutes caps the inter-operation time (D-028): 8 hours.
+	MaxTransferMinutes = 480
+	// MaxWorkingHoursExceptions caps the exception-date list (D-028).
+	MaxWorkingHoursExceptions = 400
+	// PlanningLocalLayout is the local "YYYY-MM-DDTHH:MM" of plan blocks and
+	// machine downtimes (no zone: the working-hours time zone applies).
+	PlanningLocalLayout = "2006-01-02T15:04"
 )
 
 // MachineType groups interchangeable machine units ("Offset štampa B2").
@@ -50,6 +59,27 @@ type MachineInput struct {
 	Name          string `json:"name"`
 	InService     bool   `json:"inService"`
 	Note          string `json:"note,omitempty"`
+}
+
+// MachineDowntime is a dated window (D-028) in which a machine unit is not
+// available: planned maintenance or a breakdown with a known end. From/To are
+// local "YYYY-MM-DDTHH:MM" in the working-hours time zone, From < To. The
+// planner treats the window as busy; a locked block overlapping it is reported
+// as PlanIssueMachineDown and a hand-edited one as a conflict.
+type MachineDowntime struct {
+	ID        string `json:"id"`
+	MachineID string `json:"machineId"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Note      string `json:"note,omitempty"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// MachineDowntimeInput creates a downtime window.
+type MachineDowntimeInput struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Note string `json:"note,omitempty"`
 }
 
 // WorkerQualifications lists the machine types one organization user may run.
@@ -102,12 +132,64 @@ type WorkingDay struct {
 	Breaks  []WorkingBreak `json:"breaks"`
 }
 
+// WorkingHoursException overrides the weekly pattern on one civil date
+// ("YYYY-MM-DD", D-028): with Off the date is a day off (a holiday) whatever
+// its weekday; otherwise Start/End/Breaks are that date's one-off shift (the
+// same rules as WorkingDay). The calendar consults exceptions before the
+// weekday pattern.
+type WorkingHoursException struct {
+	Date   string         `json:"date"`
+	Off    bool           `json:"off"`
+	Start  string         `json:"start,omitempty"`
+	End    string         `json:"end,omitempty"`
+	Breaks []WorkingBreak `json:"breaks"`
+}
+
 // WorkingHours is the organization-wide shift calendar, stored in
-// app_settings under "working_hours". Weekdays not listed are days off.
+// app_settings under "working_hours". Weekdays not listed are days off;
+// Exceptions (at most MaxWorkingHoursExceptions) override single dates.
 // TimeZone is an IANA name; plans, attendance dates and "now" use it.
+//
+// TransferMinutes is the inter-operation time ("međuoperacijsko vreme",
+// D-028): one organization-wide average of the waiting and transfer time
+// between two consecutive steps. The planner starts a step no earlier than
+// that many minutes of working time after every upstream step ends (a lag
+// pauses for breaks and the end of the shift, and may cross a day boundary).
+// 0 (the default) chains steps back to back, as before D-028.
 type WorkingHours struct {
-	TimeZone string       `json:"timeZone"`
-	Days     []WorkingDay `json:"days"`
+	TimeZone        string                  `json:"timeZone"`
+	Days            []WorkingDay            `json:"days"`
+	TransferMinutes int                     `json:"transferMinutes"`
+	Exceptions      []WorkingHoursException `json:"exceptions"`
+}
+
+// ShiftOn is the shift of a civil date: its exception when one exists (ok
+// false for a day off), else the weekday's pattern (ok false when unlisted or
+// the date is malformed).
+func (h WorkingHours) ShiftOn(date string) (WorkingDay, bool) {
+	for _, exception := range h.Exceptions {
+		if exception.Date != date {
+			continue
+		}
+		if exception.Off {
+			return WorkingDay{}, false
+		}
+		return WorkingDay{Start: exception.Start, End: exception.End, Breaks: exception.Breaks}, true
+	}
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return WorkingDay{}, false
+	}
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	for _, day := range h.Days {
+		if day.Weekday == weekday {
+			return day, true
+		}
+	}
+	return WorkingDay{}, false
 }
 
 // DefaultWorkingHours is Monday to Friday 07:00–15:00 with a 30-minute break
@@ -120,7 +202,7 @@ func DefaultWorkingHours() WorkingHours {
 			Breaks: []WorkingBreak{{Start: "11:00", End: "11:30"}},
 		})
 	}
-	return WorkingHours{TimeZone: DefaultPlanningTimeZone, Days: days}
+	return WorkingHours{TimeZone: DefaultPlanningTimeZone, Days: days, Exceptions: []WorkingHoursException{}}
 }
 
 // PlanStatus is the lifecycle of a day plan: a draft the admin edits, then the
@@ -179,6 +261,13 @@ const (
 	// Manual edit conflicts: the same machine or person is booked twice, a step
 	// starts before its predecessor ends, or a block lies outside working hours.
 	PlanIssueConflict PlanIssueCode = "conflict"
+	// A locked (kept) block lies in a downtime window of its machine (D-028):
+	// the machine is not available while the step is planned on it.
+	PlanIssueMachineDown PlanIssueCode = "machine_down"
+	// An in-progress step has been worked on (working minutes since its
+	// startedAt) longer than its planned duration (D-028). Informational: the
+	// step is still planned and the order stays plannable.
+	PlanIssueOverrun PlanIssueCode = "overrun"
 )
 
 // PlanIssue is a step the plan could not place, or a conflict in an edited
@@ -204,13 +293,28 @@ type OrderForecast struct {
 	EstimatedFinish *string `json:"estimatedFinish"`
 	Late            bool    `json:"late"`
 	Unplannable     bool    `json:"unplannable"`
+	// LatestStart is the local date the order's remaining steps must start by
+	// to finish by the end of its due date (D-028): a backward pass over the
+	// longest remaining chain (durations + TransferMinutes, working time
+	// only). Informational; nil without a due date, without open steps, or
+	// when an open step has no duration.
+	LatestStart *string `json:"latestStart"`
+	// LatestStartPassed is LatestStart before the forecast's start date.
+	LatestStartPassed bool `json:"latestStartPassed"`
 }
 
-// ProductionPlan is a day plan (draft or published).
+// ProductionPlan is a day plan (draft or published). The stored plan keeps
+// every block its planner run produced over the whole horizon (Date through
+// HorizonEnd; D-028), but the plan date is what is published and shown: the
+// plan endpoints return only the Date's blocks, and GET /planning/plan/horizon
+// the rest, grouped by day.
 type ProductionPlan struct {
-	ID          string           `json:"id"`
-	Date        string           `json:"date"`
-	Status      PlanStatus       `json:"status"`
+	ID     string     `json:"id"`
+	Date   string     `json:"date"`
+	Status PlanStatus `json:"status"`
+	// HorizonEnd is the last working day the run could place steps on
+	// (PlanningForecastDays working days from Date; Date itself for a day off).
+	HorizonEnd  string           `json:"horizonEnd"`
 	GeneratedAt string           `json:"generatedAt"`
 	GeneratedBy string           `json:"generatedBy"`
 	UpdatedAt   string           `json:"updatedAt"`
@@ -221,6 +325,35 @@ type ProductionPlan struct {
 	Issues      []PlanIssue      `json:"issues"`
 	// LateOrders are the orders this plan's run forecasts past their due date.
 	LateOrders []OrderForecast `json:"lateOrders"`
+}
+
+// PlanHorizonDay is one day's blocks of a plan's kept horizon, sorted by
+// start.
+type PlanHorizonDay struct {
+	Date        string           `json:"date"`
+	Assignments []PlanAssignment `json:"assignments"`
+}
+
+// PlanHorizon is every block a plan's run produced, grouped by day from the
+// plan date to HorizonEnd (days without a block are left out), with the run's
+// issues. Hand edits only ever touch the plan date's blocks.
+type PlanHorizon struct {
+	PlanID      string           `json:"planId"`
+	Status      PlanStatus       `json:"status"`
+	Date        string           `json:"date"`
+	HorizonEnd  string           `json:"horizonEnd"`
+	GeneratedAt string           `json:"generatedAt"`
+	UpdatedAt   string           `json:"updatedAt"`
+	Days        []PlanHorizonDay `json:"days"`
+	Issues      []PlanIssue      `json:"issues"`
+}
+
+// PlanDayHorizon is the answer of GET /planning/plan/horizon (admins): the
+// kept horizon of the date's draft and published plan (nil when absent).
+type PlanDayHorizon struct {
+	Date      string       `json:"date"`
+	Draft     *PlanHorizon `json:"draft"`
+	Published *PlanHorizon `json:"published"`
 }
 
 // PlanDrift reports, for the published plan of today, why a re-plan is
@@ -275,4 +408,136 @@ type MyQueueItem struct {
 	PlanAssignment
 	StepStatus ProcessStepStatus `json:"stepStatus"`
 	IsLead     bool              `json:"isLead"`
+}
+
+// ---- Workstation load ("Zauzetost", D-028) ----
+
+const (
+	// MaxLoadDays caps the range of GET /planning/load (inclusive).
+	MaxLoadDays = 31
+	// LoadNoMachineTypeName names the pseudo machine type (id "") that holds
+	// steps without a machine type and blocks on machines that no longer exist.
+	LoadNoMachineTypeName = "Bez mašine"
+)
+
+// LoadSource says which plans supplied the blocks of a load report: the
+// published plans, or (admins, from = today) today's draft in place of
+// today's published plan.
+type LoadSource string
+
+const (
+	LoadSourcePublished LoadSource = "published"
+	LoadSourceDraft     LoadSource = "draft"
+)
+
+// WorkstationLoadBlock is one planned block on a unit-day or person-day:
+// enough to list what fills the day (order, step, minutes) without the whole
+// PlanAssignment. Start/End are local "YYYY-MM-DDTHH:MM".
+type WorkstationLoadBlock struct {
+	WorkOrderID string `json:"workOrderId"`
+	OrderNumber string `json:"orderNumber"`
+	StepNodeID  string `json:"stepNodeId"`
+	StepLabel   string `json:"stepLabel"`
+	MachineName string `json:"machineName"`
+	Start       string `json:"start"`
+	End         string `json:"end"`
+	Minutes     int    `json:"minutes"`
+	LeadUserID  string `json:"leadUserId,omitempty"`
+}
+
+// WorkstationLoadTotal is a machine type's planned and available minutes on
+// one day (the sum over its units).
+type WorkstationLoadTotal struct {
+	Date             string `json:"date"`
+	PlannedMinutes   int    `json:"plannedMinutes"`
+	AvailableMinutes int    `json:"availableMinutes"`
+}
+
+// WorkstationLoadDay is one unit's or person's day: PlannedMinutes is the sum
+// of the blocks starting that day, AvailableMinutes the shift minus breaks
+// (minus downtime windows for a unit; 0 for a unit out of service or a person
+// not present), Blocks sorted by start.
+type WorkstationLoadDay struct {
+	Date             string                 `json:"date"`
+	PlannedMinutes   int                    `json:"plannedMinutes"`
+	AvailableMinutes int                    `json:"availableMinutes"`
+	Blocks           []WorkstationLoadBlock `json:"blocks"`
+}
+
+// WorkstationLoadUnit is one machine unit's load per day.
+type WorkstationLoadUnit struct {
+	ID        string               `json:"id"`
+	Name      string               `json:"name"`
+	InService bool                 `json:"inService"`
+	Days      []WorkstationLoadDay `json:"days"`
+}
+
+// WorkstationLoadType is one machine type with its units and per-day totals.
+type WorkstationLoadType struct {
+	ID    string                 `json:"id"`
+	Name  string                 `json:"name"`
+	Units []WorkstationLoadUnit  `json:"units"`
+	Days  []WorkstationLoadTotal `json:"days"`
+}
+
+// WorkstationLoadPerson is one user's load per day (as lead or crew).
+type WorkstationLoadPerson struct {
+	UserID   string               `json:"userId"`
+	Username string               `json:"username"`
+	Days     []WorkstationLoadDay `json:"days"`
+}
+
+// WorkstationLoad is the answer of GET /planning/load: planned against
+// available minutes per machine type, unit and person for each day of Days
+// (the working days of From..To, plus any day off that still carries planned
+// blocks). Every Days list of a type, unit or person follows Days.
+type WorkstationLoad struct {
+	From         string                  `json:"from"`
+	To           string                  `json:"to"`
+	Source       LoadSource              `json:"source"`
+	Days         []string                `json:"days"`
+	MachineTypes []WorkstationLoadType   `json:"machineTypes"`
+	People       []WorkstationLoadPerson `json:"people"`
+}
+
+// Calibration report (D-028, "Actual step times"): read-only, nothing is
+// applied automatically.
+
+// Calibration limits.
+const (
+	// CalibrationDefaultDays is the default report window: the last 60 days
+	// (today included).
+	CalibrationDefaultDays = 60
+	// CalibrationMaxDays caps the report window.
+	CalibrationMaxDays = 366
+)
+
+// PlanningCalibrationWindow is the report's inclusive local date range.
+type PlanningCalibrationWindow struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// PlanningCalibrationStep compares planned with measured working minutes of
+// the done steps sharing one label. Ratio is actual / planned.
+type PlanningCalibrationStep struct {
+	Label             string  `json:"label"`
+	Count             int     `json:"count"`
+	PlannedMinutesAvg float64 `json:"plannedMinutesAvg"`
+	ActualMinutesAvg  float64 `json:"actualMinutesAvg"`
+	Ratio             float64 `json:"ratio"`
+}
+
+// PlanningCalibration is the answer of GET /planning/calibration: over the
+// orders whose process finished in the window, the measured inter-operation
+// time (recommended transferMinutes) and planned vs actual minutes per step
+// label, sorted by how far the ratio is from 1.
+type PlanningCalibration struct {
+	Window                 PlanningCalibrationWindow `json:"window"`
+	Orders                 int                       `json:"orders"`
+	OrdersWithTimes        int                       `json:"ordersWithTimes"`
+	AvgTransferMinutes     *int                      `json:"avgTransferMinutes"`
+	MedianTransferMinutes  *int                      `json:"medianTransferMinutes"`
+	CurrentTransferMinutes int                       `json:"currentTransferMinutes"`
+	Steps                  []PlanningCalibrationStep `json:"steps"`
 }

@@ -70,6 +70,11 @@ type PlanningStore interface {
 	UpdateMachine(ctx context.Context, id string, input domain.MachineInput) (*domain.Machine, error)
 	DeleteMachine(ctx context.Context, id string) error
 
+	// Downtime windows of a machine (D-028).
+	MachineDowntimes(ctx context.Context, machineID string) ([]domain.MachineDowntime, error)
+	CreateMachineDowntime(ctx context.Context, machineID string, input domain.MachineDowntimeInput) (*domain.MachineDowntime, error)
+	DeleteMachineDowntime(ctx context.Context, machineID, id string) error
+
 	Qualifications(ctx context.Context) ([]domain.WorkerQualifications, error)
 	SetQualifications(ctx context.Context, userID string, input domain.WorkerQualificationsInput) (*domain.WorkerQualifications, error)
 
@@ -79,12 +84,18 @@ type PlanningStore interface {
 	// PlanDay returns the plans of a local date ("" = today); the draft only
 	// when includeDraft is set (admins).
 	PlanDay(ctx context.Context, date string, includeDraft bool) (domain.PlanDay, error)
+	// PlanHorizon returns every block of the date's plans over the whole kept
+	// horizon, grouped by day (admins only).
+	PlanHorizon(ctx context.Context, date string) (domain.PlanDayHorizon, error)
 	GeneratePlan(ctx context.Context, input domain.PlanGenerateInput, username string) (*domain.ProductionPlan, error)
 	SavePlanDraft(ctx context.Context, input domain.PlanDraftInput, username string) (*domain.ProductionPlan, error)
 	DiscardPlanDraft(ctx context.Context, date string) error
 	PublishPlan(ctx context.Context, input domain.PlanPublishInput, username string) (*domain.ProductionPlan, error)
 	MyQueue(ctx context.Context, userID, date string) (domain.MyQueue, error)
 	Forecast(ctx context.Context) ([]domain.OrderForecast, error)
+	// PlanningCalibration is the read-only calibration report over a local
+	// date window ("" = default; D-028, admins only).
+	PlanningCalibration(ctx context.Context, from, to string) (domain.PlanningCalibration, error)
 }
 
 var _ PlanningStore = (*SQLiteStore)(nil)
@@ -443,19 +454,31 @@ func (s *SQLiteStore) UpdateMachine(ctx context.Context, id string, input domain
 	return &machine, nil
 }
 
-// DeleteMachine returns ErrMachineNotFound for an unknown id. Plans keep their
-// blocks (they store the machine name).
+// DeleteMachine removes a unit and its downtime windows. It returns
+// ErrMachineNotFound for an unknown id. Plans keep their blocks (they store
+// the machine name).
 func (s *SQLiteStore) DeleteMachine(ctx context.Context, id string) error {
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, `DELETE FROM machines WHERE id = ? AND tenant_id = ?`, id, tenantID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete machine: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM machine_downtimes WHERE machine_id = ? AND tenant_id = ?`, id, tenantID); err != nil {
+		return fmt.Errorf("delete machine downtimes: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM machines WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("delete machine: %w", err)
 	}
 	if affected, err := result.RowsAffected(); err == nil && affected == 0 {
 		return ErrMachineNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete machine: %w", err)
 	}
 	return nil
 }
@@ -623,19 +646,37 @@ func readWorkingHours(ctx context.Context, q dbExecQuerier, tenantID string) (do
 	return normalizeWorkingHours(hours), nil
 }
 
-// normalizeWorkingHours sorts the days and turns nil slices into empty ones so
-// the JSON always carries arrays.
+// normalizeWorkingHours sorts the days, breaks and exception dates and turns
+// nil slices into empty ones so the JSON always carries arrays. A day-off
+// exception carries no shift.
 func normalizeWorkingHours(hours domain.WorkingHours) domain.WorkingHours {
+	sortedBreaks := func(breaks []domain.WorkingBreak) []domain.WorkingBreak {
+		out := make([]domain.WorkingBreak, len(breaks))
+		copy(out, breaks)
+		sort.Slice(out, func(a, b int) bool { return out[a].Start < out[b].Start })
+		return out
+	}
 	days := make([]domain.WorkingDay, len(hours.Days))
 	for i, day := range hours.Days {
-		breaks := make([]domain.WorkingBreak, len(day.Breaks))
-		copy(breaks, day.Breaks)
-		sort.Slice(breaks, func(a, b int) bool { return breaks[a].Start < breaks[b].Start })
-		day.Breaks = breaks
+		day.Breaks = sortedBreaks(day.Breaks)
 		days[i] = day
 	}
 	sort.Slice(days, func(a, b int) bool { return days[a].Weekday < days[b].Weekday })
-	return domain.WorkingHours{TimeZone: strings.TrimSpace(hours.TimeZone), Days: days}
+	exceptions := make([]domain.WorkingHoursException, len(hours.Exceptions))
+	for i, exception := range hours.Exceptions {
+		exception.Date = strings.TrimSpace(exception.Date)
+		if exception.Off {
+			exception.Start, exception.End, exception.Breaks = "", "", []domain.WorkingBreak{}
+		} else {
+			exception.Breaks = sortedBreaks(exception.Breaks)
+		}
+		exceptions[i] = exception
+	}
+	sort.SliceStable(exceptions, func(a, b int) bool { return exceptions[a].Date < exceptions[b].Date })
+	return domain.WorkingHours{
+		TimeZone: strings.TrimSpace(hours.TimeZone), Days: days, TransferMinutes: hours.TransferMinutes,
+		Exceptions: exceptions,
+	}
 }
 
 // planningLocation loads the working-hours time zone, falling back to the

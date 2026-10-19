@@ -3,6 +3,7 @@ package domain
 import (
 	"math"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -65,8 +66,9 @@ func processConnectionAllowed(source, target ProcessNodeKind) bool {
 // NormalizeProcessGraph validates a graph and returns a cleaned copy: labels
 // are trimmed, state, quantity and marker fields (start on steps, final on
 // products/byproducts) that do not belong to a node's kind are dropped, and nil slices become empty ones. The input is not modified.
-// Per-order state (status, actualQuantity) is kept as sent; step statuses that
-// are set must be valid.
+// Per-order state (status, actualQuantity, startedAt, finishedAt) is kept as
+// sent; step statuses that are set must be valid and step times must be RFC
+// 3339 timestamps (normalized to UTC) with finishedAt no earlier than startedAt.
 func NormalizeProcessGraph(graph ProcessGraph) (ProcessGraph, error) {
 	if len(graph.Nodes) < 1 || len(graph.Nodes) > MaxProcessNodes {
 		return ProcessGraph{}, graphError("Proces mora imati između 1 i 200 čvorova.")
@@ -127,8 +129,19 @@ func NormalizeProcessGraph(graph ProcessGraph) (ProcessGraph, error) {
 			if node.Status != "" && !node.Status.valid() {
 				return ProcessGraph{}, graphError("Nepoznat status koraka.")
 			}
+			var err error
+			if node.StartedAt, err = normalizeStepTime(node.StartedAt); err != nil {
+				return ProcessGraph{}, err
+			}
+			if node.FinishedAt, err = normalizeStepTime(node.FinishedAt); err != nil {
+				return ProcessGraph{}, err
+			}
+			if err := checkStepTimeOrder(node); err != nil {
+				return ProcessGraph{}, err
+			}
 		} else {
 			node.Status = ""
+			node.StartedAt, node.FinishedAt = "", ""
 			node.Start = false
 			node.MachineTypeID, node.CrewSize, node.SetupMinutes, node.MinutesPerUnit = "", nil, nil, nil
 			if node.Kind == ProcessNodeInput {
@@ -209,6 +222,131 @@ func copyFloat(value *float64) *float64 {
 	return &copied
 }
 
+// User-facing messages for step time validation.
+const (
+	StepTimeInvalidMessage = "Vreme koraka nije ispravno."
+	StepTimeOrderMessage   = "Završetak koraka ne može biti pre početka."
+)
+
+// normalizeStepTime trims a step timestamp and rewrites it as RFC 3339 in UTC;
+// an empty value stays empty.
+func normalizeStepTime(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return "", graphError(StepTimeInvalidMessage)
+	}
+	return FormatStepTime(parsed), nil
+}
+
+// FormatStepTime renders a step timestamp the way the graph stores it.
+func FormatStepTime(at time.Time) string {
+	return at.UTC().Truncate(time.Second).Format(time.RFC3339)
+}
+
+// checkStepTimeOrder rejects a finish before the start (both normalized).
+func checkStepTimeOrder(node ProcessNode) error {
+	if node.StartedAt == "" || node.FinishedAt == "" {
+		return nil
+	}
+	started, err1 := time.Parse(time.RFC3339, node.StartedAt)
+	finished, err2 := time.Parse(time.RFC3339, node.FinishedAt)
+	if err1 != nil || err2 != nil {
+		return graphError(StepTimeInvalidMessage)
+	}
+	if finished.Before(started) {
+		return graphError(StepTimeOrderMessage)
+	}
+	return nil
+}
+
+func stepFinished(status ProcessStepStatus) bool {
+	return status == ProcessStepDone || status == ProcessStepSkipped
+}
+
+// ApplyStepTimestamps fills the actual step times of next from its status
+// transitions against current (the stored graph; both normalized) and returns
+// the result. For every step whose status changed:
+//
+//   - to in_progress: startedAt is set to now when empty, and a finishedAt
+//     carried over unchanged from a done/skipped step is cleared (the step is
+//     open again);
+//   - to done or skipped: finishedAt is set to now when empty;
+//   - to pending: both are cleared, unless the client changed them in the same
+//     request.
+//
+// Values the client sent explicitly (an admin correction) are kept, so the
+// result is re-checked for finishedAt >= startedAt. Steps whose status did not
+// change keep whatever next carries. The input is not modified.
+func ApplyStepTimestamps(current, next ProcessGraph, now time.Time) (ProcessGraph, error) {
+	previous := make(map[string]ProcessNode, len(current.Nodes))
+	for _, node := range current.Nodes {
+		previous[node.ID] = node
+	}
+	out := CloneProcessGraph(next)
+	stamp := FormatStepTime(now)
+	for i := range out.Nodes {
+		node := &out.Nodes[i]
+		if node.Kind != ProcessNodeStep {
+			continue
+		}
+		old, existed := previous[node.ID]
+		if existed && old.Kind == ProcessNodeStep && old.Status == node.Status {
+			continue
+		}
+		sameStart := !existed || node.StartedAt == old.StartedAt
+		sameFinish := !existed || node.FinishedAt == old.FinishedAt
+		switch node.Status {
+		case ProcessStepInProgress:
+			if node.StartedAt == "" {
+				node.StartedAt = stamp
+			}
+			if existed && stepFinished(old.Status) && sameFinish {
+				node.FinishedAt = ""
+			}
+		case ProcessStepDone, ProcessStepSkipped:
+			if node.FinishedAt == "" {
+				node.FinishedAt = stamp
+			}
+		case ProcessStepPending:
+			if sameStart && sameFinish {
+				node.StartedAt, node.FinishedAt = "", ""
+			}
+		}
+		if err := checkStepTimeOrder(*node); err != nil {
+			return ProcessGraph{}, err
+		}
+	}
+	return out, nil
+}
+
+// PlannedQuantityFactor is what item-node quantities are multiplied by to get
+// the planned amount for an order: the order's jobDetails.quantity (at least 1)
+// for per-unit copies, or 1 for a copy flagged quantitiesPerOrder (D-028).
+func PlannedQuantityFactor(quantity *int, quantitiesPerOrder bool) float64 {
+	if quantitiesPerOrder || quantity == nil || *quantity < 1 {
+		return 1
+	}
+	return float64(*quantity)
+}
+
+// WorkOrderQuantityFactor is PlannedQuantityFactor for a loaded work order.
+func WorkOrderQuantityFactor(workOrder *WorkOrder, quantitiesPerOrder bool) float64 {
+	if workOrder == nil || workOrder.JobDetails == nil {
+		return PlannedQuantityFactor(nil, quantitiesPerOrder)
+	}
+	return PlannedQuantityFactor(workOrder.JobDetails.Quantity, quantitiesPerOrder)
+}
+
+// ScalePlannedQuantity multiplies a per-unit quantity by the order factor,
+// rounded to three decimals (the precision stock quantities are shown with).
+func ScalePlannedQuantity(quantity, factor float64) float64 {
+	return math.Round(quantity*factor*1000) / 1000
+}
+
 // processGraphHasCycle runs Kahn's algorithm over a graph whose edges are
 // already known to reference existing nodes.
 func processGraphHasCycle(graph ProcessGraph) bool {
@@ -243,8 +381,8 @@ func processGraphHasCycle(graph ProcessGraph) bool {
 }
 
 // PrepareTemplateGraph validates a graph for storage as a template: per-order
-// state (status, actualQuantity) is stripped before validation, so a template
-// never carries it.
+// state (status, actualQuantity, startedAt, finishedAt) is stripped before
+// validation, so a template never carries it.
 func PrepareTemplateGraph(graph ProcessGraph) (ProcessGraph, error) {
 	return NormalizeProcessGraph(StripProcessState(graph))
 }
@@ -270,6 +408,7 @@ func StripProcessState(graph ProcessGraph) ProcessGraph {
 	for i := range out.Nodes {
 		out.Nodes[i].Status = ""
 		out.Nodes[i].ActualQuantity = nil
+		out.Nodes[i].StartedAt, out.Nodes[i].FinishedAt = "", ""
 	}
 	return out
 }
@@ -305,8 +444,8 @@ func CloneProcessGraph(graph ProcessGraph) ProcessGraph {
 }
 
 // ProcessStructureChanged reports whether next differs from current in more
-// than per-order state and layout. Status, actualQuantity, note and the x/y
-// position may change freely; the node set, kind, label, quantity, unit,
+// than per-order state and layout. Status, actualQuantity, startedAt,
+// finishedAt, note and the x/y position may change freely; the node set, kind, label, quantity, unit,
 // catalogItemId, the start/final markers, the planning fields (machine type,
 // crew size, setup and per-unit minutes) and the edge set (including labels)
 // may not. Both graphs

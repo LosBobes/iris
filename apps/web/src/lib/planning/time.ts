@@ -34,6 +34,25 @@ export function dateOfLocal(local: string): string {
   return local.slice(0, 10)
 }
 
+const LOCAL_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)$/
+
+/** Whether a value is a local "YYYY-MM-DDTHH:MM" naming a real calendar date. */
+export function isLocalDateTime(value: string): boolean {
+  const match = LOCAL_PATTERN.exec(value)
+  if (!match) return false
+  const [, year, month, day] = match
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
+  return date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day)
+}
+
+/** Local "YYYY-MM-DDTHH:MM" as the user-facing "DD.MM.YYYY HH:MM". */
+export function formatLocalDateTime(local: string): string {
+  const match = LOCAL_PATTERN.exec(local)
+  if (!match) return local
+  const [, year, month, day, hour, minute] = match
+  return `${day}.${month}.${year} ${hour}:${minute}`
+}
+
 export function minutesOfLocal(local: string): number {
   return toMinutes(timeOfLocal(local))
 }
@@ -67,7 +86,13 @@ export function dayWindow(
   hours: WorkingHours | undefined,
   assignments: readonly PlanAssignment[],
 ): DayWindow {
-  const day = hours?.days.find((entry) => entry.weekday === isoWeekday(date))
+  // An exception date (day off or one-off hours, D-028) replaces the weekday's shift.
+  const exception = (hours?.exceptions ?? []).find((entry) => entry.date === date)
+  const day = exception
+    ? exception.off
+      ? undefined
+      : { start: exception.start ?? '', end: exception.end ?? '' }
+    : hours?.days.find((entry) => entry.weekday === isoWeekday(date))
   let start = day ? toMinutes(day.start) : Number.NaN
   let end = day ? toMinutes(day.end) : Number.NaN
   for (const assignment of assignments) {
