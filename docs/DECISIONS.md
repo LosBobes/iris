@@ -6,6 +6,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 - `accepted`: Active architectural decision.
 - `temporary`: Active for now, expected to evolve.
 - `superseded`: Replaced by a more recent decision.
+- `proposed`: Under discussion; not yet implemented or binding.
 
 ---
 
@@ -323,6 +324,29 @@ This document records the project-level architectural decisions (ADRs) that shap
   - Every planning change above is additive on the `planning` module and gated on `modules.planning`; the materials rule touches `processes`/`stock` and must be applied together across openapi, domain, store and the web simulator (contract-sync).
   - Keeping the horizon makes a plan row larger (blocks for up to 14 working days); the plan date remains what is published and shown by default.
   - Operators gain no new duties: timestamps come from the buttons they already press in "Moj red".
+
+---
+
+## D-029: Government e-invoicing (SEF) and e-dispatch notes (eOtpremnica) as an outbox-backed module
+- **Status**: `proposed`
+- **Context**: Serbian law requires B2B and B2G invoices to go through the Ministry of Finance's Sistem elektronskih faktura (SEF, UBL 2.1 XML with the Serbian CIUS, per-company API key) since 2023. The electronic dispatch note law adds eOtpremnica (with the buyer's confirming *prijemnica*): mandatory since 1 Jan 2026 for the public sector, suppliers to it and excise goods, and for all firms from 1 Oct 2027. A print shop delivering printed goods to schools, municipalities or public companies may already be in phase 1. Iris has an `InvoiceDraft` per work order (number, line items, unit, status), customer PIB/MB, goods/service lines, VAT handling and a stock ledger (D-018), but cannot produce a legally valid e-invoice: the organization's own seller identity, supply/payment dates, per-line VAT category and exemption reason, UN/ECE unit codes, structured buyer addresses and the public-sector JBKJS number are missing, and an issued invoice can still be edited.
+- **Decision** (proposed):
+  - **Ask first who issues invoices today.** If the shop's accountant already invoices through accounting software connected to SEF, prefer an export from Iris to that software over a direct connection; Iris then never holds legal invoice records. The rest of this decision applies when invoices are meant to originate in Iris.
+  - **Module.** A per-organization module `einvoicing` (D-019 pattern): off by default, Backoffice-only, no requirements; eOtpremnica may be a second flag (`edispatch`) so a shop can enable one without the other. Disabled routes return 403; every UI surface is gated on `useOrganization().modules`.
+  - **Data gaps first** (contract-sync: openapi ↔ domain ↔ store/migration ↔ `work-order.ts` ↔ fixtures): seller identity in `app_settings` (PIB, MB, structured address, bank account, VAT-payer flag; `add-settings-flag`); on the invoice: issue date, date of supply (*datum prometa*), payment due date, payment reference (*poziv na broj*), currency, buyer order/contract reference; per line: VAT category (`S`, `AE`, `E`, `O`, `Z`) and exemption reason code; a UN/ECE Rec. 20 code per unit (`kom`→`H87`, `m2`→`MTK`, `set`→`SET`, and one required for every admin-added `invoiceUnit` value); a structured customer address and JBKJS for public-sector buyers.
+  - **Credentials.** The SEF (and eOtpremnica) API key is stored per tenant, encrypted at rest with a server-side key from the environment, write-only (admins can set or replace it, the API never returns it). Separate keys for the SEF demo and production environments.
+  - **Pure builder.** `internal/sef` turns a work order plus organization settings into UBL XML deterministically (no clock reads, no I/O, like `internal/planner`), tested with golden files from `testdata/fixtures`; the HTTP client is separate.
+  - **Outbox.** Issuing writes an `einvoice_submissions` row in the same transaction; a background worker uploads it with a stable `requestId` (so retries cannot duplicate an invoice), stores the SEF invoice id, the exact XML sent and every response, and tracks the SEF status (sent, approved, rejected, cancelled, storno) by polling, optionally also via SEF's callback. Rows are append-only (like `stock_movements`) and are tenant data (`tenantDataTables`).
+  - **Lifecycle.** `InvoiceDraftStatus` keeps Iris's own steps (draft, issued, paid); the SEF status is a separate field shown as a badge. Line items lock once submitted; corrections go through cancel/storno or a credit note (*knjižno odobrenje*); proforma prepayments need an advance invoice (*avansni račun*).
+  - **Impersonation.** Submitting a legally binding document from an impersonated session is blocked (or at minimum requires an explicit confirmation); it is already traced in `impersonation_actions`.
+  - **Buyer check.** SEF's company lookup verifies a PIB is registered and flags public-sector buyers when a customer is saved, so missing JBKJS or address data is caught before an invoice fails.
+  - **eOtpremnica.** Outgoing: generated from a completed work order using goods lines only, the customer's delivery location, the existing shipping fields and new transport fields (vehicle plate, driver, carrier). Incoming: a supplier's eOtpremnica confirmed with a *prijemnica*, and supplier invoices received through SEF, may prefill a `POST /stock/receipts` draft. Built after SEF on the same credential and outbox design.
+  - **Order of work:** (1) data gaps; (2) UBL builder validated against the SEF demo environment; (3) outbox, status tracking, storno and credit notes; (4) outgoing eOtpremnica for public-sector customers, then for everyone before 1 Oct 2027; (5) incoming documents feeding stock receipts.
+- **Open points to verify before implementation**: the official eOtpremnica API specification and portal address (secondary sources disagree); exact SEF endpoint names and the current Serbian CIUS identifier from the Ministry's published documentation; whether phase 1 applies to the shop's current customers.
+- **Consequences**:
+  - Iris becomes a system of record for legally binding documents: submitted XML and responses must be kept for the statutory retention period, which interacts with organization deletion (D-025) and must be settled before acceptance.
+  - Several shared shapes grow (WorkOrder invoice fields, Customer address/JBKJS, settings), each a contract-sync change with migrations.
+  - A new outbound dependency on government services: the worker must tolerate SEF downtime without blocking work-order operations.
 
 ---
 
