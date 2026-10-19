@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.14.0 — 2026-10-19
+
+### Minor
+
+- Iris is now presented as an operations platform for any production or service business: new landing page, sign-in and guide wording, a general "Put jednog posla" chapter, and the demo organization is now "Demo Firma". An organization without a saved firm name now shows its own name.
+
 ## 2.13.0 — 2026-10-19
 
 ### Minor
