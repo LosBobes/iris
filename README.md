@@ -117,8 +117,8 @@ cd iris-api
 # 1. Create the schema
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl migrate
 
-# 2. (Optional) Seed the demo organization: fixture work orders plus the
-#    "Procesi rada" and "Magacin" content (both modules on). Idempotent.
+# 2. (Optional) Seed the demo organization: every module on and data that
+#    showcases each feature, dated relative to today. Idempotent.
 DATABASE_PATH=./data/iris.db go run ./cmd/irisctl seed-demo
 
 # 3. Start the API server (listens on :8080)
@@ -132,7 +132,7 @@ curl http://localhost:8080/healthz
 # → {"status":"ok"}
 ```
 
-Default demo credentials — organization **`demo`**, username **`admin`**, password **`admin123`**. `seed-demo` creates the single `demo` tenant with this account plus an **`operater`** / **`operater123`** operator login, turns on both optional modules (Procesi rada and Magacin), and fills it with the fixture work orders alongside process- and stock-driven sample orders, four process templates and warehouse stock. In production the public passwords are rejected (the server won't start on `admin` / `admin123`), so `seed-demo` there requires `IRIS_DEMO_ADMIN_PASSWORD` and `IRIS_DEMO_OPERATOR_PASSWORD` (12+ chars) — see [iris-api/README.md](iris-api/README.md).
+Default demo credentials — organization **`demo`**, username **`admin`**, password **`admin123`**. `seed-demo` creates the single `demo` tenant with this account plus an **`operater`** / **`operater123`** operator login (and four more fixture operators), turns on every optional module (Magacin, Procesi rada, Planiranje, Prisustvo) and fills it with a showcase data set dated relative to the day it runs: customers with identifiers and contacts, a catalog with stock and a scheduled price change, five process templates, a year of invoiced history, live orders in every status (overdue, due today, unassigned, awaiting a cost, signed off, paid, cancelled), two weeks of attendance, published and draft day plans, a sign-in logo and a welcome announcement. The command prints which orders to open. In production the public passwords are rejected (the server won't start on `admin` / `admin123`), so `seed-demo` there requires `IRIS_DEMO_ADMIN_PASSWORD` and `IRIS_DEMO_OPERATOR_PASSWORD` (12+ chars) — see [iris-api/README.md](iris-api/README.md).
 
 ---
 

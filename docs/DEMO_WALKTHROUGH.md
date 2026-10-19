@@ -26,8 +26,13 @@ npm run dev    # :5173
 - Demo login (non-production only): **`admin` / `admin123`**.
 - Open <http://localhost:5173>.
 
-> The seed creates a spread of work orders across recent months plus a set of
-> customers and locations, so the dashboard, charts, and filters all have data.
+> The seed builds the whole showcase relative to the day it runs: a year of
+> invoiced orders for the charts, live orders in every status (one overdue, one
+> due today, one unassigned and awaiting a cost, one signed off, one paid), a
+> catalog with stock, process templates, machines, attendance and day plans, a
+> sign-in logo and a welcome announcement. The command prints which order
+> numbers to open for each feature; the modules (Magacin, Procesi rada,
+> Planiranje, Prisustvo) are all on.
 
 ---
 
@@ -259,6 +264,6 @@ login screen.
 
 - **Demo credentials** `admin` / `admin123` are blocked when
   `IRIS_ENV=production`.
-- Some seeded orders have a blank **operater/issuer** (e.g. "još nije
-  dodeljeno"); these remain fully editable — updating an existing order does not
-  require an issuer (only creation does).
+- One seeded order is deliberately unassigned ("još nije dodeljeno") so the
+  dashboard's *Nedodeljeno* signal and the admin **Čeka unos troška**
+  (`/cost-review`) queue have something to show.

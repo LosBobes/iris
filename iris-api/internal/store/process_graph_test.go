@@ -206,8 +206,8 @@ func TestSeedDemoCreatesTemplatesOnce(t *testing.T) {
 	}
 	// A re-seed must not duplicate the content templates.
 	templates, err := s.ProcessTemplates(testTenantContext())
-	if err != nil || len(templates) != 4 {
-		t.Fatalf("templates = %+v, %v", templates, err)
+	if err != nil || len(templates) != demoTemplateCount {
+		t.Fatalf("templates = %d, %v", len(templates), err)
 	}
 	defaults := 0
 	for _, template := range templates {

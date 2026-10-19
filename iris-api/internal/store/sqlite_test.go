@@ -28,9 +28,11 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WorkOrders() returned error: %v", err)
 	}
-	// 43 plain fixture orders plus the 8 process-driven content orders.
-	if result.Total != 51 || len(result.Items) != 10 {
-		t.Fatalf("result = %#v, want total 51 and limited page", result)
+	// The history orders plus the live process-driven content orders; the
+	// fixture work orders are not loaded into the demo.
+	want := len(demoHistoryOrders()) + len((&demoContentBuilder{}).liveOrderSpecs())
+	if result.Total != want || len(result.Items) != 10 {
+		t.Fatalf("result total = %d, page %d; want total %d and limited page", result.Total, len(result.Items), want)
 	}
 	if err := sqliteStore.Close(); err != nil {
 		t.Fatalf("Close() returned error: %v", err)
@@ -38,12 +40,12 @@ func TestSQLiteStoreSeedAndPersistWorkOrders(t *testing.T) {
 
 	reopened := newSQLiteStoreForTest(t, ctx, dbPath)
 	defer reopened.Close()
-	workOrder, err := reopened.WorkOrderByID(ctx, "1")
+	workOrder, err := reopened.WorkOrderByID(ctx, "demo-h-001")
 	if err != nil {
 		t.Fatalf("WorkOrderByID() returned error: %v", err)
 	}
-	if workOrder == nil || workOrder.OrderNumber != "RN-2024-00001" {
-		t.Fatalf("workOrder = %#v, want persisted fixture order", workOrder)
+	if workOrder == nil || !strings.HasSuffix(workOrder.OrderNumber, "-00381") || len(workOrder.InvoiceDraft.LineItems) == 0 {
+		t.Fatalf("workOrder = %#v, want persisted history order", workOrder)
 	}
 }
 

@@ -303,11 +303,11 @@ func main() {
 }
 
 // printDemoSummary tells the operator how to sign in and what to look at. The
-// demo organization carries both the plain fixture work orders and the
-// process- and stock-driven content, with both modules on.
+// demo organization carries the fixture logins and master data plus the
+// process-, stock- and planning-driven content, with every module on.
 func printDemoSummary(result store.DemoSeedResult, production bool) {
 	if result.AlreadySeeded {
-		fmt.Println("Demo podaci su već upisani (fiksni nalozi osveženi); procesi i magacin ostaju netaknuti.")
+		fmt.Println("Demo podaci su već upisani (fiksni nalozi osveženi); sadržaj ostaje netaknut.")
 		return
 	}
 	adminCreds, operatorCreds := "admin / admin123", "operater / operater123"
@@ -320,26 +320,39 @@ func printDemoSummary(result store.DemoSeedResult, production bool) {
 
 Prijava:    /login/demo
   admin     %s
-  operater  %s
-Moduli:     Magacin, Procesi rada i Planiranje uključeni
-Sadržaj:    fiksni radni nalozi iz testdata/fixtures + %d šablona procesa i
-            %d radnih naloga sa procesima, magacin sa početnim stanjem i 3 prijema,
-            %d tipova mašina sa %d mašina i kvalifikacije korisnika
+  operater  %s  (i ana.jovic, marko.petrovic, jelena.markovic, stefan.nikolic)
+Moduli:     Magacin, Procesi rada, Planiranje i Prisustvo uključeni
+Sadržaj:    %d klijenata (PIB/MB, kontakti, više lokacija), katalog sa zakazanom promenom cene
+            i stavkama za čišćenje, magacin (početno stanje, 4 prijema, popis sa korekcijama),
+            %d šablona procesa, %d završenih naloga iz protekle godine (fakture, profit),
+            %d otvorenih naloga sa procesima, %d tipova mašina sa %d mašina, kvalifikacije,
+            prisustvo (prijave za 14 dana), planovi i obaveštenje dobrodošlice
 
 Šta pogledati
+  Kontrolna tabla: kasni, danas, ove nedelje i nedodeljeni nalozi; Finansije i trendovi za 12 meseci
+  Nalozi:          %s kasni (hitan, beleške i prilozi); %s ističe danas (brošura, dva paralelna koraka)
+                   %s je nedodeljen i čeka unos troška (/cost-review); %s je potpisan od klijenta
+                   %s je fakturisan i plaćen; %s ima preskočen korak; %s je otkazan (ne rezerviše zalihe)
+  U toku:          %s – stvarna količina papira veća od planirane
   Magacin:         nizak lager (ispod minimuma): %s
-  Nedostatak:      nalog %s (planirani papir premašuje stanje) - tabela Materijal i simulator
-  U toku:          nalog %s (stvarna količina papira veća od planirane); nalog %s je brošura sa dva paralelna koraka
-  Otkazan:         nalog %s ne rezerviše zalihe
-  Simulator:       šablon %q (međuproizvod "Štampani tabaci", dva koraka u istom talasu)
-  Planiranje:      /planning -> "Generiši plan" (danas su prisutni samo prijavljeni; ostali dani svi)
+  Nedostatak:      nalog %s (planirani papir premašuje stanje) – tabela Materijal i simulator
+  Simulator:       šablon %q (međuproizvod "Štampani tabaci", dva koraka u istom talasu);
+                   "Zidni kalendar" ima dva početka i dva konačna izlaza
+  Planiranje:      objavljeni planovi za %s, nacrt za %s; /planning/my-queue kao operater
+  Prisustvo:       /attendance – ko je prijavljen danas, jedan ručno označen prisutan, jedan na odmoru sutra
+  Podešavanja:     logo na prijavi, dodatne opcije isporuke, šifarnici (Kurir, Tabak, Mesečni obračun)
 Backoffice:  /backoffice, podrazumevani nalog admin / admin123321 se pravi pri prvom pokretanju servera
-             (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju.
+             (traži promenu lozinke); "Uđi kao…" otvara ovu organizaciju; beleške i obaveštenje su upisani.
 `,
 		adminCreds, operatorCreds,
-		result.Templates, result.Orders, result.MachineTypes, result.Machines,
+		result.Customers, result.Templates, result.HistoryOrders, result.Orders, result.MachineTypes, result.Machines,
+		result.OverdueOrder, result.DueTodayOrder,
+		result.CostReviewOrder, result.SignedOrder,
+		result.InvoicedOrder, result.SkippedStepOrder, result.CancelledOrder,
+		result.InProgressOrder,
 		strings.Join(result.LowArticles, ", "),
-		result.ShortageOrder, result.InProgressOrder, result.BrochureOrder, result.CancelledOrder, result.BrochureTemplate)
+		result.ShortageOrder, result.BrochureTemplate,
+		strings.Join(result.PublishedPlanDates, " i "), result.DraftPlanDate)
 }
 
 func importCSV(ctx context.Context, dataStore *store.SQLStore, dir string, apply bool) (string, error) {
@@ -656,16 +669,18 @@ Planiranje zahteva Procesi rada i Prisustvo, a Procesi rada zahtevaju Magacin.
 Prisustvo radi i samostalno.
 Novi procesi prate magacin samo ako je modul Magacin bio uključen kad su nastali.
 
-seed-demo pravi jednu "demo" organizaciju sa uključenim modulima Procesi rada i Magacin:
-fiksni radni nalozi iz testdata/fixtures plus šabloni procesa, artikli, početno stanje,
-prijemi i radni nalozi sa procesima u raznim statusima, na /login/demo. Van produkcije
-prijava je admin / admin123 i operater / operater123. Kada je IRIS_ENV=production, lozinke
-se moraju zadati (IRIS_DEMO_ADMIN_PASSWORD i IRIS_DEMO_OPERATOR_PASSWORD ili -admin-password i
--operator-password, najmanje 12 znakova, ne demo lozinke) — inače bi server odbio da se
-pokrene zbog demo naloga admin / admin123. Ako baza već sadrži drugu organizaciju sa istim
-id-jevima zapisa (fiksni id-jevi cust-1, loc-1, radni nalog "1", …), koristite -id-prefix
-(npr. demo-) da im se doda prefiks i izbegne sudar; procesni/magacin deo već koristi
-sopstvene id-jeve.
+seed-demo pravi jednu "demo" organizaciju sa svim modulima (Magacin, Procesi rada, Planiranje,
+Prisustvo) i podacima koji pokazuju svaku funkciju aplikacije: naloge iz testdata/fixtures
+(samo korisnike, klijente i lokacije), podešavanja, logo, šifarnike, klijente sa PIB-om i
+kontaktima, katalog, magacin, šablone procesa, godinu završenih naloga, otvorene naloge sa
+procesima u svim statusima, prisustvo i planove, na /login/demo. Svi datumi su relativni u
+odnosu na dan pokretanja. Van produkcije prijava je admin / admin123 i operater / operater123.
+Kada je IRIS_ENV=production, lozinke se moraju zadati (IRIS_DEMO_ADMIN_PASSWORD i
+IRIS_DEMO_OPERATOR_PASSWORD ili -admin-password i -operator-password, najmanje 12 znakova, ne
+demo lozinke) — inače bi server odbio da se pokrene zbog demo naloga admin / admin123. Ako
+baza već sadrži drugu organizaciju sa istim id-jevima zapisa (fiksni id-jevi cust-1, loc-1, …),
+koristite -id-prefix (npr. demo-) da im se doda prefiks i izbegne sudar; ostatak sadržaja već
+koristi sopstvene id-jeve.
 
 DATABASE_PATH podešava putanju SQLite baze; podrazumevano je ./data/iris.db.
 DATABASE_URL bira Postgres umesto SQLite za sve komande osim migrate-to-postgres,

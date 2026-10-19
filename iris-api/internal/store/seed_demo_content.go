@@ -10,16 +10,28 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
-// Demo content: the "Procesi rada" and "Magacin" half of the demo organization.
-// SeedDemoFromFixtures lays down the fixture users/customers/work-orders first
-// (modules off, no process), then calls seedDemoContent to turn both modules on
-// and add a curated, process- and stock-driven data set on top. Everything here
-// goes through the same store methods the HTTP API uses (module switch, catalog,
-// stock count/receipt, process templates, work orders, process updates), so
-// stock movements come from the real posting logic rather than hand-inserted
-// rows. The two halves share one tenant: article codes and order numbers are
-// unique per tenant, so the fixtures are seeded first and the orders below take
-// the next free RN-<year>-<seq> numbers after them.
+// Demo content: everything the demo organization shows beyond the fixture
+// logins and master data. SeedDemoFromFixtures lays down the fixture users,
+// customers and locations first, then calls seedDemoContent to turn every
+// module on and add a curated data set on top. The content goes through the
+// same store methods the HTTP API uses (module switch, settings, catalog, stock
+// count/receipt, process templates, work orders, process updates, attendance,
+// plans), so stock movements, cost capture, timelines and plans come from the
+// real logic rather than hand-inserted rows. The one exception is the invoiced
+// history (seed_demo_history.go), written directly so it can carry dates from
+// the past year.
+//
+// The files split the content by area:
+//
+//	seed_demo_content.go   orchestration, settings, customers, catalog, stock, templates
+//	seed_demo_history.go   a year of completed/invoiced orders (direct writes)
+//	seed_demo_orders.go    live process-driven orders and their timelines
+//	seed_demo_planning.go  machines, working hours, attendance, day plans, platform
+//	seed_demo_logo.go      the generated sign-in logo
+//
+// Every date is relative to the seed run, so the dashboard signals (overdue,
+// due today, this week, unassigned), the planning horizon and the sign-in
+// history stay meaningful whenever the seed runs.
 
 const (
 	// demoAdminUsername is created by the fixture seed; the content below reuses
@@ -34,7 +46,19 @@ const (
 	// demoBrochureTemplate is the template with an intermediate product and two
 	// parallel steps, the one to open in the process simulator.
 	demoBrochureTemplate = "Brošura sa šivenjem"
+
+	// demoFirmName is the organization's display name in the app header.
+	demoFirmName = "Demo Štamparija"
+
+	// Custom picklist values the demo adds (Podešavanja → Šifarnici).
+	demoDeliveryCourier = "kurir" // deliveryMethod: "Kurir (Bex)"
+	demoUnitSheet       = "tabak" // invoiceUnit: "Tabak"
 )
+
+// demoSeedActor is recorded in the platform activity log for the platform-level
+// rows the demo seed writes (announcement, organization notes), like the irisctl
+// offboarding commands do.
+var demoSeedActor = AuditActor{AdminID: "irisctl", AdminUsername: "irisctl"}
 
 // MinDemoPasswordLength is required for the demo logins in production.
 const MinDemoPasswordLength = 12
@@ -69,63 +93,41 @@ func DemoPasswords(production bool, admin, operator string) (string, string, err
 }
 
 // DemoSeedResult describes what SeedDemoFromFixtures created, for the CLI
-// summary. The order numbers are resolved at creation time because they follow
-// the fixture orders. When AlreadySeeded is true the process/stock content was
-// already present and left untouched, so the other fields are zero.
+// summary. Order numbers are resolved at creation time. When AlreadySeeded is
+// true the content was already present and left untouched, so the other fields
+// are zero.
 type DemoSeedResult struct {
-	AlreadySeeded    bool
-	Templates        int
-	Orders           int      // process-driven orders added on top of the fixtures
-	LowArticles      []string // names of articles flagged low
-	ShortageOrder    string   // open order whose planned input exceeds on-hand stock
-	InProgressOrder  string   // in progress, actual quantity above planned
-	BrochureOrder    string
+	AlreadySeeded bool
+	Customers     int
+	Templates     int
+	HistoryOrders int      // completed/invoiced orders from the past year
+	Orders        int      // live process-driven orders
+	LowArticles   []string // names of articles flagged low
+	MachineTypes  int      // planning: machine types and units added
+	Machines      int
+
+	// Orders worth opening, by number.
+	ShortageOrder    string // open order whose planned input exceeds on-hand stock
+	InProgressOrder  string // in progress, actual quantity above planned
+	BrochureOrder    string // brochure with two parallel steps done
 	BrochureTemplate string
-	CancelledOrder   string
-	MachineTypes     int // planning: machine types and units added
-	Machines         int
+	CancelledOrder   string // cancelled, reserves no stock
+	CostReviewOrder  string // unassigned, with a line whose cost is not captured
+	OverdueOrder     string // urgent and past its due date
+	DueTodayOrder    string // due today
+	SignedOrder      string // completed, signed off by the customer, with customer notes
+	InvoicedOrder    string // invoiced and paid
+	SkippedStepOrder string // in progress with a skipped step
+
+	// Planning: dates with a published plan and the date with only a draft.
+	PublishedPlanDates []string
+	DraftPlanDate      string
 }
 
-type demoArticle struct {
-	key      string
-	code     string
-	name     string
-	unit     string
-	price    float64
-	minStock float64
-	opening  float64
-}
-
-var demoArticles = []demoArticle{
-	{"papir80", "PAP-80-A3", "Papir 80g A3", "tabak", 12.5, 1000, 6500},
-	{"kunstdruk", "PAP-KD-135", "Papir kunstdruk 135g SRA3", "tabak", 24, 500, 1500},
-	{"karton", "KAR-300", "Karton 300g", "tabak", 38, 100, 400},
-	{"boja", "BOJ-CMYK", "Boja CMYK", "kg", 1800, 10, 14},
-	{"ploca", "PLO-OFF", "Offset ploča", "kom", 650, 40, 100},
-	{"toner", "TON-DIG", "Toner", "kom", 9500, 5, 3},
-	{"zica", "ZIC-POV", "Žica za povez", "kalem", 1400, 2, 6},
-	{"baner", "BAN-PVC-510", "Banner PVC 510g", "m2", 420, 50, 100},
-	{"makulatura", "MAK-001", "Makulatura", "tabak", 0, 0, 0},
-	{"otpad", "OTP-BAN", "Otpad bannera", "m2", 0, 0, 0},
-}
-
-var demoServices = []struct {
-	code, name, unit string
-	price            float64
-}{
-	{"USL-PRIPREMA", "Grafička priprema", "sat", 2500},
-	{"USL-OFFSET", "Offset štampa", "kom", 6},
-	{"USL-DIGITAL", "Digitalna štampa", "kom", 18},
-	{"USL-KNJIGOVEZ", "Knjigovezivanje", "kom", 45},
-}
-
-// seedDemoContent turns on all three modules for the demo tenant (already in
-// ctx) and adds the curated catalog, warehouse stock, machines with worker
-// qualifications, process templates (steps timed for planning) and
-// process-driven work orders. It assumes the fixture seed has already run, so it
-// creates only the operater login (the admin login comes from the fixtures) and
-// its orders take the next free order numbers. now anchors the order dates; zero
-// means time.Now().
+// seedDemoContent turns on all four modules for the demo tenant (already in
+// ctx) and adds the curated content. It assumes the fixture seed has already
+// run, so it creates only the operater login (the admin login comes from the
+// fixtures). now anchors every date; zero means time.Now().
 func seedDemoContent(ctx context.Context, s *SQLiteStore, slug, operatorPassword string, now time.Time) (DemoSeedResult, error) {
 	// Idempotency sentinel: process templates exist only once this content has
 	// run, so their presence means a prior seed already added everything here.
@@ -140,17 +142,25 @@ func seedDemoContent(ctx context.Context, s *SQLiteStore, slug, operatorPassword
 	if now.IsZero() {
 		now = time.Now()
 	}
+	location, err := time.LoadLocation(domain.DefaultPlanningTimeZone)
+	if err != nil {
+		return DemoSeedResult{}, err
+	}
 	operatorPw := demoOperatorPassword
 	if operatorPassword != "" {
 		operatorPw = operatorPassword
 	}
 	b := &demoContentBuilder{
-		s: s, slug: slug, ctx: ctx, now: now, operatorPassword: operatorPw,
+		s: s, slug: slug, ctx: ctx, now: now.In(location), location: location, operatorPassword: operatorPw,
 		articles:     map[string]domain.CatalogItem{},
+		services:     map[string]domain.CatalogItem{},
 		customers:    map[string]domain.Customer{},
 		locations:    map[string]domain.Location{},
 		templates:    map[string]*domain.ProcessTemplate{},
 		machineTypes: map[string]string{},
+		users:        map[string]domain.User{},
+		orderNumbers: map[string]string{},
+		invoiceSeq:   map[int]int{},
 	}
 	var result DemoSeedResult
 	if err := b.build(&result); err != nil {
@@ -163,36 +173,66 @@ type demoContentBuilder struct {
 	s                *SQLiteStore
 	ctx              context.Context
 	slug             string
-	now              time.Time
+	now              time.Time // local to location
+	location         *time.Location
 	operatorPassword string
 	articles         map[string]domain.CatalogItem
-	customers        map[string]domain.Customer
-	locations        map[string]domain.Location
+	services         map[string]domain.CatalogItem
+	customers        map[string]domain.Customer // demo key -> customer (content and fixture ones)
+	locations        map[string]domain.Location // demo key -> first location
 	templates        map[string]*domain.ProcessTemplate
 	machineTypes     map[string]string // demo key -> machine type ID
 	machineCount     int
+	users            map[string]domain.User // username -> user
+	liveOrders       []string               // ids of the live orders, for backdating
+	orderNumbers     map[string]string      // live order key -> order number
+	invoiceSeq       map[int]int            // invoice numbers per year, continuing from history into live orders
+	publishedPlans   []string               // dates with a published plan
+	draftPlan        string                 // date with only a draft
 }
 
 func (b *demoContentBuilder) build(result *DemoSeedResult) error {
 	steps := []func() error{
-		b.users, b.modules, b.customersAndLocations, b.catalog, b.stock, b.machines, b.processTemplates,
+		b.userAccounts, b.modules, b.settings, b.customersAndLocations, b.catalog, b.stock,
+		b.machines, b.processTemplates, b.history, b.workOrders, b.stockCount, b.backdateLiveOrders,
+		b.attendance, b.plans, b.platform,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
 		}
 	}
-	if err := b.workOrders(result); err != nil {
-		return err
-	}
-	result.MachineTypes, result.Machines = len(b.machineTypes), b.machineCount
-	return nil
+	return b.describe(result)
 }
 
-func (b *demoContentBuilder) users() error {
+// day returns the local date offset days from now, as YYYY-MM-DD.
+func (b *demoContentBuilder) day(offset int) string {
+	return b.now.AddDate(0, 0, offset).Format("2006-01-02")
+}
+
+// at returns the local clock time on the date offset days from now, in UTC
+// RFC 3339 as the store writes timestamps.
+func (b *demoContentBuilder) at(offset int, hour, minute int) string {
+	d := b.now.AddDate(0, 0, offset)
+	return time.Date(d.Year(), d.Month(), d.Day(), hour, minute, 0, 0, b.location).UTC().Format(time.RFC3339)
+}
+
+func str(v string) *string   { return &v }
+func num(v float64) *float64 { return &v }
+func integer(v int) *int     { return &v }
+
+// userAccounts creates the operater login and indexes every user by username.
+func (b *demoContentBuilder) userAccounts() error {
 	id := "user-" + b.slug + "-" + demoOperatorUsername
 	if err := b.s.CreateUser(b.ctx, id, demoOperatorUsername, b.operatorPassword, domain.RoleUser, true); err != nil {
 		return fmt.Errorf("demo user %s: %w", demoOperatorUsername, err)
+	}
+	users, err := b.s.ListUsers(b.ctx)
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		b.users[user.Username] = user
 	}
 	return nil
 }
@@ -205,55 +245,226 @@ func (b *demoContentBuilder) modules() error {
 	return nil
 }
 
-func (b *demoContentBuilder) customersAndLocations() error {
-	str := func(v string) *string { return &v }
-	for _, c := range []struct{ key, name, contact, email, phone, location, address string }{
-		{"pekara", "Pekara Zlatni klas", "Milan Jovanović", "milan@zlatniklas.example", "021/555-101", "Pekara Centar", "Bulevar oslobođenja 12, Novi Sad"},
-		{"opstina", "Opština Novi Grad", "Jelena Marković", "jelena.markovic@novigrad.example", "021/555-202", "Pisarnica", "Trg slobode 1, Novi Grad"},
-		{"pixel", "Agencija Pixel", "Nikola Ilić", "nikola@pixel.example", "064/555-303", "Studio", "Zmaj Jovina 8, Novi Sad"},
-		{"slovo", "Knjižara Slovo", "Ana Petrović", "ana@slovo.example", "011/555-404", "Knjižara Slovo", "Knez Mihailova 20, Beograd"},
-		{"volan", "Auto-škola Volan", "Dragan Savić", "dragan@volan.example", "021/555-505", "Sedište", "Futoška 45, Novi Sad"},
+// settings sets the organization settings away from their defaults where that
+// shows in the app (firm name, the extra shipping options on the form, a
+// changeable priority, invoices as the default document), adds custom picklist
+// values and the sign-in logo.
+func (b *demoContentBuilder) settings() error {
+	firm := demoFirmName
+	showShipping := true
+	if _, err := b.s.UpdateOrganizationSettings(b.ctx, domain.OrganizationSettingsUpdate{
+		FirmName:            &firm,
+		ShowShippingOptions: &showShipping,
+		BillingDefaults:     &domain.BillingDefaults{DocumentType: domain.BillingDocumentTypeInvoice},
+		PriorityDefaults:    &domain.PriorityDefaults{Priority: domain.WorkOrderPriorityNormal, AllowOverride: true},
+	}); err != nil {
+		return fmt.Errorf("demo settings: %w", err)
+	}
+	for _, value := range []domain.EnumValueInput{
+		{Field: domain.EnumFieldDeliveryMethod, Value: demoDeliveryCourier, Label: "Kurir (Bex)", SortOrder: 10},
+		{Field: domain.EnumFieldInvoiceUnit, Value: demoUnitSheet, Label: "Tabak", SortOrder: 10},
+		{Field: domain.EnumFieldPostagePaymentType, Value: "mesecni", Label: "Mesečni obračun", SortOrder: 10},
 	} {
-		customer, err := b.s.UpsertCustomer(b.ctx, domain.Customer{
-			ID: "cust-" + b.slug + "-" + c.key, Name: c.name,
-			ContactName: str(c.contact), Email: str(c.email), Phone: str(c.phone),
-		})
-		if err != nil {
-			return fmt.Errorf("demo customer %s: %w", c.key, err)
+		if _, err := b.s.CreateEnumValue(b.ctx, value); err != nil {
+			return fmt.Errorf("demo enum %s/%s: %w", value.Field, value.Value, err)
 		}
-		location, err := b.s.UpsertLocation(b.ctx, domain.Location{
-			ID: "loc-" + b.slug + "-" + c.key, CustomerID: customer.ID, Name: c.location, Address: str(c.address),
-		})
-		if err != nil {
-			return fmt.Errorf("demo location %s: %w", c.key, err)
-		}
-		b.customers[c.key], b.locations[c.key] = *customer, *location
+	}
+	logo, err := demoLoginLogoPNG()
+	if err != nil {
+		return err
+	}
+	if _, err := b.s.SetLoginLogo(b.ctx, domain.LoginLogoUpload{ContentType: "image/png", Data: logo}); err != nil {
+		return fmt.Errorf("demo login logo: %w", err)
 	}
 	return nil
 }
 
+// demoCustomer is one content customer with its identifiers, contacts and
+// delivery locations. The first location is the one orders use.
+type demoCustomer struct {
+	key, name, contact, email, phone string
+	pib, mb                          string
+	emails                           []domain.CustomerEmail
+	contacts                         []domain.CustomerContact
+	locations                        []struct{ name, address string }
+}
+
+var demoCustomers = []demoCustomer{
+	{key: "pekara", name: "Pekara Zlatni klas", contact: "Milan Jovanović", email: "milan@zlatniklas.example", phone: "021/555-101",
+		pib: "102345675", mb: "20123456",
+		emails:   []domain.CustomerEmail{{Email: "racuni@zlatniklas.example", Label: str("Računovodstvo")}},
+		contacts: []domain.CustomerContact{{Name: "Sanja Jović", Email: str("sanja@zlatniklas.example"), Phone: str("021/555-102"), Role: str("Knjigovođa")}},
+		locations: []struct{ name, address string }{
+			{"Pekara Centar", "Bulevar oslobođenja 12, Novi Sad"}, {"Pekara Liman", "Narodnog fronta 45, Novi Sad"},
+		}},
+	{key: "opstina", name: "Opština Novi Grad", contact: "Jelena Marković", email: "jelena.markovic@novigrad.example", phone: "021/555-202",
+		pib: "104567899", mb: "08123456",
+		emails:   []domain.CustomerEmail{{Email: "pisarnica@novigrad.example", Label: str("Pisarnica")}, {Email: "nabavka@novigrad.example", Label: str("Javne nabavke")}},
+		contacts: []domain.CustomerContact{{Name: "Zoran Lukić", Email: str("zoran.lukic@novigrad.example"), Phone: str("021/555-203"), Role: str("Šef nabavke")}},
+		locations: []struct{ name, address string }{
+			{"Pisarnica", "Trg slobode 1, Novi Grad"}, {"Mesna kancelarija Rakovac", "Glavna 8, Rakovac"},
+		}},
+	{key: "pixel", name: "Agencija Pixel", contact: "Nikola Ilić", email: "nikola@pixel.example", phone: "064/555-303",
+		pib: "105678905", mb: "21234567",
+		contacts:  []domain.CustomerContact{{Name: "Tamara Kostić", Email: str("tamara@pixel.example"), Role: str("Art direktor")}},
+		locations: []struct{ name, address string }{{"Studio", "Zmaj Jovina 8, Novi Sad"}}},
+	{key: "slovo", name: "Knjižara Slovo", contact: "Ana Petrović", email: "ana@slovo.example", phone: "011/555-404",
+		pib: "106789015", mb: "17345678",
+		emails:    []domain.CustomerEmail{{Email: "izdavastvo@slovo.example", Label: str("Izdavaštvo")}},
+		locations: []struct{ name, address string }{{"Knjižara Slovo", "Knez Mihailova 20, Beograd"}, {"Magacin Zemun", "Cara Dušana 110, Zemun"}}},
+	{key: "volan", name: "Auto-škola Volan", contact: "Dragan Savić", email: "dragan@volan.example", phone: "021/555-505",
+		pib: "107890123", mb: "63456789",
+		locations: []struct{ name, address string }{{"Sedište", "Futoška 45, Novi Sad"}}},
+	{key: "vinarija", name: "Vinarija Dolina", contact: "Petar Vuković", email: "petar@vinarija-dolina.example", phone: "022/555-606",
+		pib: "108901233", mb: "20567890",
+		contacts:  []domain.CustomerContact{{Name: "Mila Vuković", Email: str("mila@vinarija-dolina.example"), Phone: str("022/555-607"), Role: str("Marketing")}},
+		locations: []struct{ name, address string }{{"Vinarija", "Vinogradarska 3, Sremski Karlovci"}}},
+	{key: "hotel", name: "Hotel Panorama", contact: "Ivana Đorđević", email: "recepcija@panorama.example", phone: "021/555-707",
+		pib: "109012347", mb: "20678901",
+		emails:    []domain.CustomerEmail{{Email: "marketing@panorama.example", Label: str("Marketing")}},
+		locations: []struct{ name, address string }{{"Hotel", "Fruškogorska 15, Novi Sad"}}},
+	{key: "dentis", name: "Ordinacija Dentis", contact: "dr Marija Simić", email: "ordinacija@dentis.example", phone: "021/555-808",
+		pib: "110123454", mb: "64567890",
+		locations: []struct{ name, address string }{{"Ordinacija", "Maksima Gorkog 22, Novi Sad"}}},
+}
+
+// customersAndLocations adds the content customers (with PIB and matični broj,
+// extra e-mail addresses, contacts and one or two locations) and indexes the
+// fixture customers by a key as well, so orders can spread across all of them.
+func (b *demoContentBuilder) customersAndLocations() error {
+	for _, c := range demoCustomers {
+		customer, err := b.s.UpsertCustomer(b.ctx, domain.Customer{
+			ID: "cust-" + b.slug + "-" + c.key, Name: c.name,
+			ContactName: str(c.contact), Email: str(c.email), Phone: str(c.phone),
+			Pib: str(c.pib), Mb: str(c.mb), Emails: c.emails, Contacts: c.contacts,
+		})
+		if err != nil {
+			return fmt.Errorf("demo customer %s: %w", c.key, err)
+		}
+		b.customers[c.key] = *customer
+		for i, loc := range c.locations {
+			id := "loc-" + b.slug + "-" + c.key
+			if i > 0 {
+				id = fmt.Sprintf("%s-%d", id, i+1)
+			}
+			location, err := b.s.UpsertLocation(b.ctx, domain.Location{ID: id, CustomerID: customer.ID, Name: loc.name, Address: str(loc.address)})
+			if err != nil {
+				return fmt.Errorf("demo location %s: %w", c.key, err)
+			}
+			if i == 0 {
+				b.locations[c.key] = *location
+			}
+		}
+	}
+	// The fixture customers (Firma Doo, Kompanija AB, …) are keyed by their
+	// name's first word in lower case: "firma", "kompanija", "studio",
+	// "agencija", "tehnoservis".
+	all, err := b.s.Customers(b.ctx, CustomerQuery{Limit: 500})
+	if err != nil {
+		return err
+	}
+	for _, customer := range all.Items {
+		if strings.HasPrefix(customer.ID, "cust-"+b.slug+"-") {
+			continue
+		}
+		key := strings.ToLower(strings.Fields(customer.Name)[0])
+		b.customers[key] = customer
+		locations, err := b.s.Locations(b.ctx, customer.ID)
+		if err != nil {
+			return err
+		}
+		if len(locations) > 0 {
+			b.locations[key] = locations[0]
+		}
+	}
+	return nil
+}
+
+type demoArticle struct {
+	key, code, name, unit string
+	purchase, sale        float64 // 0 = none
+	minStock, opening     float64
+	barcode, taxGroup     string
+	description           string
+	inactive              bool
+}
+
+var demoArticles = []demoArticle{
+	{key: "papir80", code: "PAP-80-A3", name: "Papir 80g A3", unit: "tabak", purchase: 12.5, sale: 18, minStock: 1000, opening: 6500, barcode: "3830012345011", taxGroup: "20", description: "Ofsetni papir 80 g/m², beli, 297×420 mm."},
+	{key: "kunstdruk", code: "PAP-KD-135", name: "Papir kunstdruk 135g SRA3", unit: "tabak", purchase: 24, sale: 35, minStock: 500, opening: 1500, barcode: "3830012345028", taxGroup: "20", description: "Kunstdruk sjajni 135 g/m², 320×450 mm."},
+	{key: "karton", code: "KAR-300", name: "Karton 300g", unit: "tabak", purchase: 38, sale: 55, minStock: 100, opening: 400, barcode: "3830012345035", taxGroup: "20"},
+	{key: "boja", code: "BOJ-CMYK", name: "Boja CMYK", unit: "kg", purchase: 1800, minStock: 10, opening: 14, taxGroup: "20", description: "Set procesnih boja za offset (C, M, Y, K)."},
+	{key: "ploca", code: "PLO-OFF", name: "Offset ploča", unit: "kom", purchase: 650, minStock: 40, opening: 100, taxGroup: "20"},
+	{key: "toner", code: "TON-DIG", name: "Toner", unit: "kom", purchase: 9500, minStock: 5, opening: 3, barcode: "4902345678901", taxGroup: "20", description: "Toner za Konica Minolta C14000, jedan set."},
+	{key: "zica", code: "ZIC-POV", name: "Žica za povez", unit: "kalem", purchase: 1400, minStock: 2, opening: 6, taxGroup: "20"},
+	{key: "spirala", code: "SPI-PLA", name: "Spirala plastična 12 mm", unit: "kom", purchase: 25, sale: 60, minStock: 100, opening: 350, taxGroup: "20"},
+	{key: "baner", code: "BAN-PVC-510", name: "Banner PVC 510g", unit: "m2", purchase: 420, sale: 900, minStock: 50, opening: 100, taxGroup: "20"},
+	{key: "rollup", code: "KOM-ROLLUP", name: "Roll-up stalak 85×200", unit: "kom", purchase: 3200, sale: 6500, minStock: 3, opening: 5, barcode: "3830012345042", taxGroup: "20", description: "Aluminijumski roll-up mehanizam sa torbom."},
+	{key: "folija", code: "FOL-LAM", name: "Folija za laminaciju 125 µ", unit: "rolna", purchase: 1100, minStock: 2, opening: 1.5, taxGroup: "20"},
+	{key: "makulatura", code: "MAK-001", name: "Makulatura", unit: "tabak"},
+	{key: "otpad", code: "OTP-BAN", name: "Otpad bannera", unit: "m2"},
+	// Candidates for Katalog → Čišćenje (missing prices) and an inactive article.
+	{key: "kesa", code: "KES-PAP", name: "Kesa papirna sa ručkom", unit: "kom", sale: 40, taxGroup: "20", description: "Nabavna cena još nije uneta."},
+	{key: "papir80a4", code: "PAP-80-A4", name: "Papir 80g A4 (stari šifarnik)", unit: "ris", purchase: 480, inactive: true},
+}
+
+var demoServices = []struct {
+	key, code, name, unit string
+	cost, price           float64 // cost = cena rada; 0 price = missing
+}{
+	{"priprema", "USL-PRIPREMA", "Grafička priprema", "sat", 900, 2500},
+	{"offset", "USL-OFFSET", "Offset štampa", "kom", 2.4, 6},
+	{"digital", "USL-DIGITAL", "Digitalna štampa", "kom", 7, 18},
+	{"knjigovez", "USL-KNJIGOVEZ", "Knjigovezivanje", "kom", 18, 45},
+	{"ploter", "USL-PLOTER", "Štampa velikog formata", "m2", 650, 1500},
+	{"dorada", "USL-DORADA", "Dorada (sečenje, bigovanje)", "kom", 1.2, 3},
+	{"dostava", "USL-DOSTAVA", "Dostava", "kom", 600, 1200},
+	{"laminacija", "USL-LAMIN", "Laminacija (stari šifarnik)", "kom", 0, 0}, // cleanup candidate
+}
+
+// catalog adds the services (with the cost of labor, so service profit shows
+// on the dashboard) and the articles, then schedules a kunstdruk price rise
+// two weeks out so its "Istorija cena" shows a pending period.
 func (b *demoContentBuilder) catalog() error {
 	for _, svc := range demoServices {
-		price := svc.price
-		if _, err := b.s.UpsertCatalogItem(b.ctx, domain.CatalogItem{
+		item := domain.CatalogItem{
 			ID: "cat-" + b.slug + "-" + strings.ToLower(svc.code), Code: svc.code, Name: svc.name, Unit: svc.unit,
-			Kind: domain.CatalogItemKindService, SalePrice: &price, IsActive: true,
-		}, ""); err != nil {
+			Kind: domain.CatalogItemKindService, IsActive: true,
+		}
+		if svc.cost > 0 {
+			item.PurchasePrice = num(svc.cost)
+		}
+		if svc.price > 0 {
+			item.SalePrice = num(svc.price)
+		}
+		saved, err := b.s.UpsertCatalogItem(b.ctx, item, "")
+		if err != nil {
 			return fmt.Errorf("demo service %s: %w", svc.code, err)
 		}
+		b.services[svc.key] = *saved
 	}
 	for _, a := range demoArticles {
 		item := domain.CatalogItem{
 			ID: "cat-" + b.slug + "-" + a.key, Code: a.code, Name: a.name, Unit: a.unit,
-			Kind: domain.CatalogItemKindArticle, IsActive: true,
+			Kind: domain.CatalogItemKindArticle, IsActive: !a.inactive,
 		}
-		if a.price > 0 {
-			price := a.price
-			item.PurchasePrice = &price
+		if a.purchase > 0 {
+			item.PurchasePrice = num(a.purchase)
+		}
+		if a.sale > 0 {
+			item.SalePrice = num(a.sale)
 		}
 		if a.minStock > 0 {
-			min := a.minStock
-			item.MinStock = &min
+			item.MinStock = num(a.minStock)
+		}
+		if a.barcode != "" {
+			item.Barcode = str(a.barcode)
+		}
+		if a.taxGroup != "" {
+			item.TaxGroup = str(a.taxGroup)
+		}
+		if a.description != "" {
+			item.Description = str(a.description)
 		}
 		saved, err := b.s.UpsertCatalogItem(b.ctx, item, "")
 		if err != nil {
@@ -261,15 +472,23 @@ func (b *demoContentBuilder) catalog() error {
 		}
 		b.articles[a.key] = *saved
 	}
+	// Scheduled price change: the supplier announced a rise from two weeks on.
+	kd := b.articles["kunstdruk"]
+	kd.PurchasePrice, kd.SalePrice = num(26.5), num(38)
+	if _, err := b.s.UpsertCatalogItem(b.ctx, kd, b.day(14)); err != nil {
+		return fmt.Errorf("demo scheduled price: %w", err)
+	}
 	return nil
 }
 
 // stock posts the opening balance as a stock count (history shows "Početno
-// stanje") and three goods receipts on different articles.
+// stanje") and four goods receipts on different articles.
 func (b *demoContentBuilder) stock() error {
 	counts := make([]domain.StockCountLine, 0, len(demoArticles))
 	for _, a := range demoArticles {
-		counts = append(counts, domain.StockCountLine{CatalogItemID: b.articles[a.key].ID, CountedQuantity: a.opening})
+		if a.opening > 0 {
+			counts = append(counts, domain.StockCountLine{CatalogItemID: b.articles[a.key].ID, CountedQuantity: a.opening})
+		}
 	}
 	if _, err := b.s.PostStockCount(b.ctx, domain.StockCountInput{Note: "Početno stanje", Lines: counts}, demoAdminUsername); err != nil {
 		return fmt.Errorf("demo opening stock: %w", err)
@@ -281,6 +500,7 @@ func (b *demoContentBuilder) stock() error {
 		{DocumentRef: "OT-2026-118 Papirdom", Note: "Isporuka papira", Lines: []domain.StockReceiptLine{line("papir80", 2500), line("kunstdruk", 1000)}},
 		{DocumentRef: "FA-2026-0342 Chem-Color", Note: "Boje i ploče", Lines: []domain.StockReceiptLine{line("boja", 10), line("ploca", 50)}},
 		{DocumentRef: "OT-2026-131 Banerprint", Note: "Baneri i žica", Lines: []domain.StockReceiptLine{line("baner", 150), line("zica", 4)}},
+		{DocumentRef: "OT-2026-140 Papirdom", Note: "Karton i spirale", Lines: []domain.StockReceiptLine{line("karton", 200), line("spirala", 200)}},
 	} {
 		if _, err := b.s.PostStockReceipt(b.ctx, r, demoOperatorUsername); err != nil {
 			return fmt.Errorf("demo receipt %s: %w", r.DocumentRef, err)
@@ -289,62 +509,24 @@ func (b *demoContentBuilder) stock() error {
 	return nil
 }
 
-// demoMachineTypes are the print shop's machine types (D-026) with their units.
-var demoMachineTypes = []struct {
-	key, name string
-	units     []string
-}{
-	{"ctp", "CTP (osvetljavanje ploča)", []string{"Kodak Magnus 400"}},
-	{"offset", "Offset štampa B2", []string{"Heidelberg SM52 #1", "Heidelberg SM52 #2"}},
-	{"digital", "Digitalna štampa", []string{"Konica Minolta C14000"}},
-	{"ploter", "Ploter velikog formata", []string{"Mimaki JV330"}},
-	{"sekac", "Sekač (giljotina)", []string{"Polar 78"}},
-	{"savijacica", "Savijačica", []string{"Horizon AF-406F"}},
-	{"povez", "Mašina za povez žicom", []string{"Müller Martini Presto"}},
-}
-
-// demoQualifications says which machine types each demo user may lead.
-var demoQualifications = map[string][]string{
-	demoAdminUsername:    {"ctp", "offset", "digital", "ploter", "sekac", "savijacica", "povez"},
-	demoOperatorUsername: {"offset", "digital", "sekac"},
-	"ana.jovic":          {"offset", "ctp"},
-	"marko.petrovic":     {"digital", "ploter", "sekac"},
-	"jelena.markovic":    {"savijacica", "povez", "sekac"},
-	"stefan.nikolic":     {"offset", "povez"},
-}
-
-// machines adds the machine types and units and the users' qualifications.
-// Working hours stay at the default (Mon–Fri 07:00–15:00, break 11:00).
-func (b *demoContentBuilder) machines() error {
-	for _, mt := range demoMachineTypes {
-		created, err := b.s.CreateMachineType(b.ctx, domain.MachineTypeInput{Name: mt.name})
-		if err != nil {
-			return fmt.Errorf("demo machine type %s: %w", mt.name, err)
-		}
-		b.machineTypes[mt.key] = created.ID
-		for _, unit := range mt.units {
-			if _, err := b.s.CreateMachine(b.ctx, domain.MachineInput{MachineTypeID: created.ID, Name: unit, InService: true}); err != nil {
-				return fmt.Errorf("demo machine %s: %w", unit, err)
-			}
-			b.machineCount++
-		}
-	}
-	workers, err := b.s.Qualifications(b.ctx)
+// stockCount posts a monthly count after the live orders consumed stock: the
+// kunstdruk count comes out short and the karton count finds a few more
+// sheets, so the ledger shows adjustments next to consumption.
+func (b *demoContentBuilder) stockCount() error {
+	levels, err := b.s.StockLevels(b.ctx, StockLevelQuery{Limit: 500})
 	if err != nil {
 		return err
 	}
-	for _, worker := range workers {
-		keys, ok := demoQualifications[worker.Username]
-		if !ok {
-			continue
-		}
-		ids := make([]string, 0, len(keys))
-		for _, key := range keys {
-			ids = append(ids, b.machineTypes[key])
-		}
-		if _, err := b.s.SetQualifications(b.ctx, worker.UserID, domain.WorkerQualificationsInput{MachineTypeIDs: ids}); err != nil {
-			return fmt.Errorf("demo qualifications %s: %w", worker.Username, err)
-		}
+	onHand := map[string]float64{}
+	for _, level := range levels.Items {
+		onHand[level.CatalogItemID] = level.OnHand
+	}
+	kd, karton := b.articles["kunstdruk"].ID, b.articles["karton"].ID
+	if _, err := b.s.PostStockCount(b.ctx, domain.StockCountInput{Note: "Mesečni popis", Lines: []domain.StockCountLine{
+		{CatalogItemID: kd, CountedQuantity: onHand[kd] - 12},
+		{CatalogItemID: karton, CountedQuantity: onHand[karton] + 3},
+	}}, demoAdminUsername); err != nil {
+		return fmt.Errorf("demo stock count: %w", err)
 	}
 	return nil
 }
@@ -396,6 +578,30 @@ func (g *graphBuilder) plan(id, machineType string, crew int, setup, perUnit flo
 	panic("demo graph: no step " + id)
 }
 
+// starts marks steps as starting steps; finals marks products/byproducts as
+// final outputs (the flags a flow with several starts and outputs carries).
+func (g *graphBuilder) starts(ids ...string) {
+	g.flag(ids, func(n *domain.ProcessNode) { n.Start = true })
+}
+func (g *graphBuilder) finals(ids ...string) {
+	g.flag(ids, func(n *domain.ProcessNode) { n.Final = true })
+}
+
+func (g *graphBuilder) flag(ids []string, set func(*domain.ProcessNode)) {
+	for _, id := range ids {
+		found := false
+		for i := range g.graph.Nodes {
+			if g.graph.Nodes[i].ID == id {
+				set(&g.graph.Nodes[i])
+				found = true
+			}
+		}
+		if !found {
+			panic("demo graph: no node " + id)
+		}
+	}
+}
+
 func (g *graphBuilder) edges(pairs ...string) {
 	for i := 0; i+1 < len(pairs); i += 2 {
 		g.graph.Edges = append(g.graph.Edges, domain.ProcessEdge{ID: pairs[i] + "-" + pairs[i+1], Source: pairs[i], Target: pairs[i+1]})
@@ -428,6 +634,8 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.plan("stampa", "offset", 2, 30, 0.02)
 			g.plan("secenje", "sekac", 1, 15, 0.006)
 			g.plan("pakovanje", "", 1, 15, 0.004)
+			g.starts("priprema")
+			g.finals("otisci")
 		}},
 		{"digital", "Digitalna štampa", "Kratke serije na digitalnoj mašini.", false, func(g *graphBuilder) {
 			g.step("priprema", "Priprema fajla", 0, lane)
@@ -440,6 +648,8 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.plan("priprema", "", 1, 20, 0)
 			g.plan("stampa", "digital", 1, 10, 0.05)
 			g.plan("dorada", "sekac", 1, 10, 0.02)
+			g.starts("priprema")
+			g.finals("otisci")
 		}},
 		{"brosura", demoBrochureTemplate, "Brošura sa međuproizvodom (štampani tabaci) i paralelnom štampom korica.", false, func(g *graphBuilder) {
 			g.step("stampa-tabaka", "Štampa tabaka", 0, lane)
@@ -462,6 +672,8 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.plan("savijanje", "savijacica", 1, 20, 0.12)
 			g.plan("sivenje", "povez", 2, 30, 0.15)
 			g.plan("obrezivanje", "sekac", 1, 10, 0.03)
+			g.starts("stampa-tabaka", "stampa-korica")
+			g.finals("brosure")
 		}},
 		{"baner", "Veliki format (baner)", "Štampa banera na PVC-u sa ojačanjem i ringlovanjem.", false, func(g *graphBuilder) {
 			g.step("priprema", "Priprema", 0, lane)
@@ -474,6 +686,30 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.plan("priprema", "", 1, 30, 0)
 			g.plan("stampa", "ploter", 1, 15, 40)
 			g.plan("ojacanje", "", 2, 10, 25)
+			g.starts("priprema")
+			g.finals("gotov")
+		}},
+		// Two starting steps (sheets and backing board printed in parallel) and
+		// two final outputs (the calendars and the board offcuts).
+		{"kalendar", "Zidni kalendar", "Dva početka (listovi i podloga) koji se spajaju na sečenju; kalendari i ostaci kartona su konačni izlazi.", false, func(g *graphBuilder) {
+			g.step("stampa-listova", "Štampa listova", 0, lane)
+			g.step("stampa-podloge", "Štampa podloge", 0, lane+320)
+			g.step("secenje", "Sečenje", 1, lane)
+			g.step("povez", "Spiralni povez", 2, lane)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 130, 0, lane-demoInRow)
+			g.item(in, "karton", "Karton 300g", "karton", 10, -0.37, lane+320-demoInRow)
+			g.item(in, "toner", "Toner", "toner", 1, 0.37, lane+320-demoInRow)
+			g.item(in, "spirala", "Spirala plastična", "spirala", 10, 2, lane-demoInRow)
+			g.item(by, "ostaci", "Ostaci kartona", "makulatura", 4, 1, lane+demoRow)
+			g.item(pr, "kalendari", "Kalendari", "", 0, 3, lane)
+			g.edges("stampa-listova", "secenje", "stampa-podloge", "secenje", "secenje", "povez", "povez", "kalendari",
+				"papir", "stampa-listova", "karton", "stampa-podloge", "toner", "stampa-podloge", "spirala", "povez", "secenje", "ostaci")
+			g.plan("stampa-listova", "digital", 1, 15, 0.6)
+			g.plan("stampa-podloge", "digital", 1, 10, 0.1)
+			g.plan("secenje", "sekac", 1, 15, 0.2)
+			g.plan("povez", "spirala", 1, 10, 0.8)
+			g.starts("stampa-listova", "stampa-podloge")
+			g.finals("kalendari", "ostaci")
 		}},
 	}
 	for _, sp := range specs {
@@ -490,213 +726,57 @@ func (b *demoContentBuilder) processTemplates() error {
 	return nil
 }
 
-// demoOrder is one work order to create.
-type demoOrder struct {
-	customer, description, template string
-	daysAgo                         int
-	assignee                        string
-	priority                        domain.WorkOrderPriority
-	price                           float64
-	quantity                        int // jobDetails.quantity; drives planned step durations
-	// scale overrides planned quantities of nodes (after the process is attached).
-	scale map[string]float64
-	// status path after creation, e.g. assigned, inProgress.
-	statuses []domain.WorkOrderStatus
-	// done lists step batches to complete in order; actual overrides the
-	// recorded quantity of item nodes when that batch is marked done.
-	done []demoDone
-	// finish moves the order to the final status after the process work.
-	finish []domain.WorkOrderStatus
-}
-
-type demoDone struct {
-	steps  []string
-	actual map[string]float64
-}
-
-func (b *demoContentBuilder) workOrders(result *DemoSeedResult) error {
-	assigned := []domain.WorkOrderStatus{domain.WorkOrderStatusAssigned}
-	progress := []domain.WorkOrderStatus{domain.WorkOrderStatusAssigned, domain.WorkOrderStatusInProgress}
-	completed := []domain.WorkOrderStatus{domain.WorkOrderStatusCompleted}
-	offsetAll := []demoDone{{steps: []string{"priprema"}}, {steps: []string{"stampa"}}, {steps: []string{"secenje"}}, {steps: []string{"pakovanje"}}}
-	orders := []demoOrder{
-		{ // 1: new, untouched -> reserved stock
-			customer: "pekara", description: "Flajeri A5, 5.000 kom, 4+4", quantity: 5000, template: "offset", daysAgo: 2,
-			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 38000,
-			scale: map[string]float64{"papir": 650, "boja": 2, "ploce": 4},
-		},
-		{ // 2: new digital
-			customer: "pixel", description: "Vizit karte, 500 kom, kunstdruk 350g", quantity: 500, template: "digital", daysAgo: 1,
-			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 7800,
-			scale: map[string]float64{"papir": 40, "toner": 1},
-		},
-		{ // 3: in progress, actual paper above plan
-			customer: "opstina", description: "Obrasci A4 u tri primerka, 10.000 kom", quantity: 10000, template: "offset", daysAgo: 9,
-			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 112000,
-			scale:    map[string]float64{"papir": 2500, "boja": 6, "ploce": 8, "mak-stampa": 40, "mak-secenje": 25},
-			statuses: progress,
-			done: []demoDone{
-				{steps: []string{"priprema"}},
-				{steps: []string{"stampa"}, actual: map[string]float64{"papir": 2750, "boja": 6.5, "mak-stampa": 55}},
-			},
-		},
-		{ // 4: in progress brochure, two parallel steps done
-			customer: "slovo", description: "Katalog izdanja, 24 strane, 500 kom", quantity: 500, template: "brosura", daysAgo: 6,
-			assignee: demoAdminUsername, priority: domain.WorkOrderPriorityHigh, price: 96000,
-			scale:    map[string]float64{"papir": 600, "boja": 6, "karton": 150, "zica": 2, "mak": 12},
-			statuses: progress,
-			done:     []demoDone{{steps: []string{"stampa-tabaka", "stampa-korica"}}},
-		},
-		{ // 5: completed offset
-			customer: "volan", description: "Brošure i uputstva A4, 3.000 kom", quantity: 3000, template: "offset", daysAgo: 20,
-			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityNormal, price: 54000,
-			scale:    map[string]float64{"papir": 1100, "boja": 4, "ploce": 4, "mak-stampa": 18, "mak-secenje": 9},
-			statuses: progress, done: offsetAll, finish: completed,
-		},
-		{ // 6: completed banner
-			customer: "pixel", description: "Baner 4x2 m za sajam", quantity: 1, template: "baner", daysAgo: 15,
-			assignee: demoAdminUsername, priority: domain.WorkOrderPriorityUrgent, price: 9800,
-			scale:    map[string]float64{"baner": 8, "otpad": 0.5},
-			statuses: progress,
-			done:     []demoDone{{steps: []string{"priprema"}}, {steps: []string{"stampa"}}, {steps: []string{"ojacanje"}}},
-			finish:   completed,
-		},
-		{ // 7: big order, planned inputs exceed stock
-			customer: "slovo", description: "Zbirka priča, 320 strana, tiraž 2.000", quantity: 2000, template: "offset", daysAgo: 3,
-			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityHigh, price: 640000,
-			scale:    map[string]float64{"papir": 8000, "boja": 30, "ploce": 24, "mak-stampa": 120, "mak-secenje": 60},
-			statuses: assigned,
-		},
-		{ // 8: cancelled, must not reserve stock
-			customer: "opstina", description: "Plakati A3, 200 kom", quantity: 200, template: "digital", daysAgo: 12,
-			assignee: demoOperatorUsername, priority: domain.WorkOrderPriorityLow, price: 6400,
-			scale:    map[string]float64{"papir": 400, "toner": 1},
-			statuses: []domain.WorkOrderStatus{domain.WorkOrderStatusCancelled},
-		},
-	}
-	for i, order := range orders {
-		number, err := b.createOrder(order)
+// patch applies a partial update to a work order through the real update path
+// (timeline diffs, cost capture, status rules).
+func (b *demoContentBuilder) patch(workOrderID string, fields map[string]any) error {
+	changes := domain.UpdateWorkOrderInput{}
+	for key, value := range fields {
+		raw, err := json.Marshal(value)
 		if err != nil {
-			return fmt.Errorf("demo order %d: %w", i+1, err)
+			return err
 		}
-		switch i {
-		case 2:
-			result.InProgressOrder = number
-		case 3:
-			result.BrochureOrder = number
-		case 6:
-			result.ShortageOrder = number
-		case 7:
-			result.CancelledOrder = number
+		changes[key] = raw
+	}
+	_, err := b.s.UpdateWorkOrder(b.ctx, workOrderID, changes)
+	return err
+}
+
+func (b *demoContentBuilder) setStatuses(workOrderID string, statuses []domain.WorkOrderStatus) error {
+	for _, status := range statuses {
+		if err := b.patch(workOrderID, map[string]any{"status": status}); err != nil {
+			return fmt.Errorf("set status %s: %w", status, err)
 		}
 	}
-	result.Orders = len(orders)
-	result.BrochureTemplate = demoBrochureTemplate
-	result.Templates = len(b.templates)
+	return nil
+}
 
-	levels, err := b.s.StockLevels(b.ctx, StockLevelQuery{})
+// describe fills the CLI summary counts that are only known at the end.
+func (b *demoContentBuilder) describe(result *DemoSeedResult) error {
+	result.Customers = len(b.customers)
+	result.Templates = len(b.templates)
+	result.BrochureTemplate = demoBrochureTemplate
+	result.MachineTypes, result.Machines = len(b.machineTypes), b.machineCount
+	result.HistoryOrders = len(demoHistoryOrders())
+	result.Orders = len(b.liveOrders)
+	result.ShortageOrder = b.orderNumbers["zbirka"]
+	result.InProgressOrder = b.orderNumbers["obrasci"]
+	result.BrochureOrder = b.orderNumbers["katalog"]
+	result.CancelledOrder = b.orderNumbers["plakati"]
+	result.CostReviewOrder = b.orderNumbers["meni"]
+	result.OverdueOrder = b.orderNumbers["etikete"]
+	result.DueTodayOrder = b.orderNumbers["katalog"]
+	result.SignedOrder = b.orderNumbers["brosure"]
+	result.InvoicedOrder = b.orderNumbers["baner"]
+	result.SkippedStepOrder = b.orderNumbers["pozivnice"]
+	result.PublishedPlanDates = b.publishedPlans
+	result.DraftPlanDate = b.draftPlan
+	levels, err := b.s.StockLevels(b.ctx, StockLevelQuery{Limit: 500})
 	if err != nil {
 		return err
 	}
 	for _, level := range levels.Items {
 		if level.Low {
 			result.LowArticles = append(result.LowArticles, level.Name)
-		}
-	}
-	return nil
-}
-
-func (b *demoContentBuilder) createOrder(o demoOrder) (string, error) {
-	customer, location := b.customers[o.customer], b.locations[o.customer]
-	issue := b.now.AddDate(0, 0, -o.daysAgo)
-	due := issue.AddDate(0, 0, 10).Format("2006-01-02")
-	assignee, price := o.assignee, o.price
-	customerID, locationID := customer.ID, location.ID
-	quantity := o.quantity
-	order, err := b.s.CreateWorkOrder(b.ctx, domain.CreateWorkOrderInput{
-		CustomerID: &customerID, LocationID: &locationID, ClientName: customer.Name, ContactPerson: customer.ContactName,
-		JobDescription: o.description, IssuedBy: demoAdminUsername, IssueDate: issue.Format("2006-01-02"), DueDate: &due,
-		JobDetails: &domain.JobDetails{Quantity: &quantity},
-		Assignment: domain.Assignment{AssignedTo: &assignee, Priority: o.priority}, Price: &price,
-	})
-	if err != nil {
-		return "", err
-	}
-	// New orders get the default template automatically; any other one replaces it.
-	template := b.templates[o.template]
-	if process, err := b.s.WorkOrderProcess(b.ctx, order.ID); err != nil {
-		return "", err
-	} else if process == nil || process.TemplateID == nil || *process.TemplateID != template.ID {
-		if process != nil {
-			if err := b.s.DeleteWorkOrderProcess(b.ctx, order.ID); err != nil {
-				return "", err
-			}
-		}
-		if _, err := b.s.ApplyProcessTemplate(b.ctx, order.ID, template.ID, demoAdminUsername); err != nil {
-			return "", err
-		}
-	}
-	// Scale planned quantities on the order's own graph (admin, structural).
-	if err := b.editProcess(order.ID, demoAdminUsername, true, func(node *domain.ProcessNode) {
-		if qty, ok := o.scale[node.ID]; ok {
-			value := qty
-			node.Quantity = &value
-		}
-	}); err != nil {
-		return "", err
-	}
-	if err := b.setStatuses(order.ID, o.statuses); err != nil {
-		return "", err
-	}
-	// Operators mark steps done and record actual quantities; the store posts
-	// the matching consumption/production movements.
-	for _, batch := range o.done {
-		steps := map[string]bool{}
-		for _, id := range batch.steps {
-			steps[id] = true
-		}
-		if err := b.editProcess(order.ID, o.assignee, false, func(node *domain.ProcessNode) {
-			if steps[node.ID] {
-				node.Status = domain.ProcessStepDone
-			}
-			if actual, ok := batch.actual[node.ID]; ok {
-				value := actual
-				node.ActualQuantity = &value
-			}
-		}); err != nil {
-			return "", err
-		}
-	}
-	if err := b.setStatuses(order.ID, o.finish); err != nil {
-		return "", err
-	}
-	return order.OrderNumber, nil
-}
-
-func (b *demoContentBuilder) editProcess(workOrderID, user string, structural bool, edit func(*domain.ProcessNode)) error {
-	process, err := b.s.WorkOrderProcess(b.ctx, workOrderID)
-	if err != nil {
-		return err
-	}
-	if process == nil {
-		return fmt.Errorf("work order %s has no process", workOrderID)
-	}
-	graph := domain.CloneProcessGraph(process.Graph)
-	for i := range graph.Nodes {
-		edit(&graph.Nodes[i])
-	}
-	_, err = b.s.UpdateWorkOrderProcess(b.ctx, workOrderID, graph, user, structural)
-	return err
-}
-
-func (b *demoContentBuilder) setStatuses(workOrderID string, statuses []domain.WorkOrderStatus) error {
-	for _, status := range statuses {
-		raw, err := json.Marshal(status)
-		if err != nil {
-			return err
-		}
-		if _, err := b.s.UpdateWorkOrder(b.ctx, workOrderID, domain.UpdateWorkOrderInput{"status": raw}); err != nil {
-			return fmt.Errorf("set status %s: %w", status, err)
 		}
 	}
 	return nil
