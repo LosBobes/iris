@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.10.1 — 2026-10-19
+
+### Patch
+
+- Decision record D-028: shop-floor scheduling follows the job-loading model (inter-operation time, actual step times, workstation load).
+
 ## 2.10.0 — 2026-10-19
 
 ### Minor
