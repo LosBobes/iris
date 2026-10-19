@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { MachineTypesTab } from '@/components/planning/MachineTypesTab'
 import { MachinesTab } from '@/components/planning/MachinesTab'
@@ -8,8 +8,10 @@ import { QualificationsTab } from '@/components/planning/QualificationsTab'
 import { WorkingHoursTab } from '@/components/planning/WorkingHoursTab'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/useAuth'
+import { suggestedTransferMinutes } from '@/lib/planning/calibration-link'
 
 type ResourceTab = 'types' | 'machines' | 'qualifications' | 'hours'
+const RESOURCE_TABS: readonly ResourceTab[] = ['types', 'machines', 'qualifications', 'hours']
 
 /**
  * "Resursi" of the Planiranje module (route is wrapped in ModuleGate by App).
@@ -20,7 +22,14 @@ function PlanningResourcesPage(): React.JSX.Element {
   const { t } = useTranslation()
   const { currentUser } = useAuth()
   const canEdit = currentUser.role === 'admin'
-  const [tab, setTab] = useState<ResourceTab>('types')
+  // ?tab= opens a tab directly; ?transferMinutes= prefills the working hours
+  // (the calibration card's link, D-028; admins only, nothing is saved).
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<ResourceTab>(() => {
+    const requested = searchParams.get('tab') as ResourceTab | null
+    return requested && RESOURCE_TABS.includes(requested) ? requested : 'types'
+  })
+  const suggestedTransfer = canEdit ? suggestedTransferMinutes(searchParams) : null
 
   const tabs: TabItem<ResourceTab>[] = [
     { value: 'types', label: t('planning.resources.tabs.types') },
@@ -56,7 +65,7 @@ function PlanningResourcesPage(): React.JSX.Element {
           {tab === 'types' && <MachineTypesTab canEdit={canEdit} />}
           {tab === 'machines' && <MachinesTab canEdit={canEdit} />}
           {tab === 'qualifications' && <QualificationsTab canEdit={canEdit} />}
-          {tab === 'hours' && <WorkingHoursTab canEdit={canEdit} />}
+          {tab === 'hours' && <WorkingHoursTab canEdit={canEdit} suggestedTransferMinutes={suggestedTransfer} />}
         </div>
       </div>
     </div>

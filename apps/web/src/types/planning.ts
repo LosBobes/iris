@@ -288,3 +288,50 @@ export interface MyQueue {
   publishedAt: string | null
   items: MyQueueItem[]
 }
+
+// ---- calibration report (D-028, GET /planning/calibration) -------------------
+
+/** Default report window in days (today included). */
+export const CALIBRATION_DEFAULT_DAYS = 60
+/** Longest report window in days. */
+export const CALIBRATION_MAX_DAYS = 366
+/** The planning page lists step labels whose actual/planned ratio is off by more than this share. */
+export const CALIBRATION_RATIO_THRESHOLD = 0.25
+
+export interface PlanningCalibrationWindow {
+  from: string
+  to: string
+}
+
+/** Planned vs measured working minutes of the done steps sharing a label; `ratio` = actual / planned. */
+export interface PlanningCalibrationStep {
+  label: string
+  count: number
+  plannedMinutesAvg: number
+  actualMinutesAvg: number
+  ratio: number
+}
+
+/**
+ * Read-only calibration report over the orders whose process finished in the
+ * window: the measured inter-operation time (recommended `transferMinutes`)
+ * and planned vs actual minutes per step label, sorted by |ratio − 1|.
+ */
+export interface PlanningCalibration {
+  window: PlanningCalibrationWindow
+  /** Orders completed in the window. */
+  orders: number
+  /** Those of them where every done step has startedAt and finishedAt. */
+  ordersWithTimes: number
+  /** Recommended transferMinutes (mean, rounded to 5); null without an order to measure. */
+  avgTransferMinutes: number | null
+  medianTransferMinutes: number | null
+  currentTransferMinutes: number
+  steps: PlanningCalibrationStep[]
+}
+
+/** Optional window of the calibration report; each date defaults on the server. */
+export interface PlanningCalibrationQuery {
+  from?: string
+  to?: string
+}

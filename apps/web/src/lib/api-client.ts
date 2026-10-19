@@ -93,6 +93,7 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { PlanningCalibration, PlanningCalibrationQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -1439,6 +1440,16 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlanningForecast() {
       const response = await fetchImpl(url('/planning/forecast'), credentialedRequest())
       return readArray(await readJSON<OrderForecast[]>(response))
+    },
+
+    async getPlanningCalibration(query: PlanningCalibrationQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.from) params.set('from', query.from)
+      if (query.to) params.set('to', query.to)
+      const search = params.toString() ? `?${params}` : ''
+      const response = await fetchImpl(url(`/planning/calibration${search}`), credentialedRequest())
+      const report = await readJSON<PlanningCalibration>(response)
+      return { ...report, steps: readArray(report?.steps) }
     },
 
     async getAnnouncements() {

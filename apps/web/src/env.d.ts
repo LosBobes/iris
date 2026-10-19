@@ -91,6 +91,7 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { PlanningCalibration, PlanningCalibrationQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -302,6 +303,8 @@ declare global {
       /** The signed-in user's blocks of the published plan (date defaults to today). */
       getMyQueue: (date?: string) => Promise<MyQueue>
       getPlanningForecast: () => Promise<OrderForecast[]>
+      /** Read-only calibration report (admins; D-028): recommended transferMinutes and planned vs actual step minutes. */
+      getPlanningCalibration: (query?: PlanningCalibrationQuery) => Promise<PlanningCalibration>
     }
   }
 }

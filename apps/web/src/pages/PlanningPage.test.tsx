@@ -79,6 +79,15 @@ function stubApi(store: Store, admin = true) {
     deletePlanDraft: vi.fn(async () => {
       store.draft = null
     }),
+    getPlanningCalibration: vi.fn(async () => ({
+      window: { from: '2026-08-21', to: '2026-10-19' },
+      orders: 0,
+      ordersWithTimes: 0,
+      avgTransferMinutes: null,
+      medianTransferMinutes: null,
+      currentTransferMinutes: 0,
+      steps: [],
+    })),
   }
   vi.stubGlobal('api', api)
   return api

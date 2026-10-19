@@ -4439,6 +4439,72 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/calibration:
+    get:
+      tags: [Planning]
+      summary: Calibration report for the inter-operation time and step norms (admin only)
+      operationId: getPlanningCalibration
+      description: >-
+        Read-only report (D-028, "Actual step times"); nothing is applied automatically. An order counts as
+        completed in the window when it is not cancelled, its process is finished (every step `done` or `skipped`,
+        at least one `done`) and the latest step `finishedAt` falls on a local date (working-hours time zone) within
+        the window, whatever the order's status; orders finished before step times were recorded have no
+        `finishedAt` and are not counted. For each such order where every done step has `startedAt` and
+        `finishedAt`: cycle = working minutes (breaks, nights and days off excluded) from the earliest step
+        `startedAt` to the latest `finishedAt`; along the longest chain of done steps (most done steps, then most
+        measured minutes) tech = the chain's measured step minutes and gaps = its done steps − 1; the order's
+        inter-operation time is (cycle − tech) / gaps (orders with gaps 0 are skipped). `avgTransferMinutes` and
+        `medianTransferMinutes` are the mean and median over those orders, rounded to 5 minutes and clamped to
+        0–480. `steps` groups every done step with both timestamps by label: planned = the step's current times
+        × the order quantity (setup + per unit × quantity), actual = measured working minutes.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: First local date "YYYY-MM-DD" of the window; defaults to 59 days before `to`.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Last local date "YYYY-MM-DD" of the window (inclusive); defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanningCalibration'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            `from` after `to` (`Početni datum mora biti pre krajnjeg ili isti.`) or a window longer than 366 days
+            (`Period izveštaja može biti najviše 366 dana.`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     IrisSession:
@@ -4983,6 +5049,59 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MyQueueItem'
+    PlanningCalibrationWindow:
+      type: object
+      required: [from, to]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+    PlanningCalibrationStep:
+      type: object
+      description: Planned vs measured working minutes of the done steps sharing a label; `ratio` = actual / planned.
+      required: [label, count, plannedMinutesAvg, actualMinutesAvg, ratio]
+      properties:
+        label: {type: string}
+        count: {type: integer, minimum: 1}
+        plannedMinutesAvg: {type: number, description: Rounded to 0.1 minute.}
+        actualMinutesAvg: {type: number, description: Rounded to 0.1 minute.}
+        ratio: {type: number, description: Rounded to 0.01.}
+    PlanningCalibration:
+      type: object
+      description: >-
+        Calibration report (D-028), see `GET /planning/calibration`. `steps` is sorted by |ratio − 1| (largest
+        first), then count (largest first), then label.
+      required: [window, orders, ordersWithTimes, avgTransferMinutes, medianTransferMinutes, currentTransferMinutes, steps]
+      properties:
+        window:
+          $ref: '#/components/schemas/PlanningCalibrationWindow'
+        orders:
+          type: integer
+          minimum: 0
+          description: Orders completed in the window (see the endpoint).
+        ordersWithTimes:
+          type: integer
+          minimum: 0
+          description: Those of them where every done step has `startedAt` and `finishedAt`.
+        avgTransferMinutes:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 480
+          description: Recommended `transferMinutes` (mean); null without an order to measure.
+        medianTransferMinutes:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 480
+        currentTransferMinutes:
+          type: integer
+          minimum: 0
+          maximum: 480
+          description: The `transferMinutes` the working hours currently hold.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanningCalibrationStep'
     ProcessNode:
       type: object
       required: [id, kind, label, x, y]

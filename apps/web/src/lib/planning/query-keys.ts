@@ -15,6 +15,7 @@ export const planningKeys = {
   myQueue: (date?: string) => ['planning', 'my-queue', date ?? 'today'] as const,
   myQueueRoot: ['planning', 'my-queue'] as const,
   forecast: ['planning', 'forecast'] as const,
+  calibration: (from: string, to: string) => ['planning', 'calibration', from, to] as const,
 }
 
 // Prisustvo is its own module, so its keys live outside the planning root

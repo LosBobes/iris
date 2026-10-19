@@ -881,6 +881,16 @@ function PlanningChapter(): React.JSX.Element {
         tipa ili niko nije kvalifikovan), piše <strong>ne može se planirati</strong>. To je
         najbolje mesto da vidiš problem pre nego što klijent pozove.
       </P>
+      <H2>Kalibracija</H2>
+      <P>
+        Kad operateri u <Ui>Moj red</Ui> pritiskaju <Ui>Počni</Ui> i <Ui>Završi</Ui>, Iris
+        beleži koliko je svaki korak stvarno trajao. Kartica <strong>Kalibracija</strong> (samo
+        za administratore) za naloge završene u poslednjih 60 dana poredi stvarno vreme od
+        prvog do poslednjeg koraka sa zbirom vremena samih koraka i iz razlike predlaže
+        međuoperacijsko vreme. Dugme vodi na radno vreme sa upisanim predlogom, ali ništa se
+        ne menja dok ne sačuvaš. Ispod je spisak koraka čije se stvarno trajanje razlikuje od
+        planiranog za više od 25 %, da bi se popravila vremena u šablonima.
+      </P>
     </>
   );
 }

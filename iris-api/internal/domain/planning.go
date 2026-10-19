@@ -401,3 +401,45 @@ type MyQueueItem struct {
 	StepStatus ProcessStepStatus `json:"stepStatus"`
 	IsLead     bool              `json:"isLead"`
 }
+
+// Calibration report (D-028, "Actual step times"): read-only, nothing is
+// applied automatically.
+
+// Calibration limits.
+const (
+	// CalibrationDefaultDays is the default report window: the last 60 days
+	// (today included).
+	CalibrationDefaultDays = 60
+	// CalibrationMaxDays caps the report window.
+	CalibrationMaxDays = 366
+)
+
+// PlanningCalibrationWindow is the report's inclusive local date range.
+type PlanningCalibrationWindow struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// PlanningCalibrationStep compares planned with measured working minutes of
+// the done steps sharing one label. Ratio is actual / planned.
+type PlanningCalibrationStep struct {
+	Label             string  `json:"label"`
+	Count             int     `json:"count"`
+	PlannedMinutesAvg float64 `json:"plannedMinutesAvg"`
+	ActualMinutesAvg  float64 `json:"actualMinutesAvg"`
+	Ratio             float64 `json:"ratio"`
+}
+
+// PlanningCalibration is the answer of GET /planning/calibration: over the
+// orders whose process finished in the window, the measured inter-operation
+// time (recommended transferMinutes) and planned vs actual minutes per step
+// label, sorted by how far the ratio is from 1.
+type PlanningCalibration struct {
+	Window                 PlanningCalibrationWindow `json:"window"`
+	Orders                 int                       `json:"orders"`
+	OrdersWithTimes        int                       `json:"ordersWithTimes"`
+	AvgTransferMinutes     *int                      `json:"avgTransferMinutes"`
+	MedianTransferMinutes  *int                      `json:"medianTransferMinutes"`
+	CurrentTransferMinutes int                       `json:"currentTransferMinutes"`
+	Steps                  []PlanningCalibrationStep `json:"steps"`
+}
