@@ -223,6 +223,22 @@ func (s *Server) handlePlanDay(w http.ResponseWriter, r *http.Request, planning 
 	writeJSON(w, http.StatusOK, day)
 }
 
+// handlePlanHorizon answers admins with every block of the date's plans over
+// the kept horizon, grouped by day (D-028); GET /planning/plan shows the plan
+// date only.
+func (s *Server) handlePlanHorizon(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
+	date, ok := queryDate(w, r)
+	if !ok {
+		return
+	}
+	horizon, err := planning.PlanHorizon(r.Context(), date)
+	if err != nil {
+		writeServerError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, horizon)
+}
+
 func (s *Server) handleGeneratePlan(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
 	var input domain.PlanGenerateInput
 	if !decodeJSONBody(w, r, &input) {

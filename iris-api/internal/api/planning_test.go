@@ -76,6 +76,7 @@ var planningRoutes = []planningRoute{
 	{http.MethodGet, "/planning/working-hours", ""},
 	{http.MethodPut, "/planning/working-hours", `{"timeZone":"UTC","days":[]}`},
 	{http.MethodGet, "/planning/plan", ""},
+	{http.MethodGet, "/planning/plan/horizon", ""},
 	{http.MethodPost, "/planning/plan/generate", `{"date":"2026-10-19"}`},
 	{http.MethodPut, "/planning/plan/draft", `{"date":"2026-10-19","assignments":[]}`},
 	{http.MethodDelete, "/planning/plan/draft?date=2026-10-19", ""},
@@ -84,8 +85,11 @@ var planningRoutes = []planningRoute{
 	{http.MethodGet, "/planning/forecast", ""},
 }
 
-// adminOnly lists the routes an operator may not call.
-func (r planningRoute) adminOnly() bool { return r.method != http.MethodGet }
+// adminOnly lists the routes an operator may not call: every write, plus the
+// horizon view (the draft's other days are the admin's working copy).
+func (r planningRoute) adminOnly() bool {
+	return r.method != http.MethodGet || r.path == "/planning/plan/horizon"
+}
 
 func TestPlanningRoutesForbiddenWhileModuleOff(t *testing.T) {
 	f := newModuleFixture(t, false)
@@ -337,6 +341,21 @@ func TestPlanningPlanEndpoints(t *testing.T) {
 	if block.WorkOrderID != f.orderID || block.LeadUserID != "user-1" || block.MachineName != "M1" || block.Start != today+"T07:00" {
 		t.Fatalf("block = %+v", block)
 	}
+	// The kept horizon spans 14 working days (D-028) and is an admin view.
+	if draft.HorizonEnd != "2026-11-05" {
+		t.Fatalf("horizonEnd = %q", draft.HorizonEnd)
+	}
+	horizon := call[domain.PlanDayHorizon](t, f, f.admin, http.MethodGet, "/planning/plan/horizon?date="+today, "", http.StatusOK)
+	if horizon.Date != today || horizon.Published != nil || horizon.Draft == nil || horizon.Draft.PlanID != draft.ID ||
+		horizon.Draft.HorizonEnd != draft.HorizonEnd || len(horizon.Draft.Days) != 1 || horizon.Draft.Days[0].Date != today ||
+		len(horizon.Draft.Days[0].Assignments) != 1 || horizon.Draft.Days[0].Assignments[0].ID != block.ID {
+		t.Fatalf("horizon = %+v", horizon)
+	}
+	if horizon = call[domain.PlanDayHorizon](t, f, f.admin, http.MethodGet, "/planning/plan/horizon", "", http.StatusOK); horizon.Date != today || horizon.Draft == nil {
+		t.Fatalf("horizon without a date = %+v", horizon)
+	}
+	expectError(t, f, f.admin, http.MethodGet, "/planning/plan/horizon?date=nope", "", http.StatusBadRequest, "Neispravan datum.")
+	expectError(t, f, f.operator, http.MethodGet, "/planning/plan/horizon?date="+today, "", http.StatusForbidden, "Nemate dozvolu za ovu akciju.")
 
 	// The draft is hidden from operators.
 	if day = call[domain.PlanDay](t, f, f.operator, http.MethodGet, "/planning/plan?date="+today, "", http.StatusOK); day.Draft != nil || day.Published != nil {

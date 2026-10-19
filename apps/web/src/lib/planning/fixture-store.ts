@@ -26,6 +26,8 @@ import {
   type OrderForecast,
   type PlanAssignment,
   type PlanDay,
+  type PlanDayHorizon,
+  type PlanHorizon,
   type ProductionPlan,
   type WorkerQualifications,
   type WorkingHours,
@@ -34,6 +36,10 @@ import {
 // In-memory Planiranje store for fixture mode. It mirrors the API's validation,
 // permissions and module gate closely enough for demos and UI development; the
 // Go service stays authoritative. The plan comes from `fixture-planner.ts`.
+//
+// Like the API (D-028), a plan keeps every block of its run over the whole
+// horizon; the plan endpoints show the plan date's blocks only and
+// `getPlanHorizon` the rest, grouped by day.
 
 const MESSAGES = {
   adminOnly: 'Potrebna je administratorska uloga.',
@@ -59,6 +65,9 @@ const MESSAGES = {
 
 const CLOSED_STATUSES = new Set(['completed', 'cancelled', 'invoiced'])
 const MAX_ASSIGNMENTS = 2000
+/** Issue codes that mean a step was left out of the plan, whatever day it would fall on. */
+const UNPLACEABLE_ISSUES = new Set(['unknown_machine_type', 'no_machine', 'no_workers', 'no_capacity'])
+const PLAN_DATE_MAX = '9999-12-31'
 
 function fixtureError(status: number, message: string): ApiError {
   return new ApiError(message, { status, url: 'fixture://planning', method: 'FIXTURE' })
@@ -104,6 +113,7 @@ type PlanningApi = Pick<
   | 'getWorkingHours'
   | 'setWorkingHours'
   | 'getPlanDay'
+  | 'getPlanHorizon'
   | 'generatePlan'
   | 'updatePlanDraft'
   | 'deletePlanDraft'
@@ -303,6 +313,7 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
     issues: ProductionPlan['issues'],
     lateOrders: OrderForecast[],
     previous?: ProductionPlan,
+    horizonEnd?: string,
   ): ProductionPlan => {
     const user = context.currentUser()?.username ?? ''
     const at = stamp()
@@ -310,6 +321,7 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
       id: previous?.id ?? `plan-${sequence++}`,
       date,
       status,
+      horizonEnd: horizonEnd ?? previous?.horizonEnd ?? date,
       generatedAt: previous?.generatedAt ?? at,
       generatedBy: previous?.generatedBy ?? user,
       updatedAt: at,
@@ -321,6 +333,76 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
       lateOrders,
     }
   }
+
+  /** The run's last working day: PLANNING_FORECAST_DAYS working days from the plan date. */
+  const horizonEndFor = (date: string): string => {
+    const days = workingDays(hours, date, PLANNING_FORECAST_DAYS)
+    return days.length > 0 ? days[days.length - 1].date : date
+  }
+  const blockDate = (block: PlanAssignment): string => block.start.slice(0, 10)
+  const stepKey = (item: { workOrderId: string; stepNodeId?: string }): string => `${item.workOrderId}:${item.stepNodeId ?? ''}`
+
+  /** What the plan endpoints show: the date's blocks and the issues that concern that day. */
+  const planView = (plan: ProductionPlan, date: string): ProductionPlan => {
+    const assignments = plan.assignments.filter((block) => blockDate(block) === date)
+    const placed = new Set(assignments.map(stepKey))
+    return {
+      ...plan,
+      assignments,
+      issues: plan.issues.filter(
+        (issue) => UNPLACEABLE_ISSUES.has(issue.code) || issue.code === 'conflict' || placed.has(stepKey(issue)),
+      ),
+    }
+  }
+
+  /** Every block of a plan grouped by day, plan date first. */
+  const horizonOf = (plan: ProductionPlan): PlanHorizon => {
+    const days: PlanHorizon['days'] = []
+    const sorted = [...plan.assignments].sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id))
+    for (const block of sorted) {
+      const date = blockDate(block)
+      const last = days[days.length - 1]
+      if (last && last.date === date) last.assignments.push(block)
+      else days.push({ date, assignments: [block] })
+    }
+    return {
+      planId: plan.id,
+      status: plan.status,
+      date: plan.date,
+      horizonEnd: plan.horizonEnd,
+      generatedAt: plan.generatedAt,
+      updatedAt: plan.updatedAt,
+      days,
+      issues: plan.issues,
+    }
+  }
+
+  /** Steps of the open orders that are neither done nor skipped. */
+  const openStepKeys = (): Set<string> => {
+    const open = new Set<string>()
+    for (const order of sourceOrders()) {
+      for (const node of order.graph.nodes) {
+        if (node.kind !== 'step') continue
+        const status = stepStatus(node)
+        if (status !== 'done' && status !== 'skipped') open.add(`${order.id}:${node.id}`)
+      }
+    }
+    return open
+  }
+
+  /** A published plan's blocks of the open steps it anchors on its own date (carry-over parts included). */
+  const anchoredBlocks = (plan: ProductionPlan, open: Set<string>): PlanAssignment[] => {
+    const anchored = new Set(
+      plan.assignments.filter((block) => blockDate(block) === plan.date && open.has(stepKey(block))).map(stepKey),
+    )
+    return plan.assignments.filter((block) => anchored.has(stepKey(block)))
+  }
+
+  /** Published plans dated from `from` (inclusive) up to `before` (exclusive), oldest first. */
+  const publishedFrom = (from: string, before = PLAN_DATE_MAX): ProductionPlan[] =>
+    [...published.values()]
+      .filter((plan) => plan.date >= from && plan.date < before)
+      .sort((a, b) => a.date.localeCompare(b.date))
 
   const sortedByName = <T extends { name: string }>(list: T[]): T[] =>
     [...list].sort((a, b) => a.name.localeCompare(b.name, 'sr'))
@@ -480,17 +562,31 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
       async getPlanDay(date) {
         const user = requireUser()
         checkDate(date)
-        const publishedPlan = published.get(date) ?? null
+        const publishedPlan = published.get(date)
+        const publishedView = publishedPlan ? planView(publishedPlan, date) : null
         let drift: PlanDay['drift'] = null
-        if (publishedPlan && date === today()) {
-          drift = computeDrift(publishedPlan, sourceOrders(), localMoment(nowDate(), hours.timeZone))
+        if (publishedView && date === today()) {
+          drift = computeDrift(publishedView, sourceOrders(), localMoment(nowDate(), hours.timeZone))
         }
+        const draft = drafts.get(date)
         return clone({
           date,
-          draft: user.role === 'admin' ? (drafts.get(date) ?? null) : null,
-          published: publishedPlan,
+          draft: user.role === 'admin' && draft ? planView(draft, date) : null,
+          published: publishedView,
           drift,
         })
+      },
+      async getPlanHorizon(date) {
+        requireAdmin()
+        checkDate(date)
+        const draft = drafts.get(date)
+        const publishedPlan = published.get(date)
+        const result: PlanDayHorizon = {
+          date,
+          draft: draft ? horizonOf(draft) : null,
+          published: publishedPlan ? horizonOf(publishedPlan) : null,
+        }
+        return clone(result)
       },
       async generatePlan(input) {
         requireAdmin()
@@ -500,16 +596,31 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         if (input.replan && input.date !== current) throw fixtureError(422, MESSAGES.replanToday)
 
         const now: LocalMoment = localMoment(nowDate(), hours.timeZone)
-        const pinned = input.replan
+        // Pinned (D-028): with replan the published plan's locked blocks; for a
+        // later date the open steps the published plans of today up to the day
+        // before anchor on their own dates, so consecutive days stay coherent.
+        const pinned: PlanAssignment[] = input.replan
           ? (published.get(input.date)?.assignments ?? []).filter((block) => block.locked)
           : []
+        if (input.date > current) {
+          const open = openStepKeys()
+          const seen = new Set(pinned.map((block) => block.id))
+          for (const plan of publishedFrom(current, input.date)) {
+            for (const block of anchoredBlocks(plan, open)) {
+              if (seen.has(block.id)) continue
+              seen.add(block.id)
+              pinned.push(block)
+            }
+          }
+        }
         const result = planDay({
           ...plannerBase(input.date),
           ...(input.replan ? { start: now } : {}),
           pinned,
         })
-        // The plan keeps the date's own blocks; the rest of the horizon is the forecast.
-        const assignments = result.assignments.filter((block) => block.start.startsWith(input.date))
+        // The plan keeps its whole horizon from the plan date on; pinned context
+        // from earlier dates is left out.
+        const assignments = result.assignments.filter((block) => blockDate(block) >= input.date)
         const plan = makePlan(
           input.date,
           'draft',
@@ -517,9 +628,10 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
           result.issues,
           result.forecast.filter((entry) => entry.late),
           drafts.get(input.date),
+          horizonEndFor(input.date),
         )
         drafts.set(input.date, plan)
-        return clone(plan)
+        return clone(planView(plan, input.date))
       },
       async updatePlanDraft(input) {
         requireAdmin()
@@ -530,16 +642,18 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         // Conflicts are reported, not rejected; earlier planner issues stay.
         const kept = draft.issues.filter((issue) => issue.code !== 'conflict')
         const conflicts = checkDraft(plannerBase(input.date), input.assignments)
+        // Hand edits apply to the plan date; the horizon's later days stay.
+        const later = draft.assignments.filter((block) => blockDate(block) !== input.date)
         const updated = makePlan(
           input.date,
           'draft',
-          clone(input.assignments),
+          [...clone(input.assignments), ...later],
           [...kept, ...conflicts],
           draft.lateOrders,
           draft,
         )
         drafts.set(input.date, updated)
-        return clone(updated)
+        return clone(planView(updated, input.date))
       },
       async deletePlanDraft(date) {
         requireAdmin()
@@ -554,7 +668,7 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         const plan = makePlan(input.date, 'published', draft.assignments, draft.issues, draft.lateOrders, draft)
         published.set(input.date, plan)
         drafts.delete(input.date)
-        return clone(plan)
+        return clone(planView(plan, input.date))
       },
       async getMyQueue(date) {
         const user = requireUser()
@@ -562,7 +676,7 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         const plan = published.get(value)
         const orders = new Map(sourceOrders().map((order) => [order.id, order]))
         const items = (plan?.assignments ?? [])
-          .filter((block) => block.userIds.includes(user.id))
+          .filter((block) => blockDate(block) === value && block.userIds.includes(user.id))
           .map((block) => {
             const step = orders.get(block.workOrderId)?.graph.nodes.find((node) => node.id === block.stepNodeId)
             return {
@@ -581,11 +695,28 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         const days = workingDays(hours, current, 1)
         // From now on a working day, otherwise from the next shift start.
         const start: LocalMoment | undefined = days[0]?.date === current ? now : undefined
+        // Published plans from today on are pinned (the open steps each anchors
+        // on its own date, except blocks already over), so the forecast never
+        // contradicts them (D-028).
+        const open = openStepKeys()
+        const notOver = (block: PlanAssignment): boolean => {
+          const [date, time] = block.end.split('T')
+          return date > now.date || (date === now.date && parseClock(time ?? '00:00') > now.minutes)
+        }
+        const pinned: PlanAssignment[] = []
+        const seen = new Set<string>()
+        for (const plan of publishedFrom(current)) {
+          for (const block of anchoredBlocks(plan, open)) {
+            if (!notOver(block) || seen.has(block.id)) continue
+            seen.add(block.id)
+            pinned.push(block)
+          }
+        }
         const result = planDay({
           ...plannerBase(current),
           start,
           horizonDays: PLANNING_FORECAST_DAYS,
-          pinned: (published.get(current)?.assignments ?? []).filter((block) => block.locked),
+          pinned,
         })
         return clone(result.forecast)
       },

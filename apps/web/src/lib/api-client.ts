@@ -81,7 +81,9 @@ import type {
   MyQueue,
   OrderForecast,
   PlanDay,
+  PlanDayHorizon,
   PlanDraftInput,
+  PlanHorizon,
   PlanGenerateInput,
   PlanPublishInput,
   ProductionPlan,
@@ -114,9 +116,22 @@ function normalizeAssignment<T extends { userIds: string[] }>(a: T): T {
 function normalizePlan(plan: ProductionPlan): ProductionPlan {
   return {
     ...plan,
+    horizonEnd: plan.horizonEnd || plan.date,
     assignments: readArray(plan.assignments).map(normalizeAssignment),
     issues: readArray(plan.issues),
     lateOrders: readArray(plan.lateOrders),
+  }
+}
+
+function normalizePlanHorizon(horizon: PlanHorizon): PlanHorizon {
+  return {
+    ...horizon,
+    horizonEnd: horizon.horizonEnd || horizon.date,
+    days: readArray(horizon.days).map((day) => ({
+      ...day,
+      assignments: readArray(day.assignments).map(normalizeAssignment),
+    })),
+    issues: readArray(horizon.issues),
   }
 }
 
@@ -1346,6 +1361,19 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
         draft: day.draft ? normalizePlan(day.draft) : null,
         published: day.published ? normalizePlan(day.published) : null,
         drift: day.drift ? { ...day.drift, reasons: readArray(day.drift.reasons) } : null,
+      }
+    },
+
+    async getPlanHorizon(date: string) {
+      const response = await fetchImpl(
+        url(`/planning/plan/horizon?${new URLSearchParams({ date })}`),
+        credentialedRequest(),
+      )
+      const horizon = await readJSON<PlanDayHorizon>(response)
+      return {
+        ...horizon,
+        draft: horizon.draft ? normalizePlanHorizon(horizon.draft) : null,
+        published: horizon.published ? normalizePlanHorizon(horizon.published) : null,
       }
     },
 

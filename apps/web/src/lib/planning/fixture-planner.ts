@@ -519,7 +519,16 @@ export function planDay(input: PlannerInput): PlannerResult {
     const from = splitStamp(block.start)
     const to = splitStamp(block.end)
     const day = dayByDate.get(from.date)
-    if (!day) continue
+    if (!day) {
+      // A block before the horizon (an earlier day's published work, D-028):
+      // its step counts as finished by the start; nothing is booked or echoed.
+      if (days[0] && from.date < days[0].date) {
+        const stepKey = `${block.workOrderId}:${block.stepNodeId}`
+        pinnedSteps.add(stepKey)
+        pinnedFinish.set(stepKey, pinnedFinish.get(stepKey) ?? 0)
+      }
+      continue
+    }
     const base = day.index * AXIS
     for (const key of [...block.userIds.map((id) => `u:${id}`), ...(block.machineId ? [`m:${block.machineId}`] : [])]) {
       addBusy(key, base + from.minutes, base + to.minutes)

@@ -83,6 +83,8 @@ describe('planning HTTP client: plans', () => {
     expect(generated.assignments).toEqual([])
     expect(generated.issues).toEqual([])
     expect(generated.lateOrders).toEqual([])
+    // A plan stored before the horizon was kept has no horizonEnd: the date stands in.
+    expect(generated.horizonEnd).toBe('2026-10-19')
     expect(call(fetchMock)).toMatchObject({
       url: 'http://api.test/planning/plan/generate',
       method: 'POST',
@@ -95,6 +97,26 @@ describe('planning HTTP client: plans', () => {
     expect(loaded.draft?.assignments).toEqual([])
     expect(loaded.published).toBeNull()
     expect(loaded.drift).toEqual({ suggested: true, reasons: [] })
+  })
+
+  it('requests the kept horizon of a date and normalizes its days', async () => {
+    const horizon = {
+      planId: 'p1',
+      status: 'draft',
+      date: '2026-10-19',
+      horizonEnd: '2026-11-05',
+      generatedAt: '2026-10-19T05:00:00Z',
+      updatedAt: '2026-10-19T05:00:00Z',
+      days: [{ date: '2026-10-20', assignments: [{ id: 'a', userIds: null }] }],
+      issues: null,
+    }
+    const { api, fetchMock } = setup({ date: '2026-10-19', draft: horizon, published: null })
+    const loaded = await api.getPlanHorizon('2026-10-19')
+    expect(call(fetchMock).url).toBe('http://api.test/planning/plan/horizon?date=2026-10-19')
+    expect(loaded.published).toBeNull()
+    expect(loaded.draft?.horizonEnd).toBe('2026-11-05')
+    expect(loaded.draft?.days).toEqual([{ date: '2026-10-20', assignments: [{ id: 'a', userIds: [] }] }])
+    expect(loaded.draft?.issues).toEqual([])
   })
 
   it('saves, discards and publishes drafts', async () => {

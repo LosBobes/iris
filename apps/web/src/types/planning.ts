@@ -148,10 +148,17 @@ export interface OrderForecast {
   unplannable: boolean
 }
 
+/**
+ * A day plan. The stored run keeps every block over the whole horizon (`date`
+ * through `horizonEnd`, D-028); the plan endpoints return the blocks of `date`
+ * only, `getPlanHorizon` the rest grouped by day.
+ */
 export interface ProductionPlan {
   id: string
   date: string
   status: PlanStatus
+  /** Last working day the run could place steps on (14 working days from `date`; `date` for a day off). */
+  horizonEnd: string
   generatedAt: string
   generatedBy: string
   updatedAt: string
@@ -161,6 +168,35 @@ export interface ProductionPlan {
   assignments: PlanAssignment[]
   issues: PlanIssue[]
   lateOrders: OrderForecast[]
+}
+
+/** One day's blocks of a plan's kept horizon, sorted by start. */
+export interface PlanHorizonDay {
+  date: string
+  assignments: PlanAssignment[]
+}
+
+/**
+ * Every block a plan's run produced, grouped by day from the plan date to
+ * `horizonEnd` (days without a block are left out), with the run's issues.
+ * Hand edits only ever touch the plan date's blocks.
+ */
+export interface PlanHorizon {
+  planId: string
+  status: PlanStatus
+  date: string
+  horizonEnd: string
+  generatedAt: string
+  updatedAt: string
+  days: PlanHorizonDay[]
+  issues: PlanIssue[]
+}
+
+/** `GET /planning/plan/horizon` (admins): the kept horizon of the date's draft and published plan. */
+export interface PlanDayHorizon {
+  date: string
+  draft: PlanHorizon | null
+  published: PlanHorizon | null
 }
 
 /** Why a re-plan of today's published plan is suggested (empty = on track). */

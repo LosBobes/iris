@@ -179,6 +179,32 @@ describe('fixture planning: plans', () => {
     expect((await api.getPlanDay(date)).draft).toBeNull()
   })
 
+  it('keeps the whole horizon, shows the plan date, and pins published days when planning the next', async () => {
+    const api = await planningApi()
+    await api.applyProcessTemplate(ORDER, 'pt-offset')
+    const date = nextWorkingDay()
+    const draft = await api.generatePlan({ date, replan: false })
+    expect(draft.assignments.length).toBeGreaterThan(0)
+    expect(draft.assignments.every((block) => block.start.startsWith(date))).toBe(true)
+    expect(draft.horizonEnd > date).toBe(true)
+
+    const horizon = await api.getPlanHorizon(date)
+    expect(horizon.published).toBeNull()
+    expect(horizon.draft?.planId).toBe(draft.id)
+    expect(horizon.draft?.horizonEnd).toBe(draft.horizonEnd)
+    expect(horizon.draft?.days[0]?.date).toBe(date)
+    const kept = horizon.draft?.days.flatMap((day) => day.assignments) ?? []
+    expect(kept.length).toBeGreaterThanOrEqual(draft.assignments.length)
+    expect(kept.filter((block) => block.start.startsWith(date))).toEqual(draft.assignments)
+
+    await api.publishPlan({ date })
+    expect((await api.getPlanHorizon(date)).published?.planId).toBe(draft.id)
+    // The next day's plan pins what the published day anchored instead of planning it again.
+    const next = await api.generatePlan({ date: workingDayAfter(date), replan: false })
+    const planned = new Set(draft.assignments.map((block) => `${block.workOrderId}:${block.stepNodeId}`))
+    expect(next.assignments.some((block) => block.part === 1 && planned.has(`${block.workOrderId}:${block.stepNodeId}`))).toBe(false)
+  })
+
   it('lists no draft to operators', async () => {
     const admin = await planningApi()
     await admin.applyProcessTemplate(ORDER, 'pt-offset')
@@ -191,5 +217,12 @@ describe('fixture planning: plans', () => {
 function nextWorkingDay(): string {
   const day = new Date(Date.now() + 3 * 86_400_000)
   while (day.getUTCDay() === 0 || day.getUTCDay() === 6) day.setUTCDate(day.getUTCDate() + 1)
+  return day.toISOString().slice(0, 10)
+}
+
+function workingDayAfter(date: string): string {
+  const day = new Date(`${date}T00:00:00Z`)
+  do day.setUTCDate(day.getUTCDate() + 1)
+  while (day.getUTCDay() === 0 || day.getUTCDay() === 6)
   return day.toISOString().slice(0, 10)
 }

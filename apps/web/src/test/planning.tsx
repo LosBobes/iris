@@ -46,6 +46,7 @@ export function plan(
     id: `plan-${status}`,
     date: today(),
     status,
+    horizonEnd: today(),
     generatedAt: '2026-10-18T06:00:00Z',
     generatedBy: 'admin',
     updatedAt: '2026-10-18T06:00:00Z',

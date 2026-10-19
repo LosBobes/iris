@@ -777,6 +777,10 @@ func (p *planner) result() Result {
 		Assignments: append([]domain.PlanAssignment{}, p.out...),
 		Issues:      append([]domain.PlanIssue{}, p.issues...),
 		Forecast:    make([]domain.OrderForecast, 0, len(p.orders)),
+		HorizonEnd:  p.in.Date,
+	}
+	if len(p.dates) > 0 {
+		res.HorizonEnd = p.dates[len(p.dates)-1]
 	}
 	sort.SliceStable(res.Assignments, func(i, j int) bool {
 		a, b := res.Assignments[i], res.Assignments[j]

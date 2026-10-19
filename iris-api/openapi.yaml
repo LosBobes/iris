@@ -3988,6 +3988,8 @@ paths:
       operationId: getPlanDay
       description: >-
         `draft` is returned to admins only (null for operators). `drift` is computed for today's published plan only.
+        Each plan carries only the blocks of its own date (the stored run keeps the whole horizon up to `horizonEnd`,
+        see `GET /planning/plan/horizon`) and the issues that concern that day.
       parameters:
         - name: date
           in: query
@@ -4017,6 +4019,50 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           $ref: '#/components/responses/PlanningModuleDisabled'
+  /planning/plan/horizon:
+    get:
+      tags: [Planning]
+      summary: Every block of a date's plans over the kept horizon, grouped by day (admin only)
+      operationId: getPlanHorizon
+      description: >-
+        A plan's run covers 14 working days from its date (D-028); `GET /planning/plan` shows the plan date only,
+        this returns the rest: the draft's and the published plan's blocks grouped by day from the plan date to
+        `horizonEnd` (days without a block are left out), plus the run's issues. Only the plan date's blocks are
+        published to operators or editable by hand; later days are the run's projection, consistent with the
+        plans published before it (their open steps are pinned when a later date is generated).
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Local date "YYYY-MM-DD" in the working-hours time zone; defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The horizon of the date's draft and published plan (null when absent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDayHorizon'
+        '400':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /planning/plan/generate:
     post:
       tags: [Planning]
@@ -4027,7 +4073,10 @@ paths:
         replacing the date's draft. Uses machine units in service, qualifications, attendance for the date (others
         present on later days), working hours and each step's machine type, crew size and duration. With `replan`
         (date must be today) planning starts now and the published plan's locked blocks stay. A date that is not a
-        working day returns an empty plan.
+        working day returns an empty plan. The run covers 14 working days and the draft keeps all of it
+        (`horizonEnd`, `GET /planning/plan/horizon`); the answer holds the date's blocks only. For a date after
+        today, the still-open steps that the published plans of today up to the day before anchor on their own
+        dates are pinned first, so consecutive days never book the same work or machine twice.
       requestBody:
         required: true
         content:
@@ -4071,7 +4120,8 @@ paths:
       summary: Save a hand-edited draft (admin only)
       operationId: updatePlanDraft
       description: >-
-        Replaces the draft's assignments; `issues` are recomputed (conflicts are reported, not rejected).
+        Replaces the draft's assignments of the plan date (the kept horizon's later days are untouched); `issues`
+        are recomputed (conflicts are reported, not rejected). At most 2000 blocks for the plan date.
       requestBody:
         required: true
         content:
@@ -4232,7 +4282,9 @@ paths:
       summary: Estimated finish of every open work order with a process
       operationId: getPlanningForecast
       description: >-
-        Computed on read by a planner run from now over the next 14 working days (nothing is stored).
+        Computed on read by a planner run from now over the next 14 working days (nothing is stored). The
+        published plans from today on are pinned first (the open steps each anchors on its own date, except blocks
+        already over), so the forecast never contradicts what is published.
       responses:
         '200':
           description: Forecasts sorted by estimated finish (unplannable last)
@@ -4580,13 +4632,22 @@ components:
         unplannable: {type: boolean}
     ProductionPlan:
       type: object
-      required: [id, date, status, generatedAt, generatedBy, updatedAt, updatedBy, publishedAt, publishedBy, assignments, issues, lateOrders]
+      description: >-
+        A day plan. The stored run keeps every block over the whole horizon (`date` through `horizonEnd`, D-028); the
+        plan endpoints return the blocks of `date` only, `GET /planning/plan/horizon` the rest.
+      required: [id, date, status, horizonEnd, generatedAt, generatedBy, updatedAt, updatedBy, publishedAt, publishedBy, assignments, issues, lateOrders]
       properties:
         id: {type: string}
         date: {type: string, format: date}
         status:
           type: string
           enum: [draft, published]
+        horizonEnd:
+          type: string
+          format: date
+          description: >-
+            Last working day the run could place steps on (14 working days from `date`; `date` itself for a day
+            off, and for plans stored before the horizon was kept).
         generatedAt: {type: string, format: date-time}
         generatedBy: {type: string}
         updatedAt: {type: string, format: date-time}
@@ -4634,6 +4695,52 @@ components:
         drift:
           allOf:
             - $ref: '#/components/schemas/PlanDrift'
+          nullable: true
+    PlanHorizonDay:
+      type: object
+      required: [date, assignments]
+      properties:
+        date: {type: string, format: date}
+        assignments:
+          type: array
+          description: Blocks starting on that day, sorted by start.
+          items:
+            $ref: '#/components/schemas/PlanAssignment'
+    PlanHorizon:
+      type: object
+      description: >-
+        Every block a plan's run produced, grouped by day from the plan date to `horizonEnd`; days without a
+        block are left out. Hand edits only ever touch the plan date's blocks.
+      required: [planId, status, date, horizonEnd, generatedAt, updatedAt, days, issues]
+      properties:
+        planId: {type: string}
+        status:
+          type: string
+          enum: [draft, published]
+        date: {type: string, format: date}
+        horizonEnd: {type: string, format: date}
+        generatedAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanHorizonDay'
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanIssue'
+    PlanDayHorizon:
+      type: object
+      required: [date, draft, published]
+      properties:
+        date: {type: string, format: date}
+        draft:
+          allOf:
+            - $ref: '#/components/schemas/PlanHorizon'
+          nullable: true
+        published:
+          allOf:
+            - $ref: '#/components/schemas/PlanHorizon'
           nullable: true
     PlanGenerateInput:
       type: object

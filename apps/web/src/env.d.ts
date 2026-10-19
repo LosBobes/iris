@@ -80,6 +80,7 @@ import type {
   MyQueue,
   OrderForecast,
   PlanDay,
+  PlanDayHorizon,
   PlanDraftInput,
   PlanGenerateInput,
   PlanPublishInput,
@@ -283,8 +284,10 @@ declare global {
       setAttendance: (userId: string, input: AttendanceInput) => Promise<AttendanceEntry>
       getWorkingHours: () => Promise<WorkingHours>
       setWorkingHours: (input: WorkingHours) => Promise<WorkingHours>
-      /** Draft (admins only), published plan and drift of a date. */
+      /** Draft (admins only), published plan and drift of a date; each plan holds that date's blocks only. */
       getPlanDay: (date: string) => Promise<PlanDay>
+      /** Every block of the date's draft and published plan over the kept horizon, grouped by day (admins only). */
+      getPlanHorizon: (date: string) => Promise<PlanDayHorizon>
       /** Replaces the date's draft with a freshly planned one. */
       generatePlan: (input: PlanGenerateInput) => Promise<ProductionPlan>
       updatePlanDraft: (input: PlanDraftInput) => Promise<ProductionPlan>

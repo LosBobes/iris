@@ -206,11 +206,18 @@ type OrderForecast struct {
 	Unplannable     bool    `json:"unplannable"`
 }
 
-// ProductionPlan is a day plan (draft or published).
+// ProductionPlan is a day plan (draft or published). The stored plan keeps
+// every block its planner run produced over the whole horizon (Date through
+// HorizonEnd; D-028), but the plan date is what is published and shown: the
+// plan endpoints return only the Date's blocks, and GET /planning/plan/horizon
+// the rest, grouped by day.
 type ProductionPlan struct {
-	ID          string           `json:"id"`
-	Date        string           `json:"date"`
-	Status      PlanStatus       `json:"status"`
+	ID     string     `json:"id"`
+	Date   string     `json:"date"`
+	Status PlanStatus `json:"status"`
+	// HorizonEnd is the last working day the run could place steps on
+	// (PlanningForecastDays working days from Date; Date itself for a day off).
+	HorizonEnd  string           `json:"horizonEnd"`
 	GeneratedAt string           `json:"generatedAt"`
 	GeneratedBy string           `json:"generatedBy"`
 	UpdatedAt   string           `json:"updatedAt"`
@@ -221,6 +228,35 @@ type ProductionPlan struct {
 	Issues      []PlanIssue      `json:"issues"`
 	// LateOrders are the orders this plan's run forecasts past their due date.
 	LateOrders []OrderForecast `json:"lateOrders"`
+}
+
+// PlanHorizonDay is one day's blocks of a plan's kept horizon, sorted by
+// start.
+type PlanHorizonDay struct {
+	Date        string           `json:"date"`
+	Assignments []PlanAssignment `json:"assignments"`
+}
+
+// PlanHorizon is every block a plan's run produced, grouped by day from the
+// plan date to HorizonEnd (days without a block are left out), with the run's
+// issues. Hand edits only ever touch the plan date's blocks.
+type PlanHorizon struct {
+	PlanID      string           `json:"planId"`
+	Status      PlanStatus       `json:"status"`
+	Date        string           `json:"date"`
+	HorizonEnd  string           `json:"horizonEnd"`
+	GeneratedAt string           `json:"generatedAt"`
+	UpdatedAt   string           `json:"updatedAt"`
+	Days        []PlanHorizonDay `json:"days"`
+	Issues      []PlanIssue      `json:"issues"`
+}
+
+// PlanDayHorizon is the answer of GET /planning/plan/horizon (admins): the
+// kept horizon of the date's draft and published plan (nil when absent).
+type PlanDayHorizon struct {
+	Date      string       `json:"date"`
+	Draft     *PlanHorizon `json:"draft"`
+	Published *PlanHorizon `json:"published"`
 }
 
 // PlanDrift reports, for the published plan of today, why a re-plan is

@@ -63,14 +63,16 @@ type Input struct {
 
 // Result is the outcome of a run over the whole horizon.
 type Result struct {
-	// Assignments of every day in the horizon, sorted by Start, then machine
-	// name, then order number. The caller keeps the plan date's blocks for the
-	// ProductionPlan.
+	// Assignments of every day in the horizon (Pinned blocks included),
+	// sorted by Start, then machine name, then order number.
 	Assignments []domain.PlanAssignment
 	// Issues are steps that could not be placed (plus missing durations).
 	Issues []domain.PlanIssue
 	// Forecast has one entry per order in Input.Orders.
 	Forecast []domain.OrderForecast
+	// HorizonEnd is the last working day ("YYYY-MM-DD") of the horizon the
+	// run could use, Input.Date when the horizon holds no working day.
+	HorizonEnd string
 }
 
 // ErrInvalidHours is returned for an unknown time zone or malformed shifts.

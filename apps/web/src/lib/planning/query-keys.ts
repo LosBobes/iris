@@ -8,6 +8,7 @@ export const planningKeys = {
   qualifications: ['planning', 'qualifications'] as const,
   workingHours: ['planning', 'working-hours'] as const,
   planDay: (date: string) => ['planning', 'plan', date] as const,
+  planHorizon: (date: string) => ['planning', 'plan', 'horizon', date] as const,
   planRoot: ['planning', 'plan'] as const,
   myQueue: (date?: string) => ['planning', 'my-queue', date ?? 'today'] as const,
   myQueueRoot: ['planning', 'my-queue'] as const,

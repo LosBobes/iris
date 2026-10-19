@@ -79,6 +79,9 @@ type PlanningStore interface {
 	// PlanDay returns the plans of a local date ("" = today); the draft only
 	// when includeDraft is set (admins).
 	PlanDay(ctx context.Context, date string, includeDraft bool) (domain.PlanDay, error)
+	// PlanHorizon returns every block of the date's plans over the whole kept
+	// horizon, grouped by day (admins only).
+	PlanHorizon(ctx context.Context, date string) (domain.PlanDayHorizon, error)
 	GeneratePlan(ctx context.Context, input domain.PlanGenerateInput, username string) (*domain.ProductionPlan, error)
 	SavePlanDraft(ctx context.Context, input domain.PlanDraftInput, username string) (*domain.ProductionPlan, error)
 	DiscardPlanDraft(ctx context.Context, date string) error

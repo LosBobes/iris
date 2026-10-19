@@ -278,6 +278,7 @@ func (s *Server) Routes() http.Handler {
 		planning.Get("/planning/working-hours", s.planningHandler(s.handleWorkingHours))
 		planning.Put("/planning/working-hours", s.requireAdmin(s.planningHandler(s.handleSetWorkingHours)))
 		planning.Get("/planning/plan", s.planningHandler(s.handlePlanDay))
+		planning.Get("/planning/plan/horizon", s.requireAdmin(s.planningHandler(s.handlePlanHorizon)))
 		planning.Post("/planning/plan/generate", s.requireAdmin(s.planningHandler(s.handleGeneratePlan)))
 		planning.Put("/planning/plan/draft", s.requireAdmin(s.planningHandler(s.handleSavePlanDraft)))
 		planning.Delete("/planning/plan/draft", s.requireAdmin(s.planningHandler(s.handleDiscardPlanDraft)))
