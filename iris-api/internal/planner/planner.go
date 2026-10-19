@@ -92,6 +92,12 @@ var ErrInvalidHours = errors.New("planner: invalid working hours")
 //     back. Done and skipped steps are already finished; in-progress steps not
 //     in Pinned are placed first, at Start, and marked Locked (never shifted
 //     by a lag, nor are Pinned blocks); their successors get the lag.
+//   - An in-progress step with a StartedAt (D-028) is placed for its remaining
+//     minutes only: its duration minus the working time between StartedAt and
+//     Start (breaks and nights excluded), at least 1 minute so the block stays
+//     visible; with nothing left it counts as finishing at its block's start.
+//     A step worked on longer than its duration gets a PlanIssueOverrun
+//     (informational: the order stays plannable).
 //   - Duration is domain.StepDurationMinutes(step, order.Quantity). A step
 //     with no times set is placed with 0 minutes and gets a
 //     PlanIssueMissingDuration issue.

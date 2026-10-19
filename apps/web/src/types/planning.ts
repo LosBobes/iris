@@ -173,6 +173,8 @@ export type PlanIssueCode =
   | 'conflict'
   /** A locked block the plan keeps lies in a downtime window of its machine (D-028). */
   | 'machine_down'
+  /** An in-progress step has been worked on longer than its planned duration (D-028); informational. */
+  | 'overrun'
 
 export interface PlanIssue {
   code: PlanIssueCode

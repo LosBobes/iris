@@ -264,6 +264,10 @@ const (
 	// A locked (kept) block lies in a downtime window of its machine (D-028):
 	// the machine is not available while the step is planned on it.
 	PlanIssueMachineDown PlanIssueCode = "machine_down"
+	// An in-progress step has been worked on (working minutes since its
+	// startedAt) longer than its planned duration (D-028). Informational: the
+	// step is still planned and the order stays plannable.
+	PlanIssueOverrun PlanIssueCode = "overrun"
 )
 
 // PlanIssue is a step the plan could not place, or a conflict in an edited

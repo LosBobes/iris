@@ -870,7 +870,7 @@ function PlanningChapter(): React.JSX.Element {
           <>U nacrtu admin može da pomeri blok na drugu mašinu istog tipa, promeni početak ili ekipu. Ako napravi sukob (npr. isti čovek na dva mesta), Iris upozori, ali ne zabranjuje.</>,
           <><Ui>Objavi</Ui>: nacrt postaje važeći plan.</>,
           <><Ui>Moj red</Ui>: svako vidi svoje blokove za taj dan, redom kojim ih radi, sa dugmićima <Ui>Počni</Ui> i <Ui>Završi</Ui>.</>,
-          <><Ui>Preplaniraj</Ui>: kad se dan pokvari (mašina stala, neko otišao kući), novi nacrt kreće od ovog trenutka, a blokovi koji su već u toku ostaju gde jesu. Iris sam javi kad rad odstupa od plana.</>,
+          <><Ui>Preplaniraj</Ui>: kad se dan pokvari (mašina stala, neko otišao kući), novi nacrt kreće od ovog trenutka, a blokovi koji su već u toku ostaju gde jesu. Korak koji je započet, a nije u objavljenom planu, planira se samo za vreme koje mu je preostalo (od trenutka kad je operater pritisnuo <Ui>Počni</Ui>, bez pauza i noći); ako traje duže od planiranog, Iris to javi kao prekoračenje. Iris sam javi kad rad odstupa od plana.</>,
         ]}
       />
       <H2>Prognoza</H2>

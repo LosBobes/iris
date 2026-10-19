@@ -95,6 +95,13 @@ type stepRun struct {
 	// lagEnd is end plus the inter-operation time in working minutes: the
 	// earliest a successor may start. Equal to end when the lag is 0.
 	lagEnd int64
+	// In-progress steps with a StartedAt (D-028, remaining.go): fullDur is
+	// the planned duration before dur was cut to the remaining minutes, worked
+	// the working minutes since StartedAt, and finishAtStart marks a step with
+	// nothing left (its 1-minute block ends, for successors, where it starts).
+	fullDur       int
+	worked        int64
+	finishAtStart bool
 }
 
 type orderRun struct {
@@ -170,6 +177,7 @@ func plan(in Input) (Result, error) {
 		return Result{}, err
 	}
 	p.flagStatic()
+	p.flagOverruns()
 	p.placeInProgress()
 	p.placePending()
 	return p.result(), nil
@@ -270,6 +278,7 @@ func (p *planner) setupOrders() {
 				s.state = stFinished
 			case domain.ProcessStepInProgress:
 				s.inProgress = true
+				p.applyRemaining(s)
 			}
 			run.steps = append(run.steps, s)
 			run.byID[id] = s
@@ -809,6 +818,9 @@ func (p *planner) commit(o *orderRun, s *stepRun, parts []part, machine *resourc
 	}
 	s.state = stScheduled
 	s.end = parts[len(parts)-1].end
+	if s.finishAtStart {
+		s.end = parts[0].start
+	}
 	s.lagEnd = p.afterLag(s.end)
 	if !o.hasBlock || s.end > o.lastEnd {
 		o.lastEnd, o.hasBlock = s.end, true

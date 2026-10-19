@@ -4210,7 +4210,10 @@ paths:
         working day returns an empty plan. The run covers 14 working days and the draft keeps all of it
         (`horizonEnd`, `GET /planning/plan/horizon`); the answer holds the date's blocks only. For a date after
         today, the still-open steps that the published plans of today up to the day before anchor on their own
-        dates are pinned first, so consecutive days never book the same work or machine twice.
+        dates are pinned first, so consecutive days never book the same work or machine twice. An in-progress step
+        with a `startedAt` (D-028) is placed for its remaining minutes only: its duration minus the working time
+        (breaks and nights excluded) between `startedAt` and the planning start, at least 1 minute; one worked on
+        longer than its duration also gets an `overrun` issue.
       requestBody:
         required: true
         content:
@@ -4797,9 +4800,11 @@ components:
       properties:
         code:
           type: string
-          enum: [unknown_machine_type, no_machine, no_workers, no_capacity, missing_duration, conflict, machine_down]
+          enum: [unknown_machine_type, no_machine, no_workers, no_capacity, missing_duration, conflict, machine_down, overrun]
           description: >-
             `machine_down` (D-028): a locked block the plan keeps lies in a downtime window of its machine.
+            `overrun` (D-028): an in-progress step has been worked on (working minutes since its `startedAt`) longer
+            than its planned duration; informational, the step is still planned and the order stays plannable.
         workOrderId: {type: string}
         orderNumber: {type: string}
         stepNodeId: {type: string}
