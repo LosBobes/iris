@@ -12,6 +12,7 @@ import {
   type PlannerOrder,
   type PlannerWorker,
 } from '@/lib/planning/fixture-planner'
+import { LOAD_MESSAGES, MAX_LOAD_DAYS, computeLoad, defaultLoadTo, loadBlocks } from '@/lib/planning/fixture-load'
 import { stepStatus } from '@/lib/process/graph'
 import type { ProcessGraph } from '@/types/process'
 import type { OrganizationModules } from '@/types/settings'
@@ -132,6 +133,7 @@ type PlanningApi = Pick<
   | 'publishPlan'
   | 'getMyQueue'
   | 'getPlanningForecast'
+  | 'getPlanningLoad'
 >
 
 export interface PlanningFixtureStore {
@@ -798,6 +800,48 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
           pinned,
         })
         return clone(result.forecast)
+      },
+      async getPlanningLoad(query = {}) {
+        const user = requireUser()
+        const current = today()
+        const from = query.from ?? current
+        checkDate(from)
+        if (query.to !== undefined) checkDate(query.to)
+        if (query.plan !== undefined && query.plan !== 'published' && query.plan !== 'draft') {
+          throw fixtureError(400, LOAD_MESSAGES.badPlan)
+        }
+        const wantsDraft = query.plan === 'draft'
+        if (wantsDraft && user.role !== 'admin') throw fixtureError(403, MESSAGES.adminOnly)
+        if (wantsDraft && from !== current) throw fixtureError(422, LOAD_MESSAGES.draftToday)
+        const last = addDays(from, MAX_LOAD_DAYS - 1)
+        if (query.to !== undefined && query.to < from) throw fixtureError(422, LOAD_MESSAGES.rangeOrder)
+        if (query.to !== undefined && query.to > last) throw fixtureError(422, LOAD_MESSAGES.rangeTooLong)
+        let plans = [...published.values()]
+        if (wantsDraft) {
+          const draft = drafts.get(current)
+          if (!draft) throw fixtureError(404, MESSAGES.noDraft)
+          plans = [...plans.filter((plan) => plan.date !== current), draft]
+        }
+        const to = query.to ?? defaultLoadTo(plans, from, last)
+        const dates: string[] = []
+        for (let date = from; date <= to; date = addDays(date, 1)) dates.push(date)
+        return clone(
+          computeLoad({
+            hours,
+            from,
+            to,
+            machineTypes: types,
+            machines,
+            downtimes: allDowntimes(),
+            workers: context.users().map((entry) => ({
+              userId: entry.id,
+              username: entry.username,
+              presence: Object.fromEntries(dates.map((date) => [date, presenceOf(entry.id, date)])),
+            })),
+            blocks: loadBlocks(plans, from, to),
+            source: wantsDraft ? 'draft' : 'published',
+          }),
+        )
       },
     },
   }

@@ -91,6 +91,7 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { WorkstationLoad, WorkstationLoadQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -302,6 +303,8 @@ declare global {
       /** The signed-in user's blocks of the published plan (date defaults to today). */
       getMyQueue: (date?: string) => Promise<MyQueue>
       getPlanningForecast: () => Promise<OrderForecast[]>
+      /** Workstation load per machine type, unit and person per day (D-028); plan "draft" is admin-only. */
+      getPlanningLoad: (query?: WorkstationLoadQuery) => Promise<WorkstationLoad>
     }
   }
 }

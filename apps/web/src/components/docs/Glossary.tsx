@@ -78,6 +78,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Usluga", body: "Rad koji prodajemo: štampa, dizajn, plastifikacija.", chapter: "katalog" },
   { term: "Utrošak", body: "Materijal potrošen u proizvodnji; knjiži se sam kad se korak završi.", chapter: "magacin" },
   { term: "Zarada", body: "Prodajna cena minus nabavna cena (ili cena rada).", chapter: "novac" },
+  { term: "Zauzetost", body: "Planirano vreme mašine ili radnika u odnosu na raspoloživo, po danu; preko 100 % je preopterećeno.", chapter: "planiranje" },
 ];
 
 /** Lowercases and strips Serbian diacritics, so "cesto" finds "često". */

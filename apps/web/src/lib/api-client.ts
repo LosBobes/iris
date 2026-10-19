@@ -93,6 +93,7 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { WorkstationLoad, WorkstationLoadDay, WorkstationLoadQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -1439,6 +1440,28 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlanningForecast() {
       const response = await fetchImpl(url('/planning/forecast'), credentialedRequest())
       return readArray(await readJSON<OrderForecast[]>(response))
+    },
+
+    async getPlanningLoad(query: WorkstationLoadQuery = {}) {
+      const params = new URLSearchParams()
+      if (query.from) params.set('from', query.from)
+      if (query.to) params.set('to', query.to)
+      if (query.plan) params.set('plan', query.plan)
+      const search = params.size > 0 ? `?${params}` : ''
+      const response = await fetchImpl(url(`/planning/load${search}`), credentialedRequest())
+      const load = await readJSON<WorkstationLoad>(response)
+      const days = (list: WorkstationLoadDay[] | null | undefined): WorkstationLoadDay[] =>
+        readArray(list).map((day) => ({ ...day, blocks: readArray(day.blocks) }))
+      return {
+        ...load,
+        days: readArray(load.days),
+        machineTypes: readArray(load.machineTypes).map((type) => ({
+          ...type,
+          days: readArray(type.days),
+          units: readArray(type.units).map((unit) => ({ ...unit, days: days(unit.days) })),
+        })),
+        people: readArray(load.people).map((person) => ({ ...person, days: days(person.days) })),
+      }
     },
 
     async getAnnouncements() {

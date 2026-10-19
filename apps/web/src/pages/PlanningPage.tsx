@@ -6,12 +6,14 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/planning/ConfirmDialog'
 import { ForecastBadges } from '@/components/planning/ForecastBadges'
 import { ForecastTable } from '@/components/planning/ForecastTable'
+import { LoadTab } from '@/components/planning/LoadTab'
 import { PlanBlockDialog } from '@/components/planning/PlanBlockDialog'
 import { PlanTimeline, type TimelineView } from '@/components/planning/PlanTimeline'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/useAuth'
+import { useOrganization } from '@/hooks/useOrganization'
 import {
   useInvalidatePlanning,
   useMachines,
@@ -25,6 +27,8 @@ import type { PlanAssignment, ProductionPlan } from '@/types/planning'
 
 type PlanSource = 'draft' | 'published'
 type PendingConfirm = 'generate' | 'replan' | 'publish' | 'discard' | null
+/** The page's views: the day plan, or the workstation load ("Zauzetost", D-028). */
+type PageView = 'plan' | 'load'
 
 function PlanMeta({ plan, source }: { plan: ProductionPlan; source: PlanSource }): React.JSX.Element {
   const { t } = useTranslation()
@@ -62,6 +66,8 @@ function PlanningPage(): React.JSX.Element {
   const [confirm, setConfirm] = useState<PendingConfirm>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [pageView, setPageView] = useState<PageView>('plan')
+  const { modules } = useOrganization()
 
   const dayQuery = usePlanDay(date)
   const hoursQuery = useWorkingHours()
@@ -227,7 +233,33 @@ function PlanningPage(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="space-y-5 px-5 pb-8 sm:px-8">
+      {modules.planning && (
+        <div className="px-5 sm:px-8">
+          <Tabs
+            tabs={[
+              { value: 'plan', label: t('planning.load.planTab') },
+              { value: 'load', label: t('planning.load.tab') },
+            ]}
+            value={pageView}
+            onValueChange={setPageView}
+            aria-label={t('planning.load.pageTabsAria')}
+          />
+        </div>
+      )}
+      {modules.planning && pageView === 'load' && (
+        <div className="px-5 pb-8 sm:px-8">
+          <LoadTab
+            isAdmin={isAdmin}
+            today={today}
+            onOpenDay={(next) => {
+              changeDate(next)
+              setPageView('plan')
+            }}
+          />
+        </div>
+      )}
+
+      <div className="space-y-5 px-5 pb-8 sm:px-8" hidden={pageView !== 'plan'}>
         <div className="flex flex-wrap items-center gap-2">
           <DatePicker
             id="plan-date"
