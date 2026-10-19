@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.9.0 — 2026-10-19
+
+### Minor
+
+- Adds a Dokumentacija section: an illustrated guide to Iris and print-shop terms, from the first sign-in to planning, with a searchable glossary.
+
 ## 2.8.1 — 2026-10-19
 
 ### Patch
