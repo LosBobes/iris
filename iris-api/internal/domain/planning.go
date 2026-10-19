@@ -16,6 +16,8 @@ const (
 	PlanningForecastDays    = 14     // working days the forecast looks ahead
 	MaxPlanAssignments      = 2000
 	DefaultPlanningTimeZone = "Europe/Belgrade"
+	// MaxTransferMinutes caps the inter-operation time (D-028): 8 hours.
+	MaxTransferMinutes = 480
 )
 
 // MachineType groups interchangeable machine units ("Offset štampa B2").
@@ -105,9 +107,17 @@ type WorkingDay struct {
 // WorkingHours is the organization-wide shift calendar, stored in
 // app_settings under "working_hours". Weekdays not listed are days off.
 // TimeZone is an IANA name; plans, attendance dates and "now" use it.
+//
+// TransferMinutes is the inter-operation time ("međuoperacijsko vreme",
+// D-028): one organization-wide average of the waiting and transfer time
+// between two consecutive steps. The planner starts a step no earlier than
+// that many minutes of working time after every upstream step ends (a lag
+// pauses for breaks and the end of the shift, and may cross a day boundary).
+// 0 (the default) chains steps back to back, as before D-028.
 type WorkingHours struct {
-	TimeZone string       `json:"timeZone"`
-	Days     []WorkingDay `json:"days"`
+	TimeZone        string       `json:"timeZone"`
+	Days            []WorkingDay `json:"days"`
+	TransferMinutes int          `json:"transferMinutes"`
 }
 
 // DefaultWorkingHours is Monday to Friday 07:00–15:00 with a 30-minute break

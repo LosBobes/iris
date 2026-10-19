@@ -161,6 +161,7 @@ Daily scheduling of process steps onto machines and people (see [D-026](DECISION
 | **Qualification** | `WorkerQualifications` | `Kvalifikacije` | Machine types a user may lead a step on. Helpers need none. |
 | **Attendance** | `AttendanceEntry` | `Prisustvo` | Its own module `attendance` (D-027, usable without planning). Present on a date = admin override if set, else (today) signed in that day; later dates count everyone present. |
 | **Working hours** | `WorkingHours` | `Radno vreme` | Org-wide shift per weekday with breaks, in one time zone. |
+| **Inter-operation time** | `transferMinutes` | `Međuoperacijsko vreme` | One org-wide average of the waiting + transfer time between two consecutive steps (0–480 min, default 0; D-028). The planner starts a step no earlier than this much working time after every upstream step ends; the lag pauses for breaks and the end of the shift and may cross into the next working day. |
 | **Crew size** | `crewSize` | `Broj ljudi` | People a step needs (default 1); one must be qualified for its machine type. |
 | **Setup / per-unit time** | `setupMinutes` / `minutesPerUnit` | `Priprema` / `Po komadu` | Step duration = setup + per-unit × the order's quantity. |
 | **Plan** | `ProductionPlan` | `Plan` | One date's schedule; `draft` (admin edits) then `published`. |

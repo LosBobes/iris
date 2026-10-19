@@ -3940,7 +3940,8 @@ paths:
       summary: Replace the working hours (admin only)
       operationId: setWorkingHours
       description: >-
-        Stored in `app_settings` (`working_hours`); no migration.
+        Stored in `app_settings` (`working_hours`); no migration. A missing `transferMinutes` is 0; a value
+        outside 0-480 is a 422 (`Međuoperacijsko vreme mora biti između 0 i 480 minuta.`).
       requestBody:
         required: true
         content:
@@ -4517,6 +4518,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkingDay'
+        transferMinutes:
+          type: integer
+          minimum: 0
+          maximum: 480
+          default: 0
+          description: >-
+            Inter-operation time ("međuoperacijsko vreme", D-028): the organization-wide average waiting and
+            transfer time between two consecutive steps, in minutes. The planner starts a step no earlier than this
+            much working time after every upstream step ends (the lag pauses for breaks and the end of the shift and
+            may cross into the next working day); a hand-edited draft block that starts sooner is reported as a
+            `conflict`. 0 (the default, and the value for settings saved before D-028) chains steps back to back.
+            Always present in responses.
     PlanAssignment:
       type: object
       required: [id, workOrderId, orderNumber, clientName, stepNodeId, stepLabel, machineId, machineName, leadUserId, userIds, start, end, minutes, part, parts, locked]

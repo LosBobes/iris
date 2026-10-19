@@ -22,6 +22,7 @@ import {
   workingHoursSchema,
   type WorkingHoursFormValues,
 } from '@/lib/planning/validation'
+import { MAX_TRANSFER_MINUTES } from '@/types/planning'
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
@@ -184,6 +185,30 @@ function WorkingHoursForm({
         {errors.timeZone && (
           <p role="alert" className="text-[11px] text-destructive">
             {errors.timeZone.message}
+          </p>
+        )}
+      </div>
+      <div className="max-w-sm space-y-1.5">
+        <Label htmlFor="hours-transfer-minutes">{t('planning.hours.transferMinutes')}</Label>
+        <Input
+          id="hours-transfer-minutes"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_TRANSFER_MINUTES}
+          step={1}
+          className="w-28"
+          disabled={!canEdit}
+          aria-invalid={errors.transferMinutes ? true : undefined}
+          aria-describedby="hours-transfer-minutes-hint"
+          {...register('transferMinutes', { valueAsNumber: true })}
+        />
+        <p id="hours-transfer-minutes-hint" className="text-[11px] text-[color:var(--iris-ink-soft)]">
+          {t('planning.hours.transferMinutesHint')}
+        </p>
+        {errors.transferMinutes && (
+          <p role="alert" className="text-[11px] text-destructive">
+            {errors.transferMinutes.message}
           </p>
         )}
       </div>

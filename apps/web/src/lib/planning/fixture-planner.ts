@@ -2,8 +2,11 @@
 // deterministic greedy list-scheduler. It follows the same rules in a simplified
 // form (see the Go package comment for the authoritative version):
 //
-// - steps start only after every upstream step (through any item nodes) finished;
-//   done/skipped steps are finished, in-progress steps are placed first and locked;
+// - steps start only after every upstream step (through any item nodes) finished
+//   plus the inter-operation time `hours.transferMinutes` (D-028) in working
+//   time (the lag pauses for breaks and the end of the shift and may cross a day
+//   boundary; 0 chains steps back to back); done/skipped steps are finished,
+//   in-progress steps are placed first and locked (never shifted by the lag);
 // - duration = setup + per-unit x quantity (quantity < 1 counts as 1); a step
 //   with no times is placed with 0 minutes and flagged `missing_duration`;
 // - a machine-bound step needs one in-service unit of its type plus a crew whose
@@ -227,6 +230,31 @@ interface DayPiece {
 
 const AXIS = 1440
 const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 0, normal: 1, low: 1 }
+/** An axis moment past every horizon: a lag that never elapses, so nothing fits. */
+const BEYOND_HORIZON = Number.MAX_SAFE_INTEGER / 4
+
+/** The inter-operation time of a calendar as whole minutes (malformed = 0). */
+export function transferMinutesOf(hours: WorkingHours): number {
+  return Number.isFinite(hours.transferMinutes) ? Math.max(0, Math.floor(hours.transferMinutes)) : 0
+}
+
+/**
+ * Consumes `lag` working minutes from `from` over `segments` (each on an
+ * absolute axis), returning the moment the lag has elapsed, or `beyond` when
+ * the segments run out first.
+ */
+function afterWorkingMinutes(segments: readonly Segment[], from: number, lag: number, beyond: number): number {
+  if (lag <= 0) return from
+  let remaining = lag
+  for (const segment of segments) {
+    const begin = Math.max(from, segment.start)
+    if (begin >= segment.end) continue
+    const take = Math.min(remaining, segment.end - begin)
+    remaining -= take
+    if (remaining <= 0) return begin + take
+  }
+  return beyond
+}
 
 function messageFor(code: PlanIssueCode, order: PlannerOrder, step?: ProcessNode): string {
   const what = step ? `Radni nalog ${order.number}, korak „${step.label}“` : `Radni nalog ${order.number}`
@@ -255,6 +283,13 @@ export function planDay(input: PlannerInput): PlannerResult {
   const horizon = input.horizonDays && input.horizonDays > 0 ? input.horizonDays : PLANNING_FORECAST_DAYS
   const days = workingDays(input.hours, input.date, horizon)
   const dayByDate = new Map(days.map((day) => [day.date, day]))
+  // Every working segment of the horizon on the axis, for the inter-operation lag.
+  const axisSegments: Segment[] = days.flatMap((day) =>
+    day.segments.map((segment) => ({ start: day.index * AXIS + segment.start, end: day.index * AXIS + segment.end })),
+  )
+  const lag = transferMinutesOf(input.hours)
+  /** The earliest a successor may start after a step ending at `axis` (D-028). */
+  const afterLag = (axis: number): number => afterWorkingMinutes(axisSegments, axis, lag, BEYOND_HORIZON)
   const start: LocalMoment | undefined = input.start
   const startAxis = ((): number => {
     const first = days[0]
@@ -608,7 +643,7 @@ export function planDay(input: PlannerInput): PlannerResult {
       const key = `${item.order.id}:${pred.id}`
       const end = finish.get(key)
       if (end === undefined) return null
-      earliest = Math.max(earliest, end)
+      earliest = Math.max(earliest, afterLag(end))
     }
     return earliest
   }
@@ -692,6 +727,10 @@ export function checkDraft(
   const issues: PlanIssue[] = []
   const day = input.hours.days.find((candidate) => candidate.weekday === isoWeekday(input.date))
   const segments = day ? shiftSegments(day) : []
+  const lag = transferMinutesOf(input.hours)
+  // The inter-operation time after an upstream end, within the day (a lag that
+  // does not elapse before the shift ends blocks every later start that day).
+  const afterLag = (minutes: number): number => afterWorkingMinutes(segments, minutes, lag, Number.POSITIVE_INFINITY)
   const machines = new Map(input.machines.map((machine) => [machine.id, machine]))
   const workers = new Map(input.workers.map((worker) => [worker.userId, worker]))
   const orders = new Map(input.orders.map((order) => [order.id, order]))
@@ -724,7 +763,11 @@ export function checkDraft(
     if (order && step) {
       for (const pred of predecessorSteps(order.graph, step.id)) {
         const upstream = assignments.filter((other) => other.workOrderId === a.workOrderId && other.stepNodeId === pred.id)
-        if (upstream.some((other) => other.end > a.start)) conflict(a, 'počinje pre završetka prethodnog koraka.')
+        if (upstream.some((other) => other.end > a.start)) {
+          conflict(a, 'počinje pre završetka prethodnog koraka.')
+        } else if (upstream.some((other) => afterLag(splitStamp(other.end).minutes) > start)) {
+          conflict(a, `počinje pre isteka međuoperacijskog vremena (${lag} min).`)
+        }
       }
     }
   }

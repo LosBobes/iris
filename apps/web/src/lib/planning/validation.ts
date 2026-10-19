@@ -4,6 +4,7 @@ import {
   MAX_CREW_SIZE,
   MAX_MACHINE_NAME_LENGTH,
   MAX_MACHINE_NOTE_LENGTH,
+  MAX_TRANSFER_MINUTES,
   type WorkingHours,
 } from '@/types/planning'
 import { isTime, toMinutes } from './time'
@@ -69,6 +70,8 @@ export interface DayFormValues {
 export interface WorkingHoursFormValues {
   timeZone: string
   days: DayFormValues[]
+  /** Inter-operation time in minutes (registered with valueAsNumber; NaN when empty). */
+  transferMinutes: number
 }
 
 function validTimeZone(zone: string): boolean {
@@ -82,6 +85,11 @@ function validTimeZone(zone: string): boolean {
 
 const timeField = () => z.string().refine(isTime, tr('planning.validation.timeInvalid'))
 
+const transferMinutesField = () => {
+  const message = tr('planning.validation.transferMinutesRange', { max: MAX_TRANSFER_MINUTES })
+  return z.number({ error: message }).int(message).min(0, message).max(MAX_TRANSFER_MINUTES, message)
+}
+
 export const workingHoursSchema = () =>
   z
     .object({
@@ -90,6 +98,7 @@ export const workingHoursSchema = () =>
         .trim()
         .min(1, tr('planning.validation.timeZoneRequired'))
         .refine(validTimeZone, tr('planning.validation.timeZoneInvalid')),
+      transferMinutes: transferMinutesField(),
       days: z.array(
         z.object({
           weekday: z.number().int().min(1).max(7),
@@ -162,6 +171,7 @@ const DEFAULT_END = '15:00'
 export function hoursToForm(hours: WorkingHours): WorkingHoursFormValues {
   return {
     timeZone: hours.timeZone,
+    transferMinutes: hours.transferMinutes,
     days: [1, 2, 3, 4, 5, 6, 7].map((weekday) => {
       const day = hours.days.find((entry) => entry.weekday === weekday)
       return day
@@ -174,6 +184,7 @@ export function hoursToForm(hours: WorkingHours): WorkingHoursFormValues {
 export function formToHours(values: WorkingHoursFormValues): WorkingHours {
   return {
     timeZone: values.timeZone.trim(),
+    transferMinutes: values.transferMinutes,
     days: values.days
       .filter((day) => day.enabled)
       .map((day) => ({

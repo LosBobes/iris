@@ -1794,6 +1794,9 @@ export const sr = {
       title: 'Radno vreme',
       hint: 'Jedinstveno za celu organizaciju. Dani koji nisu označeni su neradni.',
       timeZone: 'Vremenska zona',
+      transferMinutes: 'Međuoperacijsko vreme (min)',
+      transferMinutesHint:
+        'Prosečno vreme čekanja i transporta između dva uzastopna koraka. Planer ga ubacuje između kraja jednog i početka sledećeg koraka, unutar radnog vremena (0 = koraci idu jedan za drugim).',
       dayOff: 'Neradni dan',
       addBreak: 'Dodaj pauzu',
       break: 'Pauza',
@@ -1829,6 +1832,7 @@ export const sr = {
       crewRequired: 'Ekipa mora imati bar jednog radnika',
       crewTooLarge: 'Ekipa može imati najviše {{max}} radnika',
       endsNextDay: 'Blok mora da se završi istog dana',
+      transferMinutesRange: 'Unesite ceo broj minuta između 0 i {{max}}',
     },
   },
   attendance: {

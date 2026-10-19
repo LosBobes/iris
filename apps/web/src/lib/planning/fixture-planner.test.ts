@@ -23,6 +23,7 @@ const hours: WorkingHours = {
     end: '15:00',
     breaks: [{ start: '10:00', end: '10:30' }],
   })),
+  transferMinutes: 0,
 }
 
 const types: MachineType[] = [
@@ -109,6 +110,25 @@ describe('planDay', () => {
     expect(second.start >= first.end).toBe(true)
     expect(first.leadUserId).toBe('ana')
     expect(first.machineName).toBe('Press A')
+  })
+
+  it('inserts the inter-operation time between consecutive steps, in working time', () => {
+    const chain = (first: number): PlannerOrder =>
+      order(
+        'o1',
+        [step('s1', { setupMinutes: first, machineTypeId: 'mt-print' }), step('s2', { setupMinutes: 30, machineTypeId: 'mt-cut' })],
+        [['s1', 's2']],
+      )
+    const lagged = (first: number, transferMinutes: number) =>
+      planDay(input([chain(first)], { hours: { ...hours, transferMinutes } })).assignments.map((a) => a.start)
+    // Inside the shift.
+    expect(lagged(60, 30)).toEqual(['2026-10-19T07:00', '2026-10-19T08:30'])
+    // s1 ends at the 10:00 break; the lag runs on after it.
+    expect(lagged(180, 30)).toEqual(['2026-10-19T07:00', '2026-10-19T11:00'])
+    // s1 fills Monday (450 working minutes); the lag spills into Tuesday.
+    expect(lagged(450, 60)).toEqual(['2026-10-19T07:00', '2026-10-20T08:00'])
+    // 0 keeps steps back to back, exactly as without the setting.
+    expect(lagged(60, 0)).toEqual(planDay(input([chain(60)])).assignments.map((a) => a.start))
   })
 
   it('pauses for breaks and carries a long step over to the next working day', () => {
@@ -267,6 +287,19 @@ describe('checkDraft', () => {
     expect(checkDraft(ctx, [base, clash]).some((i) => i.message.includes('zauzet'))).toBe(true)
     expect(checkDraft(ctx, [{ ...base, start: '2026-10-19T05:00', end: '2026-10-19T05:30' }])[0].code).toBe('conflict')
     expect(checkDraft(ctx, [{ ...base, userIds: ['ana'] }]).some((i) => i.message.includes('ekipa'))).toBe(true)
+  })
+
+  it('reports a successor that starts before the inter-operation time elapsed', () => {
+    const chained = order(
+      'o1',
+      [step('s1', { setupMinutes: 60, machineTypeId: 'mt-print' }), step('s2', { setupMinutes: 30, machineTypeId: 'mt-cut' })],
+      [['s1', 's2']],
+    )
+    const lagCtx = { ...ctx, hours: { ...hours, transferMinutes: 30 }, orders: [chained], workers: input([chained]).workers }
+    const blocks = planDay({ ...input([chained]), hours: lagCtx.hours }).assignments
+    expect(checkDraft(lagCtx, blocks)).toEqual([])
+    const early = blocks.map((b) => (b.stepNodeId === 's2' ? { ...b, start: '2026-10-19T08:10', end: '2026-10-19T08:40' } : b))
+    expect(checkDraft(lagCtx, early).some((i) => i.message.includes('međuoperacijskog vremena (30 min)'))).toBe(true)
   })
 })
 

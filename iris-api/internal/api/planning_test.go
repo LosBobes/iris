@@ -223,16 +223,21 @@ func TestQualificationAttendanceAndWorkingHoursEndpoints(t *testing.T) {
 	if hours.TimeZone != "Europe/Belgrade" || len(hours.Days) != 5 || hours.Days[0].Breaks[0].Start != "11:00" {
 		t.Fatalf("default hours = %+v", hours)
 	}
-	custom := `{"timeZone":"Europe/Belgrade","days":[{"weekday":1,"start":"06:00","end":"14:00","breaks":[{"start":"10:00","end":"10:15"}]}]}`
+	if hours.TransferMinutes != 0 {
+		t.Fatalf("default inter-operation time must be 0: %+v", hours)
+	}
+	custom := `{"timeZone":"Europe/Belgrade","days":[{"weekday":1,"start":"06:00","end":"14:00","breaks":[{"start":"10:00","end":"10:15"}]}],"transferMinutes":20}`
 	saved := call[domain.WorkingHours](t, f, f.admin, http.MethodPut, "/planning/working-hours", custom, http.StatusOK)
-	if len(saved.Days) != 1 || saved.Days[0].Start != "06:00" {
+	if len(saved.Days) != 1 || saved.Days[0].Start != "06:00" || saved.TransferMinutes != 20 {
 		t.Fatalf("saved = %+v", saved)
 	}
-	if again := call[domain.WorkingHours](t, f, f.operator, http.MethodGet, "/planning/working-hours", "", http.StatusOK); len(again.Days) != 1 {
+	if again := call[domain.WorkingHours](t, f, f.operator, http.MethodGet, "/planning/working-hours", "", http.StatusOK); len(again.Days) != 1 || again.TransferMinutes != 20 {
 		t.Fatalf("read back = %+v", again)
 	}
 	for _, bad := range []string{
 		`{"timeZone":"Mars/Olympus","days":[]}`,
+		`{"timeZone":"UTC","days":[],"transferMinutes":481}`,
+		`{"timeZone":"UTC","days":[],"transferMinutes":-5}`,
 		`{"timeZone":"UTC","days":[{"weekday":9,"start":"06:00","end":"14:00","breaks":[]}]}`,
 		`{"timeZone":"UTC","days":[{"weekday":1,"start":"14:00","end":"06:00","breaks":[]}]}`,
 		`{"timeZone":"UTC","days":[{"weekday":1,"start":"06:00","end":"14:00","breaks":[{"start":"13:00","end":"15:00"}]}]}`,

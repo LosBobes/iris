@@ -635,7 +635,9 @@ func normalizeWorkingHours(hours domain.WorkingHours) domain.WorkingHours {
 		days[i] = day
 	}
 	sort.Slice(days, func(a, b int) bool { return days[a].Weekday < days[b].Weekday })
-	return domain.WorkingHours{TimeZone: strings.TrimSpace(hours.TimeZone), Days: days}
+	return domain.WorkingHours{
+		TimeZone: strings.TrimSpace(hours.TimeZone), Days: days, TransferMinutes: hours.TransferMinutes,
+	}
 }
 
 // planningLocation loads the working-hours time zone, falling back to the

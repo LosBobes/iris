@@ -68,9 +68,11 @@ describe('planning HTTP client: resources', () => {
       method: 'PUT',
       body: { date: '2026-10-19', present: null },
     })
-    const hours = { timeZone: 'Europe/Belgrade', days: [{ weekday: 1, start: '07:00', end: '15:00', breaks: [] }] }
-    await api.setWorkingHours(hours)
+    const hours = { timeZone: 'Europe/Belgrade', days: [{ weekday: 1, start: '07:00', end: '15:00', breaks: [] }], transferMinutes: 15 }
+    const saved = await api.setWorkingHours(hours)
     expect(call(fetchMock, 3)).toMatchObject({ url: 'http://api.test/planning/working-hours', method: 'PUT', body: hours })
+    // A server from before D-028 sends no inter-operation time: it reads as 0.
+    expect(saved.transferMinutes).toBe(0)
   })
 })
 

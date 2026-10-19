@@ -830,7 +830,7 @@ function PlanningChapter(): React.JSX.Element {
           { term: "Mašina", body: "Jedna konkretna mašina tog tipa. Ako je u kvaru, označi se da nije u funkciji i planer je preskače." },
           { term: "Kvalifikacije", body: "Ko sme da vodi rad na kom tipu mašine. Pomoćniku ne treba kvalifikacija." },
           { term: "Broj ljudi", body: "Koliko ljudi korak traži. Jedan od njih mora biti kvalifikovan." },
-          { term: "Radno vreme", body: "Smena za svaki dan u nedelji, sa pauzama." },
+          { term: "Radno vreme", body: "Smena za svaki dan u nedelji, sa pauzama, i međuoperacijsko vreme: prosečno čekanje i transport između dva koraka, koje planer ubacuje između kraja jednog i početka sledećeg." },
           { term: "Prisustvo", body: "Ko je tu tog dana (prethodno poglavlje)." },
         ]}
       />

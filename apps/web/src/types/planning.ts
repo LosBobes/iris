@@ -11,6 +11,7 @@ export const MAX_MACHINE_NOTE_LENGTH = 500
 export const MAX_CREW_SIZE = 50
 export const MAX_STEP_MINUTES = 100000
 export const PLANNING_FORECAST_DAYS = 14
+export const MAX_TRANSFER_MINUTES = 480
 
 export interface MachineType {
   id: string
@@ -89,6 +90,13 @@ export interface WorkingHours {
   /** IANA time zone, e.g. "Europe/Belgrade". */
   timeZone: string
   days: WorkingDay[]
+  /**
+   * Inter-operation time ("međuoperacijsko vreme", D-028): the org-wide average
+   * waiting + transfer time between two consecutive steps, in working minutes
+   * (0–480). The planner starts a step no earlier than this after every upstream
+   * step ends; 0 (the default) chains steps back to back.
+   */
+  transferMinutes: number
 }
 
 export type PlanStatus = 'draft' | 'published'

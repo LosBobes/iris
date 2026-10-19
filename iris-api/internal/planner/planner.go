@@ -80,9 +80,13 @@ var ErrInvalidHours = errors.New("planner: invalid working hours")
 //
 // Rules (D-026):
 //   - A step may start only after every step upstream of it (through any
-//     items, as in the web's predecessorSteps) has finished. Done and skipped
-//     steps are already finished; in-progress steps not in Pinned are placed
-//     first, at Start, and marked Locked.
+//     items, as in the web's predecessorSteps) has finished, plus the
+//     inter-operation time Hours.TransferMinutes (D-028) counted in working
+//     time after the latest upstream end: a lag pauses for breaks and the end
+//     of the shift and may cross a day boundary. With 0 steps chain back to
+//     back. Done and skipped steps are already finished; in-progress steps not
+//     in Pinned are placed first, at Start, and marked Locked (never shifted
+//     by a lag, nor are Pinned blocks); their successors get the lag.
 //   - Duration is domain.StepDurationMinutes(step, order.Quantity). A step
 //     with no times set is placed with 0 minutes and gets a
 //     PlanIssueMissingDuration issue.
@@ -121,7 +125,8 @@ func Plan(in Input) (Result, error) {
 // a machine or person booked twice at the same time, a block outside working
 // hours or overlapping a break, a lead not qualified for the machine's type,
 // a machine out of service or of the wrong type, a crew smaller than the
-// step's crew size, or a step starting before an upstream step's block ends.
+// step's crew size, or a step starting before an upstream step's block ends
+// (or before the inter-operation time after it has elapsed).
 // Each conflict is a domain.PlanIssueConflict with a Serbian message.
 func CheckDraft(in Input, assignments []domain.PlanAssignment) []domain.PlanIssue {
 	return checkDraft(in, assignments)

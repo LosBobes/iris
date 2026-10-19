@@ -18,6 +18,7 @@ const machines = [{ id: 'm1', machineTypeId: 't1', name: 'Heidelberg 1', inServi
 const hours = {
   timeZone: 'Europe/Belgrade',
   days: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start: '07:00', end: '15:00', breaks: [{ start: '11:00', end: '11:30' }] })),
+  transferMinutes: 0,
 }
 
 function stubApi() {
@@ -140,11 +141,36 @@ describe('PlanningResourcesPage', () => {
     api.setWorkingHours.mockRejectedValueOnce(new Error('Pauza mora biti unutar smene.'))
     await user.click(screen.getByRole('button', { name: 'Sačuvaj' }))
     await waitFor(() => expect(api.setWorkingHours).toHaveBeenCalledTimes(1))
-    const sent = api.setWorkingHours.mock.calls[0][0] as { timeZone: string; days: { weekday: number; end: string }[] }
+    const sent = api.setWorkingHours.mock.calls[0][0] as {
+      timeZone: string
+      transferMinutes: number
+      days: { weekday: number; end: string }[]
+    }
     expect(sent.timeZone).toBe('Europe/Belgrade')
+    expect(sent.transferMinutes).toBe(0)
     expect(sent.days).toHaveLength(5)
     expect(sent.days[0]).toMatchObject({ weekday: 1, end: '16:00' })
     expect(await screen.findByText('Greška pri čuvanju radnog vremena: Pauza mora biti unutar smene.')).toBeInTheDocument()
+  })
+
+  it('validates and sends the inter-operation time', async () => {
+    const api = stubApi()
+    const user = userEvent.setup()
+    renderPlanningPage(<PlanningResourcesPage />)
+    await user.click(await screen.findByRole('tab', { name: 'Radno vreme' }))
+    const lag = await screen.findByLabelText('Međuoperacijsko vreme (min)')
+    expect(screen.getByText(/Prosečno vreme čekanja i transporta/)).toBeInTheDocument()
+    await user.clear(lag)
+    await user.type(lag, '500')
+    await user.click(screen.getByRole('button', { name: 'Sačuvaj' }))
+    expect(await screen.findByText('Unesite ceo broj minuta između 0 i 480')).toBeInTheDocument()
+    expect(api.setWorkingHours).not.toHaveBeenCalled()
+
+    await user.clear(lag)
+    await user.type(lag, '45')
+    await user.click(screen.getByRole('button', { name: 'Sačuvaj' }))
+    await waitFor(() => expect(api.setWorkingHours).toHaveBeenCalledTimes(1))
+    expect(api.setWorkingHours.mock.calls[0][0]).toMatchObject({ transferMinutes: 45 })
   })
 
   it('rejects an unknown time zone', async () => {

@@ -101,6 +101,24 @@ func checkDraft(in Input, assignments []domain.PlanAssignment) []domain.PlanIssu
 			stepEnd[key] = it.e
 		}
 	}
+	// A successor may start only once the inter-operation time (D-028) has
+	// elapsed after the upstream end; a lag that never elapses blocks forever.
+	lag := in.Hours.TransferMinutes
+	lagEnds := map[int64]int64{}
+	afterLag := func(end int64) int64 {
+		if lag <= 0 {
+			return end
+		}
+		if at, ok := lagEnds[end]; ok {
+			return at
+		}
+		at, ok := cal.addWorking(end, lag)
+		if !ok {
+			at = farAvail
+		}
+		lagEnds[end] = at
+		return at
+	}
 
 	for _, it := range items {
 		a := it.a
@@ -192,8 +210,13 @@ func checkDraft(in Input, assignments []domain.PlanAssignment) []domain.PlanIssu
 				if node.Status == domain.ProcessStepDone || node.Status == domain.ProcessStepSkipped {
 					continue
 				}
-				if end, ok := stepEnd[a.WorkOrderID+"\x00"+ancestor]; ok && it.s < end {
+				end, ok := stepEnd[a.WorkOrderID+"\x00"+ancestor]
+				switch {
+				case !ok:
+				case it.s < end:
 					add(a, fmt.Sprintf("počinje pre nego što se završi prethodni korak „%s“.", node.Label))
+				case it.s < afterLag(end):
+					add(a, fmt.Sprintf("počinje pre isteka međuoperacijskog vremena (%d min) posle koraka „%s“.", lag, node.Label))
 				}
 			}
 		}

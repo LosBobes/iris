@@ -14,6 +14,7 @@ vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess } }
 const hours = {
   timeZone: 'Europe/Belgrade',
   days: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, start: '07:00', end: '15:00', breaks: [] })),
+  transferMinutes: 0,
 }
 
 interface Store {

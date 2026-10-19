@@ -321,6 +321,7 @@ func TestWorkingHoursDefaultAndValidation(t *testing.T) {
 		"repeat": {TimeZone: "UTC", Days: []domain.WorkingDay{
 			{Weekday: 1, Start: "08:00", End: "16:00"}, {Weekday: 1, Start: "08:00", End: "16:00"},
 		}},
+		"lag": {TimeZone: "UTC", Days: custom.Days, TransferMinutes: domain.MaxTransferMinutes + 1},
 	} {
 		_, err := s.SetWorkingHours(ctx, bad)
 		var validation *ValidationError
@@ -330,6 +331,13 @@ func TestWorkingHoursDefaultAndValidation(t *testing.T) {
 	}
 	if got, _ := s.WorkingHours(ctx); got.TimeZone != "UTC" {
 		t.Fatalf("a rejected save changed the hours: %+v", got)
+	}
+	custom.TransferMinutes = 25
+	if saved, err := s.SetWorkingHours(ctx, custom); err != nil || saved.TransferMinutes != 25 {
+		t.Fatalf("saved lag = %+v, %v", saved, err)
+	}
+	if got, _ := s.WorkingHours(ctx); got.TransferMinutes != 25 {
+		t.Fatalf("read back lag = %+v", got)
 	}
 }
 

@@ -1794,6 +1794,9 @@ export const en: typeof sr = {
       title: 'Working hours',
       hint: 'One calendar for the whole organization. Days that are not ticked are days off.',
       timeZone: 'Time zone',
+      transferMinutes: 'Inter-operation time (min)',
+      transferMinutesHint:
+        'Average waiting and transfer time between two consecutive steps. The planner inserts it between the end of one step and the start of the next, within working hours (0 = steps run back to back).',
       dayOff: 'Day off',
       addBreak: 'Add break',
       break: 'Break',
@@ -1829,6 +1832,7 @@ export const en: typeof sr = {
       crewRequired: 'The crew needs at least one worker',
       crewTooLarge: 'The crew can have at most {{max}} workers',
       endsNextDay: 'The block must end the same day',
+      transferMinutesRange: 'Enter a whole number of minutes between 0 and {{max}}',
     },
   },
   attendance: {

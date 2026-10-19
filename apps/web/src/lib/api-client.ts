@@ -124,6 +124,8 @@ function normalizeWorkingHours(hours: WorkingHours): WorkingHours {
   return {
     ...hours,
     days: readArray(hours?.days).map((day) => ({ ...day, breaks: readArray(day.breaks) })),
+    // Settings saved before D-028 have no inter-operation time: that is 0.
+    transferMinutes: typeof hours?.transferMinutes === 'number' && Number.isFinite(hours.transferMinutes) ? hours.transferMinutes : 0,
   }
 }
 

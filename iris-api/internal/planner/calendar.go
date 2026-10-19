@@ -36,15 +36,19 @@ func parseClock(s string) (int, bool) {
 }
 
 // ValidateWorkingHours checks a working-hours setting: a loadable IANA time
-// zone, weekdays 1-7 at most once each, "HH:MM" times with start < end, and
-// breaks inside their shift that do not overlap. It returns a user-facing
-// Serbian message, or "" when valid.
+// zone, weekdays 1-7 at most once each, "HH:MM" times with start < end,
+// breaks inside their shift that do not overlap, and an inter-operation time
+// within 0-domain.MaxTransferMinutes. It returns a user-facing Serbian
+// message, or "" when valid.
 func ValidateWorkingHours(hours domain.WorkingHours) string {
 	if hours.TimeZone == "" || hours.TimeZone == "Local" {
 		return "Vremenska zona nije ispravna."
 	}
 	if _, err := time.LoadLocation(hours.TimeZone); err != nil {
 		return fmt.Sprintf("Vremenska zona „%s“ nije ispravna.", hours.TimeZone)
+	}
+	if hours.TransferMinutes < 0 || hours.TransferMinutes > domain.MaxTransferMinutes {
+		return fmt.Sprintf("Međuoperacijsko vreme mora biti između 0 i %d minuta.", domain.MaxTransferMinutes)
 	}
 	seen := map[int]bool{}
 	for _, day := range hours.Days {
@@ -231,6 +235,37 @@ func (c *calendar) horizon(date time.Time, n int, startMin int64, clip bool) ([]
 		}
 	}
 	return dates, segs
+}
+
+// lagHorizonDays bounds how far addWorking looks for working time: enough
+// for the longest lag over the shortest plausible shifts.
+const lagHorizonDays = 120
+
+// addWorking returns the moment `minutes` of working time after t (absolute
+// minutes). A lag that starts in a break, after the shift or on a day off runs
+// on from the next working segment, so it may cross a day boundary. ok is
+// false when the lag never elapses (no working time within lagHorizonDays).
+func (c *calendar) addWorking(t int64, minutes int) (int64, bool) {
+	if minutes <= 0 {
+		return t, true
+	}
+	day, err := parseCivil(c.formatDate(t))
+	if err != nil {
+		return 0, false
+	}
+	for _, days := range []int{3, lagHorizonDays} {
+		_, segs := c.horizon(day, days, t, true)
+		at, i, ok := snap(segs, t, true)
+		if !ok {
+			continue
+		}
+		parts, ok := chain(segs, i, at, minutes)
+		if !ok {
+			continue
+		}
+		return parts[len(parts)-1].end, true
+	}
+	return 0, false
 }
 
 func (c *calendar) format(minutes int64) string {

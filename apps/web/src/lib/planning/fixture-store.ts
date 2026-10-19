@@ -18,6 +18,7 @@ import type { OrganizationModules } from '@/types/settings'
 import {
   MAX_MACHINE_NAME_LENGTH,
   MAX_MACHINE_NOTE_LENGTH,
+  MAX_TRANSFER_MINUTES,
   PLANNING_FORECAST_DAYS,
   type AttendanceEntry,
   type Machine,
@@ -55,6 +56,7 @@ const MESSAGES = {
   tooManyAssignments: 'Plan može imati najviše 2000 blokova.',
   noDraft: 'Nacrt plana za taj datum ne postoji.',
   badHours: 'Radno vreme nije ispravno.',
+  badTransfer: `Međuoperacijsko vreme mora biti između 0 i ${MAX_TRANSFER_MINUTES} minuta.`,
 }
 
 const CLOSED_STATUSES = new Set(['completed', 'cancelled', 'invoiced'])
@@ -124,6 +126,7 @@ export const DEFAULT_WORKING_HOURS: WorkingHours = {
     end: '15:00',
     breaks: [{ start: '11:00', end: '11:30' }],
   })),
+  transferMinutes: 0,
 }
 
 /** Seed machine types; ids match the planning fields of the seeded process template. */
@@ -156,6 +159,9 @@ function hoursProblem(hours: WorkingHours): string | null {
     new Intl.DateTimeFormat('en-CA', { timeZone: hours.timeZone })
   } catch {
     return MESSAGES.badHours
+  }
+  if (!Number.isInteger(hours.transferMinutes) || hours.transferMinutes < 0 || hours.transferMinutes > MAX_TRANSFER_MINUTES) {
+    return MESSAGES.badTransfer
   }
   const seen = new Set<number>()
   for (const day of hours.days) {
@@ -474,6 +480,7 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
         hours = clone({
           timeZone: input.timeZone,
           days: [...input.days].sort((a, b) => a.weekday - b.weekday),
+          transferMinutes: input.transferMinutes,
         })
         return clone(hours)
       },

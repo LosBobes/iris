@@ -92,6 +92,9 @@ type stepRun struct {
 	desc       []*stepRun
 	succ       []*stepRun
 	end        int64
+	// lagEnd is end plus the inter-operation time in working minutes: the
+	// earliest a successor may start. Equal to end when the lag is 0.
+	lagEnd int64
 }
 
 type orderRun struct {
@@ -358,14 +361,29 @@ func (p *planner) applyPinned() error {
 			if st := o.byID[a.StepNodeID]; st != nil && st.state == stOpen {
 				st.state = stScheduled
 				if e > st.end {
-					st.end = e
+					st.end, st.lagEnd = e, p.afterLag(e)
 				}
 			} else if st != nil && st.state == stScheduled && e > st.end {
-				st.end = e
+				st.end, st.lagEnd = e, p.afterLag(e)
 			}
 		}
 	}
 	return nil
+}
+
+// afterLag is the earliest a successor may start after a step ending at end:
+// end plus Hours.TransferMinutes of working time (D-028). A lag that never
+// elapses within the calendar pushes the successor past the horizon.
+func (p *planner) afterLag(end int64) int64 {
+	lag := p.in.Hours.TransferMinutes
+	if lag <= 0 {
+		return end
+	}
+	at, ok := p.cal.addWorking(end, lag)
+	if !ok {
+		return farAvail
+	}
+	return at
 }
 
 func (p *planner) message(o *orderRun, s *stepRun, text string) string {
@@ -509,14 +527,17 @@ func (p *planner) placeInProgress() {
 	}
 }
 
+// ready is the earliest start of a pending step: the planning start, or the
+// latest scheduled ancestor's end plus the inter-operation time. ok is false
+// while an ancestor is still unscheduled.
 func (p *planner) ready(s *stepRun) (int64, bool) {
 	at := p.startMin
 	for _, a := range s.ancestors {
 		switch a.state {
 		case stFinished:
 		case stScheduled:
-			if a.end > at {
-				at = a.end
+			if a.lagEnd > at {
+				at = a.lagEnd
 			}
 		default:
 			return 0, false
@@ -755,6 +776,7 @@ func (p *planner) commit(o *orderRun, s *stepRun, parts []part, machine *resourc
 	}
 	s.state = stScheduled
 	s.end = parts[len(parts)-1].end
+	s.lagEnd = p.afterLag(s.end)
 	if !o.hasBlock || s.end > o.lastEnd {
 		o.lastEnd, o.hasBlock = s.end, true
 	}
