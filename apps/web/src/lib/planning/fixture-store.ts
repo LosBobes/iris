@@ -1,5 +1,7 @@
 import { ApiError } from '@/lib/errors'
 import { ATTENDANCE_DISABLED_MESSAGE, PLANNING_DISABLED_MESSAGE } from '@/lib/modules'
+import { STOCK_DISABLED_MESSAGE } from '@/lib/modules'
+import { buildMaterialNeeds, defaultMaterialNeedsEnd, materialWeeks } from '@/lib/planning/material-needs'
 import {
   addDays,
   checkDraft,
@@ -35,6 +37,8 @@ import {
   type WorkerQualifications,
   type WorkingHours,
 } from '@/types/planning'
+import { DEFAULT_MATERIAL_NEEDS_DAYS } from '@/types/planning'
+import type { StockLevel } from '@/types/stock'
 
 // In-memory Planiranje store for fixture mode. It mirrors the API's validation,
 // permissions and module gate closely enough for demos and UI development; the
@@ -70,6 +74,8 @@ const MESSAGES = {
   downtimeOrder: 'Početak zastoja mora biti pre njegovog kraja.',
   downtimeNoteTooLong: 'Napomena zastoja je predugačka (najviše 500 znakova).',
   downtimeMissing: 'Zastoj mašine nije pronađen.',
+  materialsOrder: 'Kraj perioda ne može biti pre početka.',
+  materialsSpan: 'Period može obuhvatiti najviše 8 nedelja.',
 }
 
 const CLOSED_STATUSES = new Set(['completed', 'cancelled', 'invoiced'])
@@ -99,10 +105,12 @@ export interface PlanningFixtureContext {
   users: () => { id: string; username: string }[]
   modules: () => OrganizationModules
   orders: () => PlanningOrderSource[]
-  /** Every order's process graph. */
-  processes: () => { workOrderId: string; graph: ProcessGraph }[]
+  /** Every order's process graph (with its planned-quantity factor, default 1). */
+  processes: () => { workOrderId: string; graph: ProcessGraph; factor?: number }[]
   /** Injected clock for tests. */
   now?: () => Date
+  /** Stock levels for the material-needs report (D-028); none without it. */
+  stockLevels?: () => Promise<StockLevel[]>
 }
 
 type PlanningApi = Pick<
@@ -132,6 +140,7 @@ type PlanningApi = Pick<
   | 'publishPlan'
   | 'getMyQueue'
   | 'getPlanningForecast'
+  | 'getMaterialNeeds'
 >
 
 export interface PlanningFixtureStore {
@@ -798,6 +807,35 @@ export function createPlanningFixtureStore(context: PlanningFixtureContext): Pla
           pinned,
         })
         return clone(result.forecast)
+      },
+      async getMaterialNeeds(query = {}) {
+        // Like the API (D-028): planning and stock modules, every signed-in user.
+        requireUser()
+        if (!context.modules().stock) throw fixtureError(403, STOCK_DISABLED_MESSAGE)
+        const from = query.from || today()
+        checkDate(from)
+        if (query.to) checkDate(query.to)
+        // The most recent published plan before the window and every later one.
+        const earlier = [...published.values()]
+          .filter((plan) => plan.date < from)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .at(-1)
+        const plans = [...(earlier ? [earlier] : []), ...publishedFrom(from)]
+        const to = query.to || defaultMaterialNeedsEnd(from, plans, DEFAULT_MATERIAL_NEEDS_DAYS)
+        const weeks = materialWeeks(from, to)
+        if (weeks === 'date') throw fixtureError(400, MESSAGES.badDate)
+        if (weeks === 'order') throw fixtureError(422, MESSAGES.materialsOrder)
+        if (weeks === 'span') throw fixtureError(422, MESSAGES.materialsSpan)
+        const open = new Set(
+          context.orders().filter((order) => !CLOSED_STATUSES.has(order.status)).map((order) => order.id),
+        )
+        const orders = context
+          .processes()
+          .filter((entry) => open.has(entry.workOrderId))
+          .map((entry) => ({ workOrderId: entry.workOrderId, graph: entry.graph, factor: entry.factor ?? 1 }))
+        const levels = (await context.stockLevels?.()) ?? []
+        const stock = new Map(levels.map((level) => [level.catalogItemId, level]))
+        return clone(buildMaterialNeeds({ weeks, plans, orders, stock }))
       },
     },
   }

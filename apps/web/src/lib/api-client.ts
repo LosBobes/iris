@@ -93,6 +93,7 @@ import type {
   WorkerQualificationsInput,
   WorkingHours,
 } from '@/types/planning'
+import type { MaterialNeeds, MaterialNeedsItem, MaterialNeedsQuery } from '@/types/planning'
 import type {
   CreateUserInput,
   ManagedUser,
@@ -1439,6 +1440,24 @@ export function createHttpApi(baseUrl: string, baseFetch: FetchLike = fetch): Wi
     async getPlanningForecast() {
       const response = await fetchImpl(url('/planning/forecast'), credentialedRequest())
       return readArray(await readJSON<OrderForecast[]>(response))
+    },
+
+    async getMaterialNeeds(query?: MaterialNeedsQuery) {
+      const params = new URLSearchParams()
+      if (query?.from) params.set('from', query.from)
+      if (query?.to) params.set('to', query.to)
+      const search = params.toString() ? `?${params}` : ''
+      const response = await fetchImpl(url(`/planning/material-needs${search}`), credentialedRequest())
+      const needs = await readJSON<MaterialNeeds>(response)
+      return {
+        ...needs,
+        weeks: readArray(needs?.weeks),
+        items: readArray<MaterialNeedsItem>(needs?.items).map((item) => ({
+          ...item,
+          weeks: readArray(item.weeks),
+          cumulative: readArray(item.cumulative),
+        })),
+      }
     },
 
     async getAnnouncements() {

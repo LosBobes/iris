@@ -6,12 +6,14 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/planning/ConfirmDialog'
 import { ForecastBadges } from '@/components/planning/ForecastBadges'
 import { ForecastTable } from '@/components/planning/ForecastTable'
+import { MaterialNeedsTab } from '@/components/planning/MaterialNeedsTab'
 import { PlanBlockDialog } from '@/components/planning/PlanBlockDialog'
 import { PlanTimeline, type TimelineView } from '@/components/planning/PlanTimeline'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/useAuth'
+import { useOrganization } from '@/hooks/useOrganization'
 import {
   useInvalidatePlanning,
   useMachines,
@@ -25,6 +27,8 @@ import type { PlanAssignment, ProductionPlan } from '@/types/planning'
 
 type PlanSource = 'draft' | 'published'
 type PendingConfirm = 'generate' | 'replan' | 'publish' | 'discard' | null
+/** Page sections: the day plan and, with Magacin on, material needs (D-028). */
+type PlanningSection = 'plan' | 'materials'
 
 function PlanMeta({ plan, source }: { plan: ProductionPlan; source: PlanSource }): React.JSX.Element {
   const { t } = useTranslation()
@@ -62,6 +66,10 @@ function PlanningPage(): React.JSX.Element {
   const [confirm, setConfirm] = useState<PendingConfirm>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const { modules } = useOrganization()
+  const showMaterials = modules.planning && modules.stock
+  const [section, setSection] = useState<PlanningSection>('plan')
+  const activeSection: PlanningSection = showMaterials ? section : 'plan'
 
   const dayQuery = usePlanDay(date)
   const hoursQuery = useWorkingHours()
@@ -167,6 +175,10 @@ function PlanningPage(): React.JSX.Element {
     { value: 'draft', label: t('planning.plan.draft'), disabled: !draft },
     { value: 'published', label: t('planning.plan.published'), disabled: !published },
   ]
+  const sectionTabs: TabItem<PlanningSection>[] = [
+    { value: 'plan', label: t('planning.materials.tabPlan') },
+    { value: 'materials', label: t('planning.materials.tab') },
+  ]
   const viewTabs: TabItem<TimelineView>[] = [
     { value: 'machines', label: t('planning.timeline.byMachine') },
     { value: 'people', label: t('planning.timeline.byPerson') },
@@ -237,7 +249,18 @@ function PlanningPage(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="space-y-5 px-5 pb-8 sm:px-8">
+      {showMaterials && (
+        <div className="px-5 sm:px-8">
+          <Tabs tabs={sectionTabs} value={activeSection} onValueChange={setSection} aria-label={t('planning.materials.sectionsAria')} />
+        </div>
+      )}
+      {activeSection === 'materials' && (
+        <div className="px-5 pb-8 sm:px-8">
+          <MaterialNeedsTab />
+        </div>
+      )}
+
+      <div className="space-y-5 px-5 pb-8 sm:px-8" hidden={activeSection !== 'plan'}>
         <div className="flex flex-wrap items-center gap-2">
           <DatePicker
             id="plan-date"

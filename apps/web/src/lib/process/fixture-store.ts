@@ -145,7 +145,7 @@ export interface ProcessFixtureStore {
   /** Every stock-tracked order's current graph plus its planned-quantity factor (the ledger derives reservations from it). */
   listOrderProcesses: () => { workOrderId: string; graph: ProcessGraph; factor: number }[]
   /** Every order's process, tracked by stock or not (the fixture planner reads it). */
-  listAllOrderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
+  listAllOrderProcesses: () => { workOrderId: string; graph: ProcessGraph; factor: number }[]
 }
 
 export function createProcessFixtureStore(context: ProcessFixtureContext): ProcessFixtureStore {
@@ -320,7 +320,11 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
     },
 
     listAllOrderProcesses() {
-      return [...processes].map(([workOrderId, process]) => ({ workOrderId, graph: clone(process.graph) }))
+      return [...processes].map(([workOrderId, process]) => ({
+        workOrderId,
+        graph: clone(process.graph),
+        factor: factorOf(workOrderId, process),
+      }))
     },
 
     attachDefaultProcess(workOrderId) {

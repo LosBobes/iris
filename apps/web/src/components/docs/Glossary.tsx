@@ -55,6 +55,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Planirani datum", body: "Interni datum rada; koristi se za signale kad rok nije upisan.", chapter: "nalozi" },
   { term: "Popis", body: "Brojanje stvarnog stanja; razlika se knjiži kao korekcija.", chapter: "magacin" },
   { term: "Početno stanje", body: "Prvi popis artikla u magacinu.", chapter: "magacin" },
+  { term: "Potrebe materijala", body: "Koliko materijala objavljeni planovi troše po nedeljama, u odnosu na stanje.", chapter: "planiranje" },
   { term: "Preplaniraj", body: "Novi nacrt plana od ovog trenutka; blokovi u toku ostaju.", chapter: "planiranje" },
   { term: "Prijem", body: "Roba koja je stigla od dobavljača; povećava stanje.", chapter: "magacin" },
   { term: "Prioritet", body: "Nizak, normalan, visok ili hitno.", chapter: "nalozi" },
