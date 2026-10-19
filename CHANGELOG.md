@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.13.0 — 2026-10-19
+
+### Minor
+
+- The landing page at /home is interactive: a sample work order you move through its statuses and view as the client, a status explorer, a live price example with PDV and margin, a module playground that follows the real dependency rules, a role switcher, a FAQ accordion and a contact button.
+
 ## 2.12.0 — 2026-10-19
 
 ### Minor
