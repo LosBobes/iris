@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.10.2 — 2026-10-19
+
+### Patch
+
+- The side menu now scrolls on phones and short screens, so items below the fold (Users, Documentation, Settings, sign-out) are reachable, including while a banner is shown.
+
 ## 2.10.1 — 2026-10-19
 
 ### Patch
