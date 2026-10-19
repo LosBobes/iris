@@ -1,6 +1,7 @@
 # Contributing to Iris
 
-Iris is a monorepo for Stamparija Cobanovic operations. Keep changes narrow,
+Iris is a monorepo for a multi-tenant operations platform for small
+manufacturing and service businesses. Keep changes narrow,
 verify the affected runtime, and keep domain contracts aligned across clients,
 API, fixtures, and documentation.
 
@@ -106,7 +107,7 @@ Update docs in the same change when modifying:
 
 - backend API routes
 - runtime data flow or persistence boundaries
-- domain models, statuses, or print-shop vocabulary
+- domain models, statuses, or domain vocabulary
 - roadmap items that have become active service behavior
 
 *Last verified against the checked-in repository state on 2026-05-31.*

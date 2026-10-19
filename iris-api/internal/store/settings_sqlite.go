@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -50,7 +52,6 @@ func (s *SQLiteStore) OrganizationSettings(ctx context.Context) (domain.Organiza
 
 func loadOrganizationSettings(ctx context.Context, q dbExecQuerier, tenantID string) (domain.OrganizationSettings, error) {
 	settings := domain.OrganizationSettings{
-		FirmName:            domain.DefaultFirmName,
 		PDFSections:         domain.DefaultPDFSections(),
 		BillingDefaults:     domain.DefaultBillingDefaults(),
 		PriorityDefaults:    domain.DefaultPriorityDefaults(),
@@ -122,6 +123,19 @@ func loadOrganizationSettings(ctx context.Context, q dbExecQuerier, tenantID str
 	}
 	if err := rows.Err(); err != nil {
 		return domain.OrganizationSettings{}, fmt.Errorf("iterate organization settings: %w", err)
+	}
+	if settings.FirmName == "" {
+		// No firm name saved yet: show the organization's own name rather than
+		// a generic placeholder.
+		var tenantName string
+		err := q.QueryRowContext(ctx, `SELECT name FROM tenants WHERE id = ?`, tenantID).Scan(&tenantName)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return domain.OrganizationSettings{}, fmt.Errorf("load tenant name: %w", err)
+		}
+		settings.FirmName = strings.TrimSpace(tenantName)
+		if settings.FirmName == "" {
+			settings.FirmName = domain.DefaultFirmName
+		}
 	}
 	return settings, nil
 }

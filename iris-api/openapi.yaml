@@ -6340,8 +6340,10 @@ components:
           $ref: '#/components/schemas/OrganizationModules'
         firmName:
           type: string
-          description: The shop's display name shown in the app branding.
-          example: Grafika Čobanović
+          description: >-
+            The organization's display name shown in the app branding. Until an
+            admin saves one, it is the organization's own name.
+          example: Radionica Novak
         pdfSections:
           $ref: '#/components/schemas/PDFSections'
         billingDefaults:

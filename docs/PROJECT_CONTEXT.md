@@ -1,7 +1,8 @@
 # Iris Project Context
 
-Compact repository context for Iris, the operations suite for Stamparija
-Cobanovic.
+Compact repository context for Iris, a multi-tenant operations platform for
+small manufacturing and service businesses (job shops). The first production
+organization is Grafika Čobanović.
 
 ## Project Overview
 

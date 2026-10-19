@@ -1,9 +1,11 @@
 # Iris
 
-Operations workspace for **Stamparija Cobanovic** (a print shop): work-order
-lifecycle, customers/locations, dashboard reporting, public tracking, and
-admin-configurable organization settings. The system is **multi-tenant** — every
-row is scoped to a tenant (organization) and login requires an organization slug.
+Operations platform for small manufacturing and service businesses (job shops):
+work-order lifecycle, customers/locations, catalog, dashboard reporting, public
+tracking, admin-configurable organization settings, and optional modules (stock,
+processes, attendance, planning). The system is **multi-tenant** — every row is
+scoped to a tenant (organization) and login requires an organization slug. The
+first production organization is **Grafika Čobanović**.
 
 Two deployable surfaces share **one Go REST API** and **one database** —
 SQLite or PostgreSQL, selected at startup by `DATABASE_URL` (see

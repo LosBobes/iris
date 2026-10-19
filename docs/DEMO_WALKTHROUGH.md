@@ -1,7 +1,8 @@
 # Iris — Demo Walkthrough
 
-A guided, end-to-end demo of the Iris operations workspace for **Štamparija
-Čobanović**. Follow it top to bottom for a complete tour, or jump to a section.
+A guided, end-to-end demo of Iris, the multi-tenant operations platform for
+small manufacturing and service businesses, using the seeded `demo`
+organization. Follow it top to bottom for a complete tour, or jump to a section.
 Every step lists what to click and what you should see.
 
 > UI text is Serbian (`sr-Latn`); this guide labels each step with the on-screen

@@ -42,7 +42,7 @@ export const en: typeof sr = {
   },
   app: {
     tagline:
-      'Print-shop work-order management. Every job on the record.',
+      'Work-order management from inquiry to invoice. Every job on the record.',
     version: 'Version',
     loading: 'Loading...',
     backendEyebrow: 'Iris · backend',
@@ -135,7 +135,7 @@ export const en: typeof sr = {
       title: 'Firm name',
       hint: 'Shown in the app header for all users',
       label: 'Name',
-      placeholder: 'e.g. Grafika Čobanović',
+      placeholder: 'e.g. Novak Workshop',
       nameRequired: 'Firm name is required.',
       saved: 'Firm name saved.',
       saveErrorPrefix: 'Error saving the name',
@@ -1160,7 +1160,7 @@ export const en: typeof sr = {
       errors: {
         nameRequired: 'Name is required.',
         nameTooLong: 'Name can be at most 120 characters.',
-        slugInvalid: '2–64 characters: lowercase letters, digits and dashes (e.g. print-shop-north).',
+        slugInvalid: '2–64 characters: lowercase letters, digits and dashes (e.g. my-company).',
         usernameRequired: 'Username is required.',
         passwordShort: 'Password must be at least 6 characters.',
         passwordLong: 'Password is too long (72 bytes at most).',
@@ -1610,7 +1610,7 @@ export const en: typeof sr = {
     sessionExpiredNotice: 'Sign in again to pick up where you left off.',
     sessionExpiredToast: 'Your session expired. Please sign in again.',
     orgIntro: 'Enter your organization ID. This device will remember it.',
-    orgPlaceholder: 'e.g. grafika-cobanovic',
+    orgPlaceholder: 'e.g. my-company',
     orgRequired: 'Enter your organization ID.',
     orgInvalid: 'The organization ID cannot contain spaces or the characters / ? # %.',
     orgNotFound: 'No organization has that ID.',
@@ -1809,7 +1809,7 @@ export const en: typeof sr = {
       name: 'Type name',
       createTitle: 'New machine type',
       editTitle: 'Edit machine type',
-      dialogDescription: 'A machine type (e.g. "Digital printing") links process steps to machines and people.',
+      dialogDescription: 'A machine type (e.g. "Laser cutter") links process steps to machines and people.',
       editAria: 'Edit type {{name}}',
       deleteAria: 'Delete type {{name}}',
       deleteTitle: 'Delete the machine type?',
@@ -2075,7 +2075,7 @@ export const en: typeof sr = {
   docs: {
     eyebrow: 'Iris · documentation',
     title: 'Documentation',
-    subtitle: 'How Iris works and what the print-shop terms mean, from scratch.',
+    subtitle: 'How Iris works and what its terms mean, from scratch.',
     languageNote: 'The documentation is written in Serbian.',
     contents: 'Contents',
     chapterSelect: 'Choose a chapter',
@@ -2088,7 +2088,7 @@ export const en: typeof sr = {
     startTitle: 'New here? Start with this',
     startBody: 'What Iris is, how it is organized and who sees what. About ten minutes of reading.',
     openFromHelp: 'Open the documentation',
-    openFromHelpHint: 'A detailed guide with diagrams: the whole print-shop job, money and VAT, every part of the app and a glossary.',
+    openFromHelpHint: 'A detailed guide with diagrams: the journey of a job, money and VAT, every part of the app and a glossary.',
   },
   help: {
     eyebrow: 'Iris · help',
@@ -2150,7 +2150,7 @@ export const en: typeof sr = {
     },
     about: {
       title: 'About the app',
-      body: 'Iris runs the print shop\'s work orders from creation to invoicing. Orders, clients (with locations and contacts), the catalog of services and articles, and the dashboard with deadlines and an overview of work all live in one place.',
+      body: 'Iris runs your business\'s work orders from creation to invoicing. Orders, clients (with locations and contacts), the catalog of services and articles, and the dashboard with deadlines and an overview of work all live in one place.',
     },
     roles: {
       title: 'Roles',

@@ -12,7 +12,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ## D-001: Build the primary desktop product as an Electron application
 - **Status**: `superseded` (by [D-015](#d-015-retire-the-electron-desktop-client))
-- **Context**: The local print shop (Stamparija Cobanovic) operates on-premise physical terminals that require local application reliability and easy operating system integration.
+- **Context**: The first organization using Iris (Stamparija Cobanovic) operates on-premise physical terminals that require local application reliability and easy operating system integration.
 - **Decision**: Wrap the React user interface in an Electron shell (`apps/desktop`), utilizing a multi-process architecture for native operations.
 - **Consequences**:
   - The application benefits from native OS window management and desktop packaging.
@@ -65,7 +65,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ## D-006: Client-side dashboard role gating
 - **Status**: `temporary`
-- **Context**: The print shop requires basic privilege division, ensuring standard staff operators cannot view financial revenue dashboards.
+- **Context**: Organizations require basic privilege division, ensuring standard staff operators cannot view financial revenue dashboards.
 - **Decision**: Store the authenticated operator role in React application state and block dashboard navigation unless `currentUser.role === 'admin'`.
 - **Consequences**:
   - Simple, zero-latency dashboard authorization gates in the UI.
@@ -85,7 +85,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ## D-008: Localized UI copy in Serbian (Latin) and code in English
 - **Status**: `accepted`
-- **Context**: The print-shop staff operates in Serbian, while developer tools, programming conventions, and libraries operate globally in English.
+- **Context**: The operators and staff of the organizations using Iris work in Serbian, while developer tools, programming conventions, and libraries operate globally in English.
 - **Decision**: Program all components, variables, API routes, and database models in English, but display Serbian Latin (`sr-Latn`) labels on visible user screens.
 - **Consequences**:
   - Preserves native usability for shop operators.
@@ -126,7 +126,7 @@ This document records the project-level architectural decisions (ADRs) that shap
 ## D-013: Standardize on an expanded work-order domain model
 - **Status**: `accepted` (lifecycle later amended by D-014)
 - **Context**: Real-world operations need detailed steps beyond basic open/closed statuses-specifically tracking scheduling, materials, client approvals, and invoicing drafts.
-- **Decision**: Standardize all monorepo type contracts on a unified print-shop lifecycle (`new`, `assigned`, `inProgress`, `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`, `invoiced`) complete with normalized `Customer`, `Location`, `Assignment`, `InvoiceDraft`, and execution metrics. Legacy `draft` and `active` inputs are normalized at the API boundary where older fixture compatibility requires it.
+- **Decision**: Standardize all monorepo type contracts on a unified work-order lifecycle (`new`, `assigned`, `inProgress`, `waitingForCustomer`, `waitingForMaterials`, `completed`, `cancelled`, `invoiced`) complete with normalized `Customer`, `Location`, `Assignment`, `InvoiceDraft`, and execution metrics. Legacy `draft` and `active` inputs are normalized at the API boundary where older fixture compatibility requires it.
 - **Consequences**:
   - Requires synchronized updates to TypeScript types, Go structs, and OpenAPI definitions when changing schemas.
   - Guarantees rich, operation-grounded dashboard analytics.
@@ -290,7 +290,7 @@ This document records the project-level architectural decisions (ADRs) that shap
   - **Plans** (`production_plans`, migration v31) are per date and status (at most one `draft` and one `published`). The planner proposes a draft over all open orders that have a process; an admin edits it (conflicts are reported, not blocked), then publishes it; each operator sees their own queue ("Moj red"). "Preplaniraj" generates a new draft starting now and keeps the locked (in progress) blocks of the published plan. The app suggests a re-plan when today drifts from the published plan (computed on read).
   - **Planner** (`internal/planner`) is a pure, deterministic Go list-scheduling heuristic: steps in dependency order, most urgent first (slack to the due date over the remaining chain of work; urgent/high priority first at equal slack; older order first), each placed at the earliest time a machine unit and a crew (lead qualified) are free inside shifts. A step that does not finish by the end of a shift **carries over** to the next working day on the same machine and crew and is never interleaved with other work. It looks ahead 14 working days: the plan date is stored, the rest becomes the per-order **forecast** (estimated finish, late, unplannable), computed on read.
 - **Consequences**:
-  - No solver or cgo dependency; plans are reproducible and fast at print-shop scale, but not proven optimal. A solver could replace `planner.Plan` behind the same input/output later.
+  - No solver or cgo dependency; plans are reproducible and fast at small-shop scale, but not proven optimal. A solver could replace `planner.Plan` behind the same input/output later.
   - Plans store denormalized names (order number, client, step, machine) so they stay readable after edits; they do not follow later changes until re-planned.
   - Steps without times are planned as zero minutes and flagged, so turning the module on does not block planning while times are filled in.
   - All new tables are tenant data (`tenantDataTables`): exported and deleted with the organization.
@@ -327,9 +327,23 @@ This document records the project-level architectural decisions (ADRs) that shap
 
 ---
 
-## D-029: Government e-invoicing (SEF) and e-dispatch notes (eOtpremnica) as an outbox-backed module
+## D-029: Iris is an industry-neutral operations platform
+- **Status**: `accepted`
+- **Context**: Iris was first built for one organization, and its docs, landing page, sign-in tagline and in-app guide still described it as a product for that one industry. Since then it became multi-tenant and gained the catalog and the optional `stock`, `processes`, `attendance` and `planning` modules; nothing in the work-order model, catalog, modules or tenant isolation is specific to one industry.
+- **Decision**:
+  - Product positioning and all user-facing copy are industry-neutral: Iris is a multi-tenant operations platform for small manufacturing and service businesses (job shops). No copy names a single target industry.
+  - Industry-specific work-order details (`productCode`, `dimensions`, `finishingNote`, `paperWeightGsm`) stay as optional fields that an organization may leave empty.
+  - An organization without a saved `firm_name` shows its own name (`tenants.name`, re-read after a rename) instead of a hard-coded company name; `DefaultFirmName` ("Iris") is only the last resort.
+  - Grafika Čobanović (`grafika-cobanovic`) remains the seeded production tenant; its tooling (`seed-cobanovic`, `ProductionTenant*`) is unchanged.
+- **Consequences**:
+  - New features and copy are designed and named for any job shop.
+  - The `demo` organization's seeded example data is unchanged.
+
+---
+
+## D-030: Government e-invoicing (SEF) and e-dispatch notes (eOtpremnica) as an outbox-backed module
 - **Status**: `proposed`
-- **Context**: Serbian law requires B2B and B2G invoices to go through the Ministry of Finance's Sistem elektronskih faktura (SEF, UBL 2.1 XML with the Serbian CIUS, per-company API key) since 2023. The electronic dispatch note law adds eOtpremnica (with the buyer's confirming *prijemnica*): mandatory since 1 Jan 2026 for the public sector, suppliers to it and excise goods, and for all firms from 1 Oct 2027. A print shop delivering printed goods to schools, municipalities or public companies may already be in phase 1. Iris has an `InvoiceDraft` per work order (number, line items, unit, status), customer PIB/MB, goods/service lines, VAT handling and a stock ledger (D-018), but cannot produce a legally valid e-invoice: the organization's own seller identity, supply/payment dates, per-line VAT category and exemption reason, UN/ECE unit codes, structured buyer addresses and the public-sector JBKJS number are missing, and an issued invoice can still be edited.
+- **Context**: Serbian law requires B2B and B2G invoices to go through the Ministry of Finance's Sistem elektronskih faktura (SEF, UBL 2.1 XML with the Serbian CIUS, per-company API key) since 2023. The electronic dispatch note law adds eOtpremnica (with the buyer's confirming *prijemnica*): mandatory since 1 Jan 2026 for the public sector, suppliers to it and excise goods, and for all firms from 1 Oct 2027. An organization delivering goods to schools, municipalities or public companies may already be in phase 1. Iris has an `InvoiceDraft` per work order (number, line items, unit, status), customer PIB/MB, goods/service lines, VAT handling and a stock ledger (D-018), but cannot produce a legally valid e-invoice: the organization's own seller identity, supply/payment dates, per-line VAT category and exemption reason, UN/ECE unit codes, structured buyer addresses and the public-sector JBKJS number are missing, and an issued invoice can still be edited.
 - **Decision** (proposed):
   - **Ask first who issues invoices today.** If the shop's accountant already invoices through accounting software connected to SEF, prefer an export from Iris to that software over a direct connection; Iris then never holds legal invoice records. The rest of this decision applies when invoices are meant to originate in Iris.
   - **Module.** A per-organization module `einvoicing` (D-019 pattern): off by default, Backoffice-only, no requirements; eOtpremnica may be a second flag (`edispatch`) so a shop can enable one without the other. Disabled routes return 403; every UI surface is gated on `useOrganization().modules`.

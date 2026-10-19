@@ -48,7 +48,7 @@ const (
 	demoBrochureTemplate = "Brošura sa šivenjem"
 
 	// demoFirmName is the organization's display name in the app header.
-	demoFirmName = "Demo Štamparija"
+	demoFirmName = "Demo Firma"
 
 	// Custom picklist values the demo adds (Podešavanja → Šifarnici).
 	demoDeliveryCourier = "kurir" // deliveryMethod: "Kurir (Bex)"

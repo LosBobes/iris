@@ -26,10 +26,10 @@ describe("HomePage", () => {
     renderHome();
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Svaki posao u štampariji, na jednom mestu.",
+      "Svaki posao vaše firme, na jednom mestu.",
     );
     for (const name of [
-      "Sve što štamparija radi svaki dan",
+      "Sve što vaša firma radi svaki dan",
       "Nalog uvek ide u jednom smeru",
       "Kako Iris računa cenu",
       "Sastavite svoj Iris",
@@ -90,7 +90,7 @@ describe("HomePage", () => {
   it("sets the document title while mounted and restores it after", () => {
     document.title = "Iris";
     const { unmount } = renderHome();
-    expect(document.title).toBe("Iris · radni nalozi za štampariju");
+    expect(document.title).toBe("Iris · radni nalozi za proizvodnju i usluge");
     unmount();
     expect(document.title).toBe("Iris");
   });

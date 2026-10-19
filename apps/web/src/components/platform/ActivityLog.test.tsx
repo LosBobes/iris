@@ -11,7 +11,7 @@ import "@/i18n";
 
 const strings = sr.platform.activity;
 
-const base = { adminUsername: "ops", tenantSlug: "demo", tenantName: "Demo Štamparija", ip: "10.0.0.1", at: "2026-10-17T06:00:00Z" };
+const base = { adminUsername: "ops", tenantSlug: "demo", tenantName: "Demo Firma", ip: "10.0.0.1", at: "2026-10-17T06:00:00Z" };
 
 afterEach(() => {
   cleanup();
@@ -22,7 +22,7 @@ describe("ActivityLog", () => {
   it("shows every kind of operation with its details", async () => {
     const items: PlatformAuditEvent[] = [
       { ...base, id: 5, action: "user.password_reset", targetUsername: "operater" },
-      { ...base, id: 4, action: "tenant.update", detail: { fromName: "Demo", toName: "Demo Štamparija", fromSlug: "d", toSlug: "demo" } },
+      { ...base, id: 4, action: "tenant.update", detail: { fromName: "Demo", toName: "Demo Firma", fromSlug: "d", toSlug: "demo" } },
       { ...base, id: 3, action: "tenant.suspend" },
       { ...base, id: 2, action: "tenant.create", targetUsername: "sef" },
     ];
@@ -33,7 +33,7 @@ describe("ActivityLog", () => {
     expect(rows).toHaveLength(5);
     expect(within(rows[1]).getByText(strings.kinds.passwordReset)).toBeInTheDocument();
     expect(within(rows[1]).getByText("Korisnik: operater")).toBeInTheDocument();
-    expect(within(rows[2]).getByText("Naziv: Demo → Demo Štamparija")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Naziv: Demo → Demo Firma")).toBeInTheDocument();
     expect(within(rows[2]).getByText("Oznaka: d → demo")).toBeInTheDocument();
     expect(within(rows[3]).getByText(strings.kinds.tenantSuspend)).toBeInTheDocument();
     expect(within(rows[4]).getByText("Prvi administrator: sef")).toBeInTheDocument();

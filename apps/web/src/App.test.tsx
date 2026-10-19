@@ -35,7 +35,7 @@ function stubSignedOutApi(overrides: Record<string, unknown> = {}) {
     getAppVersion: vi.fn(async () => "1.0.0"),
     login: vi.fn(async () => ({ success: true, user })),
     getPublicOrganization: vi.fn(async (slug: string) =>
-      slug === "demo" ? { slug: "demo", name: "Demo Štamparija", logoVersion: null } : null,
+      slug === "demo" ? { slug: "demo", name: "Demo Firma", logoVersion: null } : null,
     ),
     getPublicOrganizationLogoUrl: vi.fn(() => ""),
     getSettings,
@@ -119,7 +119,7 @@ describe("App two-step sign-in", () => {
     expect(window.location.pathname).toBe("/login/demo");
     expect(screen.queryByLabelText(strings.organization)).not.toBeInTheDocument();
     // No logo: the masthead and the card both name the organization.
-    expect(screen.getAllByText("Demo Štamparija")).toHaveLength(2);
+    expect(screen.getAllByText("Demo Firma")).toHaveLength(2);
   });
 
   it("skips step one on a device that already chose its organization", async () => {
