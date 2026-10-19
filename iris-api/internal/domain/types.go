@@ -298,24 +298,28 @@ type OrganizationSettings struct {
 	Modules OrganizationModules `json:"modules"`
 }
 
-// OrganizationModules are the optional per-organization feature modules. Both
-// are off by default and independent of each other: "processes" enables process
-// templates, per-order processes and the simulator; "stock" enables the
-// warehouse (magacin). With both on, process item nodes link to articles and
-// steps post stock movements.
+// OrganizationModules are the optional per-organization feature modules, all
+// off by default: "stock" enables the warehouse (magacin); "processes" enables
+// process templates, per-order processes and the simulator (requires Stock;
+// with both on, process item nodes link to articles and steps post stock
+// movements); "attendance" enables daily attendance on its own ("Prisustvo",
+// D-027); "planning" requires Processes and Attendance.
 type OrganizationModules struct {
 	Processes bool `json:"processes"`
 	Stock     bool `json:"stock"`
-	// Planning ("Planiranje", D-026) requires Processes.
+	// Planning ("Planiranje", D-026) requires Processes and Attendance.
 	Planning bool `json:"planning"`
+	// Attendance ("Prisustvo", D-027) has no dependencies.
+	Attendance bool `json:"attendance"`
 }
 
 // OrganizationModulesUpdate is a partial module switch used by irisctl
 // set-modules; a nil field is left unchanged.
 type OrganizationModulesUpdate struct {
-	Processes *bool
-	Stock     *bool
-	Planning  *bool
+	Processes  *bool
+	Stock      *bool
+	Planning   *bool
+	Attendance *bool
 }
 
 // OrganizationSettingsUpdate is the partial-update payload for PUT /settings.

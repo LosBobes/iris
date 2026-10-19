@@ -24,8 +24,12 @@ func TestSetModules(t *testing.T) {
 		!strings.Contains(err.Error(), "Planiranje") {
 		t.Fatalf("planning alone = %v", err)
 	}
-	report, err := setModules(ctx, dataStore, "prva", domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &on})
-	if err != nil || !strings.Contains(report, "Planiranje on") || !strings.Contains(report, "Magacin on") {
+	if _, err := setModules(ctx, dataStore, "prva", domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &on}); err == nil ||
+		!strings.Contains(err.Error(), "Prisustvo") {
+		t.Fatalf("planning without attendance = %v", err)
+	}
+	report, err := setModules(ctx, dataStore, "prva", domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Attendance: &on, Planning: &on})
+	if err != nil || !strings.Contains(report, "Planiranje on") || !strings.Contains(report, "Magacin on") || !strings.Contains(report, "Prisustvo on") {
 		t.Fatalf("all on = %q, %v", report, err)
 	}
 	// An omitted flag stays as it is.
@@ -34,7 +38,7 @@ func TestSetModules(t *testing.T) {
 		t.Fatalf("planning off = %q, %v", report, err)
 	}
 	modules, err := dataStore.OrganizationModules(store.ContextWithTenant(ctx, "t1"))
-	if err != nil || modules != (domain.OrganizationModules{Stock: true, Processes: true}) {
+	if err != nil || modules != (domain.OrganizationModules{Stock: true, Processes: true, Attendance: true}) {
 		t.Fatalf("stored modules = %+v, %v", modules, err)
 	}
 	if _, err := setModules(ctx, dataStore, "nepoznata", domain.OrganizationModulesUpdate{Stock: &on}); err == nil {

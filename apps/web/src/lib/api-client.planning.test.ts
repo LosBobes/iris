@@ -61,10 +61,10 @@ describe('planning HTTP client: resources', () => {
       body: { machineTypeIds: ['mt1'] },
     })
     await api.listAttendance('2026-10-19')
-    expect(call(fetchMock, 1).url).toBe('http://api.test/planning/attendance?date=2026-10-19')
+    expect(call(fetchMock, 1).url).toBe('http://api.test/attendance?date=2026-10-19')
     await api.setAttendance('u1', { date: '2026-10-19', present: null })
     expect(call(fetchMock, 2)).toMatchObject({
-      url: 'http://api.test/planning/attendance/u1',
+      url: 'http://api.test/attendance/u1',
       method: 'PUT',
       body: { date: '2026-10-19', present: null },
     })
@@ -129,12 +129,12 @@ describe('planning HTTP client: plans', () => {
 describe('organization modules: planning', () => {
   it('sends planning with the other modules', async () => {
     const { api, fetchMock } = setup({ slug: 'demo' })
-    await api.setPlatformTenantModules('demo', { processes: true, stock: true, planning: true })
-    expect(call(fetchMock).body).toEqual({ processes: true, stock: true, planning: true })
+    await api.setPlatformTenantModules('demo', { processes: true, stock: true, planning: true, attendance: true })
+    expect(call(fetchMock).body).toEqual({ processes: true, stock: true, planning: true, attendance: true })
   })
 
   it('counts planning as off without processes when reading settings', async () => {
-    const { api } = setup({ firmName: 'X', modules: { processes: false, stock: true, planning: true } })
-    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: true, planning: false })
+    const { api } = setup({ firmName: 'X', modules: { processes: false, stock: true, planning: true, attendance: true } })
+    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: true, planning: false, attendance: true })
   })
 })

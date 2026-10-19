@@ -9,7 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppShell } from './AppShell'
 import { AuthContext } from '@/contexts/AuthContext'
 import { sr } from '@/i18n/locales/sr'
-import { ALL_MODULES, NO_MODULES, PLANNING_MODULES, STOCK_ONLY, WithModules } from '@/test/modules'
+import { ALL_MODULES, ATTENDANCE_ONLY, NO_MODULES, PLANNING_MODULES, STOCK_ONLY, WithModules } from '@/test/modules'
 import '@/i18n'
 
 afterEach(() => {
@@ -60,5 +60,19 @@ describe('AppShell navigation and modules', () => {
     const mine = screen.queryAllByRole('link', { name: sr.nav.myQueue })
     expect(mine.length > 0).toBe(queue)
     if (queue) expect(mine[0]).toHaveAttribute('href', '/planning/my-queue')
+  })
+
+  it.each([
+    [ALL_MODULES, 'admin', false],
+    [ATTENDANCE_ONLY, 'admin', true],
+    [ATTENDANCE_ONLY, 'user', true],
+    [PLANNING_MODULES, 'user', true],
+  ] as const)('attendance nav with %j for %s: Prisustvo %s', (modules, role, visible) => {
+    renderShell(modules, role)
+    const links = screen.queryAllByRole('link', { name: sr.nav.attendance })
+    expect(links.length > 0).toBe(visible)
+    if (visible) expect(links[0]).toHaveAttribute('href', '/attendance')
+    // Attendance alone never brings in planning.
+    if (modules === ATTENDANCE_ONLY) expect(screen.queryAllByRole('link', { name: sr.nav.planning })).toHaveLength(0)
   })
 })

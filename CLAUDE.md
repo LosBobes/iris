@@ -174,9 +174,13 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   `app_settings` key `modules`; read-only `modules` in `GET /settings`). Disabled
   module routes return 403; gate every new process/stock UI surface on
   `useOrganization().modules` and never call a disabled module's endpoints.
-- **Planiranje** (D-026): third module `planning` (requires `processes`; off by default,
+- **Prisustvo** (D-027): module `attendance` (off by default, Backoffice-only, **no
+  requirements**, usable alone): `GET /attendance`, admin `PUT /attendance/{userId}`, web
+  `/attendance`. Gate attendance UI on `modules.attendance`. A stored `modules` value without
+  the key reads as attendance = planning (legacy orgs keep it).
+- **Planiranje** (D-026): third module `planning` (requires `processes` and `attendance`; off by default,
   Backoffice-only). Machine types/units, worker qualifications, attendance overrides
-  (migration v31) and working hours (`app_settings` `working_hours`); step nodes carry
+  (migration v31; owned by Prisustvo, read by the planner) and working hours (`app_settings` `working_hours`); step nodes carry
   `machineTypeId`/`crewSize`/`setupMinutes`/`minutesPerUnit` (structural). The pure planner
   (`internal/planner`, deterministic, no clock reads) proposes a draft day plan; admins edit
   and publish (`/planning/plan…`), operators follow `GET /planning/my-queue` ("Moj red").
@@ -192,8 +196,8 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`
   need `-tenant <slug>`; `create-tenant` provisions a new organization.
-- Demo seed (`irisctl seed-demo`): one `demo` org with all three modules **on**
-  (stock, processes, planning).
+- Demo seed (`irisctl seed-demo`): one `demo` org with all four modules **on**
+  (stock, processes, planning, attendance).
   Logins `admin` / `admin123` (+ four fixture operators) and `operater` /
   `operater123`. It loads the `testdata/fixtures` work orders (no process) first,
   then adds process- and stock-driven content (4 templates, 8 orders, warehouse

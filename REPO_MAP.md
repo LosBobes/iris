@@ -175,13 +175,18 @@ Web client
   (`modules`). The API returns 403 on disabled module routes; the web hides dependent
   UI. Stock posting only applies to processes created while Magacin was
   on (`stock_tracked`, migration v22). See [D-019](docs/DECISIONS.md).
-- `planning` (Planiranje, requires Procesi rada) is the third module, also off by
+- `planning` (Planiranje, requires Procesi rada and Prisustvo) is the third module, also off by
   default and Backoffice-only. See the next section and [D-026](docs/DECISIONS.md).
+- `attendance` (Prisustvo, no requirements) is the fourth: `GET /attendance`,
+  `PUT /attendance/{userId}` (admin), web page `/attendance`. Usable on its own; planning
+  reads the same data. A stored `modules` value without the key reads as attendance =
+  planning. See [D-027](docs/DECISIONS.md).
 
 ### Production planning (Planiranje)
 
 - Resources (migration v31): `machine_types`, `machines` (units, in service or not),
-  `worker_qualifications` (who may lead a step on a type), `attendance_overrides`;
+  `worker_qualifications` (who may lead a step on a type), `attendance_overrides`
+  (owned by the Prisustvo module, read by the planner);
   working hours in `app_settings` (`working_hours`). Process step nodes carry
   `machineTypeId`, `crewSize`, `setupMinutes`, `minutesPerUnit`.
 - `internal/planner` is a pure, deterministic list scheduler (no I/O, no clock):
@@ -191,7 +196,8 @@ Web client
   Re-plan keeps locked blocks; drift and the 14-working-day forecast are computed on read.
 - Web: `/planning` (day timeline by machine / by person, issues, late orders, forecast),
   `/planning/my-queue` ("Moj red"), `/planning/resources` (types, machines,
-  qualifications, attendance, working hours); step fields in the process inspector.
+  qualifications, working hours); step fields in the process inspector. Attendance is its
+  own page, `/attendance`.
   Fixture mode has its own simplified TS planner (`src/lib/planning/fixture-planner.ts`).
 
 ### Backoffice (superadmins, `/platform/*`)

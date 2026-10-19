@@ -27,7 +27,7 @@ func newPlanningStore(t *testing.T) (*SQLiteStore, context.Context) {
 func enablePlanning(t *testing.T, s *SQLiteStore, slug string) {
 	t.Helper()
 	on := true
-	if _, err := s.SetTenantModules(context.Background(), slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &on}); err != nil {
+	if _, err := s.SetTenantModules(context.Background(), slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Attendance: &on, Planning: &on}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -50,7 +50,23 @@ func TestPlanningModuleDependencyAndAudit(t *testing.T) {
 		t.Fatalf("effective modules = %+v", modules)
 	}
 
-	want := domain.OrganizationModules{Stock: true, Processes: true, Planning: true}
+	// Data stored before attendance became its own module (no "attendance"
+	// key) keeps it on wherever planning was on.
+	for raw, want := range map[string]domain.OrganizationModules{
+		`{"stock":true,"processes":true,"planning":true}`:                    {Stock: true, Processes: true, Planning: true, Attendance: true},
+		`{"stock":true,"processes":true,"planning":false}`:                   {Stock: true, Processes: true},
+		`{"stock":true,"processes":true,"planning":true,"attendance":false}`: {Stock: true, Processes: true},
+	} {
+		if got := parseModules(raw); got != want {
+			t.Errorf("parseModules(%s) = %+v, want %+v", raw, got, want)
+		}
+	}
+
+	// Planning also needs attendance.
+	_, err = s.PlatformSetTenantModules(ctx, actor, DemoTenantSlug, domain.OrganizationModules{Stock: true, Processes: true, Planning: true})
+	requireValidation(t, err, ModulesPlanningAttendanceMessage)
+
+	want := domain.OrganizationModules{Stock: true, Processes: true, Attendance: true, Planning: true}
 	tenant, err := s.PlatformSetTenantModules(ctx, actor, DemoTenantSlug, want)
 	if err != nil || tenant == nil || tenant.Modules != want {
 		t.Fatalf("set modules = %+v, %v", tenant, err)
@@ -59,7 +75,7 @@ func TestPlanningModuleDependencyAndAudit(t *testing.T) {
 		t.Fatalf("settings modules = %+v, %v", settings.Modules, err)
 	}
 	log, _ := s.PlatformAuditLog(ctx, 10, 0)
-	if log.Total != 1 || log.Items[0].Detail["planning"] != "on" || log.Items[0].Detail["changed"] != "planning,processes" {
+	if log.Total != 1 || log.Items[0].Detail["planning"] != "on" || log.Items[0].Detail["changed"] != "attendance,planning,processes" {
 		t.Fatalf("audit = %+v", log)
 	}
 
@@ -71,7 +87,7 @@ func TestPlanningModuleDependencyAndAudit(t *testing.T) {
 	if _, err := s.SetTenantModules(ctx, DemoTenantSlug, domain.OrganizationModulesUpdate{Processes: &off}); err != nil {
 		t.Fatal(err)
 	}
-	if modules, _ := s.OrganizationModules(ctx); modules.Planning || modules.Processes {
+	if modules, _ := s.OrganizationModules(ctx); modules.Planning || modules.Processes || !modules.Attendance {
 		t.Fatalf("modules after off = %+v", modules)
 	}
 

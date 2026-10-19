@@ -42,7 +42,7 @@ const ACTION_KEYS: Record<string, string> = {
   'PUT /machines/{id}': 'machineUpdate',
   'DELETE /machines/{id}': 'machineDelete',
   'PUT /planning/qualifications/{userId}': 'qualificationsSet',
-  'PUT /planning/attendance/{userId}': 'attendanceSet',
+  'PUT /attendance/{userId}': 'attendanceSet',
   'PUT /planning/working-hours': 'workingHoursSet',
   'POST /planning/plan/generate': 'planGenerate',
   'PUT /planning/plan/draft': 'planDraftUpdate',

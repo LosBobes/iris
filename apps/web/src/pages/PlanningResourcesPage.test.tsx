@@ -35,11 +35,6 @@ function stubApi() {
       { userId: 'u2', username: 'jelena', machineTypeIds: [] },
     ]),
     setQualifications: vi.fn(async (userId: string, input: { machineTypeIds: string[] }) => ({ userId, username: 'x', ...input })),
-    listAttendance: vi.fn(async (date: string) => [
-      { userId: 'u1', username: 'marko', date, signedIn: true, override: null, present: true },
-      { userId: 'u2', username: 'jelena', date, signedIn: false, override: null, present: false },
-    ]),
-    setAttendance: vi.fn(),
     getWorkingHours: vi.fn(async () => hours),
     setWorkingHours: vi.fn(async (input: unknown) => input),
   }
@@ -124,18 +119,6 @@ describe('PlanningResourcesPage', () => {
     await user.click(await screen.findByRole('tab', { name: 'Kvalifikacije' }))
     await user.click(await screen.findByRole('checkbox', { name: 'jelena može da vodi: Knjigovezac' }))
     await waitFor(() => expect(api.setQualifications).toHaveBeenCalledWith('u2', { machineTypeIds: ['t2'] }))
-  })
-
-  it('sets an attendance override for the picked date', async () => {
-    const api = stubApi()
-    const user = userEvent.setup()
-    renderPlanningPage(<PlanningResourcesPage />)
-
-    await user.click(await screen.findByRole('tab', { name: 'Prisustvo' }))
-    await user.selectOptions(await screen.findByLabelText('Prisustvo korisnika jelena'), 'present')
-    await waitFor(() => expect(api.setAttendance).toHaveBeenCalled())
-    expect(api.setAttendance.mock.calls[0][0]).toBe('u2')
-    expect(api.setAttendance.mock.calls[0][1].present).toBe(true)
   })
 
   it('validates working hours and shows the server 422 message', async () => {

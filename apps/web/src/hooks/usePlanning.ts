@@ -38,13 +38,6 @@ export function useWorkingHours() {
   })
 }
 
-export function useAttendance(date: string) {
-  return useQuery({
-    queryKey: planningKeys.attendance(date),
-    queryFn: () => window.api.listAttendance(date),
-  })
-}
-
 export function usePlanDay(date: string) {
   return useQuery({
     queryKey: planningKeys.planDay(date),

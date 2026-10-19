@@ -171,6 +171,10 @@ export function OrganizationsPanel(): React.JSX.Element {
     const on = [
       tenant.modules.stock ? t("platform.orgs.modules.stock") : null,
       tenant.modules.stock && tenant.modules.processes ? t("platform.orgs.modules.processes") : null,
+      tenant.modules.stock && tenant.modules.processes && tenant.modules.attendance && tenant.modules.planning
+        ? t("platform.orgs.modules.planning")
+        : null,
+      tenant.modules.attendance ? t("platform.orgs.modules.attendance") : null,
     ].filter((label): label is string => label !== null);
     return on.length === 0 ? (
       <span data-testid="module-badges" className="text-[11px] text-[color:var(--pf-muted)]">

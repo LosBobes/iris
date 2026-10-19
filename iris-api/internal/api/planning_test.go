@@ -20,7 +20,7 @@ func (f processFixture) setPlanning(t *testing.T, planning bool) {
 	t.Helper()
 	on := true
 	for _, slug := range []string{store.DemoTenantSlug, "other"} {
-		if _, err := f.sqlite.SetTenantModules(t.Context(), slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &planning}); err != nil {
+		if _, err := f.sqlite.SetTenantModules(t.Context(), slug, domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Attendance: &on, Planning: &planning}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -73,8 +73,6 @@ var planningRoutes = []planningRoute{
 	{http.MethodDelete, "/machines/x", ""},
 	{http.MethodGet, "/planning/qualifications", ""},
 	{http.MethodPut, "/planning/qualifications/user-1", `{"machineTypeIds":[]}`},
-	{http.MethodGet, "/planning/attendance", ""},
-	{http.MethodPut, "/planning/attendance/user-1", `{"date":"2026-10-19","present":true}`},
 	{http.MethodGet, "/planning/working-hours", ""},
 	{http.MethodPut, "/planning/working-hours", `{"timeZone":"UTC","days":[]}`},
 	{http.MethodGet, "/planning/plan", ""},
@@ -116,9 +114,9 @@ func TestPlanningRoutesForbiddenWhileModuleOff(t *testing.T) {
 			t.Errorf("anonymous %s %s = %d, want 401", route.method, route.path, code)
 		}
 	}
-	// With all three on, the routes open.
+	// With all four on, the routes open.
 	on := true
-	if _, err := f.sqlite.SetTenantModules(t.Context(), "demo", domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Planning: &on}); err != nil {
+	if _, err := f.sqlite.SetTenantModules(t.Context(), "demo", domain.OrganizationModulesUpdate{Stock: &on, Processes: &on, Attendance: &on, Planning: &on}); err != nil {
 		t.Fatal(err)
 	}
 	if code, _ := f.do(t, f.operator, http.MethodGet, "/planning/forecast", ""); code != http.StatusOK {
@@ -220,23 +218,6 @@ func TestQualificationAttendanceAndWorkingHoursEndpoints(t *testing.T) {
 	expectError(t, f, f.admin, http.MethodPut, "/planning/qualifications/user-1", `{"machineTypeIds":["nope"]}`, http.StatusUnprocessableEntity, "Tip mašine nije pronađen.")
 	expectError(t, f, f.otherAdmin, http.MethodPut, "/planning/qualifications/user-1", `{"machineTypeIds":[]}`, http.StatusNotFound, "")
 
-	// Attendance: defaults to today (clock: 2026-10-19), nobody has signed in.
-	entries := call[[]domain.AttendanceEntry](t, f, f.operator, http.MethodGet, "/planning/attendance", "", http.StatusOK)
-	if len(entries) != 2 || entries[0].Date != "2026-10-19" || entries[0].Present || entries[0].Override != nil {
-		t.Fatalf("attendance = %+v", entries)
-	}
-	entry := call[domain.AttendanceEntry](t, f, f.admin, http.MethodPut, "/planning/attendance/user-1", `{"date":"2026-10-19","present":true}`, http.StatusOK)
-	if entry.Override == nil || !*entry.Override || !entry.Present || entry.SignedIn {
-		t.Fatalf("override = %+v", entry)
-	}
-	raw := call[map[string]any](t, f, f.admin, http.MethodPut, "/planning/attendance/user-1", `{"date":"2026-10-19","present":null}`, http.StatusOK)
-	if value, ok := raw["override"]; !ok || value != nil || raw["present"] != false {
-		t.Fatalf("cleared override = %+v", raw)
-	}
-	expectError(t, f, f.admin, http.MethodPut, "/planning/attendance/ghost", `{"date":"2026-10-19","present":true}`, http.StatusNotFound, "Korisnik nije pronađen.")
-	expectError(t, f, f.admin, http.MethodPut, "/planning/attendance/user-1", `{"date":"19.10.2026","present":true}`, http.StatusUnprocessableEntity, "Neispravan datum.")
-	expectError(t, f, f.operator, http.MethodGet, "/planning/attendance?date=19.10.2026", "", http.StatusBadRequest, "Neispravan datum.")
-
 	// Working hours.
 	hours := call[domain.WorkingHours](t, f, f.operator, http.MethodGet, "/planning/working-hours", "", http.StatusOK)
 	if hours.TimeZone != "Europe/Belgrade" || len(hours.Days) != 5 || hours.Days[0].Breaks[0].Start != "11:00" {
@@ -320,7 +301,7 @@ func planningSetup(t *testing.T, f processFixture) {
 	machineType := call[domain.MachineType](t, f, f.admin, http.MethodPost, "/machine-types", `{"name":"Štampa"}`, http.StatusCreated)
 	call[domain.Machine](t, f, f.admin, http.MethodPost, "/machines", `{"machineTypeId":"`+machineType.ID+`","name":"M1","inService":true}`, http.StatusCreated)
 	call[domain.WorkerQualifications](t, f, f.admin, http.MethodPut, "/planning/qualifications/user-1", `{"machineTypeIds":["`+machineType.ID+`"]}`, http.StatusOK)
-	call[domain.AttendanceEntry](t, f, f.admin, http.MethodPut, "/planning/attendance/user-1", `{"date":"2026-10-19","present":true}`, http.StatusOK)
+	call[domain.AttendanceEntry](t, f, f.admin, http.MethodPut, "/attendance/user-1", `{"date":"2026-10-19","present":true}`, http.StatusOK)
 	graph := `{"nodes":[
 		{"id":"print","kind":"step","label":"Štampa","x":0,"y":0,"machineTypeId":"` + machineType.ID + `","setupMinutes":30,"minutesPerUnit":0.1},
 		{"id":"out","kind":"product","label":"Otisci","x":200,"y":0}
@@ -437,11 +418,15 @@ func TestPlanningModuleSwitchInBackoffice(t *testing.T) {
 	f := newModuleFixture(t, false)
 	cookie := signedInPlatform(t, f.server)
 	path := "/platform/tenants/demo/modules"
-	rec := platformRequest(t, f.server, cookie, http.MethodPut, path, `{"processes":false,"stock":true,"planning":true}`)
+	rec := platformRequest(t, f.server, cookie, http.MethodPut, path, `{"processes":false,"stock":true,"attendance":true,"planning":true}`)
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "Modul „Planiranje“ zahteva uključen modul „Procesi rada“.") {
 		t.Fatalf("planning without processes = %d %s", rec.Code, rec.Body.String())
 	}
 	rec = platformRequest(t, f.server, cookie, http.MethodPut, path, `{"processes":true,"stock":true,"planning":true}`)
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "Modul „Planiranje“ zahteva uključen modul „Prisustvo“.") {
+		t.Fatalf("planning without attendance = %d %s", rec.Code, rec.Body.String())
+	}
+	rec = platformRequest(t, f.server, cookie, http.MethodPut, path, `{"processes":true,"stock":true,"attendance":true,"planning":true}`)
 	var tenant domain.PlatformTenant
 	if err := json.Unmarshal(rec.Body.Bytes(), &tenant); err != nil || rec.Code != http.StatusOK || !tenant.Modules.Planning {
 		t.Fatalf("switch on = %d %s", rec.Code, rec.Body.String())
@@ -455,13 +440,13 @@ func TestPlanningModuleSwitchInBackoffice(t *testing.T) {
 	}
 	// PUT /settings cannot switch it.
 	f.setPlanning(t, false)
-	call[domain.OrganizationSettings](t, f, f.admin, http.MethodPut, "/settings", `{"modules":{"planning":true,"processes":true,"stock":true}}`, http.StatusOK)
+	call[domain.OrganizationSettings](t, f, f.admin, http.MethodPut, "/settings", `{"modules":{"planning":true,"processes":true,"stock":true,"attendance":true}}`, http.StatusOK)
 	if code, _ := f.do(t, f.operator, http.MethodGet, "/planning/forecast", ""); code != http.StatusForbidden {
 		t.Fatalf("forecast after PUT /settings = %d, want 403", code)
 	}
 	// Switching processes off in the Backoffice requires planning to go first.
 	f.setPlanning(t, true)
-	rec = platformRequest(t, f.server, cookie, http.MethodPut, path, `{"processes":false,"stock":true,"planning":true}`)
+	rec = platformRequest(t, f.server, cookie, http.MethodPut, path, `{"processes":false,"stock":true,"attendance":true,"planning":true}`)
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("processes off with planning on = %d", rec.Code)
 	}

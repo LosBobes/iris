@@ -209,6 +209,7 @@ func (s *Server) Routes() http.Handler {
 		processes := protected.With(s.requireModule(moduleProcesses))
 		stock := protected.With(s.requireModule(moduleStock))
 		planning := protected.With(s.requireModule(modulePlanning))
+		attendance := protected.With(s.requireModule(moduleAttendance))
 		protected.Get("/customers", s.handleCustomers)
 		protected.Get("/customers/{id}", s.handleCustomerByID)
 		protected.Post("/customers", s.handleUpsertCustomer)
@@ -274,8 +275,6 @@ func (s *Server) Routes() http.Handler {
 		planning.Delete("/machines/{id}", s.requireAdmin(s.planningHandler(s.handleDeleteMachine)))
 		planning.Get("/planning/qualifications", s.planningHandler(s.handleQualifications))
 		planning.Put("/planning/qualifications/{userId}", s.requireAdmin(s.planningHandler(s.handleSetQualifications)))
-		planning.Get("/planning/attendance", s.planningHandler(s.handleAttendance))
-		planning.Put("/planning/attendance/{userId}", s.requireAdmin(s.planningHandler(s.handleSetAttendance)))
 		planning.Get("/planning/working-hours", s.planningHandler(s.handleWorkingHours))
 		planning.Put("/planning/working-hours", s.requireAdmin(s.planningHandler(s.handleSetWorkingHours)))
 		planning.Get("/planning/plan", s.planningHandler(s.handlePlanDay))
@@ -285,6 +284,8 @@ func (s *Server) Routes() http.Handler {
 		planning.Post("/planning/plan/publish", s.requireAdmin(s.planningHandler(s.handlePublishPlan)))
 		planning.Get("/planning/my-queue", s.planningHandler(s.handleMyQueue))
 		planning.Get("/planning/forecast", s.planningHandler(s.handlePlanningForecast))
+		attendance.Get("/attendance", s.attendanceHandler(s.handleAttendance))
+		attendance.Put("/attendance/{userId}", s.requireAdmin(s.attendanceHandler(s.handleSetAttendance)))
 		protected.Get("/announcements", s.handleAnnouncements)
 		protected.Get("/settings", s.handleSettings)
 		protected.Put("/settings", s.requireAdmin(s.handleUpdateSettings))
@@ -376,13 +377,15 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 // Optional organization modules gated by requireModule.
 const (
-	moduleProcesses = "processes"
-	moduleStock     = "stock"
-	modulePlanning  = "planning"
+	moduleProcesses  = "processes"
+	moduleStock      = "stock"
+	modulePlanning   = "planning"
+	moduleAttendance = "attendance"
 
-	moduleProcessesDisabledMessage = "Modul „Procesi rada“ nije uključen za ovu organizaciju."
-	moduleStockDisabledMessage     = "Modul „Magacin“ nije uključen za ovu organizaciju."
-	modulePlanningDisabledMessage  = "Modul „Planiranje“ nije uključen za ovu organizaciju."
+	moduleProcessesDisabledMessage  = "Modul „Procesi rada“ nije uključen za ovu organizaciju."
+	moduleStockDisabledMessage      = "Modul „Magacin“ nije uključen za ovu organizaciju."
+	modulePlanningDisabledMessage   = "Modul „Planiranje“ nije uključen za ovu organizaciju."
+	moduleAttendanceDisabledMessage = "Modul „Prisustvo“ nije uključen za ovu organizaciju."
 )
 
 // requireModule rejects the request with 403 unless the signed-in user's
@@ -409,6 +412,8 @@ func (s *Server) requireModule(module string) func(http.Handler) http.Handler {
 				writeAPIError(w, r, http.StatusForbidden, moduleStockDisabledMessage, nil)
 			case module == modulePlanning && !modules.Planning:
 				writeAPIError(w, r, http.StatusForbidden, modulePlanningDisabledMessage, nil)
+			case module == moduleAttendance && !modules.Attendance:
+				writeAPIError(w, r, http.StatusForbidden, moduleAttendanceDisabledMessage, nil)
 			default:
 				next.ServeHTTP(w, r)
 			}

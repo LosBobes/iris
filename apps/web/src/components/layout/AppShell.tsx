@@ -12,6 +12,7 @@ import {
   Warehouse,
   CalendarRange,
   ListChecks,
+  UserCheck,
   PanelLeft,
   Settings,
   UserCog,
@@ -96,6 +97,7 @@ const NAV_ITEMS: NavItemDef[] = [
   // `end`: /planning/my-queue must not also light up the admin planning item.
   { labelKey: "nav.planning", to: "/planning", end: true, icon: CalendarRange, adminOnly: true, module: "planning" },
   { labelKey: "nav.myQueue", to: "/planning/my-queue", icon: ListChecks, module: "planning" },
+  { labelKey: "nav.attendance", to: "/attendance", icon: UserCheck, module: "attendance" },
 ];
 
 interface AppShellProps {

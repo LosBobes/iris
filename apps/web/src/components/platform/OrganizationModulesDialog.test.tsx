@@ -21,7 +21,7 @@ const demo: PlatformTenant = {
   suspendedAt: null,
   users: 2,
   admins: 1,
-  modules: { processes: false, stock: false, planning: false },
+  modules: { processes: false, stock: false, planning: false, attendance: false },
   health: emptyHealth,
   notes: emptyNotes,
 };
@@ -37,6 +37,7 @@ function open(tenant: PlatformTenant = demo, onSaved = vi.fn()) {
     stock: screen.getByRole("switch", { name: strings.stock }),
     processes: screen.getByRole("switch", { name: strings.processes }),
     planning: screen.getByRole("switch", { name: strings.planning }),
+    attendance: screen.getByRole("switch", { name: strings.attendance }),
     onSaved,
   };
 }
@@ -55,10 +56,10 @@ describe("OrganizationModulesDialog", () => {
   });
 
   it("turns processes off together with stock and saves both values", async () => {
-    const saved = { ...demo, modules: { processes: false, stock: false, planning: false } };
+    const saved = { ...demo, modules: { processes: false, stock: false, planning: false, attendance: false } };
     const setPlatformTenantModules = vi.fn().mockResolvedValue(saved);
     vi.stubGlobal("api", { setPlatformTenantModules });
-    const { stock, processes, onSaved } = open({ ...demo, modules: { processes: true, stock: true, planning: false } });
+    const { stock, processes, onSaved } = open({ ...demo, modules: { processes: true, stock: true, planning: false, attendance: false } });
     expect(processes).toBeChecked();
 
     await userEvent.click(stock);
@@ -66,7 +67,7 @@ describe("OrganizationModulesDialog", () => {
     expect(processes).toBeDisabled();
 
     await userEvent.click(screen.getByRole("button", { name: sr.common.save }));
-    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: false, stock: false, planning: false });
+    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: false, stock: false, planning: false, attendance: false });
     expect(onSaved).toHaveBeenCalledWith(saved);
   });
 
@@ -79,25 +80,37 @@ describe("OrganizationModulesDialog", () => {
     await userEvent.click(stock);
     await userEvent.click(processes);
     await userEvent.click(screen.getByRole("button", { name: sr.common.save }));
-    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: true, stock: true, planning: false });
+    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: true, stock: true, planning: false, attendance: false });
     expect(await screen.findByRole("alert")).toHaveTextContent("Nešto nije u redu.");
     expect(onSaved).not.toHaveBeenCalled();
   });
 });
 
 describe("OrganizationModulesDialog planning", () => {
-  it("disables planning until processes are on and says why", async () => {
-    const { stock, processes, planning } = open();
+  it("disables planning until processes and attendance are on and says why", async () => {
+    const { stock, processes, attendance, planning } = open();
     expect(planning).toBeDisabled();
+    expect(attendance).toBeEnabled();
     expect(screen.getByText(strings.requiresProcesses)).toBeInTheDocument();
     await userEvent.click(stock);
     expect(planning).toBeDisabled();
     await userEvent.click(processes);
+    expect(planning).toBeDisabled();
+    await userEvent.click(attendance);
     expect(planning).toBeEnabled();
   });
 
-  it("turns planning off when processes or stock are switched off", async () => {
-    const all = { ...demo, modules: { processes: true, stock: true, planning: true } };
+  it("saves attendance on its own", async () => {
+    const setPlatformTenantModules = vi.fn().mockResolvedValue(demo);
+    vi.stubGlobal("api", { setPlatformTenantModules });
+    const { attendance } = open();
+    await userEvent.click(attendance);
+    await userEvent.click(screen.getByRole("button", { name: sr.common.save }));
+    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: false, stock: false, planning: false, attendance: true });
+  });
+
+  it("turns planning off when processes, stock or attendance are switched off", async () => {
+    const all = { ...demo, modules: { processes: true, stock: true, planning: true, attendance: true } };
     const first = open(all);
     expect(first.planning).toBeChecked();
     await userEvent.click(first.processes);
@@ -109,23 +122,32 @@ describe("OrganizationModulesDialog planning", () => {
     await userEvent.click(second.stock);
     expect(second.processes).not.toBeChecked();
     expect(second.planning).not.toBeChecked();
+    expect(second.attendance).toBeChecked();
+    cleanup();
+
+    const third = open(all);
+    await userEvent.click(third.attendance);
+    expect(third.planning).not.toBeChecked();
+    expect(third.planning).toBeDisabled();
+    expect(third.processes).toBeChecked();
   });
 
   it("sends planning with the other modules", async () => {
     const setPlatformTenantModules = vi.fn().mockResolvedValue(demo);
     vi.stubGlobal("api", { setPlatformTenantModules });
-    const { stock, processes, planning } = open();
+    const { stock, processes, attendance, planning } = open();
     await userEvent.click(stock);
     await userEvent.click(processes);
+    await userEvent.click(attendance);
     await userEvent.click(planning);
     await userEvent.click(screen.getByRole("button", { name: sr.common.save }));
-    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: true, stock: true, planning: true });
+    expect(setPlatformTenantModules).toHaveBeenCalledWith("demo", { processes: true, stock: true, planning: true, attendance: true });
   });
 });
 
 describe("OrganizationsPanel modules", () => {
   it("shows module badges and the Moduli button, and refreshes after saving", async () => {
-    const enabled = { ...demo, modules: { processes: true, stock: true, planning: false } };
+    const enabled = { ...demo, modules: { processes: true, stock: true, planning: false, attendance: false } };
     vi.stubGlobal("api", {
       getPlatformTenants: vi.fn().mockResolvedValueOnce([demo]).mockResolvedValueOnce([enabled]),
       setPlatformTenantModules: vi.fn().mockResolvedValue(enabled),

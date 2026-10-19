@@ -152,14 +152,14 @@ Stock of catalog **articles**, kept as a movement ledger (see [D-018](DECISIONS.
 
 ## Production Planning (Planiranje)
 
-Daily scheduling of process steps onto machines and people (see [D-026](DECISIONS.md#d-026-production-planning-planiranje-is-a-module-with-its-own-resources-and-a-deterministic-heuristic-planner)). Module `planning`, requires `processes`.
+Daily scheduling of process steps onto machines and people (see [D-026](DECISIONS.md#d-026-production-planning-planiranje-is-a-module-with-its-own-resources-and-a-deterministic-heuristic-planner)). Module `planning`, requires `processes` and `attendance`.
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |
 | --- | --- | --- | --- |
 | **Machine type** | `MachineType` | `Tip mašine` | Group of interchangeable units. Steps and qualifications reference a type. |
 | **Machine** | `Machine` | `Mašina` | One physical unit of a type; `inService` false = never planned. |
 | **Qualification** | `WorkerQualifications` | `Kvalifikacije` | Machine types a user may lead a step on. Helpers need none. |
-| **Attendance** | `AttendanceEntry` | `Prisustvo` | Present on a date = admin override if set, else (today) signed in that day; later dates count everyone present. |
+| **Attendance** | `AttendanceEntry` | `Prisustvo` | Its own module `attendance` (D-027, usable without planning). Present on a date = admin override if set, else (today) signed in that day; later dates count everyone present. |
 | **Working hours** | `WorkingHours` | `Radno vreme` | Org-wide shift per weekday with breaks, in one time zone. |
 | **Crew size** | `crewSize` | `Broj ljudi` | People a step needs (default 1); one must be qualified for its machine type. |
 | **Setup / per-unit time** | `setupMinutes` / `minutesPerUnit` | `Priprema` / `Po komadu` | Step duration = setup + per-unit × the order's quantity. |

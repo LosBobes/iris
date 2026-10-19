@@ -294,6 +294,16 @@ This document records the project-level architectural decisions (ADRs) that shap
   - Steps without times are planned as zero minutes and flagged, so turning the module on does not block planning while times are filled in.
   - All new tables are tenant data (`tenantDataTables`): exported and deleted with the organization.
 
+## D-027: Attendance ("Prisustvo") is its own module, required by planning
+- **Status**: `accepted` (amends [D-026](#d-026-production-planning-planiranje-is-a-module-with-its-own-resources-and-a-deterministic-heuristic-planner))
+- **Context**: Attendance shipped as a tab of the planning resources, so a shop could only see who is at work by also turning on stock, processes and planning. Some shops want attendance alone.
+- **Decision**:
+  - A fourth module, `attendance` ("Prisustvo"), off by default, Backoffice-only, with **no requirements**. `planning` now requires both `processes` and `attendance` (422 `Modul „Planiranje“ zahteva uključen modul „Prisustvo“.`; on read planning counts as off while either is off).
+  - Routes move from `/planning/attendance…` to `GET /attendance` and `PUT /attendance/{userId}` (admin) behind their own 403 (`Modul „Prisustvo“ nije uključen za ovu organizaciju.`). Rules, table (`attendance_overrides`) and shapes are unchanged; the store side is `store.AttendanceStore` (`internal/store/attendance.go`). The planner keeps reading the same data.
+  - No migration: the flag lives in the same `modules` key. A stored value without the `attendance` key (written before D-027) reads as `attendance = planning`, so organizations already planning keep attendance.
+  - Web: a standalone `/attendance` page and nav item "Prisustvo" (everyone; overrides admin-only), gated on `modules.attendance`; the planning resources page no longer has the tab. "Today" uses the working-hours time zone, which defaults to Europe/Belgrade when planning never set it.
+- **Consequences**: Attendance-only organizations cannot edit working hours (a planning screen); only the time zone matters to attendance and it has a sensible default.
+
 ---
 
 *Last verified against the checked-in repository state on 2026-10-19.*
