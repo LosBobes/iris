@@ -203,7 +203,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
           aria-hidden={!mobileMenuOpen}
           data-allow-motion
           className={cn(
-            "fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ease-[var(--iris-ease-out-decisive)] lg:hidden",
+            "absolute inset-0 z-40 bg-black/40 transition-opacity duration-300 ease-[var(--iris-ease-out-decisive)] lg:hidden",
             mobileMenuOpen ? "opacity-100" : "pointer-events-none opacity-0",
           )}
           onClick={closeMobileMenu}
@@ -245,7 +245,9 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
             // `translate` — not `transform`. Tailwind v4 compiles `translate-x-*`
             // to the standalone `translate` property, so a transition list naming
             // only `transform` left the drawer snapping open with no motion.
-            "fixed inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-5 py-4 transition-[translate,width,padding] duration-300 ease-[var(--iris-ease-out-decisive)]",
+            // `absolute`, not `fixed`: the drawer opens under the impersonation
+            // and announcement banners instead of sliding beneath them.
+            "absolute inset-y-0 left-0 z-50 flex w-[min(280px,85vw)] flex-col border-r border-sidebar-border bg-sidebar px-5 py-4 transition-[translate,width,padding] duration-300 ease-[var(--iris-ease-out-decisive)]",
             mobileMenuOpen
               ? "translate-x-0"
               : "-translate-x-full pointer-events-none",
@@ -253,7 +255,20 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
             isSidebarCollapsed ? "lg:w-[68px] lg:px-3" : "lg:w-[220px] lg:px-5",
           )}
         >
-          <div className="mb-4 hidden lg:mb-10 lg:flex items-center">
+          <div className="mb-4 flex items-center lg:mb-10">
+            {/* Mobile drawer: the brand, which the drawer otherwise hides by
+                covering the top bar. */}
+            <div className="flex min-w-0 items-center gap-2.5 py-1 font-medium text-foreground lg:hidden">
+              <IrisMark className="h-8 w-8 shrink-0 text-foreground" />
+              <div className="flex flex-col items-start text-left">
+                <span className="text-[18px] font-semibold leading-none tracking-[-0.5px] whitespace-nowrap">
+                  Iris
+                </span>
+                <span className="text-[9px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-mute)] mt-0.5 whitespace-nowrap">
+                  {firmName}
+                </span>
+              </div>
+            </div>
             <SidebarTooltip
               label={isSidebarCollapsed ? t("shell.expand") : t("shell.collapse")}
               enabled={isSidebarCollapsed}

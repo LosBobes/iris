@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { PublicOrganization } from "@/types/settings";
+import { IrisMark } from "@/components/brand/IrisMark";
 
 /**
  * Shared frame of both sign-in steps: the masthead (Iris, or the
@@ -100,9 +101,10 @@ function IrisWordmark(): React.JSX.Element {
           navigate("/backoffice");
         }
       }}
-      className="select-none text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px]"
+      className="flex select-none items-center justify-center gap-3 text-[44px] font-normal leading-none tracking-[-1.5px] text-foreground sm:text-[56px] sm:tracking-[-2px] lg:flex-col lg:items-start"
     >
-      Iris
+      <IrisMark className="h-12 w-12 shrink-0 text-foreground sm:h-14 sm:w-14 lg:h-16 lg:w-16" />
+      <span>Iris</span>
     </div>
   );
 }
