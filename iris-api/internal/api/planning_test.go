@@ -485,6 +485,18 @@ func TestPlanningPlanEndpoints(t *testing.T) {
 	if len(forecast) != 1 || forecast[0].WorkOrderID != f.orderID || forecast[0].EstimatedFinish == nil || *forecast[0].EstimatedFinish != today || forecast[0].Late || forecast[0].Unplannable {
 		t.Fatalf("forecast = %+v", forecast)
 	}
+	// latestStart (nullable) and latestStartPassed are always on the wire (D-028).
+	var rawForecast []map[string]json.RawMessage
+	_, body = f.do(t, f.operator, http.MethodGet, "/planning/forecast", "")
+	if err := json.Unmarshal(body, &rawForecast); err != nil || len(rawForecast) != 1 {
+		t.Fatalf("raw forecast = %s", body)
+	}
+	if _, ok := rawForecast[0]["latestStart"]; !ok {
+		t.Fatalf("forecast without latestStart: %s", body)
+	}
+	if string(rawForecast[0]["latestStartPassed"]) != "false" && string(rawForecast[0]["latestStartPassed"]) != "true" {
+		t.Fatalf("forecast without latestStartPassed: %s", body)
+	}
 
 	// Two hours in, the block should have started: drift suggests a re-plan.
 	f.sqlite.SetClock(func() time.Time { return time.Date(2026, 10, 19, 6, 0, 0, 0, time.UTC) })

@@ -875,6 +875,8 @@ func (p *planner) result() Result {
 			f.EstimatedFinish = &finish
 			f.Late = o.order.DueDate != nil && finish > *o.order.DueDate
 		}
+		f.LatestStart = p.latestStart(o)
+		f.LatestStartPassed = f.LatestStart != nil && *f.LatestStart < startDate
 		res.Forecast = append(res.Forecast, f)
 	}
 	return res

@@ -4,6 +4,7 @@ import { useOrganization } from '@/hooks/useOrganization'
 import { usePlanningForecast } from '@/hooks/usePlanning'
 import { formatWorkOrderDate } from '@/shared/utils/work-orders'
 import { ForecastBadges } from './ForecastBadges'
+import { LatestStartDate } from './LatestStartDate'
 
 /**
  * "Procenjeni završetak" on the order detail page. Renders nothing (and
@@ -33,6 +34,12 @@ function OrderForecastLineBody({ workOrderId }: { workOrderId: string }): React.
         {entry.estimatedFinish ? formatWorkOrderDate(entry.estimatedFinish) : t('planning.forecast.noEstimate')}
       </span>
       <ForecastBadges forecast={entry} />
+      {entry.latestStart && (
+        <span>
+          <span className="text-[color:var(--iris-ink-soft)]">{t('planning.forecast.latestStart')}:</span>{' '}
+          <LatestStartDate forecast={entry} />
+        </span>
+      )}
     </div>
   )
 }

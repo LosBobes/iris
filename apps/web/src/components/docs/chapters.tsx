@@ -881,6 +881,15 @@ function PlanningChapter(): React.JSX.Element {
         tipa ili niko nije kvalifikovan), piše <strong>ne može se planirati</strong>. To je
         najbolje mesto da vidiš problem pre nego što klijent pozove.
       </P>
+      <P>
+        Uz prognozu stoji i <strong>najkasniji početak</strong>: Iris ide unazad od kraja
+        smene na dan roka (ako je rok neradni dan, od poslednje smene pre njega) i oduzima
+        trajanje preostalih koraka i međuoperacijsko vreme, samo u radnom vremenu. Taj dan je
+        poslednji kada posao može da krene da bi stigao na vreme. Mašine i ljudi se tu ne
+        gledaju, pa je to orijentir, ne obećanje. Kad je najkasniji početak već prošao,
+        prikazan je <strong>crveno</strong>. Ne prikazuje se za naloge bez roka ili kada nekom
+        koraku nije uneto trajanje.
+      </P>
     </>
   );
 }

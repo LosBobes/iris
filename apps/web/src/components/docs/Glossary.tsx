@@ -42,6 +42,7 @@ const ENTRIES: GlossaryEntry[] = [
   { term: "Nabavna cena", body: "Koliko smo platili artikal.", chapter: "novac" },
   { term: "Na stanju", body: "Koliko čega fizički imamo; zbir svih promena u magacinu.", chapter: "magacin" },
   { term: "Nacrt plana", body: "Predlog plana na kome radi administrator pre objave.", chapter: "planiranje" },
+  { term: "Najkasniji početak", body: "Dan do kog preostali koraci naloga moraju da počnu da bi bio gotov do roka. Crveno kad je prošao.", chapter: "planiranje" },
   { term: "Napomene za klijenta", body: "Ono što klijent vidi na javnom linku.", chapter: "nalozi" },
   { term: "Neto", body: "Cena bez PDV-a. Sve cene u katalogu su neto.", chapter: "novac" },
   { term: "Nusproizvod", body: "Ono što korak napravi sa strane: makulatura, okrajci.", chapter: "procesi" },

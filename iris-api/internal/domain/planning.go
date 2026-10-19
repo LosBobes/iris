@@ -289,6 +289,14 @@ type OrderForecast struct {
 	EstimatedFinish *string `json:"estimatedFinish"`
 	Late            bool    `json:"late"`
 	Unplannable     bool    `json:"unplannable"`
+	// LatestStart is the local date the order's remaining steps must start by
+	// to finish by the end of its due date (D-028): a backward pass over the
+	// longest remaining chain (durations + TransferMinutes, working time
+	// only). Informational; nil without a due date, without open steps, or
+	// when an open step has no duration.
+	LatestStart *string `json:"latestStart"`
+	// LatestStartPassed is LatestStart before the forecast's start date.
+	LatestStartPassed bool `json:"latestStartPassed"`
 }
 
 // ProductionPlan is a day plan (draft or published). The stored plan keeps

@@ -194,6 +194,15 @@ export interface OrderForecast {
   estimatedFinish: string | null
   late: boolean
   unplannable: boolean
+  /**
+   * Local date the remaining steps must start by to finish by the end of the
+   * due date (D-028): a backward pass over the longest remaining chain
+   * (durations + `transferMinutes`, working time only). Informational; null
+   * without a due date, without open steps, or when an open step has no duration.
+   */
+  latestStart: string | null
+  /** `latestStart` is before the forecast's start date. */
+  latestStartPassed: boolean
 }
 
 /**
