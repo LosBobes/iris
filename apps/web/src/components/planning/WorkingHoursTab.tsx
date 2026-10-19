@@ -19,6 +19,7 @@ import { formatActionError, reportUnexpectedError } from '@/lib/errors'
 import {
   formToHours,
   hoursToForm,
+  newExceptionRow,
   workingHoursSchema,
   type WorkingHoursFormValues,
 } from '@/lib/planning/validation'
@@ -136,6 +137,139 @@ function DayRow({
   )
 }
 
+/** One exception date (D-028): a day off, or one-off hours with breaks. */
+function ExceptionRow({
+  index,
+  control,
+  register,
+  disabled,
+  errors,
+  onRemove,
+}: {
+  index: number
+  control: Control<WorkingHoursFormValues>
+  register: UseFormRegister<WorkingHoursFormValues>
+  disabled: boolean
+  errors: FieldErrors<WorkingHoursFormValues>
+  onRemove: () => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const n = index + 1
+  const off = useWatch({ control, name: `exceptions.${index}.off` })
+  const { fields, append, remove } = useFieldArray({ control, name: `exceptions.${index}.breaks` })
+  const rowErrors = errors.exceptions?.[index]
+  const breakErrors = (rowErrors?.breaks ?? []) as ({
+    start?: { message?: string }
+    end?: { message?: string }
+  } | undefined)[]
+  const messages = [
+    rowErrors?.date?.message,
+    rowErrors?.start?.message,
+    rowErrors?.end?.message,
+    ...breakErrors.flatMap((brk) => [brk?.start?.message, brk?.end?.message]),
+  ].filter((message): message is string => Boolean(message))
+
+  return (
+    <li className="space-y-2 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          type="date"
+          className="w-40"
+          disabled={disabled}
+          aria-label={t('planning.hours.exceptions.dateAria', { n })}
+          aria-invalid={rowErrors?.date ? true : undefined}
+          {...register(`exceptions.${index}.date`)}
+        />
+        <label className="flex items-center gap-2 text-[13px]">
+          <input
+            type="checkbox"
+            className="size-4"
+            disabled={disabled}
+            aria-label={t('planning.hours.exceptions.offAria', { n })}
+            {...register(`exceptions.${index}.off`)}
+          />
+          {t('planning.hours.exceptions.off')}
+        </label>
+        {!off && (
+          <>
+            <Input
+              type="time"
+              className="w-28"
+              disabled={disabled}
+              aria-label={t('planning.hours.exceptions.startAria', { n })}
+              aria-invalid={rowErrors?.start ? true : undefined}
+              {...register(`exceptions.${index}.start`)}
+            />
+            <span aria-hidden>–</span>
+            <Input
+              type="time"
+              className="w-28"
+              disabled={disabled}
+              aria-label={t('planning.hours.exceptions.endAria', { n })}
+              aria-invalid={rowErrors?.end ? true : undefined}
+              {...register(`exceptions.${index}.end`)}
+            />
+            {!disabled && (
+              <Button type="button" variant="outline" size="sm" onClick={() => append({ start: '11:00', end: '11:30' })}>
+                <Plus aria-hidden /> {t('planning.hours.addBreak')}
+              </Button>
+            )}
+          </>
+        )}
+        {!disabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="ml-auto"
+            aria-label={t('planning.hours.exceptions.removeAria', { n })}
+            onClick={onRemove}
+          >
+            <Trash2 aria-hidden />
+          </Button>
+        )}
+      </div>
+      {!off &&
+        fields.map((field, bIndex) => (
+          <div key={field.id} className="ml-0 flex flex-wrap items-center gap-3 sm:ml-40">
+            <span className="w-14 text-[11px] text-[color:var(--iris-ink-soft)]">{t('planning.hours.break')}</span>
+            <Input
+              type="time"
+              className="w-28"
+              disabled={disabled}
+              aria-label={t('planning.hours.exceptions.breakStartAria', { n, b: bIndex + 1 })}
+              {...register(`exceptions.${index}.breaks.${bIndex}.start`)}
+            />
+            <span aria-hidden>–</span>
+            <Input
+              type="time"
+              className="w-28"
+              disabled={disabled}
+              aria-label={t('planning.hours.exceptions.breakEndAria', { n, b: bIndex + 1 })}
+              {...register(`exceptions.${index}.breaks.${bIndex}.end`)}
+            />
+            {!disabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('planning.hours.exceptions.removeBreakAria', { n, b: bIndex + 1 })}
+                onClick={() => remove(bIndex)}
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            )}
+          </div>
+        ))}
+      {messages.map((message) => (
+        <p key={message} role="alert" className="text-[11px] text-destructive">
+          {t('planning.hours.exceptions.row', { n })}: {message}
+        </p>
+      ))}
+    </li>
+  )
+}
+
 function WorkingHoursForm({
   initial,
   canEdit,
@@ -154,6 +288,8 @@ function WorkingHoursForm({
     reset,
     formState: { errors, isSubmitting },
   } = useForm<WorkingHoursFormValues>({ resolver: zodResolver(schema), defaultValues: initial })
+
+  const exceptions = useFieldArray({ control, name: 'exceptions' })
 
   useEffect(() => {
     reset(initial)
@@ -224,6 +360,48 @@ function WorkingHoursForm({
           />
         ))}
       </ul>
+      <section aria-labelledby="hours-exceptions-heading" className="space-y-2">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 id="hours-exceptions-heading" className="text-[13px] font-medium">
+              {t('planning.hours.exceptions.title')}
+            </h3>
+            <p className="text-[11px] text-[color:var(--iris-ink-soft)]">{t('planning.hours.exceptions.hint')}</p>
+          </div>
+          {canEdit && (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => exceptions.append(newExceptionRow(true))}>
+                <Plus aria-hidden /> {t('planning.hours.exceptions.addDayOff')}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => exceptions.append(newExceptionRow(false))}>
+                <Plus aria-hidden /> {t('planning.hours.exceptions.addCustom')}
+              </Button>
+            </div>
+          )}
+        </div>
+        {exceptions.fields.length === 0 ? (
+          <p className="text-[12px] text-[color:var(--iris-ink-mute)]">{t('planning.hours.exceptions.empty')}</p>
+        ) : (
+          <ul className="divide-y divide-[color:var(--iris-border-soft)] border border-border bg-card">
+            {exceptions.fields.map((field, index) => (
+              <ExceptionRow
+                key={field.id}
+                index={index}
+                control={control}
+                register={register}
+                disabled={!canEdit}
+                errors={errors}
+                onRemove={() => exceptions.remove(index)}
+              />
+            ))}
+          </ul>
+        )}
+        {errors.exceptions?.root?.message && (
+          <p role="alert" className="text-[11px] text-destructive">
+            {errors.exceptions.root.message}
+          </p>
+        )}
+      </section>
       {serverError && (
         <p role="alert" className="text-[12px] text-destructive">
           {serverError}
@@ -241,7 +419,7 @@ function WorkingHoursForm({
   )
 }
 
-/** "Radno vreme": time zone plus per-weekday shift and breaks for the whole organization. */
+/** "Radno vreme": time zone, inter-operation time, per-weekday shift and breaks, and exception dates (D-028). */
 export function WorkingHoursTab({ canEdit }: { canEdit: boolean }): React.JSX.Element {
   const { t } = useTranslation()
   const query = useWorkingHours()

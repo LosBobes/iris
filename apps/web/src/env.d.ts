@@ -74,6 +74,8 @@ import type {
   AttendanceEntry,
   AttendanceInput,
   Machine,
+  MachineDowntime,
+  MachineDowntimeInput,
   MachineInput,
   MachineType,
   MachineTypeInput,
@@ -276,6 +278,10 @@ declare global {
       createMachine: (input: MachineInput) => Promise<Machine>
       updateMachine: (id: string, input: MachineInput) => Promise<Machine>
       deleteMachine: (id: string) => Promise<void>
+      /** Downtime windows of a machine (D-028); 404 for an unknown machine. */
+      listMachineDowntimes: (machineId: string) => Promise<MachineDowntime[]>
+      createMachineDowntime: (machineId: string, input: MachineDowntimeInput) => Promise<MachineDowntime>
+      deleteMachineDowntime: (machineId: string, downtimeId: string) => Promise<void>
       listQualifications: () => Promise<WorkerQualifications[]>
       setQualifications: (userId: string, input: WorkerQualificationsInput) => Promise<WorkerQualifications>
       /** Presence of every user on a local date "YYYY-MM-DD". */

@@ -52,6 +52,7 @@ var migrationTables = []string{
 	"platform_announcement_tenants",
 	"machine_types",
 	"machines",
+	"machine_downtimes",
 	"worker_qualifications",
 	"attendance_overrides",
 	"production_plans",

@@ -24,6 +24,7 @@ const hours: WorkingHours = {
     breaks: [{ start: '10:00', end: '10:30' }],
   })),
   transferMinutes: 0,
+  exceptions: [],
 }
 
 const types: MachineType[] = [
@@ -142,6 +143,37 @@ describe('planDay', () => {
     expect(day2.machineId).toBe(day1.machineId)
     expect(day2.userIds).toEqual(day1.userIds)
     expect(result.forecast[0].estimatedFinish).toBe('2026-10-20')
+  })
+
+  it('works around a machine downtime window and flags a pinned block inside one', () => {
+    const o = order('o1', [step('s1', { setupMinutes: 60, machineTypeId: 'mt-print' })], [])
+    const downtimes = [{ id: 'd1', machineId: 'm-press', from: '2026-10-19T07:00', to: '2026-10-19T09:00', createdAt: '' }]
+    const result = planDay(input([o], { downtimes }))
+    expect(result.assignments[0]).toMatchObject({ start: '2026-10-19T09:00', end: '2026-10-19T10:00' })
+    expect(result.issues).toEqual([])
+
+    const pinned = { ...planDay(input([o])).assignments[0], locked: true }
+    const kept = planDay(input([o], { downtimes, pinned: [pinned] }))
+    expect(kept.assignments).toHaveLength(1)
+    expect(kept.assignments[0]).toMatchObject({ start: '2026-10-19T07:00', locked: true })
+    expect(kept.issues.map((i) => i.code)).toEqual(['machine_down'])
+    expect(kept.issues[0].message).toContain('van pogona 19.10.2026 07:00 – 19.10.2026 09:00')
+    expect(kept.forecast[0].unplannable).toBe(false)
+  })
+
+  it('treats an exception day off as non-working and one-off hours as a shift', () => {
+    const withExceptions = {
+      ...hours,
+      exceptions: [
+        { date: '2026-10-20', off: true },
+        { date: '2026-10-24', off: false, start: '08:00', end: '12:00', breaks: [] },
+      ],
+    }
+    const o = order('o1', [step('s1', { setupMinutes: 600, machineTypeId: 'mt-print' })], [])
+    const result = planDay(input([o], { hours: withExceptions }))
+    expect(result.assignments.map((a) => a.start.slice(0, 10))).toEqual(['2026-10-19', '2026-10-21'])
+    const saturday = planDay(input([order('o1', [step('s1', { setupMinutes: 60, machineTypeId: 'mt-print' })], [])], { hours: withExceptions, date: '2026-10-24' }))
+    expect(saturday.assignments[0]).toMatchObject({ start: '2026-10-24T08:00', end: '2026-10-24T09:00' })
   })
 
   it('skips weekends when carrying over', () => {
@@ -289,6 +321,14 @@ describe('checkDraft', () => {
     expect(checkDraft(ctx, [{ ...base, userIds: ['ana'] }]).some((i) => i.message.includes('ekipa'))).toBe(true)
   })
 
+  it('reports a block in a downtime window of its machine', () => {
+    // The block runs 07:00-07:30; a window from 07:15 overlaps it, one from 07:30 only touches it.
+    const downtimes = [{ id: 'd1', machineId: 'm-press', from: '2026-10-19T07:15', to: '2026-10-19T08:00', createdAt: '' }]
+    const issues = checkDraft({ ...ctx, downtimes }, [base])
+    expect(issues.some((i) => i.message.includes('van pogona 19.10.2026 07:15 – 19.10.2026 08:00'))).toBe(true)
+    expect(checkDraft({ ...ctx, downtimes: [{ ...downtimes[0], from: '2026-10-19T07:30' }] }, [base])).toEqual([])
+  })
+
   it('reports a successor that starts before the inter-operation time elapsed', () => {
     const chained = order(
       'o1',
@@ -319,6 +359,13 @@ describe('computeDrift', () => {
 
   it('is quiet when on track', () => {
     expect(computeDrift(plan, [o], { date: MONDAY, minutes: 7 * 60 + 5 }).suggested).toBe(false)
+  })
+
+  it('suggests a re-plan when a downtime overlaps a planned, unfinished step', () => {
+    const downtimes = [{ id: 'd1', machineId: block.machineId ?? '', from: '2026-10-19T07:15', to: '2026-10-19T09:00', createdAt: '' }]
+    const drift = computeDrift(plan, [o], { date: MONDAY, minutes: 7 * 60 + 5 }, downtimes)
+    expect(drift.suggested).toBe(true)
+    expect(drift.reasons[0]).toContain('van pogona')
   })
 })
 

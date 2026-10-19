@@ -120,6 +120,7 @@ type planner struct {
 	segs       []seg
 	types      map[string]domain.MachineType
 	machines   map[string]*resource
+	downtimes  map[string][]downtimeWindow
 	byType     map[string][]*resource
 	workers    []*worker
 	workerByID map[string]*worker
@@ -193,6 +194,17 @@ func (p *planner) setupResources() {
 		p.machines[m.ID] = r
 		if _, known := p.types[m.MachineTypeID]; known && m.InService {
 			p.byType[m.MachineTypeID] = append(p.byType[m.MachineTypeID], r)
+		}
+	}
+	// Downtime windows are busy time on the unit (D-028); they add no load.
+	p.downtimes = p.cal.downtimeWindows(p.in.Downtimes)
+	for id, windows := range p.downtimes {
+		r := p.machines[id]
+		if r == nil {
+			continue
+		}
+		for _, w := range windows {
+			r.reserve(w.s, w.e)
 		}
 	}
 	workers := append([]Worker(nil), p.in.Workers...)
@@ -330,6 +342,16 @@ func (p *planner) applyPinned() error {
 			if m == nil {
 				m = &resource{id: *a.MachineID, name: a.MachineName}
 				p.machines[*a.MachineID] = m
+			}
+			// The block stays where it is, but a downtime of its machine makes
+			// it a machine_down issue the admin has to resolve (D-028).
+			if w, hit := overlapping(p.downtimes[*a.MachineID], s, e); hit {
+				p.issues = append(p.issues, domain.PlanIssue{
+					Code: domain.PlanIssueMachineDown, WorkOrderID: a.WorkOrderID, OrderNumber: a.OrderNumber,
+					StepNodeID: a.StepNodeID, StepLabel: a.StepLabel,
+					Message: fmt.Sprintf("Nalog %s, korak „%s“: mašina „%s“ je van pogona %s – %s, a zaključani blok je planiran u tom periodu.",
+						a.OrderNumber, a.StepLabel, m.name, p.cal.formatHuman(w.s), p.cal.formatHuman(w.e)),
+				})
 			}
 			m.reserve(s, e)
 			m.load += a.Minutes

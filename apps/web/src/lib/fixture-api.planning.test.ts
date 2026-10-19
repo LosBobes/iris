@@ -111,6 +111,42 @@ describe('fixture planning: resources', () => {
     expect((await api.listMachineTypes()).some((type) => type.id === created.id)).toBe(false)
   })
 
+  it('stores downtime windows per machine and validates them', async () => {
+    const api = await planningApi()
+    const [machine] = await api.listMachines()
+    expect(await api.listMachineDowntimes(machine.id)).toEqual([])
+    expect((await rejection(api.listMachineDowntimes('nope'))).status).toBe(404)
+    expect((await rejection(api.createMachineDowntime(machine.id, { from: '2026-10-20', to: '2026-10-20T10:00' }))).status).toBe(422)
+    expect((await rejection(api.createMachineDowntime(machine.id, { from: '2026-10-20T10:00', to: '2026-10-20T08:00' }))).status).toBe(422)
+    const created = await api.createMachineDowntime(machine.id, { from: '2026-10-21T08:00', to: '2026-10-22T15:00', note: ' Servis ' })
+    expect(created).toMatchObject({ machineId: machine.id, from: '2026-10-21T08:00', to: '2026-10-22T15:00', note: 'Servis' })
+    const earlier = await api.createMachineDowntime(machine.id, { from: '2026-10-20T08:00', to: '2026-10-20T10:00' })
+    expect((await api.listMachineDowntimes(machine.id)).map((d) => d.id)).toEqual([earlier.id, created.id])
+    expect((await rejection(api.deleteMachineDowntime(machine.id, 'nope'))).status).toBe(404)
+    await api.deleteMachineDowntime(machine.id, earlier.id)
+    expect(await api.listMachineDowntimes(machine.id)).toHaveLength(1)
+  })
+
+  it('stores exception dates with the working hours', async () => {
+    const api = await planningApi()
+    const hours = await api.getWorkingHours()
+    expect(hours.exceptions).toEqual([])
+    const saved = await api.setWorkingHours({
+      ...hours,
+      exceptions: [
+        { date: '2026-12-25', off: true, start: '08:00' },
+        { date: '2026-10-24', off: false, start: '08:00', end: '12:00', breaks: [] },
+      ],
+    })
+    expect(saved.exceptions.map((e) => e.date)).toEqual(['2026-10-24', '2026-12-25'])
+    expect(saved.exceptions[1]).toEqual({ date: '2026-12-25', off: true, breaks: [] })
+    expect((await rejection(api.setWorkingHours({ ...hours, exceptions: [{ date: '2026-13-01', off: true }] }))).status).toBe(422)
+    expect(
+      (await rejection(api.setWorkingHours({ ...hours, exceptions: [{ date: '2026-10-24', off: false, start: '12:00', end: '08:00', breaks: [] }] })))
+        .status,
+    ).toBe(422)
+  })
+
   it('keeps writes admin-only', async () => {
     const api = createFixtureApi({ modules: { stock: true, processes: true, attendance: true, planning: true } })
     await api.login({ orgSlug: 'demo', username: 'user', password: 'user123' })

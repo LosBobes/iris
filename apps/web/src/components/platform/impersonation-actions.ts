@@ -41,6 +41,8 @@ const ACTION_KEYS: Record<string, string> = {
   'POST /machines': 'machineCreate',
   'PUT /machines/{id}': 'machineUpdate',
   'DELETE /machines/{id}': 'machineDelete',
+  'POST /machines/{id}/downtimes': 'machineDowntimeCreate',
+  'DELETE /machines/{id}/downtimes/{downtimeId}': 'machineDowntimeDelete',
   'PUT /planning/qualifications/{userId}': 'qualificationsSet',
   'PUT /attendance/{userId}': 'attendanceSet',
   'PUT /planning/working-hours': 'workingHoursSet',

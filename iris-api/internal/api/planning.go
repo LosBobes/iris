@@ -18,13 +18,14 @@ import (
 // live in the store (internal/store/planning*.go) and the planner.
 
 const (
-	machineTypeNameTakenMessage = "Tip mašine sa tim nazivom već postoji."
-	machineTypeInUseMessage     = "Tip mašine se koristi za mašine."
-	machineNotFoundMessage      = "Mašina nije pronađena."
-	machineNameTakenMessage     = "Mašina sa tim nazivom već postoji."
-	planningUserNotFoundMessage = "Korisnik nije pronađen."
-	planDraftNotFoundMessage    = "Nacrt plana nije pronađen."
-	invalidDateMessage          = "Neispravan datum."
+	machineTypeNameTakenMessage    = "Tip mašine sa tim nazivom već postoji."
+	machineTypeInUseMessage        = "Tip mašine se koristi za mašine."
+	machineNotFoundMessage         = "Mašina nije pronađena."
+	machineNameTakenMessage        = "Mašina sa tim nazivom već postoji."
+	machineDowntimeNotFoundMessage = "Zastoj mašine nije pronađen."
+	planningUserNotFoundMessage    = "Korisnik nije pronađen."
+	planDraftNotFoundMessage       = "Nacrt plana nije pronađen."
+	invalidDateMessage             = "Neispravan datum."
 )
 
 // planningStore returns the store's planning side; a store without it (the
@@ -48,6 +49,8 @@ func writePlanningError(w http.ResponseWriter, r *http.Request, err error) {
 		writeAPIError(w, r, http.StatusNotFound, machineNotFoundMessage, nil)
 	case errors.Is(err, store.ErrMachineNameTaken):
 		writeAPIError(w, r, http.StatusConflict, machineNameTakenMessage, nil)
+	case errors.Is(err, store.ErrMachineDowntimeNotFound):
+		writeAPIError(w, r, http.StatusNotFound, machineDowntimeNotFoundMessage, nil)
 	case errors.Is(err, store.ErrPlanningUserNotFound):
 		writeAPIError(w, r, http.StatusNotFound, planningUserNotFoundMessage, nil)
 	case errors.Is(err, store.ErrPlanDraftNotFound):
@@ -159,6 +162,39 @@ func (s *Server) handleUpdateMachine(w http.ResponseWriter, r *http.Request, pla
 
 func (s *Server) handleDeleteMachine(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
 	if err := planning.DeleteMachine(r.Context(), chi.URLParam(r, "id")); err != nil {
+		writePlanningError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Machine downtime windows (D-028): listed per machine, added and removed by
+// admins; the planner treats them as busy time.
+
+func (s *Server) handleMachineDowntimes(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
+	downtimes, err := planning.MachineDowntimes(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writePlanningError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, downtimes)
+}
+
+func (s *Server) handleCreateMachineDowntime(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
+	var input domain.MachineDowntimeInput
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	downtime, err := planning.CreateMachineDowntime(r.Context(), chi.URLParam(r, "id"), input)
+	if err != nil {
+		writePlanningError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, downtime)
+}
+
+func (s *Server) handleDeleteMachineDowntime(w http.ResponseWriter, r *http.Request, planning store.PlanningStore) {
+	if err := planning.DeleteMachineDowntime(r.Context(), chi.URLParam(r, "id"), chi.URLParam(r, "downtimeId")); err != nil {
 		writePlanningError(w, r, err)
 		return
 	}

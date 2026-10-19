@@ -26,6 +26,7 @@ func checkDraft(in Input, assignments []domain.PlanAssignment) []domain.PlanIssu
 	for _, m := range in.Machines {
 		machines[m.ID] = m
 	}
+	downtimes := cal.downtimeWindows(in.Downtimes)
 	typeNames := map[string]string{}
 	for _, t := range in.MachineTypes {
 		typeNames[t.ID] = t.Name
@@ -155,6 +156,11 @@ func checkDraft(in Input, assignments []domain.PlanAssignment) []domain.PlanIssu
 			default:
 				if !m.InService {
 					add(a, fmt.Sprintf("mašina „%s“ je van upotrebe.", m.Name))
+				}
+				if it.timeOK {
+					if w, hit := overlapping(downtimes[m.ID], it.s, it.e); hit {
+						add(a, fmt.Sprintf("mašina „%s“ je van pogona %s – %s.", m.Name, cal.formatHuman(w.s), cal.formatHuman(w.e)))
+					}
 				}
 				if requiredType != "" && m.MachineTypeID != requiredType {
 					add(a, fmt.Sprintf("mašina „%s“ nije tipa „%s“ koji korak zahteva.", m.Name, typeName(requiredType)))

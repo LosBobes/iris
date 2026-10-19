@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // Production planning ("Planiranje", D-026): machines, worker qualifications,
 // attendance, working hours and day plans produced by internal/planner. The
 // whole feature sits behind the "planning" organization module (off by
@@ -18,6 +20,11 @@ const (
 	DefaultPlanningTimeZone = "Europe/Belgrade"
 	// MaxTransferMinutes caps the inter-operation time (D-028): 8 hours.
 	MaxTransferMinutes = 480
+	// MaxWorkingHoursExceptions caps the exception-date list (D-028).
+	MaxWorkingHoursExceptions = 400
+	// PlanningLocalLayout is the local "YYYY-MM-DDTHH:MM" of plan blocks and
+	// machine downtimes (no zone: the working-hours time zone applies).
+	PlanningLocalLayout = "2006-01-02T15:04"
 )
 
 // MachineType groups interchangeable machine units ("Offset štampa B2").
@@ -52,6 +59,27 @@ type MachineInput struct {
 	Name          string `json:"name"`
 	InService     bool   `json:"inService"`
 	Note          string `json:"note,omitempty"`
+}
+
+// MachineDowntime is a dated window (D-028) in which a machine unit is not
+// available: planned maintenance or a breakdown with a known end. From/To are
+// local "YYYY-MM-DDTHH:MM" in the working-hours time zone, From < To. The
+// planner treats the window as busy; a locked block overlapping it is reported
+// as PlanIssueMachineDown and a hand-edited one as a conflict.
+type MachineDowntime struct {
+	ID        string `json:"id"`
+	MachineID string `json:"machineId"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Note      string `json:"note,omitempty"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// MachineDowntimeInput creates a downtime window.
+type MachineDowntimeInput struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Note string `json:"note,omitempty"`
 }
 
 // WorkerQualifications lists the machine types one organization user may run.
@@ -104,8 +132,22 @@ type WorkingDay struct {
 	Breaks  []WorkingBreak `json:"breaks"`
 }
 
+// WorkingHoursException overrides the weekly pattern on one civil date
+// ("YYYY-MM-DD", D-028): with Off the date is a day off (a holiday) whatever
+// its weekday; otherwise Start/End/Breaks are that date's one-off shift (the
+// same rules as WorkingDay). The calendar consults exceptions before the
+// weekday pattern.
+type WorkingHoursException struct {
+	Date   string         `json:"date"`
+	Off    bool           `json:"off"`
+	Start  string         `json:"start,omitempty"`
+	End    string         `json:"end,omitempty"`
+	Breaks []WorkingBreak `json:"breaks"`
+}
+
 // WorkingHours is the organization-wide shift calendar, stored in
-// app_settings under "working_hours". Weekdays not listed are days off.
+// app_settings under "working_hours". Weekdays not listed are days off;
+// Exceptions (at most MaxWorkingHoursExceptions) override single dates.
 // TimeZone is an IANA name; plans, attendance dates and "now" use it.
 //
 // TransferMinutes is the inter-operation time ("međuoperacijsko vreme",
@@ -115,9 +157,39 @@ type WorkingDay struct {
 // pauses for breaks and the end of the shift, and may cross a day boundary).
 // 0 (the default) chains steps back to back, as before D-028.
 type WorkingHours struct {
-	TimeZone        string       `json:"timeZone"`
-	Days            []WorkingDay `json:"days"`
-	TransferMinutes int          `json:"transferMinutes"`
+	TimeZone        string                  `json:"timeZone"`
+	Days            []WorkingDay            `json:"days"`
+	TransferMinutes int                     `json:"transferMinutes"`
+	Exceptions      []WorkingHoursException `json:"exceptions"`
+}
+
+// ShiftOn is the shift of a civil date: its exception when one exists (ok
+// false for a day off), else the weekday's pattern (ok false when unlisted or
+// the date is malformed).
+func (h WorkingHours) ShiftOn(date string) (WorkingDay, bool) {
+	for _, exception := range h.Exceptions {
+		if exception.Date != date {
+			continue
+		}
+		if exception.Off {
+			return WorkingDay{}, false
+		}
+		return WorkingDay{Start: exception.Start, End: exception.End, Breaks: exception.Breaks}, true
+	}
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return WorkingDay{}, false
+	}
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	for _, day := range h.Days {
+		if day.Weekday == weekday {
+			return day, true
+		}
+	}
+	return WorkingDay{}, false
 }
 
 // DefaultWorkingHours is Monday to Friday 07:00–15:00 with a 30-minute break
@@ -130,7 +202,7 @@ func DefaultWorkingHours() WorkingHours {
 			Breaks: []WorkingBreak{{Start: "11:00", End: "11:30"}},
 		})
 	}
-	return WorkingHours{TimeZone: DefaultPlanningTimeZone, Days: days}
+	return WorkingHours{TimeZone: DefaultPlanningTimeZone, Days: days, Exceptions: []WorkingHoursException{}}
 }
 
 // PlanStatus is the lifecycle of a day plan: a draft the admin edits, then the
@@ -189,6 +261,9 @@ const (
 	// Manual edit conflicts: the same machine or person is booked twice, a step
 	// starts before its predecessor ends, or a block lies outside working hours.
 	PlanIssueConflict PlanIssueCode = "conflict"
+	// A locked (kept) block lies in a downtime window of its machine (D-028):
+	// the machine is not available while the step is planned on it.
+	PlanIssueMachineDown PlanIssueCode = "machine_down"
 )
 
 // PlanIssue is a step the plan could not place, or a conflict in an edited

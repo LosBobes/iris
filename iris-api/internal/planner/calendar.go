@@ -60,41 +60,69 @@ func ValidateWorkingHours(hours domain.WorkingHours) string {
 			return fmt.Sprintf("Dan „%s“ je naveden više puta.", name)
 		}
 		seen[day.Weekday] = true
-		start, ok := parseClock(day.Start)
+		if msg := validateShift(name, day.Start, day.End, day.Breaks); msg != "" {
+			return msg
+		}
+	}
+	if len(hours.Exceptions) > domain.MaxWorkingHoursExceptions {
+		return fmt.Sprintf("Izuzetaka može biti najviše %d.", domain.MaxWorkingHoursExceptions)
+	}
+	dates := map[string]bool{}
+	for _, exception := range hours.Exceptions {
+		if _, err := parseCivil(exception.Date); err != nil || len(exception.Date) != len(layoutDate) {
+			return fmt.Sprintf("Datum izuzetka „%s“ nije u formatu GGGG-MM-DD.", exception.Date)
+		}
+		if dates[exception.Date] {
+			return fmt.Sprintf("Izuzetak za datum %s je naveden više puta.", exception.Date)
+		}
+		dates[exception.Date] = true
+		if exception.Off {
+			continue
+		}
+		if msg := validateShift(exception.Date, exception.Start, exception.End, exception.Breaks); msg != "" {
+			return msg
+		}
+	}
+	return ""
+}
+
+// validateShift checks one shift ("HH:MM" start < end, breaks inside and not
+// overlapping); name identifies the day in the message.
+func validateShift(name, startText, endText string, shiftBreaks []domain.WorkingBreak) string {
+	start, ok := parseClock(startText)
+	if !ok {
+		return fmt.Sprintf("Početak smene za dan „%s“ („%s“) nije u formatu HH:MM.", name, startText)
+	}
+	end, ok := parseClock(endText)
+	if !ok {
+		return fmt.Sprintf("Kraj smene za dan „%s“ („%s“) nije u formatu HH:MM.", name, endText)
+	}
+	if start >= end {
+		return fmt.Sprintf("Početak smene za dan „%s“ mora biti pre njenog kraja.", name)
+	}
+	type span struct{ s, e int }
+	breaks := make([]span, 0, len(shiftBreaks))
+	for _, br := range shiftBreaks {
+		bs, ok := parseClock(br.Start)
 		if !ok {
-			return fmt.Sprintf("Početak smene za dan „%s“ („%s“) nije u formatu HH:MM.", name, day.Start)
+			return fmt.Sprintf("Početak pauze za dan „%s“ („%s“) nije u formatu HH:MM.", name, br.Start)
 		}
-		end, ok := parseClock(day.End)
+		be, ok := parseClock(br.End)
 		if !ok {
-			return fmt.Sprintf("Kraj smene za dan „%s“ („%s“) nije u formatu HH:MM.", name, day.End)
+			return fmt.Sprintf("Kraj pauze za dan „%s“ („%s“) nije u formatu HH:MM.", name, br.End)
 		}
-		if start >= end {
-			return fmt.Sprintf("Početak smene za dan „%s“ mora biti pre njenog kraja.", name)
+		if bs >= be {
+			return fmt.Sprintf("Početak pauze za dan „%s“ mora biti pre njenog kraja.", name)
 		}
-		type span struct{ s, e int }
-		breaks := make([]span, 0, len(day.Breaks))
-		for _, br := range day.Breaks {
-			bs, ok := parseClock(br.Start)
-			if !ok {
-				return fmt.Sprintf("Početak pauze za dan „%s“ („%s“) nije u formatu HH:MM.", name, br.Start)
-			}
-			be, ok := parseClock(br.End)
-			if !ok {
-				return fmt.Sprintf("Kraj pauze za dan „%s“ („%s“) nije u formatu HH:MM.", name, br.End)
-			}
-			if bs >= be {
-				return fmt.Sprintf("Početak pauze za dan „%s“ mora biti pre njenog kraja.", name)
-			}
-			if bs < start || be > end {
-				return fmt.Sprintf("Pauza %s–%s za dan „%s“ mora biti unutar smene.", br.Start, br.End, name)
-			}
-			breaks = append(breaks, span{bs, be})
+		if bs < start || be > end {
+			return fmt.Sprintf("Pauza %s–%s za dan „%s“ mora biti unutar smene.", br.Start, br.End, name)
 		}
-		sort.Slice(breaks, func(i, j int) bool { return breaks[i].s < breaks[j].s })
-		for i := 1; i < len(breaks); i++ {
-			if breaks[i].s < breaks[i-1].e {
-				return fmt.Sprintf("Pauze za dan „%s“ se preklapaju.", name)
-			}
+		breaks = append(breaks, span{bs, be})
+	}
+	sort.Slice(breaks, func(i, j int) bool { return breaks[i].s < breaks[j].s })
+	for i := 1; i < len(breaks); i++ {
+		if breaks[i].s < breaks[i-1].e {
+			return fmt.Sprintf("Pauze za dan „%s“ se preklapaju.", name)
 		}
 	}
 	return ""
@@ -123,7 +151,22 @@ type shift struct {
 type calendar struct {
 	loc  *time.Location
 	defs map[int]shiftDef
-	memo map[string]*shift
+	// exceptions by civil date; a nil entry is a day off (D-028).
+	exceptions map[string]*shiftDef
+	memo       map[string]*shift
+}
+
+func newShiftDef(startText, endText string, breaks []domain.WorkingBreak) shiftDef {
+	start, _ := parseClock(startText)
+	end, _ := parseClock(endText)
+	def := shiftDef{start: start, end: end}
+	for _, br := range breaks {
+		bs, _ := parseClock(br.Start)
+		be, _ := parseClock(br.End)
+		def.breaks = append(def.breaks, [2]int{bs, be})
+	}
+	sort.Slice(def.breaks, func(i, j int) bool { return def.breaks[i][0] < def.breaks[j][0] })
+	return def
 }
 
 func newCalendar(hours domain.WorkingHours) (*calendar, error) {
@@ -134,18 +177,17 @@ func newCalendar(hours domain.WorkingHours) (*calendar, error) {
 	if err != nil {
 		return nil, ErrInvalidHours
 	}
-	c := &calendar{loc: loc, defs: map[int]shiftDef{}, memo: map[string]*shift{}}
+	c := &calendar{loc: loc, defs: map[int]shiftDef{}, exceptions: map[string]*shiftDef{}, memo: map[string]*shift{}}
 	for _, day := range hours.Days {
-		start, _ := parseClock(day.Start)
-		end, _ := parseClock(day.End)
-		def := shiftDef{start: start, end: end}
-		for _, br := range day.Breaks {
-			bs, _ := parseClock(br.Start)
-			be, _ := parseClock(br.End)
-			def.breaks = append(def.breaks, [2]int{bs, be})
+		c.defs[day.Weekday] = newShiftDef(day.Start, day.End, day.Breaks)
+	}
+	for _, exception := range hours.Exceptions {
+		if exception.Off {
+			c.exceptions[exception.Date] = nil
+			continue
 		}
-		sort.Slice(def.breaks, func(i, j int) bool { return def.breaks[i][0] < def.breaks[j][0] })
-		c.defs[day.Weekday] = def
+		def := newShiftDef(exception.Start, exception.End, exception.Breaks)
+		c.exceptions[exception.Date] = &def
 	}
 	return c, nil
 }
@@ -162,8 +204,17 @@ func (c *calendar) shiftOn(day time.Time) *shift {
 	if iso == 0 {
 		iso = 7
 	}
+	// An exception date wins over the weekday pattern (D-028).
+	def, ok := c.defs[iso]
+	if exception, overridden := c.exceptions[key]; overridden {
+		if exception == nil {
+			ok = false
+		} else {
+			def, ok = *exception, true
+		}
+	}
 	var sh *shift
-	if def, ok := c.defs[iso]; ok {
+	if ok {
 		y, m, d := day.Date()
 		at := func(minutes int) int64 {
 			return time.Date(y, m, d, minutes/60, minutes%60, 0, 0, c.loc).Unix() / 60
@@ -274,6 +325,52 @@ func (c *calendar) format(minutes int64) string {
 
 func (c *calendar) formatDate(minutes int64) string {
 	return time.Unix(minutes*60, 0).In(c.loc).Format(layoutDate)
+}
+
+// formatHuman is the user-facing "DD.MM.YYYY HH:MM" of an absolute minute.
+func (c *calendar) formatHuman(minutes int64) string {
+	return time.Unix(minutes*60, 0).In(c.loc).Format("02.01.2006 15:04")
+}
+
+// downtimeWindow is one machine downtime in absolute minutes.
+type downtimeWindow struct {
+	s, e int64
+	note string
+}
+
+// downtimeWindows groups the parsable downtimes by machine id, each list
+// sorted by start, so lookups are deterministic whatever the input order.
+func (c *calendar) downtimeWindows(downtimes []domain.MachineDowntime) map[string][]downtimeWindow {
+	out := map[string][]downtimeWindow{}
+	for _, d := range downtimes {
+		s, ok1 := c.parse(d.From)
+		e, ok2 := c.parse(d.To)
+		if !ok1 || !ok2 || e <= s {
+			continue
+		}
+		out[d.MachineID] = append(out[d.MachineID], downtimeWindow{s: s, e: e, note: d.Note})
+	}
+	for id := range out {
+		list := out[id]
+		sort.Slice(list, func(i, j int) bool {
+			if list[i].s != list[j].s {
+				return list[i].s < list[j].s
+			}
+			return list[i].e < list[j].e
+		})
+	}
+	return out
+}
+
+// overlapping returns the first window intersecting [s, e); a zero-length
+// span only hits a window strictly containing it.
+func overlapping(windows []downtimeWindow, s, e int64) (downtimeWindow, bool) {
+	for _, w := range windows {
+		if w.s < e && s < w.e || (s == e && w.s < s && s < w.e) {
+			return w, true
+		}
+	}
+	return downtimeWindow{}, false
 }
 
 // parse reads a local "YYYY-MM-DDTHH:MM" into absolute minutes.

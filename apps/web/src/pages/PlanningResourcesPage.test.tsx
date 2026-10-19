@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom/vitest'
 import '@/i18n'
@@ -19,7 +19,9 @@ const hours = {
   timeZone: 'Europe/Belgrade',
   days: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start: '07:00', end: '15:00', breaks: [{ start: '11:00', end: '11:30' }] })),
   transferMinutes: 0,
+  exceptions: [],
 }
+const downtimes = [{ id: 'd1', machineId: 'm1', from: '2026-10-21T08:00', to: '2026-10-22T15:00', note: 'Servis', createdAt: '' }]
 
 function stubApi() {
   const api = {
@@ -31,6 +33,9 @@ function stubApi() {
     createMachine: vi.fn(),
     updateMachine: vi.fn(),
     deleteMachine: vi.fn(async () => {}),
+    listMachineDowntimes: vi.fn(async () => downtimes),
+    createMachineDowntime: vi.fn(async (machineId: string, input: { from: string; to: string }) => ({ id: 'd2', machineId, ...input, createdAt: '' })),
+    deleteMachineDowntime: vi.fn(async () => {}),
     listQualifications: vi.fn(async () => [
       { userId: 'u1', username: 'marko', machineTypeIds: ['t1'] },
       { userId: 'u2', username: 'jelena', machineTypeIds: [] },
@@ -110,6 +115,77 @@ describe('PlanningResourcesPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Sačuvaj' }))
     expect(await within(dialog).findByText('Izaberite tip mašine')).toBeInTheDocument()
     expect(api.createMachine).not.toHaveBeenCalled()
+  })
+
+  it('lists a machine\'s downtime windows and deletes one', async () => {
+    const api = stubApi()
+    const user = userEvent.setup()
+    renderPlanningPage(<PlanningResourcesPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'Mašine' }))
+    await user.click(await screen.findByRole('button', { name: 'Zastoji mašine Heidelberg 1' }))
+    expect(await screen.findByText('21.10.2026 08:00 – 22.10.2026 15:00')).toBeInTheDocument()
+    expect(screen.getByText('Servis')).toBeInTheDocument()
+    expect(api.listMachineDowntimes).toHaveBeenCalledWith('m1')
+
+    await user.click(screen.getByRole('button', { name: 'Obriši zastoj 21.10.2026 08:00 – 22.10.2026 15:00' }))
+    const confirm = await screen.findByRole('alertdialog')
+    await user.click(within(confirm).getByRole('button', { name: 'Obriši' }))
+    await waitFor(() => expect(api.deleteMachineDowntime).toHaveBeenCalledWith('m1', 'd1'))
+  })
+
+  it('validates a new downtime window before sending it', async () => {
+    const api = stubApi()
+    const user = userEvent.setup()
+    renderPlanningPage(<PlanningResourcesPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'Mašine' }))
+    await user.click(await screen.findByRole('button', { name: 'Zastoji mašine Heidelberg 1' }))
+    await user.click(await screen.findByRole('button', { name: 'Dodaj zastoj' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Novi zastoj mašine' })
+    await user.click(within(dialog).getByRole('button', { name: 'Sačuvaj' }))
+    expect(await within(dialog).findAllByText('Unesite datum i vreme')).toHaveLength(2)
+    expect(api.createMachineDowntime).not.toHaveBeenCalled()
+
+    fireEvent.change(within(dialog).getByLabelText('Od'), { target: { value: '2026-10-23T10:00' } })
+    fireEvent.change(within(dialog).getByLabelText('Do'), { target: { value: '2026-10-23T08:00' } })
+    await user.click(within(dialog).getByRole('button', { name: 'Sačuvaj' }))
+    expect(await within(dialog).findByText('Kraj zastoja mora biti posle početka')).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Do'), { target: { value: '2026-10-23T12:00' } })
+    await user.type(within(dialog).getByLabelText('Napomena'), 'Servis valjaka')
+    await user.click(within(dialog).getByRole('button', { name: 'Sačuvaj' }))
+    await waitFor(() =>
+      expect(api.createMachineDowntime).toHaveBeenCalledWith('m1', { from: '2026-10-23T10:00', to: '2026-10-23T12:00', note: 'Servis valjaka' }),
+    )
+  })
+
+  it('adds exception dates to the working hours', async () => {
+    const api = stubApi()
+    const user = userEvent.setup()
+    renderPlanningPage(<PlanningResourcesPage />)
+
+    await user.click(await screen.findByRole('tab', { name: 'Radno vreme' }))
+    expect(await screen.findByText('Nema izuzetaka.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Dodaj neradni dan' }))
+    await user.click(screen.getByRole('button', { name: 'Sačuvaj' }))
+    expect(await screen.findByText('Izuzetak 1: Unesite datum u obliku GGGG-MM-DD')).toBeInTheDocument()
+    expect(api.setWorkingHours).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Datum izuzetka 1'), { target: { value: '2026-12-25' } })
+    await user.click(screen.getByRole('button', { name: 'Dodaj posebno radno vreme' }))
+    fireEvent.change(screen.getByLabelText('Datum izuzetka 2'), { target: { value: '2026-10-24' } })
+    const end = screen.getByLabelText('Kraj smene: izuzetak 2')
+    await user.clear(end)
+    await user.type(end, '12:00')
+    await user.click(screen.getByRole('button', { name: 'Sačuvaj' }))
+    await waitFor(() => expect(api.setWorkingHours).toHaveBeenCalledTimes(1))
+    expect(api.setWorkingHours.mock.calls[0][0]).toMatchObject({
+      exceptions: [
+        { date: '2026-12-25', off: true, breaks: [] },
+        { date: '2026-10-24', off: false, start: '07:00', end: '12:00', breaks: [] },
+      ],
+    })
   })
 
   it('saves a qualification toggle for one user', async () => {

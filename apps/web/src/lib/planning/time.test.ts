@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { dayWindow, fromMinutes, isoWeekday, layoutLanes, orderHue, toMinutes, withTime } from './time'
+import {
+  dayWindow,
+  formatLocalDateTime,
+  fromMinutes,
+  isLocalDateTime,
+  isoWeekday,
+  layoutLanes,
+  orderHue,
+  toMinutes,
+  withTime,
+} from './time'
 
 describe('planning time helpers', () => {
   it('converts between HH:MM and minutes', () => {
@@ -29,6 +39,28 @@ describe('planning time helpers', () => {
 
   it('falls back to a default window without a shift or blocks', () => {
     expect(dayWindow('2026-10-18', undefined, [])).toEqual({ start: 420, end: 900 })
+  })
+
+  it('lets an exception date override the weekday shift', () => {
+    const hours = {
+      timeZone: 'Europe/Belgrade',
+      days: [{ weekday: 1, start: '07:00', end: '15:00', breaks: [] }],
+      transferMinutes: 0,
+      exceptions: [
+        { date: '2026-10-19', off: true },
+        { date: '2026-10-24', off: false, start: '08:00', end: '12:00', breaks: [] },
+      ],
+    }
+    expect(dayWindow('2026-10-19', hours, [])).toEqual({ start: 420, end: 900 }) // day off: fallback
+    expect(dayWindow('2026-10-24', hours, [])).toEqual({ start: 480, end: 720 })
+  })
+
+  it('validates and formats local date-times', () => {
+    expect(isLocalDateTime('2026-10-19T08:30')).toBe(true)
+    expect(isLocalDateTime('2026-02-30T08:30')).toBe(false)
+    expect(isLocalDateTime('2026-10-19 08:30')).toBe(false)
+    expect(formatLocalDateTime('2026-10-19T08:30')).toBe('19.10.2026 08:30')
+    expect(formatLocalDateTime('nope')).toBe('nope')
   })
 
   it('stacks overlapping blocks in separate lanes', () => {

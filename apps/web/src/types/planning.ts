@@ -12,6 +12,7 @@ export const MAX_CREW_SIZE = 50
 export const MAX_STEP_MINUTES = 100000
 export const PLANNING_FORECAST_DAYS = 14
 export const MAX_TRANSFER_MINUTES = 480
+export const MAX_WORKING_HOURS_EXCEPTIONS = 400
 
 export interface MachineType {
   id: string
@@ -39,6 +40,28 @@ export interface MachineInput {
   machineTypeId: string
   name: string
   inService: boolean
+  note?: string
+}
+
+/**
+ * A dated window in which a machine unit is not available (D-028): planned
+ * maintenance or a breakdown with a known end. `from`/`to` are local
+ * "YYYY-MM-DDTHH:MM" in the working-hours time zone, `from` < `to`. The planner
+ * treats it as busy time; a locked block overlapping it is a `machine_down`
+ * issue and a hand-edited draft block a `conflict`.
+ */
+export interface MachineDowntime {
+  id: string
+  machineId: string
+  from: string
+  to: string
+  note?: string
+  createdAt: string
+}
+
+export interface MachineDowntimeInput {
+  from: string
+  to: string
   note?: string
 }
 
@@ -86,10 +109,25 @@ export interface WorkingDay {
   breaks: WorkingBreak[]
 }
 
+/**
+ * Overrides the weekly pattern on one civil date (D-028): with `off` the date
+ * is a day off whatever its weekday; otherwise `start`/`end`/`breaks` are that
+ * date's one-off shift. The API omits `start`/`end` for a day off.
+ */
+export interface WorkingHoursException {
+  date: string
+  off: boolean
+  start?: string
+  end?: string
+  breaks?: WorkingBreak[]
+}
+
 export interface WorkingHours {
   /** IANA time zone, e.g. "Europe/Belgrade". */
   timeZone: string
   days: WorkingDay[]
+  /** Exception dates (at most 400, unique), consulted before `days`. */
+  exceptions: WorkingHoursException[]
   /**
    * Inter-operation time ("međuoperacijsko vreme", D-028): the org-wide average
    * waiting + transfer time between two consecutive steps, in working minutes
@@ -133,6 +171,8 @@ export type PlanIssueCode =
   | 'no_capacity'
   | 'missing_duration'
   | 'conflict'
+  /** A locked block the plan keeps lies in a downtime window of its machine (D-028). */
+  | 'machine_down'
 
 export interface PlanIssue {
   code: PlanIssueCode

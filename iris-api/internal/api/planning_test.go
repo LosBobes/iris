@@ -71,6 +71,9 @@ var planningRoutes = []planningRoute{
 	{http.MethodPost, "/machines", `{"machineTypeId":"x","name":"X","inService":true}`},
 	{http.MethodPut, "/machines/x", `{"machineTypeId":"x","name":"X","inService":true}`},
 	{http.MethodDelete, "/machines/x", ""},
+	{http.MethodGet, "/machines/x/downtimes", ""},
+	{http.MethodPost, "/machines/x/downtimes", `{"from":"2026-10-20T08:00","to":"2026-10-20T10:00"}`},
+	{http.MethodDelete, "/machines/x/downtimes/y", ""},
 	{http.MethodGet, "/planning/qualifications", ""},
 	{http.MethodPut, "/planning/qualifications/user-1", `{"machineTypeIds":[]}`},
 	{http.MethodGet, "/planning/working-hours", ""},
@@ -133,8 +136,75 @@ func TestPlanningOperatorsCannotWrite(t *testing.T) {
 				t.Errorf("operator %s %s = %d %s, want 403", route.method, route.path, code, body)
 			}
 			assertErrorResponse(t, body, "Nemate dozvolu za ovu akciju.")
-		} else if code != http.StatusOK {
+		} else if code != http.StatusOK && !(code == http.StatusNotFound && strings.Contains(route.path, "/downtimes")) {
+			// Downtimes of an unknown machine are a 404, not a permission problem.
 			t.Errorf("operator %s %s = %d %s, want 200", route.method, route.path, code, body)
+		}
+	}
+}
+
+func TestMachineDowntimeEndpoints(t *testing.T) {
+	f := newPlanningFixture(t)
+	machineType := call[domain.MachineType](t, f, f.admin, http.MethodPost, "/machine-types", `{"name":"Štampa"}`, http.StatusCreated)
+	machine := call[domain.Machine](t, f, f.admin, http.MethodPost, "/machines", `{"machineTypeId":"`+machineType.ID+`","name":"M1","inService":true}`, http.StatusCreated)
+	base := "/machines/" + machine.ID + "/downtimes"
+
+	if list := call[[]domain.MachineDowntime](t, f, f.operator, http.MethodGet, base, "", http.StatusOK); list == nil || len(list) != 0 {
+		t.Fatalf("empty list = %#v", list)
+	}
+	expectError(t, f, f.operator, http.MethodGet, "/machines/nope/downtimes", "", http.StatusNotFound, "Mašina nije pronađena.")
+
+	created := call[domain.MachineDowntime](t, f, f.admin, http.MethodPost, base, `{"from":"2026-10-21T08:00","to":"2026-10-22T15:00","note":" Servis "}`, http.StatusCreated)
+	if created.ID == "" || created.MachineID != machine.ID || created.From != "2026-10-21T08:00" || created.To != "2026-10-22T15:00" || created.Note != "Servis" || created.CreatedAt == "" {
+		t.Fatalf("created = %+v", created)
+	}
+	earlier := call[domain.MachineDowntime](t, f, f.admin, http.MethodPost, base, `{"from":"2026-10-20T07:00","to":"2026-10-20T09:00"}`, http.StatusCreated)
+	expectError(t, f, f.admin, http.MethodPost, base, `{"from":"2026-10-20","to":"2026-10-20T09:00"}`, http.StatusUnprocessableEntity, "Početak i kraj zastoja moraju biti u obliku GGGG-MM-DDTHH:MM.")
+	expectError(t, f, f.admin, http.MethodPost, base, `{"from":"2026-10-20T09:00","to":"2026-10-20T09:00"}`, http.StatusUnprocessableEntity, "Početak zastoja mora biti pre njegovog kraja.")
+	expectError(t, f, f.admin, http.MethodPost, base, `{"from":"2026-10-20T07:00","to":"2026-10-20T09:00","note":"`+strings.Repeat("x", 501)+`"}`, http.StatusUnprocessableEntity, "")
+	expectError(t, f, f.admin, http.MethodPost, base, `{`, http.StatusBadRequest, "")
+	expectError(t, f, f.admin, http.MethodPost, "/machines/nope/downtimes", `{"from":"2026-10-20T07:00","to":"2026-10-20T09:00"}`, http.StatusNotFound, "Mašina nije pronađena.")
+	expectError(t, f, f.otherAdmin, http.MethodPost, base, `{"from":"2026-10-20T07:00","to":"2026-10-20T09:00"}`, http.StatusNotFound, "")
+
+	list := call[[]domain.MachineDowntime](t, f, f.operator, http.MethodGet, base, "", http.StatusOK)
+	if len(list) != 2 || list[0].ID != earlier.ID || list[1].ID != created.ID {
+		t.Fatalf("list = %+v", list)
+	}
+	expectError(t, f, f.otherAdmin, http.MethodGet, base, "", http.StatusNotFound, "")
+
+	expectError(t, f, f.admin, http.MethodDelete, base+"/nope", "", http.StatusNotFound, "Zastoj mašine nije pronađen.")
+	expectError(t, f, f.otherAdmin, http.MethodDelete, base+"/"+earlier.ID, "", http.StatusNotFound, "")
+	expectError(t, f, f.admin, http.MethodDelete, base+"/"+earlier.ID, "", http.StatusNoContent, "")
+	expectError(t, f, f.admin, http.MethodDelete, base+"/"+earlier.ID, "", http.StatusNotFound, "")
+	if list := call[[]domain.MachineDowntime](t, f, f.admin, http.MethodGet, base, "", http.StatusOK); len(list) != 1 {
+		t.Fatalf("after delete = %+v", list)
+	}
+	// Deleting the machine takes its windows along.
+	expectError(t, f, f.admin, http.MethodDelete, "/machines/"+machine.ID, "", http.StatusNoContent, "")
+	expectError(t, f, f.admin, http.MethodGet, base, "", http.StatusNotFound, "")
+}
+
+func TestWorkingHoursExceptionsEndpoint(t *testing.T) {
+	f := newPlanningFixture(t)
+	body := `{"timeZone":"Europe/Belgrade","days":[{"weekday":1,"start":"07:00","end":"15:00","breaks":[]}],
+		"exceptions":[{"date":"2026-12-25","off":true,"start":"zz"},{"date":"2026-10-24","off":false,"start":"08:00","end":"12:00","breaks":[]}]}`
+	saved := call[domain.WorkingHours](t, f, f.admin, http.MethodPut, "/planning/working-hours", body, http.StatusOK)
+	if len(saved.Exceptions) != 2 || saved.Exceptions[0].Date != "2026-10-24" || saved.Exceptions[0].Start != "08:00" ||
+		!saved.Exceptions[1].Off || saved.Exceptions[1].Start != "" || saved.Exceptions[1].Breaks == nil {
+		t.Fatalf("saved = %+v", saved)
+	}
+	hours := call[domain.WorkingHours](t, f, f.operator, http.MethodGet, "/planning/working-hours", "", http.StatusOK)
+	if len(hours.Exceptions) != 2 {
+		t.Fatalf("read back = %+v", hours)
+	}
+	for _, bad := range []string{
+		`{"timeZone":"UTC","days":[],"exceptions":[{"date":"2026-13-01","off":true}]}`,
+		`{"timeZone":"UTC","days":[],"exceptions":[{"date":"2026-10-24","off":true},{"date":"2026-10-24","off":false,"start":"08:00","end":"12:00"}]}`,
+		`{"timeZone":"UTC","days":[],"exceptions":[{"date":"2026-10-24","off":false,"start":"12:00","end":"08:00"}]}`,
+	} {
+		code, raw := f.do(t, f.admin, http.MethodPut, "/planning/working-hours", bad)
+		if code != http.StatusUnprocessableEntity {
+			t.Errorf("hours %s = %d %s, want 422", bad, code, raw)
 		}
 	}
 }

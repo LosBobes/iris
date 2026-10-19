@@ -411,7 +411,7 @@ func TestPlanningTablesInTenantExport(t *testing.T) {
 	if _, err := s.SetAttendance(ctx, "u-ana", domain.AttendanceInput{Date: "2026-10-19", Present: &present}); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"machine_types", "machines", "worker_qualifications", "attendance_overrides", "production_plans"} {
+	for _, table := range []string{"machine_types", "machines", "machine_downtimes", "worker_qualifications", "attendance_overrides", "production_plans"} {
 		found := false
 		for _, listed := range tenantDataTables {
 			found = found || listed.name == table
@@ -776,7 +776,7 @@ func TestPlanningMigration(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT group_concat(version) FROM schema_migrations WHERE version >= 27`).Scan(&versions); err != nil {
 		t.Fatal(err)
 	}
-	if versions != "27,29,30,31" {
+	if versions != "27,29,30,31,32" {
 		t.Fatalf("versions = %s", versions)
 	}
 	mustExec := func(query string, args ...any) {
