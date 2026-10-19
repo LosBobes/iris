@@ -24,12 +24,15 @@ import {
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog'
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
 import { useOrganization } from '@/hooks/useOrganization'
+import { useWorkingHours } from '@/hooks/usePlanning'
 import { useStockLevels } from '@/hooks/useStockLevels'
 import { formatStockQuantity } from '@/lib/stock/format'
 import { linkedArticleIds, materialRows, shortages, stockContextFor } from '@/lib/stock/posting'
 import { cn } from '@/lib/utils'
 import { ApiError, formatActionError, reportUnexpectedError } from '@/lib/errors'
 import { graphsEqual, readySteps, summarizeProgress, validateGraph } from '@/lib/process/graph'
+import { processQuantityFactor } from '@/lib/process/quantities'
+import { DEFAULT_STEP_TIME_ZONE } from '@/lib/process/step-times'
 import { percentToScale, staggerStyle } from '@/lib/motion'
 import { formatWorkOrderDateTime } from '@/shared/utils/work-orders'
 import { ProcessSimulatorButton } from './ProcessSimulatorButton'
@@ -42,6 +45,12 @@ interface WorkOrderProcessPanelProps {
   workOrderId: string
   /** Admins may change the structure and remove the process; operators only state. */
   canEditStructure: boolean
+  /**
+   * The order's `jobDetails.quantity`. Planned item quantities are per unit
+   * (D-028) and are multiplied by it for the material table, the simulator and
+   * the inspector, unless the process copy is flagged `quantitiesPerOrder`.
+   */
+  orderQuantity?: number | null
 }
 
 function errorStatus(cause: unknown): number | null {
@@ -59,11 +68,16 @@ export function WorkOrderProcessPanel(props: WorkOrderProcessPanelProps): React.
 function WorkOrderProcessPanelBody({
   workOrderId,
   canEditStructure,
+  orderQuantity = null,
 }: WorkOrderProcessPanelProps): React.JSX.Element {
   const { modules } = useOrganization()
   // Stock is a separate module: without it the process works with no articles,
   // material table, shortage checks or stock requests.
   const stockEnabled = modules.stock
+  // Actual step times are shown in the shop's working-hours zone; the calendar
+  // belongs to Planiranje, so it is only requested while that module is on.
+  const { data: workingHours } = useWorkingHours(modules.planning)
+  const timeZone = workingHours?.timeZone || DEFAULT_STEP_TIME_ZONE
   const { t } = useTranslation()
   // undefined = loading, null = the order has no process.
   const [process, setProcess] = useState<WorkOrderProcess | null | undefined>(undefined)
@@ -125,16 +139,21 @@ function WorkOrderProcessPanelBody({
   const dirty = process != null && draft !== null && !graphsEqual(draft, process.graph)
   const guard = useUnsavedChangesGuard(dirty)
 
+  // Planned item quantities are per unit of the order (D-028); legacy copies
+  // flagged quantitiesPerOrder keep their absolute amounts (factor 1).
+  const quantitiesPerOrder = Boolean(process?.quantitiesPerOrder)
+  const factor = useMemo(() => processQuantityFactor(process, orderQuantity), [process, orderQuantity])
+
   // Live warehouse state of the linked articles. The order's own reservation is
   // added back (see materialRows), so an order never reports a shortage caused
   // only by its own planned material.
   const linkedIds = useMemo(() => (draft ? linkedArticleIds(draft) : []), [draft])
   const { levels, loaded: stockLoaded, reload: reloadStock } = useStockLevels(linkedIds, stockEnabled)
-  const materials = useMemo(() => (draft ? materialRows(draft, 'order', levels) : []), [draft, levels])
+  const materials = useMemo(() => (draft ? materialRows(draft, 'order', levels, factor) : []), [draft, levels, factor])
   const missing = useMemo(() => shortages(materials), [materials])
   const stockContext = useMemo(
-    () => (draft && stockEnabled ? stockContextFor(draft, 'order', levels) : undefined),
-    [draft, levels, stockEnabled],
+    () => (draft && stockEnabled ? stockContextFor(draft, 'order', levels, factor) : undefined),
+    [draft, levels, stockEnabled, factor],
   )
 
   const progress = useMemo(() => (draft ? summarizeProgress(draft) : null), [draft])
@@ -259,6 +278,15 @@ function WorkOrderProcessPanelBody({
               <span className="ml-2 text-[11px] text-[color:var(--iris-ink-soft)]">
                 {process.templateName}
               </span>
+              {quantitiesPerOrder && (
+                <span
+                  className="ml-2 inline-block border border-border px-1.5 py-0.5 align-middle text-[10px] uppercase tracking-[0.5px] text-[color:var(--iris-ink-soft)]"
+                  title={t('process.order.quantitiesPerOrderHint')}
+                  data-testid="process-quantities-per-order"
+                >
+                  {t('process.order.quantitiesPerOrder')}
+                </span>
+              )}
             </div>
             <div className="text-[11px] text-[color:var(--iris-ink-mute)]">
               {t('process.order.updated', {
@@ -405,7 +433,7 @@ function WorkOrderProcessPanelBody({
             {expanded ? t('process.order.hideGraph') : t('process.order.showGraph')}
           </Button>
           {/* Previews the current draft only; the simulator never saves or mutates it. */}
-          <ProcessSimulatorButton graph={draft} stock={stockContext} />
+          <ProcessSimulatorButton graph={draft} stock={stockContext} defaultQuantity={factor} />
           {dirty && (
             <span className="text-[11px] text-[color:var(--iris-status-active)]">{t('process.order.unsaved')}</span>
           )}
@@ -443,6 +471,9 @@ function WorkOrderProcessPanelBody({
               articleLinking={stockEnabled}
               articlesHidden={!stockEnabled}
               planningEnabled={modules.planning}
+              orderQuantityFactor={factor}
+              canEditTimes={canEditStructure}
+              timeZone={timeZone}
             />
           </Suspense>
         )}

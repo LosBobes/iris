@@ -7,6 +7,8 @@ import {
   stripOrderState,
   validateGraph,
 } from '@/lib/process/graph'
+import { plannedQuantityFactor } from '@/lib/process/quantities'
+import { applyStepTimestamps } from '@/lib/process/step-times'
 import type { OrganizationModules } from '@/types/settings'
 import type {
   ProcessGraph,
@@ -72,6 +74,9 @@ function seedGraph(): ProcessGraph {
       node('step-pack', 'step', 'Pakovanje', 840, 150, { setupMinutes: 10, minutesPerUnit: 0.03 }),
       // Inputs and Makulatura are linked to the demo warehouse articles (see
       // fixture-api.ts); the finished product and paper scrap stay unlinked.
+      // Quantities are per unit of the order (D-028); the fixture work orders
+      // carry no jobDetails.quantity, so in fixture mode they are also the plan
+      // for the whole order (factor 1).
       node('in-plates', 'input', 'Ploče', 0, 0, { quantity: 4, unit: 'kom', catalogItemId: 'cat-6' }),
       node('in-paper', 'input', 'Papir', 280, 0, { quantity: 100, unit: 'tabak', catalogItemId: 'cat-4' }),
       node('in-ink', 'input', 'Boja', 420, 0, { quantity: 2, unit: 'kg', catalogItemId: 'cat-5' }),
@@ -97,6 +102,8 @@ interface ProcessFixtureContext {
   /** The signed-in organization user, or null. */
   currentUser: () => { username: string; role: 'admin' | 'user' } | null
   workOrderExists: (id: string) => boolean
+  /** The order's `jobDetails.quantity` (planned item quantities scale by it); omitted = 1. */
+  workOrderQuantity?: (id: string) => number | null | undefined
   /** The single fixture organization's slug. */
   tenantSlug: string
   platformSignedIn: () => boolean
@@ -107,8 +114,11 @@ interface ProcessFixtureContext {
    * article; unit must match). Omitted = links are stored unchecked.
    */
   findCatalogItem?: (id: string) => { name: string; kind: 'service' | 'article'; unit: string } | undefined
-  /** Called after an order's process was stored (apply/update); the stock ledger posts from it. */
-  onOrderProcessSaved?: (workOrderId: string, graph: ProcessGraph, username: string) => void
+  /**
+   * Called after an order's process was stored (apply/update); the stock ledger
+   * posts from it, multiplying planned quantities by `factor`.
+   */
+  onOrderProcessSaved?: (workOrderId: string, graph: ProcessGraph, username: string, factor: number) => void
 }
 
 type ProcessApi = Pick<
@@ -132,8 +142,8 @@ export interface ProcessFixtureStore {
   api: ProcessApi
   /** Called when a work order is created: attaches the default template, if any. */
   attachDefaultProcess: (workOrderId: string) => void
-  /** Every order's current process graph (the stock ledger derives reservations from it). */
-  listOrderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
+  /** Every stock-tracked order's current graph plus its planned-quantity factor (the ledger derives reservations from it). */
+  listOrderProcesses: () => { workOrderId: string; graph: ProcessGraph; factor: number }[]
   /** Every order's process, tracked by stock or not (the fixture planner reads it). */
   listAllOrderProcesses: () => { workOrderId: string; graph: ProcessGraph }[]
 }
@@ -166,8 +176,14 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
     if (!context.modules().processes) throw fixtureError(403, PROCESSES_DISABLED_MESSAGE)
   }
   const stockOn = (): boolean => context.modules().stock
-  const postIfTracked = (workOrderId: string, graph: ProcessGraph, username: string): void => {
-    if (stockOn() && stockTracked.has(workOrderId)) context.onOrderProcessSaved?.(workOrderId, graph, username)
+  // Planned item quantities are per unit; fixture copies are never legacy
+  // per-order copies, so the factor is the order's quantity (at least 1).
+  const factorOf = (workOrderId: string, process?: WorkOrderProcess): number =>
+    plannedQuantityFactor(context.workOrderQuantity?.(workOrderId), process?.quantitiesPerOrder ?? false)
+  const postIfTracked = (workOrderId: string, process: WorkOrderProcess, username: string): void => {
+    if (stockOn() && stockTracked.has(workOrderId)) {
+      context.onOrderProcessSaved?.(workOrderId, process.graph, username, factorOf(workOrderId, process))
+    }
   }
 
   const requireAdmin = (): { username: string } => {
@@ -280,13 +296,15 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
       templateId: template.id,
       templateName: template.name,
       graph: copyTemplateToOrder(template.graph),
+      // A fresh copy always carries per-unit quantities.
+      quantitiesPerOrder: false,
       updatedAt: now(),
       updatedBy: username,
     }
     processes.set(workOrderId, created)
     if (stockOn()) stockTracked.add(workOrderId)
     else stockTracked.delete(workOrderId)
-    postIfTracked(workOrderId, created.graph, username)
+    postIfTracked(workOrderId, created, username)
     return created
   }
 
@@ -294,7 +312,11 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
     listOrderProcesses() {
       return [...processes]
         .filter(([workOrderId]) => stockTracked.has(workOrderId))
-        .map(([workOrderId, process]) => ({ workOrderId, graph: clone(process.graph) }))
+        .map(([workOrderId, process]) => ({
+          workOrderId,
+          graph: clone(process.graph),
+          factor: factorOf(workOrderId, process),
+        }))
     },
 
     listAllOrderProcesses() {
@@ -357,10 +379,12 @@ export function createProcessFixtureStore(context: ProcessFixtureContext): Proce
         if (user.role !== 'admin' && hasStructuralChange(current.graph, graph)) {
           throw fixtureError(403, MESSAGES.forbidden)
         }
-        const updated: WorkOrderProcess = { ...current, graph, updatedAt: now(), updatedBy: user.username }
+        // Status transitions record when a step actually started / finished.
+        const stamped = applyStepTimestamps(current.graph, graph)
+        const updated: WorkOrderProcess = { ...current, graph: stamped, updatedAt: now(), updatedBy: user.username }
         processes.set(workOrderId, updated)
         // Same "transaction": the ledger is brought in line with the saved graph.
-        postIfTracked(workOrderId, updated.graph, user.username)
+        postIfTracked(workOrderId, updated, user.username)
         return clone(updated)
       },
       async deleteWorkOrderProcess(workOrderId) {

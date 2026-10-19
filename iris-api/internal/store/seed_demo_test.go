@@ -186,7 +186,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 		t.Fatalf("shortage order %q = %+v", result.ShortageOrder, shortage)
 	}
 	process, _ := s.WorkOrderProcess(tctx, shortage.ID)
-	planned := domain.ReservedInputs(process.Graph)
+	planned := domain.ReservedInputs(process.Graph, domain.WorkOrderQuantityFactor(&shortage, process.QuantitiesPerOrder))
 	paper := byName["Papir 80g A3"]
 	if need := planned[paper.CatalogItemID]; need != 8000 || need <= paper.OnHand || paper.Available >= 0 {
 		t.Fatalf("planned %v vs on hand %v / available %v", need, paper.OnHand, paper.Available)
@@ -200,7 +200,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 		if p == nil || order.Status == domain.WorkOrderStatusCancelled || order.Status == domain.WorkOrderStatusCompleted || order.Status == domain.WorkOrderStatusInvoiced {
 			continue
 		}
-		for id, qty := range domain.ReservedInputs(p.Graph) {
+		for id, qty := range domain.ReservedInputs(p.Graph, domain.WorkOrderQuantityFactor(&order, p.QuantitiesPerOrder)) {
 			wantReserved[id] += qty
 		}
 	}
@@ -209,7 +209,7 @@ func TestSeedDemoFromFixtures(t *testing.T) {
 		t.Fatalf("cancelled order = %+v", cancelled)
 	}
 	cp, _ := s.WorkOrderProcess(tctx, cancelled.ID)
-	if len(domain.ReservedInputs(cp.Graph)) == 0 {
+	if len(domain.ReservedInputs(cp.Graph, 1)) == 0 {
 		t.Fatal("cancelled order plans no inputs; the check would be vacuous")
 	}
 	for _, level := range levels.Items {

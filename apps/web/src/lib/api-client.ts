@@ -380,7 +380,7 @@ function normalizeTemplate(template: ProcessTemplate): ProcessTemplate {
 }
 
 function normalizeProcess(process: WorkOrderProcess): WorkOrderProcess {
-  return { ...process, graph: normalizeGraph(process?.graph) }
+  return { ...process, graph: normalizeGraph(process?.graph), quantitiesPerOrder: Boolean(process?.quantitiesPerOrder) }
 }
 
 function jsonRequest(method: string, body: unknown): RequestInit {

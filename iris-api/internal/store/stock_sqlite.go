@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -100,10 +101,11 @@ func insertStockMovement(
 }
 
 // postWorkOrderStock brings the order's posted stock in line with its graph:
-// it diffs the desired net per node and article against the movements already
+// it diffs the desired net per node and article (planned quantities scaled by
+// factor, see domain.PlannedQuantityFactor) against the movements already
 // posted for that order and inserts one movement per difference.
 func postWorkOrderStock(
-	ctx context.Context, q dbExecQuerier, tenantID, workOrderID string, graph domain.ProcessGraph, username, now string,
+	ctx context.Context, q dbExecQuerier, tenantID, workOrderID string, graph domain.ProcessGraph, factor float64, username, now string,
 ) error {
 	existing := map[domain.StockNodeKey]float64{}
 	rows, err := q.QueryContext(
@@ -133,7 +135,7 @@ func postWorkOrderStock(
 		return err
 	}
 
-	for _, planned := range domain.PlanStockPostings(graph, existing) {
+	for _, planned := range domain.PlanStockPostings(graph, factor, existing) {
 		article, ok, err := stockArticle(ctx, q, tenantID, planned.CatalogItemID)
 		if err != nil {
 			return err
@@ -154,11 +156,13 @@ func postWorkOrderStock(
 func stringPtr(value string) *string { return &value }
 
 // openReservations sums the planned input quantity still to be consumed per
-// article over the tenant's open work orders.
+// article over the tenant's open work orders. Per-unit copies are scaled by the
+// order's jobDetails.quantity; copies flagged quantities_per_order are not.
 func openReservations(ctx context.Context, q dbExecQuerier, tenantID string) (map[string]float64, error) {
 	rows, err := q.QueryContext(
 		ctx,
-		`SELECT p.graph FROM work_order_processes p
+		`SELECT p.graph, p.quantities_per_order, json_extract(w.payload, '$.jobDetails.quantity')
+		 FROM work_order_processes p
 		 JOIN work_orders w ON w.id = p.work_order_id
 		 WHERE p.tenant_id = ? AND w.tenant_id = ? AND p.stock_tracked = 1 AND w.status NOT IN `+closedWorkOrderStatusesSQL+`
 		   AND p.graph LIKE '%"catalogItemId"%'`,
@@ -171,10 +175,17 @@ func openReservations(ctx context.Context, q dbExecQuerier, tenantID string) (ma
 	reserved := map[string]float64{}
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		var perOrder int
+		var quantity sql.NullFloat64
+		if err := rows.Scan(&raw, &perOrder, &quantity); err != nil {
 			return nil, fmt.Errorf("scan process graph: %w", err)
 		}
-		perGraph, err := reservedInputsForGraph(raw)
+		var orderQuantity *int
+		if quantity.Valid {
+			whole := int(quantity.Float64)
+			orderQuantity = &whole
+		}
+		perGraph, err := reservedInputsForGraph(raw, domain.PlannedQuantityFactor(orderQuantity, perOrder != 0))
 		if err != nil {
 			return nil, err
 		}
@@ -186,8 +197,9 @@ func openReservations(ctx context.Context, q dbExecQuerier, tenantID string) (ma
 }
 
 // reservedCache memoizes the planned-input reservation of a process graph keyed
-// by the SHA-256 of its raw JSON. The result is a pure function of that text,
-// so a changed graph (different text) can never hit a stale entry. Keys are
+// by the SHA-256 of its raw JSON plus the order's quantity factor. The result
+// is a pure function of those two, so a changed graph (different text) or
+// order quantity can never hit a stale entry. Keys are
 // fixed-size digests (the graph text itself can be large) and the cache is
 // bounded by entry count and by the approximate size of the cached results;
 // it is simply reset when either limit is reached.
@@ -211,8 +223,8 @@ func reservedEntryBytes(perGraph map[string]float64) int {
 	return size
 }
 
-func reservedInputsForGraph(raw string) (map[string]float64, error) {
-	key := sha256.Sum256([]byte(raw))
+func reservedInputsForGraph(raw string, factor float64) (map[string]float64, error) {
+	key := sha256.Sum256([]byte(raw + "\x00" + strconv.FormatFloat(factor, 'g', -1, 64)))
 	reservedCache.Lock()
 	cached, ok := reservedCache.entries[key]
 	reservedCache.Unlock()
@@ -224,7 +236,7 @@ func reservedInputsForGraph(raw string) (map[string]float64, error) {
 		return nil, err
 	}
 	perGraph := map[string]float64{}
-	sumReserved(perGraph, graph)
+	sumReserved(perGraph, graph, factor)
 	size := reservedEntryBytes(perGraph)
 	reservedCache.Lock()
 	if len(reservedCache.entries) >= reservedCacheMaxEntries || reservedCache.bytes+size > reservedCacheMaxBytes {

@@ -550,7 +550,9 @@ func (g *graphBuilder) step(id, label string, col, y float64) {
 	g.graph.Nodes = append(g.graph.Nodes, domain.ProcessNode{ID: id, Kind: domain.ProcessNodeStep, Label: label, X: col * demoColumn, Y: y})
 }
 
-// item adds an input (stack index above the step), byproduct (below) or product.
+// item adds an input (stack index above the step), byproduct (below) or
+// product. qty is per unit of the order (D-028): the server multiplies it by
+// the order's jobDetails.quantity wherever a planned amount is used.
 func (g *graphBuilder) item(kind domain.ProcessNodeKind, id, label, article string, qty float64, col, y float64) {
 	node := domain.ProcessNode{ID: id, Kind: kind, Label: label, X: col * demoColumn, Y: y}
 	if article != "" {
@@ -622,11 +624,11 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("secenje", "Sečenje", 2, lane)
 			g.step("pakovanje", "Pakovanje", 3, lane)
-			g.item(in, "ploce", "Offset ploče", "ploca", 4, 0, lane-demoInRow)
-			g.item(in, "papir", "Papir 80g A3", "papir80", 100, 0.63, lane-demoInRow)
-			g.item(in, "boja", "Boja CMYK", "boja", 2, 1.37, lane-demoInRow)
-			g.item(by, "mak-stampa", "Makulatura (štampa)", "makulatura", 3, 1, lane+demoRow)
-			g.item(by, "mak-secenje", "Makulatura (sečenje)", "makulatura", 2, 2, lane+demoRow)
+			g.item(in, "ploce", "Offset ploče", "ploca", 0.001, 0, lane-demoInRow)
+			g.item(in, "papir", "Papir 80g A3", "papir80", 0.13, 0.63, lane-demoInRow)
+			g.item(in, "boja", "Boja CMYK", "boja", 0.0005, 1.37, lane-demoInRow)
+			g.item(by, "mak-stampa", "Makulatura (štampa)", "makulatura", 0.005, 1, lane+demoRow)
+			g.item(by, "mak-secenje", "Makulatura (sečenje)", "makulatura", 0.003, 2, lane+demoRow)
 			g.item(pr, "otisci", "Gotovi otisci", "", 0, 4, lane)
 			g.edges("priprema", "stampa", "stampa", "secenje", "secenje", "pakovanje", "pakovanje", "otisci",
 				"ploce", "priprema", "papir", "stampa", "boja", "stampa", "stampa", "mak-stampa", "secenje", "mak-secenje")
@@ -641,8 +643,8 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.step("priprema", "Priprema fajla", 0, lane)
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("dorada", "Dorada", 2, lane)
-			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 50, 0.63, lane-demoInRow)
-			g.item(in, "toner", "Toner", "toner", 1, 1.37, lane-demoInRow)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 0.1, 0.63, lane-demoInRow)
+			g.item(in, "toner", "Toner", "toner", 0.002, 1.37, lane-demoInRow)
 			g.item(pr, "otisci", "Digitalni otisci", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "dorada", "dorada", "otisci", "papir", "stampa", "toner", "stampa")
 			g.plan("priprema", "", 1, 20, 0)
@@ -657,12 +659,12 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.step("sivenje", "Šivenje", 3, lane)
 			g.step("obrezivanje", "Obrezivanje", 4, lane)
 			g.step("stampa-korica", "Štampa korica", 1, lane+320)
-			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 200, -0.37, lane-demoInRow)
-			g.item(in, "boja", "Boja CMYK", "boja", 3, 0.37, lane-demoInRow)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 1.2, -0.37, lane-demoInRow)
+			g.item(in, "boja", "Boja CMYK", "boja", 0.012, 0.37, lane-demoInRow)
 			g.item(pr, "tabaci", "Štampani tabaci", "", 0, 1, lane)
-			g.item(in, "karton", "Karton 300g", "karton", 50, 1, lane+320-demoInRow)
-			g.item(in, "zica", "Žica za povez", "zica", 1, 3, lane-demoInRow)
-			g.item(by, "mak", "Makulatura", "makulatura", 5, 4, lane+demoRow)
+			g.item(in, "karton", "Karton 300g", "karton", 0.3, 1, lane+320-demoInRow)
+			g.item(in, "zica", "Žica za povez", "zica", 0.004, 3, lane-demoInRow)
+			g.item(by, "mak", "Makulatura", "makulatura", 0.024, 4, lane+demoRow)
 			g.item(pr, "brosure", "Brošure", "", 0, 5, lane)
 			g.edges("stampa-tabaka", "tabaci", "tabaci", "savijanje", "savijanje", "sivenje", "stampa-korica", "sivenje",
 				"sivenje", "obrezivanje", "obrezivanje", "brosure", "obrezivanje", "mak",
@@ -679,8 +681,8 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.step("priprema", "Priprema", 0, lane)
 			g.step("stampa", "Štampa", 1, lane)
 			g.step("ojacanje", "Ojačanje i ringlovanje", 2, lane)
-			g.item(in, "baner", "Banner PVC 510g", "baner", 12, 1, lane-demoInRow)
-			g.item(by, "otpad", "Otpad bannera", "otpad", 1, 1, lane+demoRow)
+			g.item(in, "baner", "Banner PVC 510g", "baner", 8, 1, lane-demoInRow)
+			g.item(by, "otpad", "Otpad bannera", "otpad", 0.5, 1, lane+demoRow)
 			g.item(pr, "gotov", "Baner", "", 0, 3, lane)
 			g.edges("priprema", "stampa", "stampa", "ojacanje", "ojacanje", "gotov", "baner", "stampa", "stampa", "otpad")
 			g.plan("priprema", "", 1, 30, 0)
@@ -696,11 +698,11 @@ func (b *demoContentBuilder) processTemplates() error {
 			g.step("stampa-podloge", "Štampa podloge", 0, lane+320)
 			g.step("secenje", "Sečenje", 1, lane)
 			g.step("povez", "Spiralni povez", 2, lane)
-			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 130, 0, lane-demoInRow)
-			g.item(in, "karton", "Karton 300g", "karton", 10, -0.37, lane+320-demoInRow)
-			g.item(in, "toner", "Toner", "toner", 1, 0.37, lane+320-demoInRow)
-			g.item(in, "spirala", "Spirala plastična", "spirala", 10, 2, lane-demoInRow)
-			g.item(by, "ostaci", "Ostaci kartona", "makulatura", 4, 1, lane+demoRow)
+			g.item(in, "papir", "Papir kunstdruk 135g", "kunstdruk", 6.5, 0, lane-demoInRow)
+			g.item(in, "karton", "Karton 300g", "karton", 1, -0.37, lane+320-demoInRow)
+			g.item(in, "toner", "Toner", "toner", 0.007, 0.37, lane+320-demoInRow)
+			g.item(in, "spirala", "Spirala plastična", "spirala", 1, 2, lane-demoInRow)
+			g.item(by, "ostaci", "Ostaci kartona", "makulatura", 0.13, 1, lane+demoRow)
 			g.item(pr, "kalendari", "Kalendari", "", 0, 3, lane)
 			g.edges("stampa-listova", "secenje", "stampa-podloge", "secenje", "secenje", "povez", "povez", "kalendari",
 				"papir", "stampa-listova", "karton", "stampa-podloge", "toner", "stampa-podloge", "spirala", "povez", "secenje", "ostaci")

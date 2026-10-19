@@ -49,8 +49,10 @@ func isClosedWorkOrderStatus(status domain.WorkOrderStatus) bool {
 // closedWorkOrderStatusesSQL is the SQL list matching isClosedWorkOrderStatus.
 const closedWorkOrderStatusesSQL = `('completed', 'cancelled', 'invoiced')`
 
-func sumReserved(into map[string]float64, graph domain.ProcessGraph) {
-	for id, quantity := range domain.ReservedInputs(graph) {
+// sumReserved adds a graph's planned inputs (scaled by the order's quantity
+// factor) to the per-article totals.
+func sumReserved(into map[string]float64, graph domain.ProcessGraph, factor float64) {
+	for id, quantity := range domain.ReservedInputs(graph, factor) {
 		into[id] += quantity
 	}
 }

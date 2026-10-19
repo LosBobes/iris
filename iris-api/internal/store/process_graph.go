@@ -50,6 +50,15 @@ CREATE TABLE IF NOT EXISTS work_order_processes (
 CREATE INDEX IF NOT EXISTS idx_work_order_processes_tenant ON work_order_processes(tenant_id);
 `
 
+// workOrderProcessQuantitiesPerOrderMigration (v32, D-028) marks every process
+// copy that exists at migration time as carrying absolute per-order item
+// quantities. Copies created from now on carry per-unit quantities (the
+// column's default, 0) that are scaled by the order's jobDetails.quantity.
+const workOrderProcessQuantitiesPerOrderMigration = `
+ALTER TABLE work_order_processes ADD COLUMN quantities_per_order INTEGER NOT NULL DEFAULT 0;
+UPDATE work_order_processes SET quantities_per_order = 1;
+`
+
 var (
 	// ErrProcessTemplateNotFound means no template with that id exists in the tenant.
 	ErrProcessTemplateNotFound = errors.New("process template not found")
@@ -307,18 +316,20 @@ func getWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, workOrd
 	var process domain.WorkOrderProcess
 	var templateID sql.NullString
 	var graph string
+	var perOrder int
 	err := q.QueryRowContext(
 		ctx,
-		`SELECT work_order_id, template_id, template_name, graph, updated_at, updated_by
+		`SELECT work_order_id, template_id, template_name, graph, quantities_per_order, updated_at, updated_by
 		 FROM work_order_processes WHERE work_order_id = ? AND tenant_id = ?`,
 		workOrderID, tenantID,
-	).Scan(&process.WorkOrderID, &templateID, &process.TemplateName, &graph, &process.UpdatedAt, &process.UpdatedBy)
+	).Scan(&process.WorkOrderID, &templateID, &process.TemplateName, &graph, &perOrder, &process.UpdatedAt, &process.UpdatedBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load work order process: %w", err)
 	}
+	process.QuantitiesPerOrder = perOrder != 0
 	if templateID.Valid {
 		process.TemplateID = &templateID.String
 	}
@@ -330,7 +341,8 @@ func getWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, workOrd
 
 // insertWorkOrderProcess stores a fresh copy of a template graph on an order.
 // stockTracked marks a process created while the stock module is on; only such
-// processes post and reserve stock.
+// processes post and reserve stock. A fresh copy always carries per-unit item
+// quantities (quantities_per_order = 0).
 func insertWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, workOrderID string, template domain.ProcessTemplate, username, now string, stockTracked bool) (*domain.WorkOrderProcess, error) {
 	graph := domain.InstantiateProcessGraph(template.Graph)
 	raw, err := encodeProcessGraph(graph)
@@ -339,8 +351,8 @@ func insertWorkOrderProcess(ctx context.Context, q dbExecQuerier, tenantID, work
 	}
 	if _, err := q.ExecContext(
 		ctx,
-		`INSERT INTO work_order_processes(work_order_id, tenant_id, template_id, template_name, graph, updated_at, updated_by, stock_tracked)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO work_order_processes(work_order_id, tenant_id, template_id, template_name, graph, updated_at, updated_by, stock_tracked, quantities_per_order)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
 		workOrderID, tenantID, template.ID, template.Name, raw, now, username, boolInt(stockTracked),
 	); err != nil {
 		if isUniqueConstraintError(err) {
@@ -514,7 +526,11 @@ func (s *SQLiteStore) ApplyProcessTemplate(ctx context.Context, workOrderID, tem
 		return nil, err
 	}
 	if modules.Stock {
-		if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, process.Graph, username, now); err != nil {
+		factor, err := workOrderQuantityFactor(ctx, tx, tenantID, workOrderID, process.QuantitiesPerOrder)
+		if err != nil {
+			return nil, err
+		}
+		if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, process.Graph, factor, username, now); err != nil {
 			return nil, err
 		}
 	}
@@ -524,9 +540,23 @@ func (s *SQLiteStore) ApplyProcessTemplate(ctx context.Context, workOrderID, tem
 	return process, nil
 }
 
+// workOrderQuantityFactor loads the order and returns the factor its planned
+// item quantities are multiplied by (see domain.PlannedQuantityFactor).
+func workOrderQuantityFactor(ctx context.Context, q dbExecQuerier, tenantID, workOrderID string, quantitiesPerOrder bool) (float64, error) {
+	if quantitiesPerOrder {
+		return 1, nil
+	}
+	workOrder, err := workOrderByID(ctx, q, tenantID, workOrderID)
+	if err != nil {
+		return 0, err
+	}
+	return domain.WorkOrderQuantityFactor(workOrder, false), nil
+}
+
 // UpdateWorkOrderProcess replaces the order's graph. It returns nil when the
 // order has no process. Unless allowStructural is set, only per-order state
-// and positions may change; anything else is ErrProcessStructureLocked.
+// and positions may change; anything else is ErrProcessStructureLocked. Step
+// status transitions fill startedAt / finishedAt (domain.ApplyStepTimestamps).
 func (s *SQLiteStore) UpdateWorkOrderProcess(ctx context.Context, workOrderID string, graph domain.ProcessGraph, username string, allowStructural bool) (*domain.WorkOrderProcess, error) {
 	tenantID, err := tenantFromContext(ctx)
 	if err != nil {
@@ -554,11 +584,15 @@ func (s *SQLiteStore) UpdateWorkOrderProcess(ctx context.Context, workOrderID st
 	if err := validateGraphMachineTypes(ctx, tx, tenantID, next, machineTypeLinkSkip(current.Graph)); err != nil {
 		return nil, err
 	}
+	nowTime := time.Now().UTC()
+	if next, err = domain.ApplyStepTimestamps(current.Graph, next, nowTime); err != nil {
+		return nil, graphValidationError(err)
+	}
 	raw, err := encodeProcessGraph(next)
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := nowTime.Format(time.RFC3339)
 	if _, err := tx.ExecContext(
 		ctx,
 		`UPDATE work_order_processes SET graph = ?, updated_at = ?, updated_by = ? WHERE work_order_id = ? AND tenant_id = ?`,
@@ -579,7 +613,11 @@ func (s *SQLiteStore) UpdateWorkOrderProcess(ctx context.Context, workOrderID st
 			return nil, fmt.Errorf("load process stock tracking: %w", err)
 		}
 		if tracked != 0 {
-			if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, next, username, now); err != nil {
+			factor, err := workOrderQuantityFactor(ctx, tx, tenantID, workOrderID, current.QuantitiesPerOrder)
+			if err != nil {
+				return nil, err
+			}
+			if err := postWorkOrderStock(ctx, tx, tenantID, workOrderID, next, factor, username, now); err != nil {
 				return nil, err
 			}
 		}

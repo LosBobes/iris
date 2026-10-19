@@ -980,7 +980,11 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
       <OrderForecastLine workOrderId={order.id} />
 
       {/* Renders nothing (and requests nothing) while the processes module is off. */}
-      <WorkOrderProcessPanel workOrderId={order.id} canEditStructure={isAdmin} />
+      <WorkOrderProcessPanel
+        workOrderId={order.id}
+        canEditStructure={isAdmin}
+        orderQuantity={order.jobDetails?.quantity ?? null}
+      />
     </>
   );
 }

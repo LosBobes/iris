@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { renderWithQueryClient } from '@/test/query'
 import { MemoryRouter } from 'react-router-dom'
 import '@testing-library/jest-dom/vitest'
 import { ALL_MODULES, NO_MODULES, STOCK_ONLY, WithModules } from '@/test/modules'
@@ -47,7 +48,7 @@ function renderPanel(modules: typeof ALL_MODULES) {
     }),
   }
   vi.stubGlobal('api', api)
-  render(
+  renderWithQueryClient(
     <MemoryRouter>
       <WithModules modules={modules}>
         <WorkOrderProcessPanel workOrderId="wo-1" canEditStructure />

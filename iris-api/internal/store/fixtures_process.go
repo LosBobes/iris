@@ -224,7 +224,7 @@ func (s *FixtureStore) ApplyProcessTemplate(_ context.Context, workOrderID, temp
 	now := time.Now().UTC().Format(time.RFC3339)
 	process := s.setWorkOrderProcessLocked(workOrderID, s.processTemplates[i], username, now)
 	if s.modules.Stock {
-		s.postWorkOrderStockLocked(workOrderID, process.Graph, username, now)
+		s.postWorkOrderStockLocked(workOrderID, process.Graph, s.quantityFactorLocked(workOrderID, false), username, now)
 	}
 	return process, nil
 }
@@ -246,11 +246,15 @@ func (s *FixtureStore) UpdateWorkOrderProcess(_ context.Context, workOrderID str
 	if next, err = s.resolveGraphLinksLocked(next, existingLinkSkip(current.Graph)); err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	nowTime := time.Now().UTC()
+	if next, err = domain.ApplyStepTimestamps(current.Graph, next, nowTime); err != nil {
+		return nil, graphValidationError(err)
+	}
+	now := nowTime.Format(time.RFC3339)
 	current.Graph, current.UpdatedAt, current.UpdatedBy = next, now, username
 	s.workOrderProcesses[workOrderID] = current
 	if s.modules.Stock && s.stockTracked[workOrderID] {
-		s.postWorkOrderStockLocked(workOrderID, next, username, now)
+		s.postWorkOrderStockLocked(workOrderID, next, s.quantityFactorLocked(workOrderID, current.QuantitiesPerOrder), username, now)
 	}
 	return cloneWorkOrderProcess(current), nil
 }

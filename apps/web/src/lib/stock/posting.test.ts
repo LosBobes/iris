@@ -56,6 +56,43 @@ function graph(statuses: Partial<Record<'print' | 'cut', 'done' | 'pending' | 's
   }
 }
 
+// Planned quantities are per unit of the order (D-028): the factor multiplies
+// them exactly once; actual quantities are absolute and never scale.
+describe('order quantity factor', () => {
+  it('scales reservations and desired nets, not actual quantities', () => {
+    expect(reservedByArticle(graph(), 3).get('a1')).toBe(300)
+    expect(reservedByArticle(graph(), 1).get('a1')).toBe(100)
+    const done = graph({ print: 'done' })
+    expect(desiredNet(done, done.nodes[0], 3)).toBe(-300)
+    expect(desiredNet(done, done.nodes[4], 3)).toBe(9)
+    const actual = { ...done, nodes: done.nodes.map((n) => (n.id === 'paper' ? { ...n, actualQuantity: 92 } : n)) }
+    expect(desiredNet(actual, actual.nodes[0], 3)).toBe(-92)
+  })
+
+  it('posts scaled movements and sums reservations per order factor', () => {
+    const moves = planProcessPosting(graph({ print: 'done' }), [], 3)
+    expect(moves.find((m) => m.processNodeId === 'paper')).toMatchObject({ quantity: -300, kind: 'consumption' })
+    expect(moves.find((m) => m.processNodeId === 'waste')).toMatchObject({ quantity: 9, kind: 'production' })
+    const total = reservedAcrossGraphs([{ graph: graph(), factor: 3 }, { graph: graph() }, graph()])
+    expect(total.get('a1')).toBe(500)
+  })
+
+  it('rounds fractional per-unit amounts to three decimals once scaled', () => {
+    const fractional = graph()
+    fractional.nodes[0] = { ...fractional.nodes[0], quantity: 1100 / 3000 }
+    expect(reservedByArticle(fractional, 3000).get('a1')).toBe(1100)
+    const rows = materialRows(fractional, 'order', toLevelMap([level('a1', 2000)]), 3000)
+    expect(rows[0]).toMatchObject({ planned: 1100, required: 1100 })
+  })
+
+  it('shows planned amounts for the order in the material table and the simulator context', () => {
+    const rows = materialRows(graph(), 'order', toLevelMap([level('a1', 250, 300)]), 3)
+    // The order's own (scaled) reservation is added back, so 250 - 300 + 300 = 250 is available.
+    expect(rows[0]).toMatchObject({ planned: 300, required: 300, available: 250, shortage: 50 })
+    expect(stockContextFor(graph(), 'order', toLevelMap([level('a1', 250, 300)]), 3).items.a1.available).toBe(250)
+  })
+})
+
 describe('desiredNet', () => {
   it('books an input as consumed once any step it feeds is done', () => {
     const paper = graph().nodes[0]

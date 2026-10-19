@@ -778,7 +778,10 @@ function ProcessesChapter(): React.JSX.Element {
       <Callout kind="note" title="Ko šta sme">
         Administrator menja strukturu (dodaje korake, veze, ulaze). Operater samo pomera
         status koraka i upisuje stvarne količine. Tako operater ne može slučajno da obriše
-        pola procesa.
+        pola procesa. Kad korak krene i kad se završi, Iris sam zapamti stvarno vreme
+        početka i završetka (vidi se u detaljima koraka; administrator ga može ispraviti).
+        Planirane količine ulaza i izlaza unose se po jednom komadu naloga i množe se
+        količinom naloga; stvarna količina je uvek ukupna za ceo nalog.
       </Callout>
       <H2>Procesi i magacin rade zajedno</H2>
       <P>

@@ -3,6 +3,7 @@ import type { ProcessGraph, ProcessNode, ProcessStepStatus } from '@/types/proce
 import type { StockContext } from '@/lib/stock/posting'
 import { STOCK_EPSILON, shortageOf } from '@/lib/stock/posting'
 import { hasCycle, predecessorSteps, validateGraph } from './graph'
+import { roundPlanned, scalePlannedQuantity } from './quantities'
 
 // Pure, client-side process "tester" and "simulator". Nothing here touches the
 // API or mutates the graph it is given.
@@ -217,15 +218,18 @@ export interface SimPlan {
 }
 
 export interface SimulationOptions {
-  /** Multiplier applied to every planned quantity; default 1, clamped to >= 0. */
+  /**
+   * Multiplier applied to every planned (per-unit) quantity: the simulated
+   * number of units; default 1, clamped to >= 0. For a work order start from
+   * `plannedQuantityFactor` so the simulator and the server agree.
+   */
   quantity?: number
   skipped?: ReadonlySet<string>
 }
 
-function scale(value: number | undefined, factor: number): number | undefined {
-  if (value === undefined) return undefined
-  return Math.round(value * factor * 1000) / 1000
-}
+// One shared helper (lib/process/quantities) does the per-unit × units step,
+// so the client never multiplies twice.
+const scale = scalePlannedQuantity
 
 function addTotals(items: SimItem[]): SimTotal[] {
   const byUnit = new Map<string, SimTotal>()
@@ -233,7 +237,7 @@ function addTotals(items: SimItem[]): SimTotal[] {
     const unit = item.unit?.trim() ?? ''
     const total = byUnit.get(unit) ?? { unit, quantity: 0, unknown: 0 }
     if (item.quantity === undefined) total.unknown += 1
-    else total.quantity = Math.round((total.quantity + item.quantity) * 1000) / 1000
+    else total.quantity = roundPlanned(total.quantity + item.quantity)
     byUnit.set(unit, total)
   }
   return [...byUnit.values()]
@@ -441,8 +445,8 @@ export function stockRequirements(graph: ProcessGraph, plan: SimPlan, stock: Sto
     rows.set(node.catalogItemId, row)
   }
   return [...rows.values()].map((row) => {
-    const required = Math.round(row.required * 1000) / 1000
-    return { ...row, required, shortage: Math.round(shortageOf(required, row.available) * 1000) / 1000 }
+    const required = roundPlanned(row.required)
+    return { ...row, required, shortage: roundPlanned(shortageOf(required, row.available)) }
   })
 }
 

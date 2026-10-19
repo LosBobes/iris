@@ -194,14 +194,16 @@ type StockNet struct {
 	Net           float64
 }
 
-// nodeStockQuantity is the actual quantity when recorded, else the planned one.
-func nodeStockQuantity(node ProcessNode) float64 {
+// nodeStockQuantity is the actual quantity when recorded (an absolute
+// per-order figure the operator entered), else the planned per-unit quantity
+// scaled by factor (see PlannedQuantityFactor).
+func nodeStockQuantity(node ProcessNode, factor float64) float64 {
 	quantity := 0.0
 	switch {
 	case node.ActualQuantity != nil:
 		quantity = *node.ActualQuantity
 	case node.Quantity != nil:
-		quantity = *node.Quantity
+		quantity = ScalePlannedQuantity(*node.Quantity, factor)
 	}
 	if quantity < 0 || math.IsNaN(quantity) || math.IsInf(quantity, 0) {
 		return 0
@@ -249,16 +251,17 @@ func anyStepDone(steps map[string]ProcessNode, ids []string) bool {
 //   - produced (a step that outputs the node is done): +qty;
 //   - an intermediate product that is both produced and consumed nets out.
 //
-// qty is actualQuantity, else quantity, else 0. "skipped" and "in_progress"
+// qty is actualQuantity, else quantity × factor (the order's planned-quantity
+// factor, see PlannedQuantityFactor), else 0. "skipped" and "in_progress"
 // count as not done. The map is keyed by node id.
-func DesiredStockNet(graph ProcessGraph) map[string]StockNet {
+func DesiredStockNet(graph ProcessGraph, factor float64) map[string]StockNet {
 	steps, consumers, producers := graphStepLinks(graph)
 	desired := map[string]StockNet{}
 	for _, node := range graph.Nodes {
 		if !node.Kind.isItem() || node.CatalogItemID == "" {
 			continue
 		}
-		quantity := nodeStockQuantity(node)
+		quantity := nodeStockQuantity(node, factor)
 		net := 0.0
 		if node.Kind != ProcessNodeInput && anyStepDone(steps, producers[node.ID]) {
 			net += quantity
@@ -273,8 +276,9 @@ func DesiredStockNet(graph ProcessGraph) map[string]StockNet {
 
 // ReservedInputs returns the planned quantity still to be consumed per article
 // by the graph's linked input nodes (kind "input" only) whose consuming steps
-// are not yet done. Intended to be summed over open work orders.
-func ReservedInputs(graph ProcessGraph) map[string]float64 {
+// are not yet done, scaled by the order's planned-quantity factor (see
+// PlannedQuantityFactor). Intended to be summed over open work orders.
+func ReservedInputs(graph ProcessGraph, factor float64) map[string]float64 {
 	steps, consumers, _ := graphStepLinks(graph)
 	reserved := map[string]float64{}
 	for _, node := range graph.Nodes {
@@ -286,7 +290,7 @@ func ReservedInputs(graph ProcessGraph) map[string]float64 {
 		}
 		planned := 0.0
 		if node.Quantity != nil && *node.Quantity > 0 {
-			planned = *node.Quantity
+			planned = ScalePlannedQuantity(*node.Quantity, factor)
 		}
 		if planned > 0 {
 			reserved[node.CatalogItemID] += planned
@@ -309,13 +313,14 @@ type PlannedStockMovement struct {
 	Kind          StockMovementKind
 }
 
-// PlanStockPostings compares the graph's desired net per node with the net
-// already posted for the order (existing, keyed by node and article) and
-// returns one movement per difference. Nodes whose article changed get the old
-// article reversed and the new one posted; nodes that left the graph are
-// reversed. The result is ordered deterministically.
-func PlanStockPostings(graph ProcessGraph, existing map[StockNodeKey]float64) []PlannedStockMovement {
-	desired := DesiredStockNet(graph)
+// PlanStockPostings compares the graph's desired net per node (planned
+// quantities scaled by factor, see DesiredStockNet) with the net already posted
+// for the order (existing, keyed by node and article) and returns one movement
+// per difference. Nodes whose article changed get the old article reversed and
+// the new one posted; nodes that left the graph are reversed. The result is
+// ordered deterministically.
+func PlanStockPostings(graph ProcessGraph, factor float64, existing map[StockNodeKey]float64) []PlannedStockMovement {
+	desired := DesiredStockNet(graph, factor)
 	steps, consumers, producers := graphStepLinks(graph)
 	nodes := map[string]ProcessNode{}
 	for _, node := range graph.Nodes {

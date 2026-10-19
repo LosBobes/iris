@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { renderWithQueryClient } from '@/test/query'
 import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom/vitest'
 import { ALL_MODULES, WithModules } from '@/test/modules'
@@ -56,7 +57,7 @@ afterEach(() => {
 describe('WorkOrderProcessPanel', () => {
   it('shows progress and the ready steps for an order with a process', async () => {
     vi.stubGlobal('api', { getWorkOrderProcess: vi.fn().mockResolvedValue(processOf(graph)) })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
 
     expect(await screen.findByText('1/3 koraka završeno')).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '33')
@@ -71,7 +72,7 @@ describe('WorkOrderProcessPanel', () => {
       getWorkOrderProcess: vi.fn().mockResolvedValue(processOf(graph)),
       updateWorkOrderProcess,
     })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
 
     await user.click(await screen.findByRole('button', { name: 'Simuliraj' }))
     expect(await screen.findByTestId('process-simulator')).toBeInTheDocument()
@@ -87,7 +88,7 @@ describe('WorkOrderProcessPanel', () => {
       getProcessTemplates: vi.fn().mockResolvedValue(templates),
       applyProcessTemplate,
     })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
 
     expect(await screen.findByText('Ovaj radni nalog nema proces rada.')).toBeInTheDocument()
     const apply = await screen.findByRole('button', { name: 'Primeni' })
@@ -108,7 +109,7 @@ describe('WorkOrderProcessPanel', () => {
       getProcessTemplates: vi.fn().mockResolvedValue(templates),
       applyProcessTemplate: vi.fn().mockRejectedValue(conflict),
     })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
 
     const apply = await screen.findByRole('button', { name: 'Primeni' })
     await waitFor(() => expect(apply).toBeEnabled())
@@ -123,7 +124,7 @@ describe('WorkOrderProcessPanel', () => {
       getWorkOrderProcess: vi.fn().mockResolvedValue(null),
       getProcessTemplates: vi.fn().mockResolvedValue([]),
     })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
     expect(await screen.findByText(/Nema definisanih procesa/)).toBeInTheDocument()
   })
 
@@ -135,7 +136,7 @@ describe('WorkOrderProcessPanel', () => {
       getProcessTemplates: vi.fn().mockResolvedValue(templates),
       deleteWorkOrderProcess,
     })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
 
     await user.click(await screen.findByRole('button', { name: 'Ukloni proces' }))
     expect(deleteWorkOrderProcess).not.toHaveBeenCalled()
@@ -148,7 +149,7 @@ describe('WorkOrderProcessPanel', () => {
   it('loads the graph lazily and hides structure tools from operators', async () => {
     const user = userEvent.setup()
     vi.stubGlobal('api', { getWorkOrderProcess: vi.fn().mockResolvedValue(processOf(graph)) })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure={false} /></WithModules>)
 
     expect(screen.queryByRole('group', { name: 'Grafikon procesa' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Prikaži grafikon' }))
@@ -161,7 +162,7 @@ describe('WorkOrderProcessPanel', () => {
   it('shows structure tools to admins and disables save until something changes', async () => {
     const user = userEvent.setup()
     vi.stubGlobal('api', { getWorkOrderProcess: vi.fn().mockResolvedValue(processOf(graph)) })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
 
     await user.click(await screen.findByRole('button', { name: 'Prikaži grafikon' }))
     const add = await screen.findByRole('button', { name: 'Dodaj korak' })
@@ -180,7 +181,7 @@ describe('WorkOrderProcessPanel', () => {
       getWorkOrderProcess: vi.fn().mockResolvedValue(processOf(graph)),
       updateWorkOrderProcess,
     })
-    render(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
+    renderWithQueryClient(<WithModules modules={ALL_MODULES}><WorkOrderProcessPanel workOrderId="wo-1" canEditStructure /></WithModules>)
 
     await user.click(await screen.findByRole('button', { name: 'Prikaži grafikon' }))
     await user.click(await screen.findByRole('button', { name: 'Dodaj korak' }))
