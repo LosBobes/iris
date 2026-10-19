@@ -8,10 +8,10 @@ This glossary maps the business, operational, and database terms used across the
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |
 | --- | --- | --- | --- |
-| **Iris Suite** | `Iris` | n/a | The unified operations suite: web client and Go API. |
+| **Iris Suite** | `Iris` | n/a | The unified, industry-neutral operations platform for small manufacturing and service businesses: web client and Go API. |
 | **Web Client** | `apps/web` | n/a | Lightweight React application for remote management and public order lookup. |
 | **Backend API** | `iris-api` | n/a | Go REST API serving as the single source of truth for workspace operations. |
-| **Tenant / Organization** | `Tenant` | `Organizacija` | An isolated organization (shop). Every row is scoped to a tenant; users log in with the tenant's **org slug** (`orgSlug`). Seeded production tenant: `grafika-cobanovic` (Grafika Čobanović); demo tenant: `demo`. |
+| **Tenant / Organization** | `Tenant` | `Organizacija` | An isolated organization (a customer business, e.g. a shop or workshop). Every row is scoped to a tenant; users log in with the tenant's **org slug** (`orgSlug`). Seeded production tenant: `grafika-cobanovic` (Grafika Čobanović); demo tenant: `demo`. |
 | **Admin** | `role: 'admin'` | `Administrator` | Staff role authorized to access performance charts, organization settings, and billing configurations. |
 | **Operator** | `role: 'user'` | `Operater` | Standard staff role focused on order execution, tracking time, and updating status. |
 
@@ -28,13 +28,17 @@ This glossary maps the business, operational, and database terms used across the
 
 ---
 
-## Work-Order & Printing Terms
+## Work-Order Terms
+
+> Material, size and finishing fields below (`productCode`, `paperWeightGsm`,
+> `dimensions`, `finishingNote`) are optional work-order details; an
+> organization that does not need them leaves them empty.
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |
 | --- | --- | --- | --- |
-| **Work Order** | `WorkOrder` | `Radni nalog` | The central execution record in the print shop. |
+| **Work Order** | `WorkOrder` | `Radni nalog` | The central execution record of an organization's work: one job from intake to invoicing. |
 | **Order Number** | `orderNumber` | `Broj naloga` | Unique per-tenant order reference `RN-<year>-<seq>` with a 5-digit sequence (e.g., `RN-2025-00042`). Can be pre-reserved before save (see reservation endpoints). |
-| **Job Description** | `jobDescription` | `Opis posla` | Summary of print work requested (e.g., "Štampa vizit karti"). |
+| **Job Description** | `jobDescription` | `Opis posla` | Summary of the work requested (e.g., "Izrada 200 komada"). |
 | **Product Code** | `productCode` | `Šifra proizvoda` | Inventory or catalog system code representing paper/product style. |
 | **Paper Weight** | `paperWeightGsm` | `Gramatura (g/m²)` | Weight/thickness of the paper stocks used in production. |
 | **Dimensions** | `dimensions` | `Dimenzije` | Physical format dimensions (e.g., `A4`, `85x55 mm`). |
@@ -65,10 +69,10 @@ Work orders progress sequentially through a defined lifecycle. Transitions are s
 
 | English Term | Code Token | Serbian UI Label | Meaning & Context |
 | --- | --- | --- | --- |
-| **Internal Notes** | `internalNotes` | `Interne napomene` | Internal communication only visible to print-shop operators. Gated. |
+| **Internal Notes** | `internalNotes` | `Interne napomene` | Internal communication only visible to the organization's staff. Gated. |
 | **Customer Notes** | `customerNotes` | `Napomene za klijenta` | Public-facing comments visible to clients on tracking portals. |
 | **Time Entry** | `TimeEntry` | `Evidencija rada` | Record of how many minutes a specific operator spent on production. |
-| **Material Usage** | `MaterialUsage` | `Utrošak materijala` | Record of materials (e.g. inks, plates, media) consumed during print runs. |
+| **Material Usage** | `MaterialUsage` | `Utrošak materijala` | Record of materials (e.g. inks, plates, media) consumed during production. |
 | **Invoice Draft** | `InvoiceDraft` | `Nacrt fakture` | Line-item container tracking billing items and invoicing states. |
 | **Draft Status** | `InvoiceDraftStatus` | `Status fakture` | Invoicing states: `none`, `draft` (nacrt), `issued` (izdata), `paid` (plaćena). |
 | **Public Token** | `publicToken` | `Javni token` | Secure unique hash enabling customers to access public tracking pages. |
@@ -99,7 +103,7 @@ The catalog item's `taxGroup` (`Poreska grupa`) holds the fiscal-receipt tax lab
 - `pickup` (`Lično preuzimanje`): Client collects order in person.
 - `postExpress` (`Post Express`): Delivered via Post Express courier.
 - `cityExpress` (`City Express`): Delivered via City Express courier.
-- `fieldVisit` (`Terenski obilazak`): Installed or delivered by print staff on site.
+- `fieldVisit` (`Terenski obilazak`): Installed or delivered by the organization's staff on site.
 
 ---
 

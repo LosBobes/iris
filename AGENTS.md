@@ -1,7 +1,9 @@
 # Iris
 
-Operations workspace for **Stamparija Cobanovic** (a print shop): work-order
-lifecycle, customers/locations, dashboard reporting, and public tracking.
+Operations platform for small manufacturing and service businesses (job shops):
+work-order lifecycle, customers/locations, catalog, dashboard reporting, public
+tracking, and optional modules (stock, processes, attendance, planning). The
+first production organization is **Grafika Čobanović**.
 
 Two deployable surfaces share **one Go REST API** and **one SQLite database**:
 

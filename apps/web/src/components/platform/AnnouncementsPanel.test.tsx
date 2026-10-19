@@ -15,7 +15,7 @@ const strings = sr.platform.announcements;
 const tenant: PlatformTenant = {
   id: "tenant-demo",
   slug: "demo",
-  name: "Demo Štamparija",
+  name: "Demo Firma",
   createdAt: "2026-02-01 00:00:00",
   suspendedAt: null,
   users: 2,
@@ -86,7 +86,7 @@ describe("AnnouncementsPanel", () => {
     expect(within(dialog).getByText(strings.errors.tenantsRequired)).toBeInTheDocument();
     expect(createPlatformAnnouncement).not.toHaveBeenCalled();
 
-    await userEvent.click(await within(dialog).findByRole("checkbox", { name: /Demo Štamparija/ }));
+    await userEvent.click(await within(dialog).findByRole("checkbox", { name: /Demo Firma/ }));
     await userEvent.click(within(dialog).getByRole("button", { name: strings.createSubmit }));
 
     expect(createPlatformAnnouncement).toHaveBeenCalledWith({

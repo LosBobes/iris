@@ -33,7 +33,8 @@ import { staggerStyle } from "@/lib/motion";
 
 /**
  * The public landing page (/home): what Iris is, for whom, and everything it
- * does, written for a print shop that is considering it. It is reachable
+ * does, written for a small production or service business that is
+ * considering it. It is reachable
  * signed out and signed in, needs no API call, and (like the documentation
  * chapters) is long-form Serbian only.
  *
@@ -43,7 +44,7 @@ import { staggerStyle } from "@/lib/motion";
  * per deployment with `VITE_HOME_CONTACT_EMAIL` (see .env.example).
  */
 
-const PAGE_TITLE = "Iris · radni nalozi za štampariju";
+const PAGE_TITLE = "Iris · radni nalozi za proizvodnju i usluge";
 
 const DEFAULT_CONTACT_EMAIL = "vladbatocanin@gmail.com";
 
@@ -69,7 +70,7 @@ const CORE_FEATURES: Feature[] = [
   {
     icon: ClipboardList,
     title: "Radni nalozi",
-    body: "Jedan posao, jedan nalog: za koga, šta se radi, papir, format, dorada, ko radi i do kada. Broj naloga se dodeljuje sam, stavke se biraju iz kataloga, a cena je njihov zbir.",
+    body: "Jedan posao, jedan nalog: za koga, šta se radi, sa kojim materijalom i doradom, ko radi i do kada. Broj naloga se dodeljuje sam, stavke se biraju iz kataloga, a cena je njihov zbir.",
   },
   {
     icon: Users,
@@ -109,7 +110,7 @@ const CORE_FEATURES: Feature[] = [
   {
     icon: BookOpen,
     title: "Uputstvo i vodič",
-    body: "Ugrađena dokumentacija sa dijagramima, od toga kako radi štamparija do svakog ekrana, rečnik pojmova i interaktivni vodič koji te provede kroz prvi nalog bez čuvanja.",
+    body: "Ugrađena dokumentacija sa dijagramima, od puta jednog posla do svakog ekrana, rečnik pojmova i interaktivni vodič koji te provede kroz prvi nalog bez čuvanja.",
   },
   {
     icon: Smartphone,
@@ -128,7 +129,7 @@ const SECURITY_POINTS: SecurityPoint[] = [
   {
     icon: Building2,
     title: "Svaka firma u svom prostoru",
-    body: "Iris koristi više štamparija odjednom, ali svaka je zasebna organizacija. Nalozi, klijenti, katalog i ljudi vide se samo unutar nje; druga firma ne može da vidi ništa vaše.",
+    body: "Iris koristi više firmi odjednom, ali svaka je zasebna organizacija. Nalozi, klijenti, katalog i ljudi vide se samo unutar nje; druga firma ne može da vidi ništa vaše.",
   },
   {
     icon: Lock,
@@ -226,7 +227,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
         <Section
           id="mogucnosti"
           eyebrow="Mogućnosti"
-          title="Sve što štamparija radi svaki dan"
+          title="Sve što vaša firma radi svaki dan"
           lead="Iris prati ono što se ionako dešava u radionici: od upita, preko naloga i proizvodnje, do isporuke i naplate. Ovo koriste svi, svaki dan."
         >
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -466,10 +467,10 @@ function Hero({ primaryHref, primaryLabel }: { primaryHref: string; primaryLabel
           style={{ animation: "iris-fade-up var(--iris-dur-page) var(--iris-ease-out-decisive) both" }}
         >
           <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
-            Iris · sistem za štamparije
+            Iris · sistem za proizvodnju i usluge
           </div>
           <h1 className="mt-4 max-w-[14ch] text-[38px] font-normal leading-[1.05] tracking-[-1.2px] sm:text-[52px] sm:tracking-[-1.8px] lg:text-[60px]">
-            Svaki posao u štampariji, na jednom mestu.
+            Svaki posao vaše firme, na jednom mestu.
           </h1>
           <div
             className="my-6 h-0.5 w-10 origin-left bg-[color:var(--iris-accent)]"

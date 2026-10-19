@@ -93,8 +93,11 @@ export interface OrganizationSettings {
   modules: OrganizationModules
 }
 
-/** Fallback firm name used before settings load or when the request fails. */
-export const DEFAULT_FIRM_NAME = 'Grafika Čobanović'
+/**
+ * Fallback firm name used before settings load or when the request fails. The
+ * API itself falls back to the organization's own name.
+ */
+export const DEFAULT_FIRM_NAME = 'Iris'
 
 /**
  * Default PDF sections, used before settings load or for an unconfigured shop.

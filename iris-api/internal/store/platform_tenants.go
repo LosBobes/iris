@@ -35,7 +35,7 @@ const duplicateTenantSlugMessage = "Organizacija sa tom oznakom već postoji."
 func normalizeTenantSlug(slug string) (string, error) {
 	slug = strings.ToLower(strings.TrimSpace(slug))
 	if len(slug) < 2 || len(slug) > 64 || !tenantSlugPattern.MatchString(slug) {
-		return "", newValidationError("Oznaka mora imati 2–64 znaka: mala slova, cifre i crtice (npr. stamparija-novi-sad).")
+		return "", newValidationError("Oznaka mora imati 2–64 znaka: mala slova, cifre i crtice (npr. moja-firma).")
 	}
 	return slug, nil
 }
@@ -276,6 +276,8 @@ func (s *SQLiteStore) PlatformUpdateTenant(ctx context.Context, actor AuditActor
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit update tenant: %w", err)
 	}
+	// An organization without a saved firm name shows its tenant name.
+	s.invalidateSettings(current.ID)
 	return s.platformTenantByID(ctx, current.ID)
 }
 

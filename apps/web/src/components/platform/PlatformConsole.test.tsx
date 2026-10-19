@@ -35,7 +35,7 @@ const metrics: PlatformMetrics = {
       activeSessions: 2, lastWorkOrderAt: "2026-10-16T09:30:00Z", lastLoginAt: "2026-10-16T08:00:00Z", hasLoginLogo: true,
     },
     {
-      id: "tenant-demo", slug: "demo", name: "Demo Štamparija", createdAt: "2026-02-01 00:00:00",
+      id: "tenant-demo", slug: "demo", name: "Demo Firma", createdAt: "2026-02-01 00:00:00",
       users: 2, admins: 1, customers: 0, catalogItems: 0, workOrders: 2, workOrdersInRange: 0,
       openWorkOrders: 0, statusCounts: {}, loginsInRange: 2, activeUsersInRange: 1,
       activeSessions: 0, lastWorkOrderAt: null, lastLoginAt: null, hasLoginLogo: false,

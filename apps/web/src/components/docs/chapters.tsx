@@ -29,7 +29,6 @@ import {
   JobJourneyDiagram,
   ModulesDiagram,
   OrderNumberDiagram,
-  PaperSizesDiagram,
   PlanCycleDiagram,
   PriceStackDiagram,
   ProcessGraphDiagram,
@@ -74,12 +73,13 @@ function StartChapter(): React.JSX.Element {
     <>
       <P>
         Zdravo. Ovo je uputstvo za Iris i pisao sam ga tako da ga razume i neko ko prvi
-        put ulazi u štampariju. Ako već znaš šta je gramatura i zašto se profaktura šalje
-        pre posla, slobodno preskoči na poglavlja o samoj aplikaciji. Ako ne znaš, nema
-        veze, krećemo od nule.
+        put radi u firmi koja posao radi po narudžbini, bilo da je to radionica,
+        proizvodnja ili servis. Ako već znaš zašto se profaktura šalje pre
+        posla, slobodno preskoči na poglavlja o samoj aplikaciji. Ako ne znaš, nema veze,
+        krećemo od nule.
       </P>
       <P>
-        <strong>Iris je mesto gde živi svaki posao koji štamparija radi.</strong> Klijent
+        <strong>Iris je mesto gde živi svaki posao koji vaša firma radi.</strong> Klijent
         se javi, mi otvorimo radni nalog, na njemu piše šta se radi, za koga, koliko košta
         i do kada mora da bude gotovo. Nalog onda putuje kroz proizvodnju, dok ne bude
         isporučen i naplaćen. Sve što Iris radi vrti se oko tog puta.
@@ -91,7 +91,7 @@ function StartChapter(): React.JSX.Element {
       <H2>Kako je uputstvo složeno</H2>
       <List
         items={[
-          <><strong>Za početak</strong>: šta je Iris, kako radi štamparija, kako se računa novac i kako se prijavljuješ.</>,
+          <><strong>Za početak</strong>: šta je Iris, put jednog posla, kako se računa novac i kako se prijavljuješ.</>,
           <><strong>Svaki dan</strong>: radni nalozi, klijenti, katalog i kontrolna tabla. Ovo koriste svi, svaki dan.</>,
           <><strong>Moduli</strong>: magacin, procesi rada, prisustvo i planiranje. To su dodaci koje vaša firma može, ali ne mora da ima uključene.</>,
           <><strong>Za administratore</strong>: podešavanja firme i korisnici.</>,
@@ -103,7 +103,7 @@ function StartChapter(): React.JSX.Element {
       <P>
         Iris koristi više firmi odjednom, ali svaka živi u svom zatvorenom prostoru koji
         zovemo <strong>organizacija</strong>. Tvoji nalozi, klijenti, katalog i ljudi vide
-        se samo u tvojoj organizaciji. Druga štamparija ne može da vidi ništa tvoje, niti ti
+        se samo u tvojoj organizaciji. Druga firma ne može da vidi ništa tvoje, niti ti
         njeno. Zato se pri prijavi prvo upisuje <strong>oznaka organizacije</strong>, pa tek
         onda korisničko ime.
       </P>
@@ -184,13 +184,13 @@ function RolesTable(): React.JSX.Element {
   );
 }
 
-function PrintShopChapter(): React.JSX.Element {
+function JobJourneyChapter(): React.JSX.Element {
   return (
     <>
       <P>
-        Pre nego što pričamo o dugmićima, hajde da vidimo šta štamparija zapravo radi. Kad
-        to razumeš, pola aplikacije ti je samo po sebi jasno, jer Iris samo prati ono što
-        se ionako dešava u radionici.
+        Pre nego što pričamo o dugmićima, hajde da vidimo kako jedan posao putuje od upita
+        do naplate. Kad to razumeš, pola aplikacije ti je samo po sebi jasno, jer Iris samo
+        prati ono što se ionako dešava u firmi.
       </P>
       <Figure caption="Osam koraka jednog posla. Radni nalog (3) je dokument oko kog se sve okreće, i baš njega Iris vodi.">
         <JobJourneyDiagram />
@@ -199,9 +199,9 @@ function PrintShopChapter(): React.JSX.Element {
       <H2>Korak po korak</H2>
       <H3>1. Upit</H3>
       <P>
-        Klijent se javi: „Treba mi 1.000 vizit karti, obostrano, plastificirane, do petka.“
-        To je upit. U njemu su uvek tri stvari: <strong>šta</strong> (proizvod i kako
-        izgleda), <strong>koliko</strong> (tiraž) i <strong>do kada</strong> (rok).
+        Klijent se javi: „Treba mi 200 komada, do petka.“ To je upit. U njemu su uvek tri
+        stvari: <strong>šta</strong> (proizvod ili usluga i kako treba da izgleda),{" "}
+        <strong>koliko</strong> (količina) i <strong>do kada</strong> (rok).
       </P>
       <H3>2. Ponuda i predračun</H3>
       <P>
@@ -211,34 +211,27 @@ function PrintShopChapter(): React.JSX.Element {
       </P>
       <H3>3. Radni nalog</H3>
       <P>
-        Kad se dogovorimo, otvara se <strong>radni nalog</strong>. To je interni papir
-        (kod nas u Irisu, a može i da se odštampa) na kome piše sve što majstor treba da
-        zna: za koga je, šta se tačno radi, na kom papiru, u kom formatu, sa kojom doradom,
-        ko radi i do kada. Ako nešto nije na nalogu, za radionicu to ne postoji.
+        Kad se dogovorimo, otvara se <strong>radni nalog</strong>. To je interni dokument
+        (kod nas u Irisu, a može i da se odštampa) na kome piše sve što izvršilac treba da
+        zna: za koga je, šta se tačno radi, od kog materijala, u kojoj meri, sa kojom
+        doradom, ko radi i do kada. Ako nešto nije na nalogu, za proizvodnju to ne postoji.
       </P>
-      <H3>4. Priprema za štampu</H3>
+      <H3>4. Priprema</H3>
       <P>
-        Fajl od klijenta retko je spreman za mašinu. Proverava se rezolucija, boje,
-        margine, pa se više komada slaže na jedan veliki tabak (to je{" "}
-        <strong>montaža</strong>), da bi se papir što bolje iskoristio. Često se radi i{" "}
-        <strong>probni otisak</strong> da klijent potvrdi kako izgleda.
+        Pre izrade se proveri ono što je stiglo od klijenta (mere, crteži, fajlovi), obezbedi
+        se materijal i podesi mašina. Često se klijentu prvo pokaže <strong>uzorak</strong>{" "}
+        da potvrdi kako će posao izgledati.
       </P>
-      <H3>5. Štampa</H3>
+      <H3>5. Izrada</H3>
       <P>
-        <strong>Digitalna</strong> štampa je kao veliki kvalitetan štampač: brza za male
-        tiraže i nema mnogo pripreme. <strong>Ofset</strong> je klasična mašina sa pločama:
-        priprema je skuplja i duža, ali je svaki sledeći komad jeftin, pa se isplati za
-        velike tiraže. Ono što se pokvari tokom podešavanja i štampe zove se{" "}
-        <strong>makulatura</strong>.
+        Sam posao: na mašini, za radnim stolom ili na terenu. Ako je uključen modul{" "}
+        <strong>Procesi rada</strong>, izrada se deli na korake i svaki se označava kad je
+        gotov.
       </P>
       <H3>6. Dorada</H3>
       <P>
-        Sve što se radi posle štampe: <strong>sečenje</strong> na tačan format,{" "}
-        <strong>savijanje</strong> (falcovanje), <strong>bigovanje</strong> (utiskivanje
-        linije da bi se debeo papir lepo savio), <strong>plastifikacija</strong> (tanka
-        folija preko papira, mat ili sjajna), <strong>povez</strong> (spirala, heftanje,
-        lepljenje), <strong>perforacija</strong>, <strong>numeracija</strong>. Na nalogu se
-        to upisuje u polje <Ui>Dorada</Ui>.
+        Sve što se radi posle glavnog dela posla: sečenje na meru, završna obrada,
+        sklapanje, pakovanje. Na nalogu se to upisuje u polje <Ui>Dorada</Ui>.
       </P>
       <H3>7. Isporuka</H3>
       <P>
@@ -252,32 +245,10 @@ function PrintShopChapter(): React.JSX.Element {
         kurir naplatio pri preuzimanju (otkup). Kad je to gotovo, nalog dobija status{" "}
         <strong>Fakturisan</strong> i njegov put je završen.
       </P>
-
-      <H2>Papir: format i gramatura</H2>
-      <P>
-        Dve reči koje ćeš čuti stalno. <strong>Format</strong> je veličina papira. Kod nas
-        se koriste A formati: A4 je običan list za štampač, A3 je duplo veći, A5 je pola
-        A4. Kad nešto nije standardni format, upisuje se u milimetrima, npr. vizit karta je
-        obično 85 × 55 mm. <strong>Gramatura</strong> je koliko težak je kvadratni metar
-        tog papira, u gramima. Što je veća, papir je deblji.
-      </P>
-      <Figure caption="Levo: A formati od A3 do A6, nacrtani u istoj razmeri, i vizit karta pored. Desno: koja gramatura se otprilike koristi za šta.">
-        <PaperSizesDiagram />
-      </Figure>
-
-      <H2>Reči iz radionice</H2>
-      <Terms
-        items={[
-          { term: "Tiraž", body: "Koliko komada se štampa. Na nalogu je to polje Količina." },
-          { term: "Tabak", body: "Veliki list papira na koji se slaže više komada pre sečenja." },
-          { term: "Montaža", body: "Raspoređivanje više komada na jedan tabak da se papir što manje baca." },
-          { term: "Makulatura", body: "Papir koji se potroši na podešavanje i greške. U procesima rada vodi se kao nusproizvod." },
-          { term: "Obostrano (4/4) i jednostrano (4/0)", body: "Broj boja sa svake strane. 4 znači punu kolor štampu, 0 da je ta strana prazna, 1 da je crno-bela." },
-          { term: "Plastifikacija", body: "Folija preko odštampanog papira, mat ili sjajna. Štiti i daje bolji osećaj u ruci." },
-          { term: "Bigovanje", body: "Utiskivanje linije na debljem papiru da bi se savio bez pucanja." },
-          { term: "Probni otisak", body: "Jedan primerak pre cele štampe, da klijent potvrdi boje i izgled." },
-        ]}
-      />
+      <Callout kind="note">
+        Polja na nalogu kao što su šifra, gramatura, mere i dorada su opisi posla. Ono što
+        vašoj firmi ne treba, jednostavno ostaje prazno.
+      </Callout>
     </>
   );
 }
@@ -388,7 +359,7 @@ function SignInChapter(): React.JSX.Element {
     <>
       <P>
         Prijava ima dva koraka. Prvo kažeš <strong>u koju firmu</strong> ulaziš, pa onda{" "}
-        <strong>ko si</strong>. Oznaku firme (npr. <code>grafika-cobanovic</code>) dobićeš
+        <strong>ko si</strong>. Oznaku firme (npr. <code>moja-firma</code>) dobićeš
         od administratora. Uređaj je zapamti, pa sledeći put kreće odmah od korisničkog
         imena.
       </P>
@@ -451,7 +422,7 @@ function WorkOrdersChapter(): React.JSX.Element {
         items={[
           { term: "Opis posla", body: "Kratko i jasno šta radimo, npr. „Vizit karte, 4/4, mat plastifikacija“. Ovo vidi i klijent preko javnog linka, pa piši pristojno." },
           { term: "Šifra proizvoda, gramatura, format", body: "Tehnički podaci za radionicu: koji papir, koje debljine, koje veličine." },
-          { term: "Dorada", body: "Sve što se radi posle štampe: sečenje, savijanje, plastifikacija, povez." },
+          { term: "Dorada", body: "Sve što se radi posle glavnog dela posla: sečenje na meru, završna obrada, sklapanje, pakovanje." },
           { term: "Izvršilac", body: "Ko radi posao. Dok ga nema, nalog se na kontrolnoj tabli vodi kao „nedodeljen“." },
           { term: "Prioritet", body: "Nizak, normalan, visok ili hitno. Da li operater sme da ga menja, odlučuje administrator." },
           { term: "Rok i planirani datum", body: "Rok je kada klijent očekuje posao, i on pali upozorenja. Planirani datum je naš interni plan i koristi se ako rok nije upisan." },
@@ -569,7 +540,7 @@ function CatalogChapter(): React.JSX.Element {
   return (
     <>
       <P>
-        Katalog je cenovnik štamparije. U njemu je sve što prodajemo, podeljeno u dve
+        Katalog je cenovnik vaše firme. U njemu je sve što prodajemo, podeljeno u dve
         vrste: <strong>usluge</strong> i <strong>artikle</strong>. Operater ga vidi i
         bira stavke iz njega, a menja ga samo administrator.
       </P>
@@ -578,7 +549,7 @@ function CatalogChapter(): React.JSX.Element {
       </Figure>
       <Terms
         items={[
-          { term: "Usluga", body: "Rad koji prodajemo: štampa, plastifikacija, dizajn, sečenje. Ima cenu rada (koliko nas košta) i prodajnu cenu." },
+          { term: "Usluga", body: "Rad koji prodajemo: izrada, dizajn, sečenje, ugradnja. Ima cenu rada (koliko nas košta) i prodajnu cenu." },
           { term: "Artikal", body: "Roba: papir, koverte, folija, gotovi proizvodi. Ima nabavnu i prodajnu cenu, i ako je uključen Magacin, ima i stanje." },
           { term: "Šifra", body: "Kratka oznaka stavke. Ako je ne upišeš, Iris je napravi sam." },
           { term: "Jedinica mere", body: "kom, set, m², tabak… U čemu se stavka broji." },
@@ -756,7 +727,7 @@ function ProcessesChapter(): React.JSX.Element {
       <H2>Delovi procesa</H2>
       <Terms
         items={[
-          { term: "Korak", body: "Jedna faza rada: štampa, plastifikacija, sečenje. Na nalogu ima status: na čekanju, u toku, završeno ili preskočeno." },
+          { term: "Korak", body: "Jedna faza rada: sečenje, sklapanje, pakovanje. Na nalogu ima status: na čekanju, u toku, završeno ili preskočeno." },
           { term: "Ulaz", body: "Materijal koji korak troši, sa planiranom i stvarnom količinom. Vezuje se za artikal iz kataloga." },
           { term: "Proizvod", body: "Ono što korak pravi. Može da bude i međuproizvod koji ide u sledeći korak." },
           { term: "Nusproizvod", body: "Ono što ostane sa strane: makulatura, okrajci, otpad." },
@@ -829,7 +800,7 @@ function PlanningChapter(): React.JSX.Element {
       <H2>Šta planer mora da zna</H2>
       <Terms
         items={[
-          { term: "Tip mašine", body: "Grupa mašina koje rade isto, npr. „Digitalna štampa“ ili „Sekač“. Korak u procesu kaže koji tip mu treba." },
+          { term: "Tip mašine", body: "Grupa mašina koje rade isto, npr. „Laserski rezač“ ili „Sekač“. Korak u procesu kaže koji tip mu treba." },
           { term: "Mašina", body: "Jedna konkretna mašina tog tipa. Ako je u kvaru, označi se da nije u funkciji i planer je preskače; za servis ili kvar sa poznatim krajem unosi se zastoj (od – do) koji planer zaobilazi." },
           { term: "Kvalifikacije", body: "Ko sme da vodi rad na kom tipu mašine. Pomoćniku ne treba kvalifikacija." },
           { term: "Broj ljudi", body: "Koliko ljudi korak traži. Jedan od njih mora biti kvalifikovan." },
@@ -986,7 +957,7 @@ function GlossaryChapter(): React.JSX.Element {
 
 export const DOC_CHAPTERS: DocChapter[] = [
   { id: "pocetak", title: "Odakle da počnem", summary: "Šta je Iris, organizacija i uloge", group: "Za početak", icon: BookOpen, Content: StartChapter },
-  { id: "stamparija", title: "Kako radi štamparija", summary: "Put posla od upita do naplate, papir i dorada", group: "Za početak", icon: Factory, Content: PrintShopChapter },
+  { id: "posao", title: "Put jednog posla", summary: "Od upita, preko naloga i izrade, do isporuke i naplate", group: "Za početak", icon: Factory, Content: JobJourneyChapter },
   { id: "novac", title: "Novac: cene, PDV i naplata", summary: "Nabavna i prodajna cena, marža, PDV, faktura, profaktura, otkup", group: "Za početak", icon: Coins, Content: MoneyChapter },
   { id: "prijava", title: "Prijava", summary: "Oznaka firme, „Zapamti me“, sesije i lozinke", group: "Za početak", icon: KeyRound, Content: SignInChapter },
   { id: "nalozi", title: "Radni nalozi", summary: "Broj, delovi, stavke, statusi, javni link", group: "Svaki dan", icon: ClipboardList, Content: WorkOrdersChapter },

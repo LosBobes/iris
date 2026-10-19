@@ -182,9 +182,10 @@ type CatalogItemInput struct {
 	EffectiveFrom *string         `json:"effectiveFrom,omitempty"`
 }
 
-// DefaultFirmName is the shop's display name shown in the app branding until an
-// administrator changes it via the organization settings.
-const DefaultFirmName = "Grafika Čobanović"
+// DefaultFirmName is the last-resort display name in the app branding. An
+// organization without a saved firm name shows its own name (tenants.name);
+// this is used only when that is unknown too (e.g. the fixture store).
+const DefaultFirmName = "Iris"
 
 // PDFSections controls which optional sections of the work-order printout are
 // rendered; all of them default to true (see DefaultPDFSections) so an

@@ -1,6 +1,6 @@
 # Iris Operations Management Suite
 
-Iris is a full-stack operations workspace for **Stamparija Cobanovic**, a print-shop environment. It covers the complete work-order lifecycle — from intake through invoicing — alongside customer master data, dashboard analytics, and a public order-tracking portal for customers.
+Iris is a full-stack, multi-tenant operations platform for small manufacturing and service businesses — production shops, workshops, signage, joinery, food production and other job shops. It covers the complete work-order lifecycle — from intake through invoicing — alongside customer master data, a catalog, dashboard analytics, a public order-tracking portal for customers, and optional modules for stock (Magacin), work processes, attendance (Prisustvo) and production planning. Its first production organization is **Grafika Čobanović** (tenant `grafika-cobanovic`).
 
 The repository is a **monorepo** comprising two deployable surfaces that share one Go REST API and one SQLite database. The system is **multi-tenant**: all data is isolated per organization ("tenant"), and users sign in with an organization slug alongside their username and password.
 
@@ -27,7 +27,7 @@ The repository is a **monorepo** comprising two deployable surfaces that share o
 
 ## Project Overview
 
-Iris manages the day-to-day operations of a commercial print shop:
+Iris manages the day-to-day operations of a small production or service business (each one an isolated organization on the platform):
 
 | Domain | Capabilities |
 |--------|-------------|

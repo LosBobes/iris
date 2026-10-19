@@ -41,7 +41,7 @@ export const sr = {
   },
   app: {
     tagline:
-      'Sistem za vođenje radnih naloga u štampariji. Svaki posao je evidentiran.',
+      'Sistem za vođenje radnih naloga, od upita do fakture. Svaki posao je evidentiran.',
     version: 'Verzija',
     loading: 'Učitavanje...',
     backendEyebrow: 'Iris · backend',
@@ -134,7 +134,7 @@ export const sr = {
       title: 'Naziv firme',
       hint: 'Prikazuje se u zaglavlju aplikacije za sve korisnike',
       label: 'Naziv',
-      placeholder: 'npr. Grafika Čobanović',
+      placeholder: 'npr. Radionica Novak',
       nameRequired: 'Naziv firme je obavezan.',
       saved: 'Naziv firme je sačuvan.',
       saveErrorPrefix: 'Greška pri čuvanju naziva',
@@ -1159,7 +1159,7 @@ export const sr = {
       errors: {
         nameRequired: 'Naziv je obavezan.',
         nameTooLong: 'Naziv može imati najviše 120 znakova.',
-        slugInvalid: '2–64 znaka: mala slova, cifre i crtice (npr. stamparija-novi-sad).',
+        slugInvalid: '2–64 znaka: mala slova, cifre i crtice (npr. moja-firma).',
         usernameRequired: 'Korisničko ime je obavezno.',
         passwordShort: 'Lozinka mora imati najmanje 6 karaktera.',
         passwordLong: 'Lozinka je preduga (najviše 72 bajta).',
@@ -1610,7 +1610,7 @@ export const sr = {
       'Prijavite se ponovo da biste nastavili tamo gde ste stali.',
     sessionExpiredToast: 'Sesija je istekla. Prijavite se ponovo.',
     orgIntro: 'Unesite oznaku vaše organizacije. Pamtimo je na ovom uređaju.',
-    orgPlaceholder: 'npr. grafika-cobanovic',
+    orgPlaceholder: 'npr. moja-firma',
     orgRequired: 'Unesite oznaku organizacije.',
     orgInvalid: 'Oznaka organizacije ne sme sadržati razmake ni znakove / ? # %.',
     orgNotFound: 'Organizacija sa tom oznakom ne postoji.',
@@ -1809,7 +1809,7 @@ export const sr = {
       name: 'Naziv tipa',
       createTitle: 'Novi tip mašine',
       editTitle: 'Izmena tipa mašine',
-      dialogDescription: 'Tip mašine (npr. „Digitalna štampa“) povezuje korake procesa sa mašinama i ljudima.',
+      dialogDescription: 'Tip mašine (npr. „Laserski rezač“) povezuje korake procesa sa mašinama i ljudima.',
       editAria: 'Izmeni tip {{name}}',
       deleteAria: 'Obriši tip {{name}}',
       deleteTitle: 'Obrisati tip mašine?',
@@ -2075,7 +2075,7 @@ export const sr = {
   docs: {
     eyebrow: 'Iris · dokumentacija',
     title: 'Dokumentacija',
-    subtitle: 'Kako Iris radi i šta znače pojmovi iz štamparije, od nule.',
+    subtitle: 'Kako Iris radi i šta znače pojmovi koje koristi, od nule.',
     languageNote: '',
     contents: 'Sadržaj',
     chapterSelect: 'Izaberi poglavlje',
@@ -2088,7 +2088,7 @@ export const sr = {
     startTitle: 'Nov si? Kreni odavde',
     startBody: 'Šta je Iris, kako je organizovan i ko šta vidi. Desetak minuta čitanja.',
     openFromHelp: 'Otvori dokumentaciju',
-    openFromHelpHint: 'Detaljno uputstvo sa dijagramima: ceo posao štamparije, novac i PDV, svaki deo aplikacije i rečnik pojmova.',
+    openFromHelpHint: 'Detaljno uputstvo sa dijagramima: put jednog posla, novac i PDV, svaki deo aplikacije i rečnik pojmova.',
   },
   help: {
     eyebrow: 'Iris · pomoć',
@@ -2150,7 +2150,7 @@ export const sr = {
     },
     about: {
       title: 'O aplikaciji',
-      body: 'Iris vodi radne naloge štamparije od kreiranja do fakturisanja. Na jednom mestu su nalozi, klijenti (sa lokacijama i kontaktima), katalog usluga i artikala, kao i kontrolna tabla sa rokovima i pregledom rada.',
+      body: 'Iris vodi radne naloge vaše firme od kreiranja do fakturisanja. Na jednom mestu su nalozi, klijenti (sa lokacijama i kontaktima), katalog usluga i artikala, kao i kontrolna tabla sa rokovima i pregledom rada.',
     },
     roles: {
       title: 'Uloge',
