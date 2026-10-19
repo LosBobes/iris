@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.12.0 — 2026-10-19
+
+### Minor
+
+- Public landing page at /home presents Iris to prospective organizations: features, work-order lifecycle, modules, roles, security, onboarding steps and FAQ.
+
 ## 2.11.1 — 2026-10-19
 
 ### Patch
