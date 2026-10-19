@@ -161,6 +161,27 @@ describe('planDay', () => {
     expect(planDay(input([normal, older])).assignments[0].workOrderId).toBe('c')
   })
 
+  it('ranks urgent above high (and high above normal above low) at equal slack', () => {
+    // The high order is older and has the lower number: only its rank loses it the first slot.
+    const high = order('a', [step('s', { setupMinutes: 60, machineTypeId: 'mt-print' })], [], {
+      priority: 'high',
+      dueDate: '2026-10-21',
+      createdAt: '2026-10-01T00:00:00Z',
+    })
+    const urgent = order('b', [step('s', { setupMinutes: 60, machineTypeId: 'mt-print' })], [], {
+      priority: 'urgent',
+      dueDate: '2026-10-21',
+      createdAt: '2026-10-05T00:00:00Z',
+    })
+    const first = planDay(input([high, urgent])).assignments
+    expect(first[0].workOrderId).toBe('b')
+    expect(first[1].workOrderId).toBe('a')
+
+    const low = order('a', [step('s', { setupMinutes: 60, machineTypeId: 'mt-print' })], [], { priority: 'low' })
+    const normal = order('b', [step('s', { setupMinutes: 60, machineTypeId: 'mt-print' })], [])
+    expect(planDay(input([low, normal])).assignments[0].workOrderId).toBe('b')
+  })
+
   it('forms a crew with a qualified lead and any helper', () => {
     const o = order('o1', [step('s1', { setupMinutes: 30, crewSize: 2, machineTypeId: 'mt-print' })], [])
     const result = planDay(input([o]))

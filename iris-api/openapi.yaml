@@ -3783,6 +3783,63 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           $ref: '#/components/responses/AttendanceModuleDisabled'
+  /attendance/{userId}:
+    put:
+      tags: [Attendance]
+      summary: Set or clear one user's attendance override (admin only)
+      description: >-
+        `present` true/false sets the override, null clears it. The resulting entry is what `GET /attendance`
+        shows for that user and date; the planner reads it for the plan date.
+      operationId: setAttendance
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceInput'
+      responses:
+        '200':
+          description: The resulting entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceEntry'
+        '400':
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an administrator. Also returned when the "Prisustvo" module is off (see AttendanceModuleDisabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Unknown user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /planning/qualifications:
     get:
       tags: [Planning]
@@ -3855,60 +3912,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Unknown machine type
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-  /planning/attendance/{userId}:
-    put:
-      tags: [Planning]
-      summary: Set or clear one user's attendance override (admin only)
-      operationId: setAttendance
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttendanceInput'
-      responses:
-        '200':
-          description: The resulting entry
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AttendanceEntry'
-        '400':
-          description: Invalid JSON payload
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Not signed in
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Caller is not an administrator. Also returned when the "Planiranje" module is off (see PlanningModuleDisabled).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Unknown user
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: Malformed date
           content:
             application/json:
               schema:

@@ -244,11 +244,7 @@ func (p *planner) setupOrders() {
 		}
 		run := &orderRun{order: o, byID: map[string]*stepRun{}}
 		run.avail = p.availFor(o.DueDate)
-		if o.Priority == domain.WorkOrderPriorityUrgent || o.Priority == domain.WorkOrderPriorityHigh {
-			run.rank = 0
-		} else {
-			run.rank = 1
-		}
+		run.rank = priorityRank(o.Priority)
 		gi := indexGraph(o.Graph)
 		for _, id := range gi.stepIDs {
 			node := gi.nodes[id]
@@ -275,6 +271,21 @@ func (p *planner) setupOrders() {
 		}
 		p.orders = append(p.orders, run)
 		p.orderByID[o.ID] = run
+	}
+}
+
+// priorityRank orders the four work-order priorities for moreUrgent: urgent
+// before high before normal before low (D-028). Unknown values count as normal.
+func priorityRank(priority domain.WorkOrderPriority) int {
+	switch priority {
+	case domain.WorkOrderPriorityUrgent:
+		return 0
+	case domain.WorkOrderPriorityHigh:
+		return 1
+	case domain.WorkOrderPriorityLow:
+		return 3
+	default:
+		return 2
 	}
 }
 
@@ -525,8 +536,8 @@ func (p *planner) ready(s *stepRun) (int64, bool) {
 	return at, true
 }
 
-// moreUrgent orders candidates: smaller slack, then urgent/high before
-// normal/low, older order, order number, then step id.
+// moreUrgent orders candidates: smaller slack, then priority (urgent, high,
+// normal, low), older order, order number, then step id.
 func moreUrgent(a, b *orderRun, aStep, bStep *stepRun) bool {
 	sa, sb := a.avail-a.remaining, b.avail-b.remaining
 	if sa != sb {

@@ -322,6 +322,29 @@ func TestPlanUrgencyOrder(t *testing.T) {
 		res = two(normal, high)
 		expectSpan(t, one(t, res, "ohigh", "s1"), "2026-10-19T07:00", "2026-10-19T08:00", 60)
 	})
+	t.Run("urgent before high at equal slack", func(t *testing.T) {
+		// The high order is older and has the lower number, so only its
+		// priority rank can lose it the first slot (D-028).
+		high := singleStepOrder("ohigh", "1", typeOffset, 60)
+		high.Priority = domain.WorkOrderPriorityHigh
+		high.CreatedAt = "2026-10-01T08:00:00Z"
+		high.DueDate = sp("2026-10-21")
+		urgent := singleStepOrder("ourg", "2", typeOffset, 60)
+		urgent.Priority = domain.WorkOrderPriorityUrgent
+		urgent.CreatedAt = "2026-10-05T08:00:00Z"
+		urgent.DueDate = sp("2026-10-21")
+		res := two(high, urgent)
+		expectSpan(t, one(t, res, "ourg", "s1"), "2026-10-19T07:00", "2026-10-19T08:00", 60)
+		expectSpan(t, one(t, res, "ohigh", "s1"), "2026-10-19T08:00", "2026-10-19T09:00", 60)
+
+		// And high still beats normal, normal still beats low.
+		normal := singleStepOrder("onorm", "1", typeOffset, 60)
+		low := singleStepOrder("olow", "2", typeOffset, 60)
+		low.Priority = domain.WorkOrderPriorityLow
+		res = two(low, normal)
+		expectSpan(t, one(t, res, "onorm", "s1"), "2026-10-19T07:00", "2026-10-19T08:00", 60)
+		expectSpan(t, one(t, res, "olow", "s1"), "2026-10-19T08:00", "2026-10-19T09:00", 60)
+	})
 	t.Run("older order, then number", func(t *testing.T) {
 		newer := singleStepOrder("on", "1", typeOffset, 60)
 		newer.CreatedAt = "2026-10-05T08:00:00Z"

@@ -100,10 +100,10 @@ var ErrInvalidHours = errors.New("planner: invalid working hours")
 //     (absence), the whole step must be placed elsewhere.
 //   - Order of placement: most urgent first. Urgency is the slack between the
 //     order's due date (end of that day's shift; no due date = after the
-//     horizon) and the remaining work on its longest chain of steps; priority
-//     "urgent" and "high" go before "normal" and "low" at equal slack; ties go
-//     to the older order, then the order number. The goal is to meet due
-//     dates first and then finish as many orders as possible.
+//     horizon) and the remaining work on its longest chain of steps; at equal
+//     slack priority decides ("urgent" before "high" before "normal" before
+//     "low"); ties go to the older order, then the order number. The goal is
+//     to meet due dates first and then finish as many orders as possible.
 //   - Each step is placed at the earliest time its machine and crew are all
 //     free; among equal options prefer the machine and people with the least
 //     planned time so far, then the lowest name.

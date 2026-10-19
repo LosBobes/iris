@@ -11,8 +11,8 @@
 // - work happens inside shifts, pausing for breaks; a step that does not finish
 //   by the end of a shift carries over to the next working day on the same
 //   machine and crew (one block per day);
-// - most urgent first (slack to due date over the remaining chain, urgent/high
-//   priority at equal slack, older order, order number);
+// - most urgent first (slack to due date over the remaining chain, then priority
+//   urgent > high > normal > low at equal slack, older order, order number);
 // - every step goes to the earliest time its machine and crew are free, preferring
 //   the least-loaded machine/people, then the lowest name;
 // - the horizon is PLANNING_FORECAST_DAYS working days.
@@ -226,7 +226,8 @@ interface DayPiece {
 }
 
 const AXIS = 1440
-const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 0, normal: 1, low: 1 }
+// Urgent before high before normal before low (D-028); unknown values count as normal.
+const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
 
 function messageFor(code: PlanIssueCode, order: PlannerOrder, step?: ProcessNode): string {
   const what = step ? `Radni nalog ${order.number}, korak „${step.label}“` : `Radni nalog ${order.number}`
@@ -677,7 +678,7 @@ export function planDay(input: PlannerInput): PlannerResult {
 
   function compareCandidates(a: { item: Pending; slack: number }, b: { item: Pending; slack: number }): number {
     if (a.slack !== b.slack) return a.slack - b.slack
-    const rank = (PRIORITY_RANK[a.item.order.priority] ?? 1) - (PRIORITY_RANK[b.item.order.priority] ?? 1)
+    const rank = (PRIORITY_RANK[a.item.order.priority] ?? 2) - (PRIORITY_RANK[b.item.order.priority] ?? 2)
     return rank || compareOrders(a.item, b.item)
   }
 }
