@@ -27,6 +27,8 @@ COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 
 COPY VERSION /src/VERSION
+# The public regulations guide (/home/propisi) bundles these Markdown files.
+COPY docs/drzavne-integracije /src/docs/drzavne-integracije
 COPY apps/web/ ./
 RUN npm run build
 

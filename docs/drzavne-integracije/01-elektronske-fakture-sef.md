@@ -19,7 +19,7 @@
 - Kroz SEF se vodi i **evidencija PDV-a** za promet koji ne ide preko e-fakture (izvoz, uvoz,
   avansi, promet na malo…).
 - Promet na malo ide preko **fiskalne kase**, a ne preko SEF-a (vidi
-  [03-fiskalizacija.md](03-fiskalizacija.md)). Od aprila 2026. postoje dva izuzetka: kupac sa
+  [Fiskalizacija](03-fiskalizacija.md)). Od aprila 2026. postoje dva izuzetka: kupac sa
   korporativnom karticom i javni sektor na zahtev.
 - Kazne za pravno lice idu od **200.000 do 2.000.000 dinara**.
 
@@ -148,7 +148,7 @@ prometa koji ide na e-fakturu i prometa koji ide u evidenciju.
   ([specifikacija](https://www.efaktura.gov.rs/extfile/sr/1804/spec-srbdt-ext-en16931-2023_03_31.pdf)).
 - **Vrste dokumenata:** 380 faktura, 381 knjižno odobrenje, 383 knjižno zaduženje, 386 avansni
   račun. Konačna faktura i knjižna odobrenja se pozivaju na ranije dokumente
-  ([ITU 2023](https://www.efaktura.gov.rs/extfile/sr/1594/SEF%20ITU%20Verzija%20od%2011.01.2023_%20(18_01)%20-%20Copy.pdf)).
+  ([ITU 2023](https://www.efaktura.gov.rs/extfile/sr/1594/SEF%20ITU%20Verzija%20od%2011.01.2023_%20%2818_01%29%20-%20Copy.pdf)).
 - **Avans primljen istog dana kad je promet:** od 1.4.2026. ide obična faktura, ne avansni račun.
 - **Obavezni podaci koji obično fale u programima za radne naloge:**
   - datum nastanka PDV obaveze ili datum prometa;
@@ -231,6 +231,7 @@ izmene 109/2025 ili 80/2026 promenile ove iznose.
      - lista jedinica mere
    ([prezentacija](https://www.efaktura.gov.rs/extfile/sr/1470/Rad%20sa%20SEF-om%20preko%20API%20servisa_prezentacija.pdf)).
 
+<!-- interno -->
 ## Šta ovo znači za Iris
 
 - Grafika Čobanović fakturiše firmama i (možda) javnom sektoru, pa je **već obveznik** SEF-a od
@@ -246,6 +247,8 @@ izmene 109/2025 ili 80/2026 promenile ove iznose.
   posebno za produkciju. Iris ga samo čuva šifrovano.
 - **Čuvanje:** SEF čuva fakture 10 godina, ali brisanje organizacije u Iris-u ne sme da bude
   jedino mesto gde se gubi trag šta je poslato (PIN-33).
+
+<!-- /interno -->
 
 ## Otvorena pitanja
 

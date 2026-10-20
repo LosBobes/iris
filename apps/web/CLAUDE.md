@@ -94,6 +94,12 @@ vars and must not be committed.
   the sign-in (or into the app when `signedIn`); the contact address has a built-in default,
   overridable with `VITE_HOME_CONTACT_EMAIL`. When a feature new clients should hear about ships,
   add it there too.
+- **Regulations guide** (`/home/propisi`, `/home/propisi/:slug`, public, linked from the landing FAQ and
+  footer): `pages/RegulationsPage.tsx` renders the Serbian Markdown in `docs/drzavne-integracije/`
+  (bundled via the `@regulation-docs` alias, `lib/regulations/documents.ts`; react-markdown + remark-gfm,
+  lazy route only). Sections fenced `<!-- interno -->` … `<!-- /interno -->` are team notes and are stripped;
+  the tests fail if issue numbers or the pilot organization leak, or an in-document anchor breaks. The
+  Dockerfile copies the docs into the web build stage.
 - **Dokumentacija** (`/docs`, `/docs/:chapterId`, nav for everyone): `pages/DocsPage.tsx` over
   `components/docs/` — chapters in `chapters.tsx` (long-form Serbian only; just the page chrome is in
   i18n), inline SVG diagrams in `diagrams.tsx` built from `diagram-kit.tsx` (theme CSS variables, no

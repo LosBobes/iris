@@ -29,6 +29,7 @@ import { WorkOrderDemo } from "@/components/home/WorkOrderDemo";
 import { cn } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/app-version";
 import { loginEntryPath } from "@/lib/organization-login";
+import { REGULATIONS_BASE_PATH } from "@/lib/regulations/paths";
 import { staggerStyle } from "@/lib/motion";
 
 /**
@@ -187,6 +188,11 @@ const FAQ: FaqItem[] = [
   {
     q: "Šta operater vidi od cena?",
     a: "Prodajnu cenu. Nabavnu cenu, trošak, zaradu i maržu vidi samo administrator, i na nalogu i na kontrolnoj tabli.",
+  },
+  {
+    q: "Šta zakon traži za e-fakture, e-otpremnice i fiskalne račune?",
+    a: "Saželi smo propise na srpskom: ko je obveznik i od kada, rokovi, kazne i kako se firma priključuje na SEF i sistem e-otpremnica, sa izvorima za svaku tvrdnju. Vodič služi za snalaženje, nije pravni savet.",
+    link: { to: REGULATIONS_BASE_PATH, label: "Pročitajte vodič kroz propise →" },
   },
   {
     q: "Na kom je jeziku?",
@@ -389,6 +395,9 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
             <a href="#moduli" className="iris-focusable hover:text-foreground">Moduli</a>
             <a href="#bezbednost" className="iris-focusable hover:text-foreground">Bezbednost</a>
             <a href="#pitanja" className="iris-focusable hover:text-foreground">Pitanja</a>
+            <Link to={REGULATIONS_BASE_PATH} className="iris-focusable hover:text-foreground">
+              Propisi
+            </Link>
             <Link to={primaryHref} className="iris-focusable hover:text-foreground">
               {primaryLabel}
             </Link>

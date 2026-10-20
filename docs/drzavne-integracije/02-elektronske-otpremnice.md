@@ -256,6 +256,7 @@ iznos nismo našli ⚠️. Izvori:
 - Zakon **ne povezuje** otpremnicu sa magacinskom evidencijom. Kad program knjiži otpremnicu kao
   izlaz, a prijemnicu kao ulaz robe, to je odluka programa, a ne zakonska obaveza.
 
+<!-- interno -->
 ## Šta ovo znači za Iris
 
 - **Grafika Čobanović** (i slične radionice):
@@ -275,6 +276,8 @@ iznos nismo našli ⚠️. Izvori:
   firma ima više magacina, ovo je nova potreba.
 - **Šta nam fali u podacima:** strukturisana adresa kupca i lokacije, JBKJS za javni sektor, podaci
   o prevozu (registracija, vozač, prevoznik) (Linear PIN-23, PIN-35).
+
+<!-- /interno -->
 
 ## Otvorena pitanja
 

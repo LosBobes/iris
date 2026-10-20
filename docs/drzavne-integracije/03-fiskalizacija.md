@@ -221,6 +221,7 @@ Nadzor vrši **poreska inspekcija**.
 Izvori: [PURS – prečišćen tekst](https://www.purs.gov.rs/upload/media/2025/2/4/382229/Zakonofiskalizaciji.pdf),
 [Paragraf](https://www.paragraf.rs/dnevne-vesti/290323/290323-vest5.html).
 
+<!-- interno -->
 ## Šta ovo znači za Iris
 
 - **Gde nastaje fiskalni račun u radionici:**
@@ -242,6 +243,8 @@ Izvori: [PURS – prečišćen tekst](https://www.purs.gov.rs/upload/media/2025/
 - **Preporuka:** opcija 1 odmah, opcija 2 samo ako konkretni dobavljač kase ima upotrebljiv API.
 - **Treba proveriti sa radionicom:** koju kasu i ESIR koristi, da li je radionica prijavljena kao
   maloprodajni objekat, i koliki je udeo naloga fizičkih lica.
+
+<!-- /interno -->
 
 ## Otvorena pitanja
 

@@ -1,8 +1,11 @@
 import { ChevronDown } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export interface FaqItem {
   q: string;
   a: string;
+  /** Optional in-app link shown after the answer. */
+  link?: { to: string; label: string };
 }
 
 /** Native disclosure accordion: keyboard and screen-reader friendly without any state. */
@@ -18,7 +21,20 @@ export function Faq({ items }: { items: FaqItem[] }): React.JSX.Element {
               className="h-4 w-4 shrink-0 text-[color:var(--iris-ink-mute)] transition-transform duration-200 group-open:rotate-180"
             />
           </summary>
-          <p className="animate-iris-rise pb-5 pr-8 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">{item.a}</p>
+          <p className="animate-iris-rise pb-5 pr-8 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
+            {item.a}
+            {item.link ? (
+              <>
+                {" "}
+                <Link
+                  to={item.link.to}
+                  className="iris-focusable text-foreground underline decoration-[color:var(--iris-border)] underline-offset-2 hover:decoration-foreground"
+                >
+                  {item.link.label}
+                </Link>
+              </>
+            ) : null}
+          </p>
         </details>
       ))}
     </div>

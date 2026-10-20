@@ -1,9 +1,16 @@
-# Državne integracije: pregled
+<!--
+Ovi dokumenti su javno objavljeni u aplikaciji na /home/propisi (apps/web/src/pages/RegulationsPage.tsx).
+Delovi ograđeni komentarima „interno“ i „/interno“ (planovi za Iris, Linear, pilot organizacija) su
+samo za tim i ne prikazuju se javno. Novi dokument dodajte i u apps/web/src/lib/regulations/documents.ts.
+-->
+# Propisi o e-fakturama, e-otpremnicama i fiskalizaciji: pregled
 
 > **Stanje na dan 20.10.2026.** Vodič za učenje propisa koji se tiču Iris-a i firmi koje ga
 > koriste, ne pravni savet. Svaki dokument navodi izvore uz tvrdnje, a nesigurne stvari označava
 > sa ⚠️. Pune tekstove iz „Službenog glasnika“ nismo mogli da otvorimo, pa pre pravno važne odluke
 > proverite prečišćen tekst i pitajte knjigovođu.
+
+Svi izvori na jednom mestu, grupisani po pouzdanosti: [Izvori](IZVORI.md).
 
 ## Tri sistema, jedna slika
 
@@ -11,17 +18,17 @@ Kad firma u Srbiji nešto proda, država preko tri sistema vidi tri različite s
 
 | Šta se dešava | Sistem | Dokument | Ko vodi | Detaljno |
 | --- | --- | --- | --- | --- |
-| Prodaja **firmi ili državi** (B2B / B2G), po fakturi | **SEF** – Sistem elektronskih faktura | e-faktura (UBL XML) | Ministarstvo finansija | [01-elektronske-fakture-sef.md](01-elektronske-fakture-sef.md) |
-| **Roba fizički putuje** (isporuka, prebacivanje između magacina, povraćaj) | **SEO** – Sistem elektronskih otpremnica | eOtpremnica + ePrijemnica (UBL XML) | Ministarstvo finansija | [02-elektronske-otpremnice.md](02-elektronske-otpremnice.md) |
-| Prodaja **na malo** (građaninu, ili bilo kome u radnji) | **Fiskalizacija** (SUF) | fiskalni račun sa QR kodom | Poreska uprava | [03-fiskalizacija.md](03-fiskalizacija.md) |
+| Prodaja **firmi ili državi** (B2B / B2G), po fakturi | **SEF** – Sistem elektronskih faktura | e-faktura (UBL XML) | Ministarstvo finansija | [Elektronske fakture](01-elektronske-fakture-sef.md) |
+| **Roba fizički putuje** (isporuka, prebacivanje između magacina, povraćaj) | **SEO** – Sistem elektronskih otpremnica | eOtpremnica + ePrijemnica (UBL XML) | Ministarstvo finansija | [Elektronske otpremnice](02-elektronske-otpremnice.md) |
+| Prodaja **na malo** (građaninu, ili bilo kome u radnji) | **Fiskalizacija** (SUF) | fiskalni račun sa QR kodom | Poreska uprava | [Fiskalizacija](03-fiskalizacija.md) |
 
 Isti posao može da dodirne više sistema.
 
-- **Primer 1:** radionica isporučuje štampane materijale školi. Faktura ide kroz **SEF**, a pošto
-  je kupac javni sektor, od 1.1.2026. kretanje robe ide i kroz **eOtpremnicu**.
-- **Primer 2:** građanin dođe po vizit-karte i plati karticom. To je **fiskalni račun**; SEF i
+- **Primer 1:** firma isporučuje robu školi. Faktura ide kroz **SEF**, a pošto je kupac javni
+  sektor, od 1.1.2026. kretanje robe ide i kroz **eOtpremnicu**.
+- **Primer 2:** građanin preuzme gotov proizvod i plati karticom. To je **fiskalni račun**; SEF i
   otpremnica nisu potrebni (promet na malo je izuzet od oba).
-- **Primer 3:** firma iz komšiluka plati na šalteru radionice. Ako je radionica maloprodajni
+- **Primer 3:** druga firma plati na šalteru prodavca. Ako je prodajno mesto maloprodajni
   objekat, to je fiskalni račun sa PIB-om kupca. Ako kupac plaća korporativnom karticom, od
   1.4.2026. ide i e-faktura, izdata **posle** fiskalnog računa.
 
@@ -78,6 +85,7 @@ Isti posao može da dodirne više sistema.
 | **BE** | Bezbednosni element: sertifikat firme za potpisivanje fiskalnih računa. |
 | **SUF** | Sistem za upravljanje fiskalizacijom Poreske uprave. |
 
+<!-- interno -->
 ## Šta ovo znači za Iris (sažetak)
 
 | Oblast | Stanje u Iris-u | Sledeći korak |
@@ -92,3 +100,4 @@ Isti posao može da dodirne više sistema.
 2. Da li isporučuje robu javnom sektoru (škole, opštine, javna preduzeća)?
 3. Koju fiskalnu kasu i ESIR koristi, da li dobavljač nudi API, i koliko naloga plaćaju građani?
 4. Da li ima više magacina ili lokacija između kojih se roba prebacuje?
+<!-- /interno -->
