@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.15.1 — 2026-10-20
+
+### Patch
+
+- Fix the frontend image build, which failed because the regulations guide Markdown was not copied into it.
+
 ## 2.15.0 — 2026-10-20
 
 ### Minor
