@@ -9,3 +9,5 @@ export const PLANNING_DISABLED_MESSAGE = 'Modul „Planiranje“ nije uključen 
 export const PLANNING_REQUIRES_PROCESSES_MESSAGE = 'Modul „Planiranje“ zahteva uključen modul „Procesi rada“.'
 export const PLANNING_REQUIRES_ATTENDANCE_MESSAGE = 'Modul „Planiranje“ zahteva uključen modul „Prisustvo“.'
 export const ATTENDANCE_DISABLED_MESSAGE = 'Modul „Prisustvo“ nije uključen za ovu organizaciju.'
+export const EINVOICING_DISABLED_MESSAGE = 'Modul „e-Fakture“ nije uključen za ovu organizaciju.'
+export const EDISPATCH_DISABLED_MESSAGE = 'Modul „e-Otpremnice“ nije uključen za ovu organizaciju.'

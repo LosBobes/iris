@@ -48,8 +48,10 @@ import {
   type PrintItemColumn,
   type PriorityDefaults,
   type PublicOrganization,
+  type SellerIdentity,
   normalizeOrganizationModules,
 } from '@/types/settings'
+import { normalizeSellerIdentity } from '@/lib/seller-identity'
 import type {
   PlatformAdminSummary,
   PlatformMetrics,
@@ -567,6 +569,7 @@ let billingDefaults: BillingDefaults = { ...DEFAULT_BILLING_DEFAULTS }
 let priorityDefaults: PriorityDefaults = { ...DEFAULT_PRIORITY_DEFAULTS }
 let printItemColumns: PrintItemColumn[] = [...DEFAULT_PRINT_ITEM_COLUMNS]
 let showShippingOptions = DEFAULT_SHOW_SHIPPING_OPTIONS
+let sellerIdentity: SellerIdentity | null = null
 // Fixture mode models the single demo organization (mirrors the Go fixture
 // store's TenantBySlug); its sign-in logo lives here as a data URL.
 const FIXTURE_ORGANIZATION = { slug: 'demo', name: 'Demo Firma' }
@@ -1161,7 +1164,7 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
     },
 
     async getSettings(): Promise<OrganizationSettings> {
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules: { ...modules } }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, sellerIdentity: sellerIdentity ? { ...sellerIdentity } : null, modules: { ...modules } }
     },
 
     async updateSettings(
@@ -1188,7 +1191,10 @@ export function createFixtureApi(options: FixtureApiOptions = {}): Window['api']
       if (settings.showShippingOptions !== undefined) {
         showShippingOptions = settings.showShippingOptions
       }
-      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, modules: { ...modules } }
+      if (settings.sellerIdentity) {
+        sellerIdentity = normalizeSellerIdentity(settings.sellerIdentity)
+      }
+      return { firmName, pdfSections, billingDefaults, priorityDefaults, printItemColumns, showShippingOptions, sellerIdentity: sellerIdentity ? { ...sellerIdentity } : null, modules: { ...modules } }
     },
 
     async getPublicOrganization(slug): Promise<PublicOrganization | null> {

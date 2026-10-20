@@ -267,12 +267,16 @@ func main() {
 		stock := cmd.String("stock", "", "modul Magacin: on ili off")
 		planning := cmd.String("planning", "", "modul Planiranje: on ili off")
 		attendance := cmd.String("attendance", "", "modul Prisustvo: on ili off")
+		einvoicing := cmd.String("einvoicing", "", "modul e-Fakture: on ili off")
+		edispatch := cmd.String("edispatch", "", "modul e-Otpremnice: on ili off")
 		_ = cmd.Parse(os.Args[2:])
 		update := domain.OrganizationModulesUpdate{
 			Processes:  parseOnOff("processes", *processes),
 			Stock:      parseOnOff("stock", *stock),
 			Planning:   parseOnOff("planning", *planning),
 			Attendance: parseOnOff("attendance", *attendance),
+			EInvoicing: parseOnOff("einvoicing", *einvoicing),
+			EDispatch:  parseOnOff("edispatch", *edispatch),
 		}
 		dataStore := mustOpenStore(ctx)
 		defer dataStore.Close()
@@ -648,7 +652,7 @@ func usage() {
   irisctl import-csv -tenant oznaka --apply --dir import/
   irisctl import-stock -tenant oznaka --file stanje.csv --dry-run
   irisctl import-stock -tenant oznaka --file stanje.csv --apply
-  irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off] [-planning on|off] [-attendance on|off]
+  irisctl set-modules -tenant oznaka [-processes on|off] [-stock on|off] [-planning on|off] [-attendance on|off] [-einvoicing on|off] [-edispatch on|off]
   irisctl create-platform-admin -username ime -password lozinka
   irisctl reset-platform-2fa -username ime
   irisctl backup [-out backups/iris.db]   (bez -out: IRIS_BACKUP_DIR, podrazumevano backups/ pored baze)
@@ -663,7 +667,7 @@ suspenduje); Backoffice aktivnost zadržava zapis. Oba se beleže u aktivnost ka
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
 a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).
 
-set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin, Planiranje, Prisustvo);
+set-modules uključuje ili isključuje opcione module organizacije (Procesi rada, Magacin, Planiranje, Prisustvo, e-Fakture, e-Otpremnice);
 izostavljen modul ostaje kakav jeste. Za razliku od Backoffice-a ne upisuje zapis u aktivnost.
 Planiranje zahteva Procesi rada i Prisustvo, a Procesi rada zahtevaju Magacin.
 Prisustvo radi i samostalno.
@@ -699,6 +703,7 @@ func setModules(ctx context.Context, dataStore *store.SQLStore, slug string, upd
 	if modules == nil {
 		return "", fmt.Errorf("organizacija %q ne postoji", slug)
 	}
-	return fmt.Sprintf("Moduli organizacije %s: Procesi rada %s, Magacin %s, Planiranje %s, Prisustvo %s.\n",
-		slug, onOff(modules.Processes), onOff(modules.Stock), onOff(modules.Planning), onOff(modules.Attendance)), nil
+	return fmt.Sprintf("Moduli organizacije %s: Procesi rada %s, Magacin %s, Planiranje %s, Prisustvo %s, e-Fakture %s, e-Otpremnice %s.\n",
+		slug, onOff(modules.Processes), onOff(modules.Stock), onOff(modules.Planning), onOff(modules.Attendance),
+		onOff(modules.EInvoicing), onOff(modules.EDispatch)), nil
 }

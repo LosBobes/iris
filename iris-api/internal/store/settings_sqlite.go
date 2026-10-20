@@ -19,6 +19,7 @@ const (
 	priorityDefaultsSettingKey    = "priority_defaults"
 	printItemColumnsSettingKey    = "print_item_columns"
 	showShippingOptionsSettingKey = "show_shipping_options"
+	sellerIdentitySettingKey      = "seller_identity"
 )
 
 // OrganizationSettings returns the shop-wide settings, falling back to defaults
@@ -61,7 +62,7 @@ func loadOrganizationSettings(ctx context.Context, q dbExecQuerier, tenantID str
 
 	rows, err := q.QueryContext(
 		ctx,
-		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?, ?, ?)`,
+		`SELECT key, value FROM app_settings WHERE tenant_id = ? AND key IN (?, ?, ?, ?, ?, ?, ?, ?)`,
 		tenantID,
 		firmNameSettingKey,
 		pdfSectionsSettingKey,
@@ -69,6 +70,7 @@ func loadOrganizationSettings(ctx context.Context, q dbExecQuerier, tenantID str
 		priorityDefaultsSettingKey,
 		printItemColumnsSettingKey,
 		showShippingOptionsSettingKey,
+		sellerIdentitySettingKey,
 		modulesSettingKey,
 	)
 	if err != nil {
@@ -116,6 +118,11 @@ func loadOrganizationSettings(ctx context.Context, q dbExecQuerier, tenantID str
 		case showShippingOptionsSettingKey:
 			if parsed, err := strconv.ParseBool(value); err == nil {
 				settings.ShowShippingOptions = parsed
+			}
+		case sellerIdentitySettingKey:
+			var identity domain.SellerIdentity
+			if err := json.Unmarshal([]byte(value), &identity); err == nil {
+				settings.SellerIdentity = &identity
 			}
 		case modulesSettingKey:
 			settings.Modules = parseModules(value)
@@ -218,6 +225,18 @@ func (s *SQLiteStore) UpdateOrganizationSettings(
 	if update.ShowShippingOptions != nil {
 		current.ShowShippingOptions = *update.ShowShippingOptions
 		writes[showShippingOptionsSettingKey] = strconv.FormatBool(current.ShowShippingOptions)
+	}
+	if update.SellerIdentity != nil {
+		identity, err := normalizeSellerIdentity(*update.SellerIdentity)
+		if err != nil {
+			return domain.OrganizationSettings{}, err
+		}
+		current.SellerIdentity = &identity
+		encoded, err := json.Marshal(identity)
+		if err != nil {
+			return domain.OrganizationSettings{}, fmt.Errorf("marshal seller identity: %w", err)
+		}
+		writes[sellerIdentitySettingKey] = string(encoded)
 	}
 
 	for key, value := range writes {

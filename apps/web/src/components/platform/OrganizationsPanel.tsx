@@ -173,6 +173,8 @@ export function OrganizationsPanel(): React.JSX.Element {
         ? t("platform.orgs.modules.planning")
         : null,
       tenant.modules.attendance ? t("platform.orgs.modules.attendance") : null,
+      tenant.modules.einvoicing ? t("platform.orgs.modules.einvoicing") : null,
+      tenant.modules.edispatch ? t("platform.orgs.modules.edispatch") : null,
     ].filter((label): label is string => label !== null);
 
   // Compact "which modules are on" badges for the table.

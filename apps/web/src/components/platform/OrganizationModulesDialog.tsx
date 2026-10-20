@@ -54,7 +54,8 @@ function ModuleSwitch({
 /**
  * Switches an organization's optional modules (Backoffice superadmins only).
  * "Procesi rada" requires "Magacin" and "Planiranje" requires "Procesi rada"
- * and "Prisustvo" ("Prisustvo" itself has no requirement): a dependent switch
+ * and "Prisustvo" ("Prisustvo", "e-Fakture" and "e-Otpremnice" have no
+ * requirement): a dependent switch
  * is disabled while a requirement is off, and turning a requirement off turns
  * the dependent module off too.
  */
@@ -73,6 +74,8 @@ export function OrganizationModulesDialog({
     processes: tenant.modules.stock && tenant.modules.processes,
     planning: tenant.modules.stock && tenant.modules.processes && tenant.modules.attendance && tenant.modules.planning,
     attendance: tenant.modules.attendance,
+    einvoicing: tenant.modules.einvoicing,
+    edispatch: tenant.modules.edispatch,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +135,18 @@ export function OrganizationModulesDialog({
           description={t("platform.orgs.modules.planningHint")}
           helper={t("platform.orgs.modules.requiresProcesses")}
           onChange={(planning) => setModules((current) => ({ ...current, planning }))}
+        />
+        <ModuleSwitch
+          checked={modules.einvoicing}
+          label={t("platform.orgs.modules.einvoicing")}
+          description={t("platform.orgs.modules.einvoicingHint")}
+          onChange={(einvoicing) => setModules((current) => ({ ...current, einvoicing }))}
+        />
+        <ModuleSwitch
+          checked={modules.edispatch}
+          label={t("platform.orgs.modules.edispatch")}
+          description={t("platform.orgs.modules.edispatchHint")}
+          onChange={(edispatch) => setModules((current) => ({ ...current, edispatch }))}
         />
         <p className="text-[12px] text-[color:var(--pf-muted)]">{t("platform.orgs.modules.defaultOff")}</p>
         {error ? (

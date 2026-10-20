@@ -34,6 +34,7 @@ import {
   type BillingDefaults,
   type OrganizationModules,
   type OrganizationSettings,
+  type SellerIdentity,
   type PDFSections,
   type PrintItemColumn,
   type PriorityDefaults,
@@ -68,6 +69,7 @@ const PlanningPrintPage = lazy(() => import("@/pages/PlanningPrintPage"));
 const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
 const PublicWorkOrderPage = lazy(() => import("@/pages/PublicWorkOrderPage"));
 const HomePage = lazy(() => import("@/pages/HomePage"));
+const RegulationsPage = lazy(() => import("@/pages/RegulationsPage"));
 const WorkOrderCreatePage = lazy(() => import("@/pages/WorkOrderCreatePage"));
 const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
 const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
@@ -187,6 +189,9 @@ function AppContent(): React.JSX.Element {
   const [showShippingOptions, setShowShippingOptions] = useState(
     DEFAULT_SHOW_SHIPPING_OPTIONS,
   );
+  const [sellerIdentity, setSellerIdentity] = useState<SellerIdentity | null>(
+    null,
+  );
   const [modules, setModules] = useState<OrganizationModules>(
     DEFAULT_ORGANIZATION_MODULES,
   );
@@ -214,6 +219,7 @@ function AppContent(): React.JSX.Element {
           ? settings.showShippingOptions
           : DEFAULT_SHOW_SHIPPING_OPTIONS,
       );
+      setSellerIdentity(settings?.sellerIdentity ?? null);
       // Optional modules are off unless the server says otherwise.
       setModules(normalizeOrganizationModules(settings?.modules));
     },
@@ -399,6 +405,8 @@ function AppContent(): React.JSX.Element {
       setPrintItemColumns,
       showShippingOptions,
       setShowShippingOptions,
+      sellerIdentity,
+      setSellerIdentity,
       modules,
     }),
     [
@@ -408,6 +416,7 @@ function AppContent(): React.JSX.Element {
       priorityDefaults,
       printItemColumns,
       showShippingOptions,
+      sellerIdentity,
       modules,
     ],
   );
@@ -434,6 +443,8 @@ function AppContent(): React.JSX.Element {
             <Route path="/public/work-orders/:token" element={<PublicWorkOrderPage />} />
             {/* Public landing page for prospective organizations; works signed in or out. */}
             <Route path="/home" element={<HomePage signedIn={Boolean(currentUser)} />} />
+            {/* Public guide to e-invoicing, e-dispatch and fiscalization law (docs/drzavne-integracije). */}
+            <Route path="/home/propisi/:slug?" element={<RegulationsPage />} />
             {/* Backoffice: superadmin session, independent of any organization. */}
             <Route path="/backoffice/*" element={<PlatformConsole />} />
             <Route

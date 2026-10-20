@@ -17,6 +17,7 @@ import { PdfSectionsSettings } from "@/components/settings/PdfSectionsSettings";
 import { PrintItemColumnsSettings } from "@/components/settings/PrintItemColumnsSettings";
 import { BillingDefaultsSettings } from "@/components/settings/BillingDefaultsSettings";
 import { PriorityDefaultsSettings } from "@/components/settings/PriorityDefaultsSettings";
+import { SellerIdentitySettings } from "@/components/settings/SellerIdentitySettings";
 import { ShippingOptionsSettings } from "@/components/settings/ShippingOptionsSettings";
 import { useOrganization } from "@/hooks/useOrganization";
 
@@ -56,6 +57,8 @@ export function SettingsPage(): React.JSX.Element {
           {isAdmin && <OrganizationNameSettings />}
 
           {isAdmin && <LoginLogoSettings />}
+
+          {isAdmin && (modules.einvoicing || modules.edispatch) && <SellerIdentitySettings />}
 
           <section className="max-w-2xl border border-border bg-card">
             <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">

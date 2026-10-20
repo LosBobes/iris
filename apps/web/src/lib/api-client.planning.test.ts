@@ -162,12 +162,12 @@ describe('planning HTTP client: plans', () => {
 describe('organization modules: planning', () => {
   it('sends planning with the other modules', async () => {
     const { api, fetchMock } = setup({ slug: 'demo' })
-    await api.setPlatformTenantModules('demo', { processes: true, stock: true, planning: true, attendance: true })
-    expect(call(fetchMock).body).toEqual({ processes: true, stock: true, planning: true, attendance: true })
+    await api.setPlatformTenantModules('demo', { processes: true, stock: true, planning: true, attendance: true, einvoicing: false, edispatch: false })
+    expect(call(fetchMock).body).toEqual({ processes: true, stock: true, planning: true, attendance: true, einvoicing: false, edispatch: false })
   })
 
   it('counts planning as off without processes when reading settings', async () => {
-    const { api } = setup({ firmName: 'X', modules: { processes: false, stock: true, planning: true, attendance: true } })
-    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: true, planning: false, attendance: true })
+    const { api } = setup({ firmName: 'X', modules: { processes: false, stock: true, planning: true, attendance: true, einvoicing: false, edispatch: false } })
+    expect((await api.getSettings()).modules).toEqual({ processes: false, stock: true, planning: false, attendance: true, einvoicing: false, edispatch: false })
   })
 })

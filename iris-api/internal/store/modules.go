@@ -12,8 +12,8 @@ import (
 	"github.com/LosBobes/iris/iris-api/internal/domain"
 )
 
-// Optional per-organization modules ("processes", "stock", "planning" and
-// "attendance"). All
+// Optional per-organization modules ("processes", "stock", "planning",
+// "attendance", "einvoicing" and "edispatch"). All
 // are off by default and only Backoffice superadmins switch them. The flags live in the
 // app_settings key/value table (no migration); a missing row or key means off.
 //
@@ -126,7 +126,7 @@ func onOff(value bool) string {
 }
 
 // moduleChangeDetail builds the audit detail of a module switch and reports
-// whether anything changed. "processes"/"stock"/"planning"/"attendance" carry the new values and
+// whether anything changed. Each module name carries its new value and
 // "changed" the comma-joined names that differ.
 func moduleChangeDetail(current, next domain.OrganizationModules) (map[string]string, bool) {
 	changed := []string{}
@@ -142,12 +142,20 @@ func moduleChangeDetail(current, next domain.OrganizationModules) (map[string]st
 	if current.Attendance != next.Attendance {
 		changed = append(changed, "attendance")
 	}
+	if current.EInvoicing != next.EInvoicing {
+		changed = append(changed, "einvoicing")
+	}
+	if current.EDispatch != next.EDispatch {
+		changed = append(changed, "edispatch")
+	}
 	sort.Strings(changed)
 	return map[string]string{
 		"processes":  onOff(next.Processes),
 		"stock":      onOff(next.Stock),
 		"planning":   onOff(next.Planning),
 		"attendance": onOff(next.Attendance),
+		"einvoicing": onOff(next.EInvoicing),
+		"edispatch":  onOff(next.EDispatch),
 		"changed":    strings.Join(changed, ","),
 	}, len(changed) > 0
 }
@@ -222,6 +230,12 @@ func (s *SQLiteStore) SetTenantModules(ctx context.Context, slug string, update 
 	}
 	if update.Attendance != nil {
 		modules.Attendance = *update.Attendance
+	}
+	if update.EInvoicing != nil {
+		modules.EInvoicing = *update.EInvoicing
+	}
+	if update.EDispatch != nil {
+		modules.EDispatch = *update.EDispatch
 	}
 	if err := validateModules(modules); err != nil {
 		return nil, err

@@ -55,3 +55,39 @@ describe('SettingsPage "Procesi rada" section and modules', () => {
     }
   })
 })
+
+describe('SettingsPage seller identity card (D-030)', () => {
+  it.each([
+    [NO_MODULES, false],
+    [ALL_MODULES, false],
+    [{ ...NO_MODULES, einvoicing: true }, true],
+    [{ ...NO_MODULES, edispatch: true }, true],
+  ])('with %j the card is shown: %s', (modules, shown) => {
+    vi.stubGlobal('api', { getProcessTemplates: vi.fn().mockResolvedValue([]) })
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={{ currentUser: { id: 'u', username: 'admin', role: 'admin' }, onLogout: vi.fn() }}>
+          <WithModules modules={modules}>
+            <Page />
+          </WithModules>
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+    const heading = sr.settings.seller.title
+    if (shown) expect(screen.getByText(heading)).toBeInTheDocument()
+    else expect(screen.queryByText(heading)).not.toBeInTheDocument()
+  })
+
+  it('is hidden from operators', () => {
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={{ currentUser: { id: 'u', username: 'op', role: 'user' }, onLogout: vi.fn() }}>
+          <WithModules modules={{ ...NO_MODULES, einvoicing: true }}>
+            <Page />
+          </WithModules>
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByText(sr.settings.seller.title)).not.toBeInTheDocument()
+  })
+})

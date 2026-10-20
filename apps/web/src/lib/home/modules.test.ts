@@ -20,9 +20,9 @@ describe("setModule", () => {
   });
 
   it("switching a requirement off takes the dependents with it", () => {
-    const all = { stock: true, processes: true, attendance: true, planning: true };
-    expect(setModule(all, "stock", false)).toEqual({ stock: false, processes: false, attendance: true, planning: false });
-    expect(setModule(all, "attendance", false)).toEqual({ stock: true, processes: true, attendance: false, planning: false });
+    const all = { stock: true, processes: true, attendance: true, planning: true, einvoicing: false, edispatch: false };
+    expect(setModule(all, "stock", false)).toEqual({ stock: false, processes: false, attendance: true, planning: false, einvoicing: false, edispatch: false });
+    expect(setModule(all, "attendance", false)).toEqual({ stock: true, processes: true, attendance: false, planning: false, einvoicing: false, edispatch: false });
   });
 });
 

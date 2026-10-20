@@ -3,7 +3,7 @@
 Operations platform for small manufacturing and service businesses (job shops):
 work-order lifecycle, customers/locations, catalog, dashboard reporting, public
 tracking, admin-configurable organization settings, and optional modules (stock,
-processes, attendance, planning). The system is **multi-tenant** — every row is
+processes, attendance, planning, e-invoicing, e-dispatch). The system is **multi-tenant** — every row is
 scoped to a tenant (organization) and login requires an organization slug. The
 first production organization is **Grafika Čobanović**.
 
@@ -180,6 +180,13 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   requirements**, usable alone): `GET /attendance`, admin `PUT /attendance/{userId}`, web
   `/attendance`. Gate attendance UI on `modules.attendance`. A stored `modules` value without
   the key reads as attendance = planning (legacy orgs keep it).
+- **e-Fakture / e-Otpremnice** (D-030, in progress — Linear project "Iris: e-invoicing SEF &
+  eOtpremnica (D-030)"): modules `einvoicing` and `edispatch` (off by default, Backoffice-only,
+  no requirements, independent; missing key = off). So far only the flags and the seller identity
+  (`OrganizationSettings.sellerIdentity`, `app_settings` key `seller_identity`, validated in
+  `store/seller_identity.go` with a TS twin in `apps/web/src/lib/seller-identity.ts`; Settings card
+  for admins while either module is on). Gate every new SEF/eOtpremnica route with
+  `requireModule(moduleEInvoicing|moduleEDispatch)` and every UI on `modules.einvoicing|edispatch`.
 - **Planiranje** (D-026): third module `planning` (requires `processes` and `attendance`; off by default,
   Backoffice-only). Machine types/units, worker qualifications, attendance overrides
   (migration v31; owned by Prisustvo, read by the planner) and working hours (`app_settings` `working_hours`); step nodes carry

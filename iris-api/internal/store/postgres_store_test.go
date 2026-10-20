@@ -49,6 +49,7 @@ func storeScenarios() []storeScenario {
 		{name: "AnnouncementsTargetAndWindow", run: scenarioAnnouncementsTargetAndWindow},
 		{name: "DeletedOrganizationKeepsImpersonationHistory", run: scenarioDeletedOrganizationKeepsImpersonationHistory},
 		{name: "FirmNameFallsBackToTenantName", run: scenarioFirmNameFallsBackToTenantName},
+		{name: "SellerIdentityRoundTrip", run: scenarioSellerIdentityRoundTrip},
 	}
 }
 

@@ -155,9 +155,9 @@ requires `-tenant <slug>` (a `--dry-run` only validates CSV shape). `import-stoc
 needs `-tenant` (it matches CSV codes against the catalog); `--apply` posts a stock count as
 user `irisctl` (opening movements for articles without stock history) and reports unknown codes.
 
-`set-modules -tenant <slug> [-processes on|off] [-stock on|off] [-planning on|off]` switches an
-organization's optional modules ("Procesi rada" needs "Magacin", "Planiranje" needs "Procesi rada"; an
-omitted flag stays as it is). Unlike the
+`set-modules -tenant <slug> [-processes on|off] [-stock on|off] [-planning on|off] [-attendance on|off] [-einvoicing on|off] [-edispatch on|off]`
+switches an organization's optional modules ("Procesi rada" needs "Magacin", "Planiranje" needs "Procesi rada"
+and "Prisustvo"; "Prisustvo", "e-Fakture" and "e-Otpremnice" stand alone; an omitted flag stays as it is). Unlike the
 Backoffice (`PUT /platform/tenants/{slug}/modules`) it writes no audit row. All modules are off
 for new organizations by default; with a module off its routes answer `403`, new orders get no
 auto-attached process and the catalog's `stockOnHand` is `null`. Work-order processes post/reserve

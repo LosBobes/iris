@@ -59,6 +59,7 @@ type FixtureStore struct {
 	priorityDefaults    *domain.PriorityDefaults
 	printItemColumns    *[]domain.PrintItemColumn
 	showShippingOptions *bool
+	sellerIdentity      *domain.SellerIdentity
 	loginLogo           *domain.LoginLogo
 	sessions            map[string]fixtureSession
 	processTemplates    []domain.ProcessTemplate

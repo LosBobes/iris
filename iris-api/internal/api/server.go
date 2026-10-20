@@ -388,11 +388,15 @@ const (
 	moduleStock      = "stock"
 	modulePlanning   = "planning"
 	moduleAttendance = "attendance"
+	moduleEInvoicing = "einvoicing"
+	moduleEDispatch  = "edispatch"
 
 	moduleProcessesDisabledMessage  = "Modul „Procesi rada“ nije uključen za ovu organizaciju."
 	moduleStockDisabledMessage      = "Modul „Magacin“ nije uključen za ovu organizaciju."
 	modulePlanningDisabledMessage   = "Modul „Planiranje“ nije uključen za ovu organizaciju."
 	moduleAttendanceDisabledMessage = "Modul „Prisustvo“ nije uključen za ovu organizaciju."
+	moduleEInvoicingDisabledMessage = "Modul „e-Fakture“ nije uključen za ovu organizaciju."
+	moduleEDispatchDisabledMessage  = "Modul „e-Otpremnice“ nije uključen za ovu organizaciju."
 )
 
 // requireModule rejects the request with 403 unless the signed-in user's
@@ -421,6 +425,10 @@ func (s *Server) requireModule(module string) func(http.Handler) http.Handler {
 				writeAPIError(w, r, http.StatusForbidden, modulePlanningDisabledMessage, nil)
 			case module == moduleAttendance && !modules.Attendance:
 				writeAPIError(w, r, http.StatusForbidden, moduleAttendanceDisabledMessage, nil)
+			case module == moduleEInvoicing && !modules.EInvoicing:
+				writeAPIError(w, r, http.StatusForbidden, moduleEInvoicingDisabledMessage, nil)
+			case module == moduleEDispatch && !modules.EDispatch:
+				writeAPIError(w, r, http.StatusForbidden, moduleEDispatchDisabledMessage, nil)
 			default:
 				next.ServeHTTP(w, r)
 			}
