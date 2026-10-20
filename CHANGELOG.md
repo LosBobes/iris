@@ -2,6 +2,13 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.15.0 — 2026-10-20
+
+### Minor
+
+- Organizations can now be given the e-Fakture and e-Otpremnice modules in the Backoffice, and admins of such organizations can enter their company details (legal name, PIB, MB, address, bank account, VAT payer) for government e-invoices and e-dispatch notes in Settings. First step of D-030.
+- New public page /home/propisi (linked from the landing page): a Serbian guide to the law on e-invoices (SEF), e-dispatch notes and fiscal receipts, with deadlines, penalties and all sources.
+
 ## 2.14.1 — 2026-10-19
 
 ### Patch
