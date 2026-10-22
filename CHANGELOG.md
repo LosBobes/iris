@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.16.0 — 2026-10-22
+
+### Minor
+
+- Superadmin (Backoffice) sign-ins now last 8 hours instead of 2.
+
 ## 2.15.1 — 2026-10-20
 
 ### Patch
