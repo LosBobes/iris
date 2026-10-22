@@ -89,8 +89,8 @@ export function visibleNav(modules: OrganizationModules, role: PreviewRole): Nav
 
 /** What each module adds beyond its own menu entry, for the playground's summary. */
 export const MODULE_EFFECTS: Record<ModuleKey, string> = {
-  stock: "Katalog dobija stanje, rezervisano i raspoloživo; kontrolna tabla niske zalihe.",
-  processes: "Nalog dobija karticu „Proces“; završen korak sam knjiži utrošak u magacinu.",
-  attendance: "Dnevna evidencija ko je na poslu, koju planer čita.",
+  stock: "Katalog dobija stanje, rezervisano i raspoloživo, a kontrolna tabla upozorenje o niskim zalihama.",
+  processes: "Nalog dobija karticu „Proces“, a završen korak automatski knjiži utrošak u magacinu.",
+  attendance: "Dnevna evidencija prisustva, koju koristi i planiranje.",
   planning: "Dnevni plan po mašinama i ljudima, „Moj red“ za operatere, prognoza rokova.",
 };

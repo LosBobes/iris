@@ -9,6 +9,7 @@ import { ModulePlayground } from "./ModulePlayground";
 import { RoleSwitcher } from "./RoleSwitcher";
 import { PriceCalculator, parseNumber } from "./PriceCalculator";
 import { Faq } from "./Faq";
+import { PricingPlans, formatRsd } from "./PricingPlans";
 
 afterEach(() => {
   cleanup();
@@ -168,5 +169,28 @@ describe("Faq", () => {
     const details = screen.getByText("Prvo?").closest("details");
     expect(details).toHaveAttribute("open");
     expect(screen.getByText("Drugo?").closest("details")).not.toHaveAttribute("open");
+  });
+});
+
+describe("PricingPlans", () => {
+  it("shows the monthly prices and switches every plan to the annual price", async () => {
+    render(<PricingPlans />);
+    const plan = (name: string) => screen.getByRole("listitem", { name: `Paket ${name}` });
+
+    expect(within(plan("Osnovni")).getByText("3.900")).toBeInTheDocument();
+    expect(within(plan("Proizvodnja")).getByText("8.900")).toBeInTheDocument();
+    expect(within(plan("Pro")).getByText("13.900")).toBeInTheDocument();
+    expect(within(plan("Proizvodnja")).getByText("80.000 RSD")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mesečno" })).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(screen.getByRole("button", { name: /Godišnje/ }));
+    expect(within(plan("Osnovni")).getByText("39.000")).toBeInTheDocument();
+    expect(within(plan("Pro")).getByText("139.000")).toBeInTheDocument();
+    expect(within(plan("Pro")).getByText("RSD godišnje")).toBeInTheDocument();
+  });
+
+  it("formats dinars with a dot as the thousands separator", () => {
+    expect(formatRsd(112500)).toBe("112.500 RSD");
+    expect(formatRsd(490)).toBe("490 RSD");
   });
 });

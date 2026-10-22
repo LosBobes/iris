@@ -22,15 +22,15 @@ const STATUSES: StatusInfo[] = [
     key: "new",
     label: "Nov",
     color: "var(--iris-status-draft)",
-    meaning: "Nalog je otvoren, rad još nije krenuo. Svaki nalog počinje ovde.",
-    who: "Bilo ko: operater ili administrator, čim klijent potvrdi posao.",
+    meaning: "Nalog je otvoren, a rad još nije počeo. Svaki nalog kreće odavde.",
+    who: "Operater ili administrator, čim klijent potvrdi posao.",
     automatic: "Iris rezerviše sledeći broj naloga i vraća nesačuvan unos ako se stranica osveži.",
   },
   {
     key: "assigned",
     label: "Dodeljen",
     color: "var(--iris-status-active)",
-    meaning: "Neko je preuzeo posao. Dok izvršilac nije upisan, nalog je na tabli „nedodeljen“.",
+    meaning: "Neko je preuzeo posao. Dok izvršilac nije upisan, nalog se na kontrolnoj tabli vodi kao nedodeljen.",
     who: "Operater koji preuzima posao, ili administrator koji ga dodeljuje.",
     automatic: "Nalog nestaje sa liste nedodeljenih, a operater ga vidi među svojima.",
   },
@@ -38,23 +38,23 @@ const STATUSES: StatusInfo[] = [
     key: "inProgress",
     label: "U toku",
     color: "var(--iris-status-active)",
-    meaning: "Posao se radi u radionici. Sa procesima rada, i korak po korak.",
+    meaning: "Posao se radi u radionici. Uz modul procesa rada prati se i svaki korak.",
     who: "Izvršilac, dugmetom „Pomeri u U toku“.",
-    automatic: "Ako je modul uključen, završen korak procesa sam knjiži utrošak materijala u magacinu.",
+    automatic: "Ako je modul uključen, završen korak procesa automatski knjiži utrošak materijala u magacinu.",
   },
   {
     key: "completed",
     label: "Završen",
     color: "var(--iris-status-done)",
-    meaning: "Gotovo. Odavde nalog ne može nazad u rad.",
+    meaning: "Posao je gotov i nalog se više ne vraća u rad.",
     who: "Izvršilac, kad je posao spreman za isporuku.",
-    automatic: "Iris upisuje datum završetka i nalog izlazi iz signala rokova na tabli.",
+    automatic: "Iris upisuje datum završetka i nalog se više ne prati u upozorenjima o rokovima.",
   },
   {
     key: "invoiced",
     label: "Fakturisan",
     color: "var(--iris-status-done)",
-    meaning: "Faktura, profaktura ili otkup: novac je rešen, nalog je završio put.",
+    meaning: "Izdata je faktura, profaktura ili otkup. Naplata je rešena i nalog je završio put.",
     who: "Administrator ili operater, posle naplate.",
     automatic: "Prihod i zarada naloga ulaze u mesečne brojeve na kontrolnoj tabli.",
   },
@@ -63,9 +63,9 @@ const STATUSES: StatusInfo[] = [
     label: "Otkazan",
     color: "var(--iris-status-cancelled)",
     side: true,
-    meaning: "Posao je otpao. Nalog ostaje zapisan, pa je otkazivanje skoro uvek bolje od brisanja.",
+    meaning: "Posao je otpao. Nalog ostaje zapisan, pa je otkazivanje gotovo uvek bolje od brisanja.",
     who: "Bilo ko, iz menija „Još radnji“, dok nalog nije završen.",
-    automatic: "Nalog izlazi iz svih signala i lista za rad, a istorija ostaje.",
+    automatic: "Nalog izlazi iz svih upozorenja i lista za rad, a istorija ostaje sačuvana.",
   },
 ];
 
@@ -84,7 +84,7 @@ export function StatusExplorer(): React.JSX.Element {
 
   return (
     <div>
-      <div className="overflow-x-auto pb-1">
+      <div className="relative overflow-x-auto pb-1">
         <div role="tablist" aria-label="Statusi naloga" className="flex min-w-[600px] items-center gap-2">
           {STATUSES.map((status, index) => {
             const isActive = status.key === selected;

@@ -20,7 +20,7 @@ const STEPS: Step[] = [
   { key: "new", label: "Nov", color: "var(--iris-status-draft)", event: "Nalog otvoren, broj rezervisan" },
   { key: "assigned", label: "Dodeljen", color: "var(--iris-status-active)", event: "Ana preuzela posao" },
   { key: "inProgress", label: "U toku", color: "var(--iris-status-active)", event: "Rad u radionici započet" },
-  { key: "completed", label: "Završen", color: "var(--iris-status-done)", event: "Posao završen, datum upisan sam" },
+  { key: "completed", label: "Završen", color: "var(--iris-status-done)", event: "Posao završen, datum upisan automatski" },
   { key: "invoiced", label: "Fakturisan", color: "var(--iris-status-done)", event: "Faktura izdata, kraj puta" },
 ];
 
@@ -149,7 +149,7 @@ export function WorkOrderDemo(): React.JSX.Element {
         </button>
       </div>
       <p className="mt-2 text-[11px] text-[color:var(--iris-ink-mute)]">
-        Probajte: nalog ide samo napred, kao u aplikaciji. Ništa se ne čuva.
+        Probajte sami: kao i u aplikaciji, nalog ide samo napred. Ništa od ovoga se ne čuva.
       </p>
     </div>
   );
@@ -213,7 +213,7 @@ function ClientView({ statusLabel }: { statusLabel: string }): React.JSX.Element
         ))}
       </dl>
       <p className="mt-5 border-t border-[color:var(--iris-border-soft)] pt-3 text-[11px] text-[color:var(--iris-ink-mute)]">
-        Ovako nalog vidi klijent kad otvori javni link: bez prijave, bez cena i bez internih napomena.
+        Ovako klijent vidi nalog kad otvori javni link: bez prijave, bez cena i bez internih napomena.
       </p>
     </div>
   );

@@ -31,8 +31,8 @@ export function PriceCalculator(): React.JSX.Element {
     <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <form className="space-y-5" onSubmit={(event) => event.preventDefault()} aria-label="Primer cene">
         <Field label="Količina (kom)" value={quantity} onChange={setQuantity} />
-        <Field label="Nabavna cena po komadu (neto)" value={unitCost} onChange={setUnitCost} hint="Koliko nas košta: papir, folija, rad." />
-        <Field label="Prodajna cena po komadu (neto)" value={unitPrice} onChange={setUnitPrice} hint="Koliko naplaćujemo klijentu, bez PDV-a." />
+        <Field label="Nabavna cena po komadu (neto)" value={unitCost} onChange={setUnitCost} hint="Koliko vas košta: papir, folija, rad." />
+        <Field label="Prodajna cena po komadu (neto)" value={unitPrice} onChange={setUnitPrice} hint="Koliko naplaćujete klijentu, bez PDV-a." />
         <div>
           <div id={vatGroupId} className="mb-1.5 text-[11px] text-[color:var(--iris-ink-soft)]">Poreska grupa</div>
           <div role="radiogroup" aria-labelledby={vatGroupId} className="flex gap-2">
@@ -105,9 +105,9 @@ export function PriceCalculator(): React.JSX.Element {
         <p className="mt-5 border-t border-[color:var(--iris-border-soft)] pt-3 text-[11px] leading-[1.5] text-[color:var(--iris-ink-mute)]">
           {admin
             ? loss
-              ? "Prodajna cena je ispod troška: ovakav nalog bi na kontrolnoj tabli bio crven."
-              : "Na nalogu i na kontrolnoj tabli administrator vidi sve ove brojeve, po stavci i po mesecu."
-            : "Operater vidi samo prodajnu cenu i ono što klijent plaća. Trošak, zarada i marža mu se ne prikazuju."}
+              ? "Prodajna cena je ispod troška, pa bi ovaj nalog na kontrolnoj tabli bio označen crveno."
+              : "Administrator vidi sve ove brojeve na nalogu i na kontrolnoj tabli, po stavci i po mesecu."
+            : "Operater vidi samo prodajnu cenu i iznos koji klijent plaća. Trošak, zaradu i maržu ne vidi."}
         </p>
       </div>
     </div>
