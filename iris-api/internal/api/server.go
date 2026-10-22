@@ -58,8 +58,9 @@ type Config struct {
 	// AllowedOrigins, grants credentialed CORS to any http://localhost:* page.
 	Production bool
 	WebDir     string
-	// Operator console session (see platform.go): a separate cookie, kept
-	// short because it can read usage across every organization.
+	// Operator console session (see platform.go): a separate cookie with a
+	// fixed lifetime (8 h by default) that never slides, because it can read
+	// usage across every organization.
 	PlatformSessionCookieName string
 	PlatformSessionDuration   time.Duration
 	// ImpersonationDuration caps an organization session a superadmin opens
@@ -115,7 +116,7 @@ func NewServer(store store.Store, configs ...Config) *Server {
 		config.PlatformSessionCookieName = "iris_platform_session"
 	}
 	if config.PlatformSessionDuration == 0 {
-		config.PlatformSessionDuration = 2 * time.Hour
+		config.PlatformSessionDuration = 8 * time.Hour
 	}
 	if config.ImpersonationDuration == 0 {
 		config.ImpersonationDuration = time.Hour

@@ -115,7 +115,7 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
 - **Backoffice (`/backoffice`, API `/platform/*`):** opened by tapping the "Iris"
   wordmark on the org picker 5× within 3 s (a convenience, not security). Only
   `superadmin` accounts get in; they live in `platform_admins`, fully separate from
-  organization `users` (own sessions, `iris_platform_session` cookie, 2 h; neither
+  organization `users` (own sessions, `iris_platform_session` cookie, 8 h; neither
   side's credentials or sessions work on the other). A database with none gets
   `admin` / `admin123321`, which must change its password before anything shows
   (in-app "Lozinka"; `irisctl create-platform-admin` or the "Superadmini" tab adds

@@ -102,7 +102,7 @@ Web client
   (`sessions.token_hash`); the idle expiry slides on use (written at most hourly)
   under an absolute cap — 12 h idle / 24 h cap with a browser-session cookie, or
   7 d / 30 d with a persistent cookie when the login form's "Zapamti me na ovom
-  uređaju" sends `remember: true`. Impersonation (1 h) and Backoffice (2 h)
+  uređaju" sends `remember: true`. Impersonation (1 h) and Backoffice (8 h)
   sessions are fixed. Changing a user's password ends their other sessions.
   Mutating requests from a foreign `Origin` are refused (403).
 - Protected routes use `requireAuth`; admin-only routes use `requireAdmin`
@@ -203,7 +203,7 @@ Web client
 
 ### Backoffice (superadmins, `/platform/*`)
 
-- Separate `platform_admins` accounts and `iris_platform_session` (2 h). Tabs:
+- Separate `platform_admins` accounts and `iris_platform_session` (8 h). Tabs:
   **Organizacije** (create / rename / suspend, modules, users and impersonation
   with a required reason, health computed on read, superadmin-only notes in
   `tenant_notes` — never shown to the organization or exported — and JSON export /
