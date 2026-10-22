@@ -2,6 +2,17 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.17.0 — 2026-10-22
+
+### Minor
+
+- The landing page has a price list (Cenovnik): the three subscription plans with a monthly/annual switch, onboarding prices, the adoption period, support and paid changes.
+
+### Patch
+
+- The landing page no longer scrolls sideways on phones, and its section menu no longer overflows on tablets.
+- The landing page copy has been rewritten in a consistent, professional Serbian voice.
+
 ## 2.16.1 — 2026-10-22
 
 ### Patch
