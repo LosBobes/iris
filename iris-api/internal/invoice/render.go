@@ -3,6 +3,7 @@ package invoice
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"strings"
@@ -13,6 +14,14 @@ import (
 
 //go:embed invoice.html.tmpl
 var invoiceTemplate string
+
+// logoSVG is the Pingwin penguin, redrawn as vectors from the firm's own
+// invoices.
+//
+//go:embed pingwin-logo.svg
+var logoSVG []byte
+
+var logoDataURI = template.URL("data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(logoSVG))
 
 var parsedTemplate = template.Must(template.New("invoice").Funcs(template.FuncMap{
 	"money": FormatMoney,
@@ -34,6 +43,7 @@ var pageLayout = reports.PageLayout{MarginTop: 0.47, MarginBottom: 0.55, MarginL
 type templateData struct {
 	Invoice
 	Totals
+	Logo             template.URL
 	PaymentModel     string
 	PaymentReference string
 	VatExemptNote    string
@@ -45,6 +55,7 @@ func RenderHTML(inv Invoice) (string, error) {
 	model, reference := inv.ReferenceNumber()
 	data := templateData{
 		Invoice:          inv,
+		Logo:             logoDataURI,
 		Totals:           inv.Compute(),
 		PaymentModel:     model,
 		PaymentReference: reference,
