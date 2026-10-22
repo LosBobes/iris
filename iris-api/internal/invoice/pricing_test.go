@@ -15,54 +15,80 @@ func lineSum(items []Item) int64 {
 	return sum
 }
 
-func TestPlanItemsAddUpToThePriceList(t *testing.T) {
-	for _, plan := range Plans {
-		for billing, want := range map[Billing]int64{BillingMonthly: plan.Monthly, BillingQuarterly: 3 * plan.Monthly, BillingAnnual: plan.Annual} {
-			items, err := PlanItems(PlanOptions{Plan: plan.Key, Billing: billing})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := lineSum(items); got != want {
-				t.Errorf("%s %s: lines add up to %d, want %d", plan.Key, billing, got, want)
-			}
-		}
-	}
-}
-
-func TestPlanItemsListEveryModule(t *testing.T) {
-	items, err := PlanItems(PlanOptions{Plan: "Pro", Period: "oktobar 2026", ExtraUsers: 2, Onboarding: true})
+func pricing(t *testing.T, spec string, opts PricingOptions) []Item {
+	t.Helper()
+	modules, err := ParseModules(spec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	codes := []string{"IR-OSN", "IR-MAG", "IR-PRC", "IR-EFA", "IR-EOT", "IR-PRS", "IR-PLN", "IR-KOR", "IR-UVO"}
-	if len(items) != len(codes) {
-		t.Fatalf("got %d lines, want %d: %+v", len(items), len(codes), items)
+	opts.Modules = modules
+	if opts.ModuleLicence == 0 {
+		opts.ModuleLicence = DefaultModuleLicence
 	}
-	for i, code := range codes {
-		if items[i].Code != code {
-			t.Errorf("line %d = %s, want %s", i+1, items[i].Code, code)
+	if opts.ModuleMonthly == 0 {
+		opts.ModuleMonthly = DefaultModuleMonthly
+	}
+	items, err := PricingItems(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return items
+}
+
+func TestParseModules(t *testing.T) {
+	modules, err := ParseModules("planiranje, Magacin")
+	if err != nil || len(modules) != 2 || modules[0].Key != "magacin" || modules[1].Key != "planiranje" {
+		t.Fatalf("modules = %+v, %v", modules, err)
+	}
+	for plan, want := range map[string]int{"pro": 6, "proizvodnja": 4, "osnovni": 0, "": 0} {
+		if modules, err := ParseModules(plan); err != nil || len(modules) != want {
+			t.Errorf("ParseModules(%q) = %d modules, %v; want %d", plan, len(modules), err, want)
 		}
 	}
-	if items[0].Name != baseSubscription.Name+", oktobar 2026" {
-		t.Errorf("base line = %q", items[0].Name)
+	if _, err := ParseModules("magacin,crm"); err == nil {
+		t.Error("expected an error for an unknown module")
 	}
-	if items[1].Price != 1250 || items[5].Price != 2500 {
-		t.Errorf("module shares = %v / %v, want 1250 / 2500", items[1].Price, items[5].Price)
+}
+
+func TestLicenceIsOneLinePerModule(t *testing.T) {
+	items := pricing(t, "pro", PricingOptions{Licence: true})
+	if len(items) != 6 || lineSum(items) != 6*DefaultModuleLicence {
+		t.Fatalf("licence lines = %d, sum %d", len(items), lineSum(items))
 	}
-	if items[7].Quantity != 2 || items[7].Price != 490 || items[8].Price != 160000 || items[8].DiscountPercent != 0 {
-		t.Errorf("extra users / onboarding: %+v / %+v", items[7], items[8])
+	if items[0].Code != "IR-LMAG" || items[5].Code != "IR-LPLN" || items[0].Unit != "KOM" {
+		t.Errorf("licence lines: %+v", items)
+	}
+	if _, err := PricingItems(PricingOptions{Licence: true}); err == nil {
+		t.Error("expected an error for a licence without modules")
+	}
+}
+
+func TestSubscriptionGrowsByModule(t *testing.T) {
+	cases := []struct {
+		spec    string
+		billing Billing
+		want    int64
+	}{
+		{"osnovni", BillingMonthly, 3900},
+		{"pro", BillingMonthly, 3900 + 6*300},
+		{"magacin,procesi", BillingQuarterly, 3 * (3900 + 2*300)},
+		{"pro", BillingAnnual, 10 * (3900 + 6*300)},
+	}
+	for _, c := range cases {
+		items := pricing(t, c.spec, PricingOptions{Subscription: true, Billing: c.billing})
+		if got := lineSum(items); got != c.want {
+			t.Errorf("%s %s: subscription %d, want %d", c.spec, c.billing, got, c.want)
+		}
 	}
 
-	annual, _ := PlanItems(PlanOptions{Plan: "pro", Billing: BillingAnnual, ExtraUsers: 1, Onboarding: true})
-	users, onboarding := annual[7], annual[8]
-	if users.Unit != "KOR/GOD" || users.Price != 4900 || onboarding.DiscountPercent != annualOnboardingDiscount {
-		t.Errorf("annual extra users / onboarding: %+v / %+v", users, onboarding)
+	items := pricing(t, "pro", PricingOptions{Subscription: true, Period: "oktobar 2026", ExtraUsers: 2})
+	if len(items) != 3 || items[1].Quantity != 6 || items[1].Price != 300 || items[1].Unit != "MOD/MES" {
+		t.Fatalf("subscription lines: %+v", items)
 	}
-
-	if _, err := PlanItems(PlanOptions{Plan: "zlatni"}); err == nil {
-		t.Error("expected an error for an unknown plan")
+	if items[2].Code != "IR-KOR" || items[2].Quantity != 2 || items[2].Price != 490 {
+		t.Errorf("extra users: %+v", items[2])
 	}
-	if _, err := PlanItems(PlanOptions{Plan: "pro", Billing: "nedeljno"}); err == nil {
+	if _, err := PricingItems(PricingOptions{Subscription: true, Billing: "nedeljno"}); err == nil {
 		t.Error("expected an error for an unknown billing")
 	}
 }
@@ -75,28 +101,19 @@ func TestApplyDiscountKeepsOwnRabat(t *testing.T) {
 	}
 }
 
-// TestPlansMatchLandingPage keeps Plans in step with the public price list.
-func TestPlansMatchLandingPage(t *testing.T) {
+// TestPricesMatchLandingPage keeps the base subscription and the extra-user
+// price in step with the public price list.
+func TestPricesMatchLandingPage(t *testing.T) {
 	src, err := os.ReadFile("../../../apps/web/src/components/home/PricingPlans.tsx")
 	if err != nil {
 		t.Skipf("landing page not in this checkout: %v", err)
 	}
-	block := regexp.MustCompile(`name: "([^"]+)",[\s\S]*?monthly: (\d+),\s*annual: (\d+),\s*users: (\d+),\s*onboarding: (\d+)`)
-	matches := block.FindAllStringSubmatch(string(src), -1)
-	if len(matches) != len(Plans) {
-		t.Fatalf("landing page lists %d plans, Plans has %d", len(matches), len(Plans))
-	}
 	num := func(s string) int64 { n, _ := strconv.ParseInt(s, 10, 64); return n }
-	for i, m := range matches {
-		p := Plans[i]
-		if m[1] != p.Name || num(m[2]) != p.Monthly || num(m[3]) != p.Annual || int(num(m[4])) != p.Users || num(m[5]) != p.Onboarding {
-			t.Errorf("plan %d: landing page %v, Plans %+v", i+1, m[1:], p)
-		}
+	base := regexp.MustCompile(`name: "Osnovni",[\s\S]*?monthly: (\d+),[\s\S]*?users: (\d+),`).FindSubmatch(src)
+	if base == nil || num(string(base[1])) != BaseMonthly || int(num(string(base[2]))) != BaseUsers {
+		t.Errorf("Osnovni on the landing page = %q, want %d RSD for %d users", base, BaseMonthly, BaseUsers)
 	}
-	if extra := regexp.MustCompile(`Dodatni korisnik je (\d+) RSD`).FindStringSubmatch(string(src)); extra == nil || num(extra[1]) != ExtraUserMonthly {
-		t.Errorf("extra user price on the landing page = %v, want %d", extra, ExtraUserMonthly)
-	}
-	if !regexp.MustCompile(`uvođenje je ` + strconv.Itoa(annualOnboardingDiscount) + `% jeftinije`).Match(src) {
-		t.Errorf("annual onboarding discount on the landing page is not %d%%", annualOnboardingDiscount)
+	if extra := regexp.MustCompile(`Dodatni korisnik je (\d+) RSD`).FindSubmatch(src); extra == nil || num(string(extra[1])) != ExtraUserMonthly {
+		t.Errorf("extra user price on the landing page = %q, want %d", extra, ExtraUserMonthly)
 	}
 }

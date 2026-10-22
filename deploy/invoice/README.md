@@ -23,45 +23,43 @@ go run ./cmd/irisctl invoice -seller ../deploy/invoice/seller.json \
   -number 26-PW0001 -date 2026-10-22 -due-days 8 \
   -tenant cobanovic -partner-code 00001 \
   -contract "Ugovor o licenci br. 01/2026" \
-  -plan pro -period "oktobar 2026" -discount 30
+  -modules pro -period "oktobar 2026" -discount 30
 ```
 
-## Plans, modules and discounts
+The licence goes on its own invoice, once:
 
-`-plan osnovni|proizvodnja|pro` adds the subscription from the price list on
-the landing page (`apps/web/src/components/home/PricingPlans.tsx`; a test in
-`internal/invoice` fails when `Plans` drifts from it). Every module is a
-separate line. The base subscription costs what the Osnovni plan costs, and
-each higher plan's surcharge is split evenly over the modules it adds, so a
-plan's lines add up to its listed price:
+```bash
+go run ./cmd/irisctl invoice -seller ../deploy/invoice/seller.json \
+  -number 26-PW0002 -tenant cobanovic -modules pro -bill licenca -discount 30
+```
 
-| Line | Monthly | Annual |
-| --- | --- | --- |
-| Osnovna pretplata | 3.900 | 39.000 |
-| Magacin, Procesi rada, e-Fakture, e-Otpremnice (Proizvodnja) | 1.250 each | 12.500 each |
-| Prisustvo, Planiranje (Pro) | 2.500 each | 25.000 each |
+## Licences, subscription and discounts
 
-- `-billing mesecno|kvartalno|godisnje`: quarterly bills 3 months, annual
-  uses the annual prices (ten months for twelve).
+Iris is billed as a one-time **licence per module** (it covers onboarding)
+plus a **monthly subscription** that grows by a small fee per module:
+
+| Line | Default |
+| --- | --- |
+| Licence per module, one-time (`IR-L…`, one line per module) | 12.500 RSD (`-licence-price`) |
+| Subscription, base system (`IR-PRE`) | 3.900 RSD a month (Osnovni on the landing page) |
+| Subscription, per module (`IR-PMO`, quantity = number of modules) | 300 RSD a month (`-module-fee`) |
+| Extra user over 5 (`IR-KOR`) | 490 RSD a month |
+
+- `-modules magacin,procesi,efakture,eotpremnice,prisustvo,planiranje` picks
+  the client's modules; `osnovni`, `proizvodnja` and `pro` are shortcuts for
+  the landing page plans' module sets.
+- `-bill licenca|pretplata|oba` (default `pretplata`): the licence invoice is
+  issued once, the subscription every period.
+- `-billing mesecno|kvartalno|godisnje`: quarterly bills 3 months, annual 10
+  months for 12.
 - `-period "oktobar 2026"` is appended to the base line.
-- `-extra-users N` adds users over the plan limit at 490 RSD a month (4.900 a year).
-- `-onboarding` adds the plan's one-time onboarding, 30% off with an annual
-  subscription.
+- `-extra-users N` adds users over the 5 included.
 - `-discount N` is the client's rabat in percent. It applies to every line
   without its own rabat, e.g. `-discount 30` for Grafika Čobanović.
-- `-item` lines can be added next to a plan (extra work, field days).
+- `-item` lines can be added next to these (extra work, field days).
 
-- `-tenant <slug>` fills the buyer from that organization's e-invoicing
-  identity (Settings, `sellerIdentity`) in the database (`DATABASE_PATH` /
-  `DATABASE_URL`); without it, or to override a field, use `-buyer-name`,
-  `-buyer-street`, `-buyer-postal`, `-buyer-city`, `-buyer-pib`, `-buyer-mb`.
-- `-item "naziv;jm;količina;cena[;rabat%][;pdv%][;šifra]"`, repeatable. Numbers
-  use the Serbian notation (`24.000`, `5.874,74`); a lone decimal dot also works.
-  The VAT column defaults to `-vat` (20).
-- `-due YYYY-MM-DD` or `-due-days N` (default 8) sets the payment date,
-  `-supply-date` the date of supply, `-place` the place of issue (default: the
-  seller's city), `-note` an extra note, `-model 00` a plain reference, `-html`
-  writes the HTML instead of the PDF.
+A test in `internal/invoice` fails when the base subscription or the
+extra-user price drift from `apps/web/src/components/home/PricingPlans.tsx`.
 
 ## Offers (`irisctl offer`)
 
@@ -75,7 +73,7 @@ go run ./cmd/irisctl offer -seller ../deploy/invoice/seller.json \
   -number 26-PN0001 -tenant cobanovic -valid-days 15 \
   -payment "Avansno, 50% pri prihvatanju ponude" \
   -delivery "10 radnih dana od prihvatanja ponude" \
-  -plan pro -billing godisnje -onboarding -discount 30 \
+  -modules pro -bill oba -billing godisnje -discount 30 \
   -item "Dorada po satu;SAT;8;6.000"
 ```
 
