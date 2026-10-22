@@ -57,7 +57,7 @@ iris/
 │           └── types/             TypeScript domain types
 ├── iris-api/
 │   ├── cmd/server/                HTTP server wiring
-│   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup, platform admins/2FA, export-/delete-tenant
+│   ├── cmd/irisctl/             migrate, seed-demo, create-tenant, import-csv, users, backup, platform admins/2FA, export-/delete-tenant, invoice
 │   ├── internal/api/            Routes, auth middleware, handlers
 │   ├── internal/domain/         Go structs (contract with OpenAPI)
 │   ├── internal/store/          SQL store (SQLite/Postgres) + fixture store

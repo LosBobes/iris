@@ -17,3 +17,7 @@ PLAN.md
 docs/DEPLOYMENT.md
 .omx/
 .cursor/rules/karpathy-guidelines.mdc
+# irisctl invoice output and the real seller identity
+racun-*.pdf
+racun-*.html
+deploy/invoice/seller.json
