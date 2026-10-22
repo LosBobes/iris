@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.18.1 — 2026-10-22
+
+### Patch
+
+- The invoice from irisctl invoice carries the Pingwin penguin logo, redrawn as vectors.
+
 ## 2.18.0 — 2026-10-22
 
 ### Minor
