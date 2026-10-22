@@ -2,6 +2,17 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.19.0 — 2026-10-22
+
+### Minor
+
+- irisctl offer prints Pingwin Software's offer (ponuda) to a client in the invoice layout, with validity, payment and delivery terms.
+- irisctl invoice and offer take -plan from the price list with every module as its own line, and -discount for a client's rabat.
+
+### Patch
+
+- The invoice and offer use the Pingwin logo's indigo and blue instead of navy and orange.
+
 ## 2.18.1 — 2026-10-22
 
 ### Patch
