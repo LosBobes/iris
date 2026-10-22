@@ -81,7 +81,7 @@ export function ModulePlayground(): React.JSX.Element {
       </ul>
 
       <aside aria-label="Pregled menija" className="border border-border bg-background px-5 py-5 lg:sticky lg:top-24 lg:self-start">
-        <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">Meni vaše aplikacije</div>
+        <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">Meni Vaše aplikacije</div>
         <p className="mt-1 text-[12px] text-[color:var(--iris-ink-soft)]" aria-live="polite">
           {enabled === 0
             ? "Osnovni Iris, bez modula."

@@ -2,17 +2,13 @@ import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  BookOpen,
   Building2,
   ClipboardList,
-  Command,
-  FileSpreadsheet,
+  Download,
   History,
   LayoutDashboard,
   Link2,
-  Lock,
   Package,
-  Printer,
   ShieldCheck,
   Smartphone,
   Users,
@@ -21,9 +17,7 @@ import {
 import { IrisMark } from "@/components/brand/IrisMark";
 import { Faq, type FaqItem } from "@/components/home/Faq";
 import { ModulePlayground } from "@/components/home/ModulePlayground";
-import { PriceCalculator } from "@/components/home/PriceCalculator";
 import { PricingPlans } from "@/components/home/PricingPlans";
-import { RoleSwitcher } from "@/components/home/RoleSwitcher";
 import { StatusExplorer } from "@/components/home/StatusExplorer";
 import { useScrollSpy } from "@/components/home/useScrollSpy";
 import { WorkOrderDemo } from "@/components/home/WorkOrderDemo";
@@ -41,9 +35,9 @@ import { staggerStyle } from "@/lib/motion";
  * chapters) is long-form Serbian only.
  *
  * The interactive pieces live in `components/home/`: the hero's live work
- * order, the status explorer, the price example, the module playground, the
- * role switcher and the price list. The contact address is the product
- * owner's, overridable
+ * order, the status explorer, the module playground and the price list. The
+ * copy follows the `srpski-prirodno` skill: short, and addressing the reader
+ * formally as "Vi". The contact address is the product owner's, overridable
  * per deployment with `VITE_HOME_CONTACT_EMAIL` (see .env.example).
  */
 
@@ -63,146 +57,117 @@ interface HomePageProps {
 // Content
 // ---------------------------------------------------------------------------
 
-interface Feature {
+interface Point {
   icon: LucideIcon;
   title: string;
   body: string;
 }
 
-const CORE_FEATURES: Feature[] = [
+const CORE_FEATURES: Point[] = [
   {
     icon: ClipboardList,
     title: "Radni nalozi",
-    body: "Jedan posao, jedan nalog: za koga se radi, šta, sa kojim materijalom i doradom, ko radi i do kada. Broj naloga se dodeljuje automatski, stavke se biraju iz kataloga, a cena je njihov zbir.",
+    body: "Klijent, posao, materijal, rok i izvršilac na jednom mestu, uz štampani nalog za radionicu.",
   },
   {
     icon: Users,
-    title: "Klijenti i lokacije",
-    body: "Svaku firmu unosite jednom, sa PIB-om, matičnim brojem i kontaktima. Klijent može imati više adresa za isporuku, a pretraga radi po nazivu, PIB-u i matičnom broju.",
+    title: "Klijenti",
+    body: "Firme sa PIB-om, matičnim brojem, kontaktima i više adresa za isporuku.",
   },
   {
     icon: Package,
-    title: "Katalog usluga i artikala",
-    body: "Usluge i roba sa jedinicom mere, poreskom grupom, nabavnom i prodajnom cenom. Novu cenu zadajete od određenog datuma, istorija cena ostaje sačuvana, a stavke koje se ne koriste lako uklanjate.",
+    title: "Katalog",
+    body: "Usluge i roba sa nabavnom i prodajnom cenom. Nove cene važe od datuma koji odredite.",
   },
   {
     icon: LayoutDashboard,
     title: "Kontrolna tabla",
-    body: "Na prvi pogled vidite koji nalozi kasne, koji dospevaju danas ili ove nedelje i koje još niko nije preuzeo. Administrator vidi i prihod, trošak, zaradu i maržu po mesecu, klijentu i stavci.",
+    body: "Nalozi koji kasne, dospevaju ili čekaju izvršioca, uz prihod i maržu po mesecu.",
   },
   {
     icon: Link2,
-    title: "Javni link za klijenta",
-    body: "Klijent otvori link na telefonu, bez prijave, i vidi dokle je stigao njegov posao, pa ne mora da zove i pita da li je gotovo. Interne napomene i cene ostaju samo kod vas.",
-  },
-  {
-    icon: Printer,
-    title: "Nalog za radionicu i PDF",
-    body: "Na štampanom nalogu su sekcije koje sami birate: način isporuke, vrsta dokumenta, adresa, završetak posla, potpisi i redosled kolona.",
-  },
-  {
-    icon: FileSpreadsheet,
-    title: "Lista, filteri, CSV",
-    body: "Naloge pretražujete po broju, klijentu, opisu, operateru i ceni, a filtrirate po statusu, tipu dokumenta, dostavi i roku. Celu listu možete izvesti u CSV i otvoriti u Excelu.",
-  },
-  {
-    icon: Command,
-    title: "Brzo kretanje",
-    body: "Ctrl + K otvara komandnu paletu, pa do naloga, klijenta ili stranice stižete u par slova. Stalne porudžbine duplirate jednim klikom, a nesačuvan unos se vraća i posle osvežavanja stranice.",
-  },
-  {
-    icon: BookOpen,
-    title: "Uputstvo i vodič",
-    body: "Dokumentacija je deo aplikacije: dijagrami od puta jednog posla do svakog ekrana, rečnik pojmova i interaktivni vodič koji vas provede kroz prvi nalog, bez čuvanja.",
+    title: "Praćenje za klijenta",
+    body: "Vaš klijent proverava status posla preko linka, bez prijave i bez uvida u cene.",
   },
   {
     icon: Smartphone,
-    title: "U pregledaču i na telefonu",
-    body: "Na računar se ništa ne instalira. Na telefonu ili tabletu Iris dodajete kao aplikaciju sa sopstvenom ikonicom. Birate svetlu ili tamnu temu, veličinu teksta i srpski ili engleski jezik.",
+    title: "Svi uređaji",
+    body: "Računar, tablet ili telefon, bez ikakve instalacije.",
   },
 ];
 
-interface SecurityPoint {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}
+const PRICE_TERMS: Array<{ title: string; body: string }> = [
+  { title: "Nabavna cena", body: "Koliko Vas posao košta." },
+  { title: "Prodajna cena", body: "Koliko ga naplaćujete, bez PDV-a." },
+  { title: "PDV i ukupno", body: "Iris ih računa prema poreskoj grupi svake stavke." },
+];
 
-const SECURITY_POINTS: SecurityPoint[] = [
+const ROLES: Array<{ title: string; body: string }> = [
   {
-    icon: Building2,
-    title: "Svaka firma u svom prostoru",
-    body: "Iris koristi više firmi, a svaka ima zasebnu organizaciju. Nalozi, klijenti, katalog i korisnici vide se samo unutar nje, pa druga firma ne može da vidi vaše podatke.",
+    title: "Administrator",
+    body: "Upravlja korisnicima, katalogom, cenama i podešavanjima i vidi sve finansijske podatke.",
   },
   {
-    icon: Lock,
-    title: "Prijava i sesije",
-    body: "Prijava traži oznaku organizacije, korisničko ime i lozinku. Sesija ističe posle neaktivnosti, opcija „Zapamti me“ važi samo za vaš uređaj, a promena lozinke odjavljuje sve ostale uređaje. Posle više pogrešnih pokušaja prijava se privremeno zaustavlja.",
+    title: "Operater",
+    body: "Radi sa nalozima i vidi prodajne cene. Nabavne cene, zaradu i maržu ne vidi, jer mu ih server i ne šalje.",
+  },
+];
+
+const SECURITY_POINTS: Point[] = [
+  {
+    icon: Building2,
+    title: "Odvojeni podaci",
+    body: "Svaka firma ima zasebnu organizaciju i niko izvan nje ne vidi Vaše podatke.",
   },
   {
     icon: ShieldCheck,
-    title: "Server proverava svaku radnju",
-    body: "Prava se proveravaju na serveru, prema ulozi korisnika. Ono što uloga ne dozvoljava ne može se uraditi ni zaobilaznim putem.",
+    title: "Provera na serveru",
+    body: "Svaku radnju server proverava prema ulozi korisnika.",
   },
   {
     icon: History,
-    title: "Izmene se ne preklapaju",
-    body: "Dok jedna osoba menja nalog, ostali ga vide samo za čitanje, uz poruku ko ga menja. Ako se računar te osobe ugasi, nalog se oslobađa posle dva minuta.",
+    title: "Zabeležen pristup",
+    body: "Vašoj organizaciji pristupamo samo kad nam zatražite pomoć, i svaki pristup se beleži.",
+  },
+  {
+    icon: Download,
+    title: "Izvoz podataka",
+    body: "Potpun izvoz svih podataka dobijate kad god ga zatražite.",
   },
 ];
 
 const START_STEPS: Array<{ title: string; body: string }> = [
   {
-    title: "Javite se",
-    body: "Dogovorimo šta vam treba: samo nalozi i klijenti ili i magacin, procesi i planiranje.",
+    title: "Javite nam se",
+    body: "Dogovaramo koji delovi sistema su Vam potrebni.",
   },
   {
-    title: "Otvaramo vašu organizaciju",
-    body: "Dobijate oznaku organizacije, prvog administratora i module koje ste izabrali. Postojeće klijente, lokacije i naloge uvozimo iz vaše tabele.",
-  },
-  {
-    title: "Dodajete ljude",
-    body: "Administrator pravi korisnike i podešava naziv firme, logotip, izgled naloga i podrazumevane vrednosti.",
+    title: "Pripremamo organizaciju",
+    body: "Uvozimo Vaše klijente, artikle i postojeće naloge.",
   },
   {
     title: "Počinjete sa radom",
-    body: "Prvi nalog, prvi javni link, prva kontrolna tabla. Uputstvo i vodič su u aplikaciji kad vam zatrebaju.",
+    body: "Obučavamo Vaš tim, a uputstvo je uvek dostupno u aplikaciji.",
   },
 ];
 
 const FAQ: FaqItem[] = [
   {
-    q: "Da li moramo nešto da instaliramo?",
-    a: "Ne. Iris radi u pregledaču, na računaru, tabletu i telefonu, a na telefonu ga možete dodati na početni ekran kao aplikaciju.",
-  },
-  {
-    q: "Ko može da vidi naše podatke?",
-    a: "Samo korisnici vaše organizacije, svako prema svojoj ulozi. Druge firme koje koriste Iris ne vide ništa od vaših podataka. Mi ulazimo u vašu organizaciju samo uz zabeležen razlog, na primer kad tražite pomoć, i svaki takav ulazak ostaje u evidenciji.",
-  },
-  {
-    q: "Šta ako ne želimo magacin ili planiranje?",
-    a: "Magacin, procesi, prisustvo i planiranje su moduli i podrazumevano su isključeni. Dok je modul isključen, njegovi ekrani se ne vide u meniju. Uključujemo ih kad vam zatrebaju.",
-  },
-  {
-    q: "Možemo li da prenesemo postojeće klijente i naloge?",
-    a: "Da. Klijente, lokacije i postojeće naloge uvozimo iz tabele (CSV), a početno stanje magacina iz popisa.",
-  },
-  {
-    q: "Šta operater vidi od cena?",
-    a: "Prodajnu cenu. Nabavnu cenu, trošak, zaradu i maržu vidi samo administrator, i na nalogu i na kontrolnoj tabli.",
-  },
-  {
-    q: "Šta zakon traži za e-fakture, e-otpremnice i fiskalne račune?",
-    a: "Propise smo sažeto opisali na srpskom: ko je obveznik i od kada, rokovi, kazne i kako se firma priključuje na SEF i sistem e-otpremnica, sa izvorom uz svaku tvrdnju. Vodič služi za lakše snalaženje i ne zamenjuje pravni savet.",
-    link: { to: REGULATIONS_BASE_PATH, label: "Pročitajte vodič kroz propise →" },
-  },
-  {
     q: "Koliko košta Iris?",
-    a: "Od 3.900 RSD mesečno za firmu do 5 korisnika, uz jednokratno uvođenje od 30.000 RSD. Svi paketi, period besplatnih izmena i cene dorada su u cenovniku iznad. Prvih 30 dana Iris probate besplatno, bez obaveze.",
+    a: "Od 3.900 RSD mesečno za firmu do 5 korisnika, uz jednokratno uvođenje. Prvih 30 dana Iris možete probati besplatno.",
   },
   {
-    q: "Na kom je jeziku?",
-    a: "Na srpskom. Svaki korisnik može za sebe da prebaci aplikaciju na engleski, a dokumentacija je na srpskom.",
+    q: "Šta ako prestanemo da koristimo Iris?",
+    a: "Dobijate potpun izvoz svojih podataka, a mi ih zatim brišemo po dogovorenoj proceduri.",
+  },
+  {
+    q: "Šta zakon propisuje za e-fakture, e-otpremnice i fiskalne račune?",
+    a: "Pripremili smo pregled propisa na srpskom, sa izvorom uz svaku tvrdnju. Pregled služi za snalaženje i ne zamenjuje pravni savet.",
+    link: { to: REGULATIONS_BASE_PATH, label: "Pročitajte pregled propisa →" },
+  },
+  {
+    q: "Na kom jeziku je aplikacija?",
+    a: "Na srpskom, a svaki korisnik je može prebaciti na engleski.",
   },
 ];
 
@@ -239,35 +204,17 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
         <Section
           id="mogucnosti"
           eyebrow="Mogućnosti"
-          title="Sve što vaša firma radi svaki dan"
-          lead="Iris prati ono što se u radionici ionako dešava, od upita, preko naloga i proizvodnje, do isporuke i naplate. Ove delove koriste svi, svaki dan."
+          title="Sve što Vaša firma radi svaki dan"
+          lead="Od upita i naloga do isporuke i naplate."
         >
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {CORE_FEATURES.map((feature, index) => (
-              <li
-                key={feature.title}
-                className="animate-iris-rise iris-stagger border border-border bg-card px-5 py-5"
-                style={staggerStyle(index)}
-              >
-                <feature.icon
-                  aria-hidden
-                  className="h-5 w-5 text-[color:var(--iris-accent)]"
-                  strokeWidth={1.75}
-                />
-                <h3 className="mt-3 text-[15px] font-medium tracking-[-0.2px]">{feature.title}</h3>
-                <p className="mt-1.5 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
-                  {feature.body}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <PointGrid points={CORE_FEATURES} columns="three" />
         </Section>
 
         <Section
           id="tok"
           eyebrow="Put naloga"
           title="Nalog uvek ide u jednom smeru"
-          lead="Pet statusa redom, a sa strane Otkazan. Izaberite status i pogledajte šta znači, ko ga menja i šta Iris tada radi automatski. Fakturisan i Otkazan su kraj puta."
+          lead="Pet statusa, od novog do fakturisanog. Izaberite status da vidite šta znači."
           tone="card"
         >
           <StatusExplorer />
@@ -275,18 +222,19 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
 
         <Section
           id="cena"
-          eyebrow="Novac"
+          eyebrow="Cena naloga"
           title="Kako Iris računa cenu"
-          lead="Svaki nalog ima tri vrste brojeva: koliko vas je posao koštao, koliko ga naplaćujete i koliko ide državi. Promenite količinu, cene ili poresku grupu i pogledajte kako se menjaju zarada, marža i iznos koji klijent plaća."
+          lead="Cena naloga je zbir njegovih stavki. Iz razlike između prodajne i nabavne cene Iris računa zaradu i maržu, po nalogu, klijentu i mesecu."
         >
-          <PriceCalculator />
+          <TermList items={PRICE_TERMS} columns="three" />
         </Section>
 
         <Section
           id="moduli"
           eyebrow="Moduli"
           title="Sastavite svoj Iris"
-          lead="Osnovni Iris čine nalozi, klijenti, katalog i kontrolna tabla. Četiri modula vode dalje u proizvodnju i podrazumevano su isključeni. Uključite ih ovde i pogledajte kako se menja meni aplikacije, po istim pravilima kao u stvarnom sistemu."
+          lead="Osnovni Iris čine nalozi, klijenti, katalog i kontrolna tabla. Ostale module uključujemo kad Vam zatrebaju."
+          tone="card"
         >
           <ModulePlayground />
         </Section>
@@ -295,49 +243,24 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="uloge"
           eyebrow="Uloge"
           title="Administrator vidi sve, operater ono što mu treba"
-          lead="Svaka organizacija ima dve vrste korisnika. Promenite ulogu i pogledajte isti nalog i istu kontrolnu tablu iz njihovog ugla."
-          tone="card"
         >
-          <RoleSwitcher />
+          <TermList items={ROLES} columns="two" />
         </Section>
 
         <Section
           id="bezbednost"
-          eyebrow="Bezbednost i poverenje"
-          title="Vaši podaci su vaši"
-          lead="Iris koristi više firmi, a nijedna ne vidi drugu. Server proverava svaku radnju, a sve što mi kao administratori platforme uradimo ostaje zabeleženo."
+          eyebrow="Bezbednost"
+          title="Vaši podaci su Vaši"
+          tone="card"
         >
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {SECURITY_POINTS.map((point, index) => (
-              <li
-                key={point.title}
-                className="animate-iris-rise iris-stagger border border-border bg-card px-5 py-5"
-                style={staggerStyle(index)}
-              >
-                <point.icon
-                  aria-hidden
-                  className="h-5 w-5 text-[color:var(--iris-accent)]"
-                  strokeWidth={1.75}
-                />
-                <h3 className="mt-3 text-[15px] font-medium tracking-[-0.2px]">{point.title}</h3>
-                <p className="mt-1.5 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
-                  {point.body}
-                </p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-6 max-w-3xl text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
-            Podaci se čuvaju u jednoj bazi, uz redovne rezervne kopije. Potpun izvoz svojih
-            podataka možete dobiti u svakom trenutku, a po prestanku saradnje brišemo ih po
-            dogovorenoj proceduri.
-          </p>
+          <PointGrid points={SECURITY_POINTS} columns="two" />
         </Section>
 
         <Section
           id="cenovnik"
           eyebrow="Cenovnik"
           title="Jasna cena, bez iznenađenja"
-          lead="Pretplata se plaća po firmi i uključuje određen broj korisnika, pa svaki novi operater ne podiže cenu. Uvođenje plaćate jednom, po fiksnoj ceni, a podrška i nove verzije su uključene."
+          lead="Pretplata je po firmi i uključuje korisnike, podršku i nove verzije. Uvođenje se plaća jednom."
         >
           <PricingPlans />
         </Section>
@@ -348,7 +271,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           title="Od prvog razgovora do prvog naloga"
           tone="card"
         >
-          <ol className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <ol className="grid gap-6 sm:grid-cols-3">
             {START_STEPS.map((step, index) => (
               <li key={step.title} className="flex gap-4 sm:block">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-foreground text-[12px] font-medium tnum">
@@ -365,9 +288,9 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           </ol>
           <div className="mt-10 flex flex-col items-start gap-3 border-t border-[color:var(--iris-border-soft)] pt-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-[15px] font-medium tracking-[-0.2px]">Želite da probate?</div>
+              <div className="text-[15px] font-medium tracking-[-0.2px]">Želite da vidite Iris na svojim primerima?</div>
               <p className="mt-1 text-[13px] text-[color:var(--iris-ink-soft)]">
-                Pišite nam i pokazaćemo vam Iris uživo, na primerima iz vaše firme.
+                Pišite nam i dogovorićemo prikaz uživo.
               </p>
             </div>
             <a
@@ -379,18 +302,13 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           </div>
         </Section>
 
-        <Section id="pitanja" eyebrow="Česta pitanja" title="Ono što nas prvo pitaju">
+        <Section id="pitanja" eyebrow="Česta pitanja" title="Ono što nas najčešće pitaju">
           <Faq items={FAQ} />
         </Section>
 
         <section className="px-5 pb-20 pt-4 sm:px-8 lg:px-10">
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-5 border border-border bg-card px-6 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-9">
-            <div>
-              <h2 className="text-[22px] font-normal tracking-[-0.5px]">Spremni za prvi nalog?</h2>
-              <p className="mt-1 text-[13px] text-[color:var(--iris-ink-soft)]">
-                Prijavite se sa oznakom vaše organizacije, korisničkim imenom i lozinkom.
-              </p>
-            </div>
+            <h2 className="text-[22px] font-normal tracking-[-0.5px]">Spremni za prvi nalog?</h2>
             <PrimaryLink to={primaryHref}>{primaryLabel}</PrimaryLink>
           </div>
         </section>
@@ -431,7 +349,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
 const NAV_LINKS: Array<{ id: string; label: string }> = [
   { id: "mogucnosti", label: "Mogućnosti" },
   { id: "tok", label: "Put naloga" },
-  { id: "cena", label: "Novac" },
+  { id: "cena", label: "Cena naloga" },
   { id: "moduli", label: "Moduli" },
   { id: "uloge", label: "Uloge" },
   { id: "bezbednost", label: "Bezbednost" },
@@ -496,17 +414,16 @@ function Hero({ primaryHref, primaryLabel }: { primaryHref: string; primaryLabel
             Iris · sistem za proizvodnju i usluge
           </div>
           <h1 className="mt-4 max-w-[14ch] text-[38px] font-normal leading-[1.05] tracking-[-1.2px] sm:text-[52px] sm:tracking-[-1.8px] lg:text-[60px]">
-            Svaki posao vaše firme, na jednom mestu.
+            Svaki posao Vaše firme, na jednom mestu.
           </h1>
           <div
             className="my-6 h-0.5 w-10 origin-left bg-[color:var(--iris-accent)]"
             style={{ animation: "iris-rule-grow 520ms var(--iris-ease-out-decisive) both 180ms" }}
           />
           <p className="max-w-[52ch] text-[15px] leading-[1.65] text-[color:var(--iris-ink-soft)] sm:text-[16px]">
-            Iris vodi radne naloge od upita do fakture: šta se radi, za koga, koliko košta i
-            do kada. Tu su klijenti, katalog, kontrolna tabla i javni link za praćenje, u
-            pregledaču i na telefonu, bez instalacije. Kad proizvodnja poraste, uključujete
-            magacin, procese rada, prisustvo i dnevno planiranje.
+            Iris vodi radne naloge od upita do fakture, sa klijentima, katalogom i
+            kontrolnom tablom na jednom mestu. Kad proizvodnja poraste, uključujete
+            magacin, procese rada, prisustvo i planiranje.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <PrimaryLink to={primaryHref}>{primaryLabel}</PrimaryLink>
@@ -578,6 +495,44 @@ function Section({
         <div className="mt-8">{children}</div>
       </div>
     </section>
+  );
+}
+
+function PointGrid({ points, columns }: { points: Point[]; columns: "two" | "three" }): React.JSX.Element {
+  return (
+    <ul className={cn("grid gap-4 sm:grid-cols-2", columns === "three" && "lg:grid-cols-3")}>
+      {points.map((point, index) => (
+        <li
+          key={point.title}
+          className="animate-iris-rise iris-stagger border border-border bg-card px-5 py-5"
+          style={staggerStyle(index)}
+        >
+          <point.icon aria-hidden className="h-5 w-5 text-[color:var(--iris-accent)]" strokeWidth={1.75} />
+          <h3 className="mt-3 text-[15px] font-medium tracking-[-0.2px]">{point.title}</h3>
+          <p className="mt-1.5 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">{point.body}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Short title + one-line explanation pairs, set side by side under an accent rule. */
+function TermList({
+  items,
+  columns,
+}: {
+  items: Array<{ title: string; body: string }>;
+  columns: "two" | "three";
+}): React.JSX.Element {
+  return (
+    <dl className={cn("grid gap-6 sm:grid-cols-2", columns === "three" && "lg:grid-cols-3")}>
+      {items.map((item) => (
+        <div key={item.title} className="border-t-2 border-[color:var(--iris-accent)] pt-4">
+          <dt className="text-[15px] font-medium tracking-[-0.2px]">{item.title}</dt>
+          <dd className="mt-1.5 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">{item.body}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

@@ -88,10 +88,10 @@ vars and must not be committed.
   sheets in `components/planning/DispatchList.tsx`, print rules `dispatch-print-*` in `main.css`).
 - **Landing page** (`/home`, public, outside the auth gate next to the public tracking route):
   `pages/HomePage.tsx` composes `components/home/` (the hero's live work order, status explorer,
-  price example, module playground, role switcher, price list `PricingPlans`, FAQ, scroll spy) over pure helpers in
-  `lib/home/` (`pricing.ts`, `modules.ts` mirror the app's VAT and module-dependency rules; keep
-  them in step). Long-form Serbian only (no i18n keys), written with the `srpski-prirodno` skill
-  (professional register: „mi“ for us, „vi“ for the reader), no API calls. Its call to action goes to
+  module playground, price list `PricingPlans`, FAQ, scroll spy) over the pure helper
+  `lib/home/modules.ts` (mirrors the app's module-dependency rules; keep them in step). Serbian only
+  (no i18n keys), written with the `srpski-prirodno` skill: professional register, „mi“ for us and a
+  formal, capitalized „Vi“ for the reader, short descriptions with nothing self-evident. No API calls. Its call to action goes to
   the sign-in (or into the app when `signedIn`); the contact address has a built-in default,
   overridable with `VITE_HOME_CONTACT_EMAIL`. When a feature new clients should hear about ships,
   add it there too.
