@@ -84,7 +84,7 @@ export function StatusExplorer(): React.JSX.Element {
 
   return (
     <div>
-      <div className="overflow-x-auto pb-1">
+      <div className="relative overflow-x-auto pb-1">
         <div role="tablist" aria-label="Statusi naloga" className="flex min-w-[600px] items-center gap-2">
           {STATUSES.map((status, index) => {
             const isActive = status.key === selected;

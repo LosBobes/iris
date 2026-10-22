@@ -58,8 +58,8 @@ export function RoleSwitcher(): React.JSX.Element {
         ]}
       />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="overflow-x-auto border border-border bg-background">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="relative overflow-x-auto border border-border bg-background">
           <table className="w-full min-w-[460px] text-left text-[13px]">
             <thead>
               <tr className="border-b border-border text-[11px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
@@ -111,7 +111,7 @@ export function RoleSwitcher(): React.JSX.Element {
             </dl>
           </div>
 
-          <div className="overflow-x-auto border border-border bg-background px-4 py-4">
+          <div className="relative overflow-x-auto border border-border bg-background px-4 py-4">
             <div className="text-[10px] uppercase tracking-[1.5px] text-[color:var(--iris-ink-mute)]">
               Stavke na nalogu · {admin ? "administrator" : "operater"}
             </div>

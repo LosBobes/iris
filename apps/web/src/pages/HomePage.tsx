@@ -450,7 +450,7 @@ function TopBar({ primaryHref, primaryLabel }: { primaryHref: string; primaryLab
           <IrisMark className="h-7 w-7" />
           <span className="text-[20px] tracking-[-0.6px]">Iris</span>
         </a>
-        <nav aria-label="Sekcije" className="hidden items-center gap-6 text-[12px] text-[color:var(--iris-ink-soft)] md:flex">
+        <nav aria-label="Sekcije" className="hidden items-center gap-6 text-[12px] text-[color:var(--iris-ink-soft)] lg:flex">
           {NAV_LINKS.map((link) => (
             <a
               key={link.id}
