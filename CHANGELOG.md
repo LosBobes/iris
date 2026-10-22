@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.17.1 — 2026-10-22
+
+### Patch
+
+- The landing page is shorter: every section is reduced to brief descriptions, the reader is addressed formally, and the price and role sections are plain summaries instead of interactive demos.
+
 ## 2.17.0 — 2026-10-22
 
 ### Minor
