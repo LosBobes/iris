@@ -141,7 +141,7 @@ export function RoleSwitcher(): React.JSX.Element {
             </table>
             {!admin && (
               <p className="mt-3 text-[11px] text-[color:var(--iris-ink-mute)]">
-                Nabavna cena, zarada i marža se operateru ne prikazuju, ni na ekranu ni preko servera.
+                Operater ne vidi nabavnu cenu, zaradu i maržu, jer mu ih server ni ne šalje.
               </p>
             )}
           </div>

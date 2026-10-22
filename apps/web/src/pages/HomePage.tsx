@@ -73,52 +73,52 @@ const CORE_FEATURES: Feature[] = [
   {
     icon: ClipboardList,
     title: "Radni nalozi",
-    body: "Jedan posao, jedan nalog: za koga, šta se radi, sa kojim materijalom i doradom, ko radi i do kada. Broj naloga se dodeljuje sam, stavke se biraju iz kataloga, a cena je njihov zbir.",
+    body: "Jedan posao, jedan nalog: za koga se radi, šta, sa kojim materijalom i doradom, ko radi i do kada. Broj naloga se dodeljuje automatski, stavke se biraju iz kataloga, a cena je njihov zbir.",
   },
   {
     icon: Users,
     title: "Klijenti i lokacije",
-    body: "Svaka firma se upiše jednom, sa PIB-om, matičnim brojem i kontaktima. Više adresa za isporuku po klijentu, pretraga po nazivu, PIB-u ili matičnom broju.",
+    body: "Svaku firmu unosite jednom, sa PIB-om, matičnim brojem i kontaktima. Klijent može imati više adresa za isporuku, a pretraga radi po nazivu, PIB-u i matičnom broju.",
   },
   {
     icon: Package,
     title: "Katalog usluga i artikala",
-    body: "Usluge i roba sa jedinicom mere, poreskom grupom, nabavnom i prodajnom cenom. Promena cene od datuma, istorija cena i čišćenje stavki koje se ne koriste.",
+    body: "Usluge i roba sa jedinicom mere, poreskom grupom, nabavnom i prodajnom cenom. Novu cenu zadajete od određenog datuma, istorija cena ostaje sačuvana, a stavke koje se ne koriste lako uklanjate.",
   },
   {
     icon: LayoutDashboard,
     title: "Kontrolna tabla",
-    body: "Za pet sekundi vidiš šta danas gori: nalozi koji kasne, dospevaju danas, ove nedelje i nedodeljeni. Administrator vidi i prihod, trošak, zaradu i maržu po mesecu, klijentu i stavci.",
+    body: "Na prvi pogled vidite koji nalozi kasne, koji dospevaju danas ili ove nedelje i koje još niko nije preuzeo. Administrator vidi i prihod, trošak, zaradu i maržu po mesecu, klijentu i stavci.",
   },
   {
     icon: Link2,
     title: "Javni link za klijenta",
-    body: "Umesto poziva „da li je gotovo“, klijent otvori link na telefonu, bez prijave, i vidi status svog posla. Interne napomene i cene nikad ne izlaze napolje.",
+    body: "Klijent otvori link na telefonu, bez prijave, i vidi dokle je stigao njegov posao, pa ne mora da zove i pita da li je gotovo. Interne napomene i cene ostaju samo kod vas.",
   },
   {
     icon: Printer,
     title: "Nalog za radionicu i PDF",
-    body: "Štampani nalog sa sekcijama koje firma sama bira: način isporuke, vrsta dokumenta, adresa, završetak posla, potpisi, redosled kolona.",
+    body: "Na štampanom nalogu su sekcije koje sami birate: način isporuke, vrsta dokumenta, adresa, završetak posla, potpisi i redosled kolona.",
   },
   {
     icon: FileSpreadsheet,
     title: "Lista, filteri, CSV",
-    body: "Pretraga po broju, klijentu, opisu, operateru i ceni. Filteri po statusu, tipu dokumenta, dostavi i roku. Izvoz cele liste u CSV koji se otvara u Excelu.",
+    body: "Naloge pretražujete po broju, klijentu, opisu, operateru i ceni, a filtrirate po statusu, tipu dokumenta, dostavi i roku. Celu listu možete izvesti u CSV i otvoriti u Excelu.",
   },
   {
     icon: Command,
     title: "Brzo kretanje",
-    body: "Ctrl + K otvara komandnu paletu: nalog, klijent ili stranica u par slova. Dupliranje naloga za stalne porudžbine, vraćanje nesačuvanog unosa posle osvežavanja.",
+    body: "Ctrl + K otvara komandnu paletu, pa do naloga, klijenta ili stranice stižete u par slova. Stalne porudžbine duplirate jednim klikom, a nesačuvan unos se vraća i posle osvežavanja stranice.",
   },
   {
     icon: BookOpen,
     title: "Uputstvo i vodič",
-    body: "Ugrađena dokumentacija sa dijagramima, od puta jednog posla do svakog ekrana, rečnik pojmova i interaktivni vodič koji te provede kroz prvi nalog bez čuvanja.",
+    body: "Dokumentacija je deo aplikacije: dijagrami od puta jednog posla do svakog ekrana, rečnik pojmova i interaktivni vodič koji vas provede kroz prvi nalog, bez čuvanja.",
   },
   {
     icon: Smartphone,
     title: "U pregledaču i na telefonu",
-    body: "Ništa se ne instalira na računar. Na telefonu ili tabletu Iris se dodaje kao aplikacija sa svojom ikonicom. Svetla i tamna tema, veličina teksta, srpski ili engleski.",
+    body: "Na računar se ništa ne instalira. Na telefonu ili tabletu Iris dodajete kao aplikaciju sa sopstvenom ikonicom. Birate svetlu ili tamnu temu, veličinu teksta i srpski ili engleski jezik.",
   },
 ];
 
@@ -132,60 +132,60 @@ const SECURITY_POINTS: SecurityPoint[] = [
   {
     icon: Building2,
     title: "Svaka firma u svom prostoru",
-    body: "Iris koristi više firmi odjednom, ali svaka je zasebna organizacija. Nalozi, klijenti, katalog i ljudi vide se samo unutar nje; druga firma ne može da vidi ništa vaše.",
+    body: "Iris koristi više firmi, a svaka ima zasebnu organizaciju. Nalozi, klijenti, katalog i korisnici vide se samo unutar nje, pa druga firma ne može da vidi vaše podatke.",
   },
   {
     icon: Lock,
     title: "Prijava i sesije",
-    body: "Oznaka organizacije, korisničko ime i lozinka. Sesija ističe posle neaktivnosti, „Zapamti me“ je samo za vaš uređaj, a promena lozinke odjavljuje sve ostale uređaje. Previše pogrešnih pokušaja se zaustavlja.",
+    body: "Prijava traži oznaku organizacije, korisničko ime i lozinku. Sesija ističe posle neaktivnosti, opcija „Zapamti me“ važi samo za vaš uređaj, a promena lozinke odjavljuje sve ostale uređaje. Posle više pogrešnih pokušaja prijava se privremeno zaustavlja.",
   },
   {
     icon: ShieldCheck,
-    title: "Provera na serveru, ne samo na ekranu",
-    body: "Kad operater ne vidi dugme, to nije sve: server proverava svaku radnju, pa se ni zaobilaznim putem ne može uraditi ono što uloga ne sme.",
+    title: "Server proverava svaku radnju",
+    body: "Prava se proveravaju na serveru, prema ulozi korisnika. Ono što uloga ne dozvoljava ne može se uraditi ni zaobilaznim putem.",
   },
   {
     icon: History,
-    title: "Niko ne gazi tuđe izmene",
-    body: "Dok jedna osoba menja nalog, druga ga vidi samo za čitanje, sa porukom ko ga menja. Ako se računar ugasi, nalog se sam oslobađa posle dva minuta.",
+    title: "Izmene se ne preklapaju",
+    body: "Dok jedna osoba menja nalog, ostali ga vide samo za čitanje, uz poruku ko ga menja. Ako se računar te osobe ugasi, nalog se oslobađa posle dva minuta.",
   },
 ];
 
 const START_STEPS: Array<{ title: string; body: string }> = [
   {
     title: "Javite se",
-    body: "Dogovorimo šta vam treba: samo nalozi i klijenti, ili i magacin, procesi i planiranje.",
+    body: "Dogovorimo šta vam treba: samo nalozi i klijenti ili i magacin, procesi i planiranje.",
   },
   {
     title: "Otvaramo vašu organizaciju",
-    body: "Dobijate oznaku organizacije, prvog administratora i uključene module. Postojeće klijente, lokacije i naloge možemo uvesti iz tabele.",
+    body: "Dobijate oznaku organizacije, prvog administratora i module koje ste izabrali. Postojeće klijente, lokacije i naloge uvozimo iz vaše tabele.",
   },
   {
     title: "Dodajete ljude",
-    body: "Administrator pravi korisnike, podešava naziv, logotip, izgled naloga i podrazumevane vrednosti.",
+    body: "Administrator pravi korisnike i podešava naziv firme, logotip, izgled naloga i podrazumevane vrednosti.",
   },
   {
-    title: "Radite",
-    body: "Prvi nalog, prvi javni link, prva kontrolna tabla. Uputstvo i vodič su u aplikaciji kad zatrebaju.",
+    title: "Počinjete sa radom",
+    body: "Prvi nalog, prvi javni link, prva kontrolna tabla. Uputstvo i vodič su u aplikaciji kad vam zatrebaju.",
   },
 ];
 
 const FAQ: FaqItem[] = [
   {
     q: "Da li moramo nešto da instaliramo?",
-    a: "Ne. Iris radi u pregledaču, na računaru, tabletu i telefonu. Na telefonu se može dodati na početni ekran kao aplikacija.",
+    a: "Ne. Iris radi u pregledaču, na računaru, tabletu i telefonu, a na telefonu ga možete dodati na početni ekran kao aplikaciju.",
   },
   {
     q: "Ko može da vidi naše podatke?",
-    a: "Samo korisnici vaše organizacije, i to prema ulozi. Druge firme koje koriste Iris ne vide ništa vaše. Administrator platforme ulazi u organizaciju samo uz zabeležen razlog i svaki takav ulazak se evidentira.",
+    a: "Samo korisnici vaše organizacije, svako prema svojoj ulozi. Druge firme koje koriste Iris ne vide ništa od vaših podataka. Mi ulazimo u vašu organizaciju samo uz zabeležen razlog, na primer kad tražite pomoć, i svaki takav ulazak ostaje u evidenciji.",
   },
   {
     q: "Šta ako ne želimo magacin ili planiranje?",
-    a: "Ti delovi su moduli i podrazumevano su isključeni. Dok je modul isključen, njegovih ekrana nema u meniju. Uključuju se naknadno, kad zatrebaju.",
+    a: "Magacin, procesi, prisustvo i planiranje su moduli i podrazumevano su isključeni. Dok je modul isključen, njegovi ekrani se ne vide u meniju. Uključujemo ih kad vam zatrebaju.",
   },
   {
     q: "Možemo li da prenesemo postojeće klijente i naloge?",
-    a: "Da. Klijenti, lokacije i postojeći nalozi se uvoze iz tabele (CSV), a početno stanje magacina iz popisa.",
+    a: "Da. Klijente, lokacije i postojeće naloge uvozimo iz tabele (CSV), a početno stanje magacina iz popisa.",
   },
   {
     q: "Šta operater vidi od cena?",
@@ -193,16 +193,16 @@ const FAQ: FaqItem[] = [
   },
   {
     q: "Šta zakon traži za e-fakture, e-otpremnice i fiskalne račune?",
-    a: "Saželi smo propise na srpskom: ko je obveznik i od kada, rokovi, kazne i kako se firma priključuje na SEF i sistem e-otpremnica, sa izvorima za svaku tvrdnju. Vodič služi za snalaženje, nije pravni savet.",
+    a: "Propise smo sažeto opisali na srpskom: ko je obveznik i od kada, rokovi, kazne i kako se firma priključuje na SEF i sistem e-otpremnica, sa izvorom uz svaku tvrdnju. Vodič služi za lakše snalaženje i ne zamenjuje pravni savet.",
     link: { to: REGULATIONS_BASE_PATH, label: "Pročitajte vodič kroz propise →" },
   },
   {
     q: "Koliko košta Iris?",
-    a: "Od 3.900 RSD mesečno za firmu do 5 korisnika, uz jednokratno uvođenje od 30.000 RSD. Svi paketi, period besplatnih izmena i cene dorada su u cenovniku iznad. Prvih 30 dana je probni period, bez obaveze.",
+    a: "Od 3.900 RSD mesečno za firmu do 5 korisnika, uz jednokratno uvođenje od 30.000 RSD. Svi paketi, period besplatnih izmena i cene dorada su u cenovniku iznad. Prvih 30 dana Iris probate besplatno, bez obaveze.",
   },
   {
     q: "Na kom je jeziku?",
-    a: "Na srpskom. Svako za sebe može da prebaci aplikaciju na engleski; dokumentacija je na srpskom.",
+    a: "Na srpskom. Svaki korisnik može za sebe da prebaci aplikaciju na engleski, a dokumentacija je na srpskom.",
   },
 ];
 
@@ -240,7 +240,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="mogucnosti"
           eyebrow="Mogućnosti"
           title="Sve što vaša firma radi svaki dan"
-          lead="Iris prati ono što se ionako dešava u radionici: od upita, preko naloga i proizvodnje, do isporuke i naplate. Ovo koriste svi, svaki dan."
+          lead="Iris prati ono što se u radionici ionako dešava, od upita, preko naloga i proizvodnje, do isporuke i naplate. Ove delove koriste svi, svaki dan."
         >
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {CORE_FEATURES.map((feature, index) => (
@@ -267,7 +267,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="tok"
           eyebrow="Put naloga"
           title="Nalog uvek ide u jednom smeru"
-          lead="Pet statusa redom, plus Otkazan sa strane. Izaberite status i vidite šta znači, ko ga pomera i šta Iris tada uradi sam. Fakturisan i Otkazan su kraj puta."
+          lead="Pet statusa redom, a sa strane Otkazan. Izaberite status i pogledajte šta znači, ko ga menja i šta Iris tada radi automatski. Fakturisan i Otkazan su kraj puta."
           tone="card"
         >
           <StatusExplorer />
@@ -277,7 +277,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="cena"
           eyebrow="Novac"
           title="Kako Iris računa cenu"
-          lead="Tri vrste brojeva: koliko nas je koštalo, koliko prodajemo i koliko država uzima. Promenite količinu, cene ili poresku grupu i gledajte kako se menjaju zarada, marža i ono što klijent plaća."
+          lead="Svaki nalog ima tri vrste brojeva: koliko vas je posao koštao, koliko ga naplaćujete i koliko ide državi. Promenite količinu, cene ili poresku grupu i pogledajte kako se menjaju zarada, marža i iznos koji klijent plaća."
         >
           <PriceCalculator />
         </Section>
@@ -286,7 +286,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="moduli"
           eyebrow="Moduli"
           title="Sastavite svoj Iris"
-          lead="Osnovni Iris su nalozi, klijenti, katalog i tabla. Četiri modula idu dalje u proizvodnju i podrazumevano su isključeni. Uključite ih ovde i gledajte kako se menja meni aplikacije, po istim pravilima kao u pravom sistemu."
+          lead="Osnovni Iris čine nalozi, klijenti, katalog i kontrolna tabla. Četiri modula vode dalje u proizvodnju i podrazumevano su isključeni. Uključite ih ovde i pogledajte kako se menja meni aplikacije, po istim pravilima kao u stvarnom sistemu."
         >
           <ModulePlayground />
         </Section>
@@ -295,7 +295,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="uloge"
           eyebrow="Uloge"
           title="Administrator vidi sve, operater ono što mu treba"
-          lead="U svakoj organizaciji postoje dve vrste ljudi. Prebacite ulogu i vidite isti nalog i istu kontrolnu tablu njihovim očima."
+          lead="Svaka organizacija ima dve vrste korisnika. Promenite ulogu i pogledajte isti nalog i istu kontrolnu tablu iz njihovog ugla."
           tone="card"
         >
           <RoleSwitcher />
@@ -305,7 +305,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="bezbednost"
           eyebrow="Bezbednost i poverenje"
           title="Vaši podaci su vaši"
-          lead="Iris je napravljen da ga deli više firmi, a da nijedna ne vidi drugu. Sve se proverava na serveru, a sve što administrator platforme uradi ostaje zabeleženo."
+          lead="Iris koristi više firmi, a nijedna ne vidi drugu. Server proverava svaku radnju, a sve što mi kao administratori platforme uradimo ostaje zabeleženo."
         >
           <ul className="grid gap-4 sm:grid-cols-2">
             {SECURITY_POINTS.map((point, index) => (
@@ -327,9 +327,9 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
             ))}
           </ul>
           <p className="mt-6 max-w-3xl text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">
-            Podaci se čuvaju u jednoj bazi sa redovnim rezervnim kopijama. Organizacija može
-            u svakom trenutku dobiti potpun izvoz svojih podataka, a po prestanku saradnje
-            podaci se brišu po dogovorenoj proceduri.
+            Podaci se čuvaju u jednoj bazi, uz redovne rezervne kopije. Potpun izvoz svojih
+            podataka možete dobiti u svakom trenutku, a po prestanku saradnje brišemo ih po
+            dogovorenoj proceduri.
           </p>
         </Section>
 
@@ -337,7 +337,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           id="cenovnik"
           eyebrow="Cenovnik"
           title="Jasna cena, bez iznenađenja"
-          lead="Pretplata je po firmi, sa korisnicima uključenim u paket, pa operateri u radionici ne poskupljuju Iris. Uvođenje se plaća jednom, po fiksnoj ceni, a podrška i nove verzije su uključene."
+          lead="Pretplata se plaća po firmi i uključuje određen broj korisnika, pa svaki novi operater ne podiže cenu. Uvođenje plaćate jednom, po fiksnoj ceni, a podrška i nove verzije su uključene."
         >
           <PricingPlans />
         </Section>
@@ -365,9 +365,9 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           </ol>
           <div className="mt-10 flex flex-col items-start gap-3 border-t border-[color:var(--iris-border-soft)] pt-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-[15px] font-medium tracking-[-0.2px]">Zainteresovani ste?</div>
+              <div className="text-[15px] font-medium tracking-[-0.2px]">Želite da probate?</div>
               <p className="mt-1 text-[13px] text-[color:var(--iris-ink-soft)]">
-                Pišite nam i dogovorićemo prikaz uživo, na vašim primerima.
+                Pišite nam i pokazaćemo vam Iris uživo, na primerima iz vaše firme.
               </p>
             </div>
             <a
@@ -504,9 +504,9 @@ function Hero({ primaryHref, primaryLabel }: { primaryHref: string; primaryLabel
           />
           <p className="max-w-[52ch] text-[15px] leading-[1.65] text-[color:var(--iris-ink-soft)] sm:text-[16px]">
             Iris vodi radne naloge od upita do fakture: šta se radi, za koga, koliko košta i
-            do kada. Klijenti, katalog, kontrolna tabla i javni link za praćenje, u
-            pregledaču i na telefonu, bez instalacije. Kad proizvodnja poraste, tu su
-            magacin, procesi rada, prisustvo i dnevno planiranje.
+            do kada. Tu su klijenti, katalog, kontrolna tabla i javni link za praćenje, u
+            pregledaču i na telefonu, bez instalacije. Kad proizvodnja poraste, uključujete
+            magacin, procese rada, prisustvo i dnevno planiranje.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <PrimaryLink to={primaryHref}>{primaryLabel}</PrimaryLink>

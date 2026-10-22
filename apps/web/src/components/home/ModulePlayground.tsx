@@ -30,30 +30,30 @@ interface ModuleCopy {
 const MODULE_COPY: Record<ModuleKey, ModuleCopy> = {
   stock: {
     icon: Warehouse,
-    body: "Koliko čega imamo: stanje, rezervisano i raspoloživo po artiklu, sa istorijom svake promene.",
+    body: "Koliko čega imate: stanje, rezervisano i raspoloživo po artiklu, uz istoriju svake promene.",
     points: [
       "Prijem robe i popis, početno stanje iz tabele",
-      "Svaka promena je zapis koji se nikad ne briše",
+      "Svaka promena ostaje trajno zapisana",
       "Niske zalihe na kontrolnoj tabli",
     ],
   },
   processes: {
     icon: Workflow,
-    body: "Kako se posao radi korak po korak: koraci, ulazi i proizvodi, kao šablon po vrsti posla i kao kopija na svakom nalogu.",
+    body: "Kako se posao radi korak po korak: koraci, ulazi i proizvodi, kao šablon za svaku vrstu posla i kao kopija na svakom nalogu.",
     points: [
       "Operater završava korake i upisuje stvarne količine",
-      "Završen korak sam skida materijal iz magacina i knjiži proizvod",
+      "Završen korak automatski skida materijal iz magacina i knjiži proizvod",
       "Makulatura i nusproizvodi se vode posebno",
     ],
   },
   attendance: {
     icon: UserCheck,
-    body: "Ko je danas na poslu. Jednostavna evidencija koja radi sama, a planiranje je čita.",
-    points: ["Dnevni pregled po osobi", "Izuzeci za smene i odsustva", "Bez dodatnih zahteva"],
+    body: "Ko je danas na poslu. Jednostavna evidencija prisustva, koju koristi i planiranje.",
+    points: ["Dnevni pregled po osobi", "Izuzeci za smene i odsustva", "Radi i bez drugih modula"],
   },
   planning: {
     icon: CalendarRange,
-    body: "Iris predlaže dnevni raspored: koji korak, na kojoj mašini, ko ga radi i kada. Administrator doteruje i objavljuje, radionica prati svoj red.",
+    body: "Iris predlaže dnevni raspored: koji korak, na kojoj mašini, ko ga radi i kada. Administrator ga doteruje i objavljuje, a radionica prati svoj red.",
     points: [
       "Mašine, tipovi mašina, kvalifikacije i radno vreme",
       "Nacrt, objava i „Moj red“ za svakog operatera",
@@ -162,7 +162,7 @@ function ModuleCard({
       </div>
       <p id={`${id}-req`} className="mt-1 text-[11px] text-[color:var(--iris-ink-mute)]">
         {requirements.length === 0
-          ? "Bez zahteva, može i sam."
+          ? "Radi samostalno, bez drugih modula."
           : available
             ? `Zahteva: ${requirements.join(" i ")}`
             : `Prvo uključite: ${missing.join(" i ")}`}

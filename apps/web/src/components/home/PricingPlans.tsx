@@ -76,7 +76,7 @@ const ADOPTION: Array<{ plan: string; days: number; hours: number }> = [
 const SUPPORT_POINTS: string[] = [
   "Radnim danima od 9 do 17 h, porukom, e-poštom ili telefonom",
   "Odgovor u roku od 1 radnog dana",
-  "Kvar koji zaustavlja rad: počinjemo u roku od 4 sata",
+  "Kad kvar zaustavi rad, počinjemo u roku od 4 sata",
   "Ispravke grešaka i nove verzije su uvek besplatne",
 ];
 
@@ -156,13 +156,13 @@ export function PricingPlans(): React.JSX.Element {
       </ul>
 
       <p className="mt-4 max-w-[80ch] text-[12px] leading-[1.6] text-[color:var(--iris-ink-mute)]">
-        Dodatni korisnik 490 RSD mesečno. Plaćanje godišnje ili kvartalno unapred; uz godišnje
-        plaćanje uvođenje je 30% jeftinije. Probni period 30 dana, bez obaveze. Cene su u dinarima
-        i konačne: pružalac nije u sistemu PDV-a.
+        Dodatni korisnik je 490 RSD mesečno. Pretplata se plaća godišnje ili kvartalno unapred, a
+        uz godišnje plaćanje uvođenje je 30% jeftinije. Probni period traje 30 dana i ne obavezuje
+        vas ni na šta. Cene su u dinarima i konačne, jer nismo u sistemu PDV-a.
       </p>
 
       <div className="mt-10 grid gap-4 md:grid-cols-3">
-        <TermsCard title="Period usvajanja" lead="Posle početka rada, manje izmene su besplatne u okviru fonda sati.">
+        <TermsCard title="Period usvajanja" lead="Posle početka rada manje izmene radimo besplatno, u okviru fonda sati.">
           <table className="w-full text-[13px]">
             <caption className="sr-only">Period usvajanja po paketu</caption>
             <thead>
@@ -195,7 +195,7 @@ export function PricingPlans(): React.JSX.Element {
           </ul>
         </TermsCard>
 
-        <TermsCard title="Dorade i usluge" lead="Veće dorade po fiksnoj ponudi pre početka rada.">
+        <TermsCard title="Dorade i usluge" lead="Za veće dorade dajemo fiksnu ponudu pre početka rada.">
           <dl className="text-[13px]">
             {CHANGE_POINTS.map((point) => (
               <div
