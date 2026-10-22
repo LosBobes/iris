@@ -173,6 +173,10 @@ http://localhost:5173/track/{public-token}
 ### Using Docker Helper Scripts
 
 ```bash
+# Without Docker: warm Go toolchain/modules/build cache and apps/web node_modules
+# (also usable as a cloud environment setup script); --seed adds a demo DB
+scripts/dev-setup.sh --seed
+
 # Build, start, wait for /healthz, then seed demo data in one step
 scripts/docker-up.sh --seed
 
@@ -255,6 +259,7 @@ iris/
 │   └── agents/                     # Domain-specific agent profiles
 │
 ├── scripts/
+│   ├── dev-setup.sh
 │   ├── docker-up.sh
 │   └── docker-persistence-test.sh
 │
