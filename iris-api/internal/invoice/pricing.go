@@ -5,14 +5,14 @@ import (
 	"strings"
 )
 
-// The price list mirrors the landing page (apps/web/src/components/home/
-// PricingPlans.tsx); TestPlansMatchLandingPage fails when the two drift.
-// Prices are whole dinars and final: the provider is outside the VAT system.
+// Iris is sold as a one-time licence per module plus a monthly subscription
+// that grows by a small fee for every module the organization runs. The
+// licence also covers onboarding. Prices are whole dinars and final: the
+// provider is outside the VAT system.
 //
-// The price list sells plans, but the documents list every module as its own
-// line. The base subscription costs what the Osnovni plan costs, and each
-// higher plan's surcharge is split evenly over the modules it adds, so the
-// lines of a plan always add up to its listed price.
+// BaseMonthly and ExtraUserMonthly mirror the landing page's price list
+// (apps/web/src/components/home/PricingPlans.tsx); TestPricesMatchLandingPage
+// fails when they drift.
 
 // Billing is how the subscription is invoiced.
 type Billing string
@@ -23,149 +23,151 @@ const (
 	BillingAnnual    Billing = "godisnje"
 )
 
-// Plan is one subscription plan of the price list.
-type Plan struct {
-	Key        string // flag value
-	Name       string
-	Monthly    int64 // RSD
-	Annual     int64 // RSD, ten months for twelve
-	Onboarding int64 // RSD, one-time
-	Users      int   // users included
-	// Modules are the modules this plan adds over the previous one.
-	Modules []Module
-}
+const (
+	// BaseMonthly is the subscription without modules (the Osnovni plan).
+	BaseMonthly int64 = 3900
+	// BaseUsers is how many users the subscription includes.
+	BaseUsers = 5
+	// ExtraUserMonthly is the price of a user over BaseUsers.
+	ExtraUserMonthly int64 = 490
+	// DefaultModuleLicence is the one-time licence of a module.
+	DefaultModuleLicence int64 = 12500
+	// DefaultModuleMonthly is what each module adds to the monthly subscription.
+	DefaultModuleMonthly int64 = 300
+	// annualMonths is what a year costs in months (ten months for twelve).
+	annualMonths = 10
+)
 
 // Module is an optional Iris module as an invoice line.
 type Module struct {
+	Key  string // flag value
 	Code string
 	Name string
 }
 
-// baseSubscription is the line every plan starts with.
-var baseSubscription = Module{
-	Code: "IR-OSN",
-	Name: "Iris - osnovna pretplata (radni nalozi, klijenti i lokacije, katalog, kontrolna tabla, javno praćenje naloga)",
+// Modules are listed in the order they appear on documents.
+var Modules = []Module{
+	{Key: "magacin", Code: "MAG", Name: "Magacin"},
+	{Key: "procesi", Code: "PRC", Name: "Procesi rada"},
+	{Key: "efakture", Code: "EFA", Name: "e-Fakture"},
+	{Key: "eotpremnice", Code: "EOT", Name: "e-Otpremnice"},
+	{Key: "prisustvo", Code: "PRS", Name: "Prisustvo"},
+	{Key: "planiranje", Code: "PLN", Name: "Planiranje"},
 }
 
-// Plans are ordered: each includes everything of the ones before it.
-var Plans = []Plan{
-	{Key: "osnovni", Name: "Osnovni", Monthly: 3900, Annual: 39000, Onboarding: 30000, Users: 5},
-	{Key: "proizvodnja", Name: "Proizvodnja", Monthly: 8900, Annual: 89000, Onboarding: 80000, Users: 15, Modules: []Module{
-		{Code: "IR-MAG", Name: "Iris - modul Magacin"},
-		{Code: "IR-PRC", Name: "Iris - modul Procesi rada"},
-		{Code: "IR-EFA", Name: "Iris - modul e-Fakture"},
-		{Code: "IR-EOT", Name: "Iris - modul e-Otpremnice"},
-	}},
-	{Key: "pro", Name: "Pro", Monthly: 13900, Annual: 139000, Onboarding: 160000, Users: 25, Modules: []Module{
-		{Code: "IR-PRS", Name: "Iris - modul Prisustvo"},
-		{Code: "IR-PLN", Name: "Iris - modul Planiranje (dnevni plan i „Moj red“)"},
-	}},
+// planModules are shortcuts for -modules, named after the landing page plans.
+var planModules = map[string][]string{
+	"osnovni":     {},
+	"proizvodnja": {"magacin", "procesi", "efakture", "eotpremnice"},
+	"pro":         {"magacin", "procesi", "efakture", "eotpremnice", "prisustvo", "planiranje"},
 }
 
-const (
-	// ExtraUserMonthly is the price of a user over the plan's limit.
-	ExtraUserMonthly int64 = 490
-	// annualOnboardingDiscount applies to onboarding with an annual subscription.
-	annualOnboardingDiscount = 30
-)
-
-// PlanOptions selects the generated lines.
-type PlanOptions struct {
-	Plan       string
-	Billing    Billing
-	Period     string // e.g. "oktobar 2026", appended to the base line
-	ExtraUsers int
-	Onboarding bool
-}
-
-// PlanItems returns the subscription lines for a plan: the base subscription,
-// one line per module, extra users and, optionally, the one-time onboarding.
-func PlanItems(opts PlanOptions) ([]Item, error) {
-	index := -1
-	for i, plan := range Plans {
-		if plan.Key == strings.ToLower(strings.TrimSpace(opts.Plan)) {
-			index = i
+// ParseModules reads a comma-separated module list ("magacin,procesi") or a
+// plan name ("pro", "proizvodnja", "osnovni") into Modules order.
+func ParseModules(spec string) ([]Module, error) {
+	spec = strings.ToLower(strings.TrimSpace(spec))
+	keys := strings.Split(spec, ",")
+	if plan, ok := planModules[spec]; ok {
+		keys = plan
+	}
+	wanted := map[string]bool{}
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		found := false
+		for _, module := range Modules {
+			found = found || module.Key == key
+		}
+		if !found {
+			names := make([]string, len(Modules))
+			for i, module := range Modules {
+				names[i] = module.Key
+			}
+			return nil, fmt.Errorf("nepoznat modul %q (moguće: %s, ili paket osnovni, proizvodnja, pro)", key, strings.Join(names, ", "))
+		}
+		wanted[key] = true
+	}
+	var modules []Module
+	for _, module := range Modules {
+		if wanted[module.Key] {
+			modules = append(modules, module)
 		}
 	}
-	if index < 0 {
-		keys := make([]string, len(Plans))
-		for i, plan := range Plans {
-			keys[i] = plan.Key
+	return modules, nil
+}
+
+// PricingOptions selects the generated lines.
+type PricingOptions struct {
+	Modules []Module
+	// Licence adds one licence line per module; Subscription adds the
+	// subscription for Billing.
+	Licence, Subscription bool
+	Billing               Billing
+	Period                string // e.g. "oktobar 2026", appended to the subscription
+	ExtraUsers            int
+	ModuleLicence         int64 // RSD per module, one-time
+	ModuleMonthly         int64 // RSD per module and month
+}
+
+// PricingItems returns the licence lines (one per module) and the
+// subscription: the base line, one line for all modules (quantity = module
+// count) and extra users.
+func PricingItems(opts PricingOptions) ([]Item, error) {
+	var items []Item
+	if opts.Licence {
+		if len(opts.Modules) == 0 {
+			return nil, fmt.Errorf("licenca se naplaćuje po modulu: zadajte -modules")
 		}
-		return nil, fmt.Errorf("nepoznat paket %q (moguće: %s)", opts.Plan, strings.Join(keys, ", "))
+		for _, module := range opts.Modules {
+			items = append(items, Item{
+				Code: "IR-L" + module.Code, Name: "Iris - licenca za modul " + module.Name + ", sa uvođenjem (jednokratno)",
+				Unit: "KOM", Quantity: 1, Price: float64(opts.ModuleLicence),
+			})
+		}
+	}
+	if !opts.Subscription {
+		return items, nil
 	}
 
-	// quantity and unit per billing; annual uses the annual prices as is.
-	quantity, unit := 1.0, "MES"
-	annual := false
+	// months billed per line; annual bills one year at ten months' price.
+	quantity, unit, months := 1.0, "MES", int64(1)
 	switch opts.Billing {
 	case BillingMonthly, "":
 	case BillingQuarterly:
 		quantity = 3
 	case BillingAnnual:
-		unit, annual = "GOD", true
+		unit, months = "GOD", annualMonths
 	default:
 		return nil, fmt.Errorf("nepoznat način plaćanja %q (moguće: mesecno, kvartalno, godisnje)", opts.Billing)
 	}
-	price := func(plan Plan) int64 {
-		if annual {
-			return plan.Annual
-		}
-		return plan.Monthly
-	}
 
-	base := baseSubscription.Name
+	base := "Iris - pretplata, osnovni sistem (radni nalozi, klijenti i lokacije, katalog, kontrolna tabla, javno praćenje naloga)"
 	if period := strings.TrimSpace(opts.Period); period != "" {
 		base += ", " + period
 	}
-	items := []Item{{Code: baseSubscription.Code, Name: base, Unit: unit, Quantity: quantity, Price: float64(price(Plans[0]))}}
-	for i := 1; i <= index; i++ {
-		plan, previous := Plans[i], Plans[i-1]
-		share := splitEvenly(price(plan)-price(previous), len(plan.Modules))
-		for j, module := range plan.Modules {
-			items = append(items, Item{Code: module.Code, Name: module.Name, Unit: unit, Quantity: quantity, Price: float64(share[j])})
+	items = append(items, Item{Code: "IR-PRE", Name: base, Unit: unit, Quantity: quantity, Price: float64(BaseMonthly * months)})
+
+	if n := len(opts.Modules); n > 0 {
+		names := make([]string, n)
+		for i, module := range opts.Modules {
+			names[i] = module.Name
 		}
+		perModule := "MOD/" + unit
+		items = append(items, Item{
+			Code: "IR-PMO", Name: "Iris - pretplata za module: " + strings.Join(names, ", "),
+			Unit: perModule, Quantity: float64(n) * quantity, Price: float64(opts.ModuleMonthly * months),
+		})
 	}
 
 	if opts.ExtraUsers > 0 {
-		perUser := ExtraUserMonthly
-		if annual {
-			perUser *= 10 // ten months for twelve, like the plans
-		}
-		// Monthly and quarterly bill user-months; annual bills user-years.
-		users := Item{
-			Code: "IR-KOR", Name: fmt.Sprintf("Iris - dodatni korisnik (preko %d u paketu)", Plans[index].Users),
-			Unit: "KOR/MES", Quantity: float64(opts.ExtraUsers) * quantity, Price: float64(perUser),
-		}
-		if annual {
-			users.Unit, users.Quantity = "KOR/GOD", float64(opts.ExtraUsers)
-		}
-		items = append(items, users)
-	}
-
-	if opts.Onboarding {
-		plan := Plans[index]
-		item := Item{Code: "IR-UVO", Name: "Iris - uvođenje, paket " + plan.Name + " (jednokratno)", Unit: "KOM", Quantity: 1, Price: float64(plan.Onboarding)}
-		if annual {
-			item.Name += ", uz godišnju pretplatu"
-			item.DiscountPercent = annualOnboardingDiscount
-		}
-		items = append(items, item)
+		items = append(items, Item{
+			Code: "IR-KOR", Name: fmt.Sprintf("Iris - dodatni korisnik (preko %d u pretplati)", BaseUsers),
+			Unit: "KOR/" + unit, Quantity: float64(opts.ExtraUsers) * quantity, Price: float64(ExtraUserMonthly * months),
+		})
 	}
 	return items, nil
-}
-
-// splitEvenly divides amount into n whole-dinar shares that add up to it,
-// giving the remainder to the first shares.
-func splitEvenly(amount int64, n int) []int64 {
-	shares := make([]int64, n)
-	for i := range shares {
-		shares[i] = amount / int64(n)
-		if int64(i) < amount%int64(n) {
-			shares[i]++
-		}
-	}
-	return shares
 }
 
 // ApplyDiscount gives every line without its own rabat the client's discount

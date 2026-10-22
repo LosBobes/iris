@@ -79,11 +79,13 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 	}
 	out := cmd.String("out", "", "izlazni fajl (podrazumevano "+prefix+"<broj>.pdf)")
 	asHTML := cmd.Bool("html", false, "upiši HTML umesto PDF-a")
-	plan := cmd.String("plan", "", "paket iz cenovnika (osnovni, proizvodnja, pro): pretplata i svaki modul kao posebna stavka")
+	modules := cmd.String("modules", "", "moduli klijenta, npr. \"magacin,procesi,efakture\", ili paket osnovni, proizvodnja, pro")
+	bill := cmd.String("bill", "", "šta se naplaćuje: licenca (jednokratno, po modulu), pretplata ili oba (podrazumevano pretplata kad su zadati moduli)")
 	billing := cmd.String("billing", string(invoice.BillingMonthly), "obračun pretplate: mesecno, kvartalno ili godisnje")
 	period := cmd.String("period", "", "period pretplate na stavci, npr. \"oktobar 2026\"")
-	extraUsers := cmd.Int("extra-users", 0, "broj dodatnih korisnika preko limita paketa")
-	onboarding := cmd.Bool("onboarding", false, "dodaj jednokratno uvođenje paketa")
+	extraUsers := cmd.Int("extra-users", 0, "broj dodatnih korisnika preko osnovnih")
+	licencePrice := cmd.Float64("licence-price", float64(invoice.DefaultModuleLicence), "jednokratna licenca po modulu, RSD")
+	moduleFee := cmd.Float64("module-fee", float64(invoice.DefaultModuleMonthly), "mesečni dodatak pretplate po modulu, RSD")
 	discount := cmd.Float64("discount", 0, "rabat klijenta u % za sve stavke bez sopstvenog rabata")
 	var items stringList
 	cmd.Var(&items, "item", "stavka \"naziv;jm;količina;cena[;rabat%][;pdv%][;šifra]\" (ponovljivo)")
@@ -143,18 +145,33 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		}
 	}
 
-	if *plan != "" {
-		planItems, err := invoice.PlanItems(invoice.PlanOptions{
-			Plan: *plan, Billing: invoice.Billing(*billing), Period: *period,
-			ExtraUsers: *extraUsers, Onboarding: *onboarding,
-		})
+	if *modules != "" || *bill != "" {
+		selected, err := invoice.ParseModules(*modules)
 		if err != nil {
 			return err
 		}
-		for i := range planItems {
-			planItems[i].VatPercent = *vat
+		opts := invoice.PricingOptions{
+			Modules: selected, Billing: invoice.Billing(*billing), Period: *period, ExtraUsers: *extraUsers,
+			ModuleLicence: int64(*licencePrice), ModuleMonthly: int64(*moduleFee),
 		}
-		inv.Items = append(inv.Items, planItems...)
+		switch *bill {
+		case "", "pretplata":
+			opts.Subscription = true
+		case "licenca":
+			opts.Licence = true
+		case "oba":
+			opts.Licence, opts.Subscription = true, true
+		default:
+			return fmt.Errorf("-bill mora biti licenca, pretplata ili oba")
+		}
+		pricingItems, err := invoice.PricingItems(opts)
+		if err != nil {
+			return err
+		}
+		for i := range pricingItems {
+			pricingItems[i].VatPercent = *vat
+		}
+		inv.Items = append(inv.Items, pricingItems...)
 	}
 	for _, spec := range items {
 		item, err := invoice.ParseItem(spec, *vat)
