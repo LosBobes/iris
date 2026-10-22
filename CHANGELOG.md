@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.16.1 — 2026-10-22
+
+### Patch
+
+- Added scripts/dev-setup.sh to prepare a fresh development environment (Go toolchain and build cache, web dependencies, optional demo database).
+
 ## 2.16.0 — 2026-10-22
 
 ### Minor
