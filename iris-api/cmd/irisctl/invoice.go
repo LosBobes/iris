@@ -79,6 +79,12 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 	}
 	out := cmd.String("out", "", "izlazni fajl (podrazumevano "+prefix+"<broj>.pdf)")
 	asHTML := cmd.Bool("html", false, "upiši HTML umesto PDF-a")
+	plan := cmd.String("plan", "", "paket iz cenovnika (osnovni, proizvodnja, pro): pretplata i svaki modul kao posebna stavka")
+	billing := cmd.String("billing", string(invoice.BillingMonthly), "obračun pretplate: mesecno, kvartalno ili godisnje")
+	period := cmd.String("period", "", "period pretplate na stavci, npr. \"oktobar 2026\"")
+	extraUsers := cmd.Int("extra-users", 0, "broj dodatnih korisnika preko limita paketa")
+	onboarding := cmd.Bool("onboarding", false, "dodaj jednokratno uvođenje paketa")
+	discount := cmd.Float64("discount", 0, "rabat klijenta u % za sve stavke bez sopstvenog rabata")
 	var items stringList
 	cmd.Var(&items, "item", "stavka \"naziv;jm;količina;cena[;rabat%][;pdv%][;šifra]\" (ponovljivo)")
 	_ = cmd.Parse(args)
@@ -137,6 +143,19 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		}
 	}
 
+	if *plan != "" {
+		planItems, err := invoice.PlanItems(invoice.PlanOptions{
+			Plan: *plan, Billing: invoice.Billing(*billing), Period: *period,
+			ExtraUsers: *extraUsers, Onboarding: *onboarding,
+		})
+		if err != nil {
+			return err
+		}
+		for i := range planItems {
+			planItems[i].VatPercent = *vat
+		}
+		inv.Items = append(inv.Items, planItems...)
+	}
 	for _, spec := range items {
 		item, err := invoice.ParseItem(spec, *vat)
 		if err != nil {
@@ -144,6 +163,10 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		}
 		inv.Items = append(inv.Items, item)
 	}
+	if *discount < 0 || *discount > 100 {
+		return fmt.Errorf("rabat mora biti između 0 i 100%%")
+	}
+	invoice.ApplyDiscount(inv.Items, *discount)
 	if err := inv.Validate(); err != nil {
 		return err
 	}
