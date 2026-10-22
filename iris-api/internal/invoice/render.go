@@ -34,7 +34,7 @@ var parsedTemplate = template.Must(template.New("invoice").Funcs(template.FuncMa
 
 // footerTemplate is Chrome's page footer: page count and the issuing program.
 // Chrome renders it in its own tiny-font context, so the styles are inline.
-const footerTemplate = `<div style="width:100%;font-family:'Liberation Sans',Arial,sans-serif;font-size:7px;color:#6b7c8f;padding:0 12mm;display:flex;justify-content:space-between;">` +
+const footerTemplate = `<div style="width:100%;font-family:'Liberation Sans',Arial,sans-serif;font-size:7px;color:#6d6ea0;padding:0 12mm;display:flex;justify-content:space-between;">` +
 	`<span>Strana <span class="pageNumber"></span> od <span class="totalPages"></span></span>` +
 	`<span>Iris · operativni sistem za proizvodne i uslužne radnje</span></div>`
 
