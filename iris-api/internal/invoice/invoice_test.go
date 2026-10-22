@@ -138,3 +138,24 @@ func TestRenderHTML(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderOfferHTML(t *testing.T) {
+	offer := testInvoice(false, Item{Name: "Iris pretplata", Unit: "MES", Quantity: 12, Price: 24000})
+	offer.Kind = KindOffer
+	offer.PaymentTerms = "Avansno"
+	offer.DeliveryTerms = "10 radnih dana"
+	html, err := RenderHTML(offer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Ponuda br. 26-PW0001", "Ponuda važi do:", "13.10.2026", "Avansno", "10 radnih dana", "UKUPNA VREDNOST PONUDE", "288.000,00", "(prihvata, za kupca)"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("offer HTML is missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"Račun br.", "Poziv na broj", "Faktura je važeća", "na fakturi"} {
+		if strings.Contains(html, unwanted) {
+			t.Errorf("offer HTML must not contain %q", unwanted)
+		}
+	}
+}
