@@ -1362,7 +1362,24 @@ func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, printCtx Pr
 	if err != nil {
 		return nil, fmt.Errorf("failed to render HTML template: %w", err)
 	}
+	return RenderHTMLToPDF(ctx, htmlContent, workOrderPageLayout)
+}
 
+// PageLayout is the A4 print setup for RenderHTMLToPDF: margins in inches and
+// an optional Chrome footer template (it may use the pageNumber/totalPages
+// classes; an empty template prints no header or footer).
+type PageLayout struct {
+	MarginTop, MarginBottom, MarginLeft, MarginRight float64
+	FooterTemplate                                   string
+}
+
+// workOrderPageLayout is the work-order sheet: 20mm of white space above the
+// title, 2mm below so content reaches near the page bottom.
+var workOrderPageLayout = PageLayout{MarginTop: 0.787, MarginBottom: 0.0787, MarginLeft: 0.315, MarginRight: 0.315}
+
+// RenderHTMLToPDF prints a self-contained HTML document to an A4 PDF in the
+// shared headless browser.
+func RenderHTMLToPDF(ctx context.Context, htmlContent string, layout PageLayout) ([]byte, error) {
 	execPath, err := resolveBrowserPath()
 	if err != nil {
 		return nil, err
@@ -1401,16 +1418,22 @@ func RenderWorkOrderPDF(ctx context.Context, order domain.WorkOrder, printCtx Pr
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			// Print to PDF with exact A4 sheet configuration
-			pdf, _, err = page.PrintToPDF().
+			params := page.PrintToPDF().
 				WithPrintBackground(true).
 				WithPreferCSSPageSize(true).
-				WithPaperWidth(8.27).     // A4 Width in inches (210mm)
-				WithPaperHeight(11.69).   // A4 Height in inches (297mm)
-				WithMarginTop(0.787).     // 20mm, white space above the title
-				WithMarginBottom(0.0787). // 2mm, so content reaches near the page bottom
-				WithMarginLeft(0.315).
-				WithMarginRight(0.315).
-				Do(ctx)
+				WithPaperWidth(8.27).   // A4 Width in inches (210mm)
+				WithPaperHeight(11.69). // A4 Height in inches (297mm)
+				WithMarginTop(layout.MarginTop).
+				WithMarginBottom(layout.MarginBottom).
+				WithMarginLeft(layout.MarginLeft).
+				WithMarginRight(layout.MarginRight)
+			if layout.FooterTemplate != "" {
+				params = params.
+					WithDisplayHeaderFooter(true).
+					WithHeaderTemplate("<span></span>").
+					WithFooterTemplate(layout.FooterTemplate)
+			}
+			pdf, _, err = params.Do(ctx)
 			return err
 		}),
 	)

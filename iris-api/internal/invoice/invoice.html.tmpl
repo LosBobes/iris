@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="sr-Latn">
+<head>
+<meta charset="utf-8">
+<title>Račun {{.Number}}</title>
+<style>
+  @page { size: A4; }
+  :root {
+    --ink: #0e2a47;
+    --accent: #f28c28;
+    --muted: #5d6f82;
+    --line: #c9d4df;
+    --soft: #eef3f8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+    font-size: 8.6pt;
+    color: #1b2733;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* Seller header */
+  .head { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 8px; border-bottom: 3px solid var(--ink); }
+  .brand { display: flex; gap: 10px; align-items: center; }
+  .brand svg { width: 46px; height: 46px; flex: none; }
+  .brand-name { font-size: 17pt; font-weight: 700; color: var(--ink); letter-spacing: 0.3px; line-height: 1; }
+  .brand-name span { color: var(--accent); }
+  .brand-legal { font-size: 7.6pt; color: var(--muted); margin-top: 3px; text-transform: uppercase; }
+  .seller { text-align: right; font-size: 7.8pt; line-height: 1.45; color: #2c3a48; }
+  .seller b { color: var(--ink); }
+  .accent-bar { height: 3px; width: 64px; background: var(--accent); margin-top: -3px; }
+
+  h1 { font-size: 15pt; color: var(--ink); margin: 14px 0 8px; }
+  h1 small { font-size: 9pt; color: var(--muted); font-weight: 400; margin-left: 6px; }
+
+  /* Dates + buyer */
+  .meta { display: flex; gap: 14px; align-items: stretch; }
+  .dates { flex: 0 0 42%; border-collapse: collapse; }
+  .dates td { padding: 1.5px 0; vertical-align: top; }
+  .dates td:first-child { color: var(--muted); padding-right: 8px; white-space: nowrap; text-align: right; }
+  .buyer { flex: 1; border: 1px solid var(--line); border-left: 4px solid var(--ink); border-radius: 3px; padding: 7px 10px; background: var(--soft); }
+  .buyer-top { display: flex; justify-content: space-between; color: var(--muted); font-size: 7.6pt; }
+  .buyer-name { font-size: 11pt; font-weight: 700; margin: 4px 0 3px; color: var(--ink); }
+  .buyer-line { line-height: 1.5; }
+
+  .ref { margin: 10px 0 6px; color: var(--muted); font-size: 7.8pt; }
+
+  /* Items */
+  table.items { width: 100%; border-collapse: collapse; }
+  table.items thead th {
+    background: var(--ink); color: #fff; font-weight: 700; font-size: 7.6pt;
+    padding: 5px 4px; text-align: left; vertical-align: bottom;
+  }
+  table.items thead th.num { text-align: right; }
+  table.items tbody td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.items tbody tr:nth-child(even) td { background: #f7f9fb; }
+  table.items tbody tr { break-inside: avoid; }
+  table.items .name { text-transform: uppercase; }
+  table.items tfoot td { padding: 5px 4px; font-weight: 700; border-top: 2px solid var(--ink); }
+
+  /* Tax spec + recap */
+  .summary { display: flex; gap: 18px; margin-top: 14px; break-inside: avoid; }
+  .summary h2 { font-size: 9.5pt; color: var(--ink); margin: 0 0 4px; padding-bottom: 3px; border-bottom: 2px solid var(--accent); display: inline-block; }
+  .spec { flex: 1; }
+  .spec table { width: 100%; border-collapse: collapse; }
+  .spec th { font-size: 7.4pt; color: var(--muted); text-align: right; padding: 3px 0 3px 8px; border-bottom: 1px solid var(--line); }
+  .spec th:first-child { text-align: left; }
+  .spec td { padding: 3px 0 3px 8px; }
+  .spec th:first-child, .spec td:first-child { padding-left: 0; }
+  .spec tr.sum td { border-top: 1px solid var(--line); font-weight: 700; }
+  .recap { flex: 0 0 33%; }
+  .recap table { width: 100%; border-collapse: collapse; }
+  .recap td { padding: 2.5px 0; border-bottom: 1px dotted var(--line); }
+  .recap tr.strong td { font-weight: 700; border-bottom: none; }
+
+  .due {
+    margin-top: 12px; display: flex; justify-content: space-between; align-items: center;
+    background: var(--ink); color: #fff; padding: 9px 12px; border-radius: 3px; break-inside: avoid;
+  }
+  .due span { font-size: 9.5pt; letter-spacing: 0.4px; }
+  .due b { font-size: 15pt; }
+  .due b small { font-size: 9pt; font-weight: 400; color: #c7d6e6; margin-left: 4px; }
+
+  .payment { display: flex; gap: 18px; margin-top: 14px; break-inside: avoid; }
+  .payment > div { flex: 0 0 62%; }
+  .payment h2 { font-size: 9.5pt; color: var(--ink); margin: 0 0 4px; padding-bottom: 3px; border-bottom: 2px solid var(--accent); display: inline-block; }
+  .payment table { width: 100%; border-collapse: collapse; }
+  .payment th { font-size: 7.4pt; color: var(--muted); text-align: left; padding: 3px 3px; border-bottom: 1px solid var(--line); }
+  .payment th.num { text-align: right; }
+  .payment td { padding: 3px 12px 3px 0; }
+  .payment th { padding-right: 12px; }
+  .account { font-size: 9.5pt; font-weight: 700; margin-top: 6px; }
+
+  .notes { margin-top: 14px; font-size: 7.8pt; line-height: 1.5; break-inside: avoid; }
+  .notes b { color: var(--ink); }
+
+  .signatures { display: flex; justify-content: space-between; margin-top: 34px; text-align: center; font-size: 7.6pt; color: var(--muted); break-inside: avoid; }
+  .signatures > div { width: 28%; }
+  .signatures .line { border-top: 1px solid #7d8b99; padding-top: 4px; margin-top: 30px; }
+  .signatures .mp { padding-top: 30px; font-weight: 700; color: #7d8b99; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div class="brand">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="23" fill="#0e2a47"/>
+      <ellipse cx="24" cy="29" rx="11" ry="13" fill="#ffffff"/>
+      <circle cx="19.5" cy="18" r="2.3" fill="#ffffff"/><circle cx="28.5" cy="18" r="2.3" fill="#ffffff"/>
+      <circle cx="20" cy="18.4" r="1.1" fill="#0e2a47"/><circle cx="28" cy="18.4" r="1.1" fill="#0e2a47"/>
+      <path d="M20.5 22 L27.5 22 L24 26.5 Z" fill="#f28c28"/>
+      <path d="M17 43 q3 -3 6 0 M25 43 q3 -3 6 0" stroke="#f28c28" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <div class="brand-name">Pingwin <span>Software</span></div>
+      <div class="brand-legal">{{.Seller.Name}}</div>
+      {{if .Seller.Activity}}<div class="brand-legal">{{.Seller.Activity}}</div>{{end}}
+    </div>
+  </div>
+  <div class="seller">
+    <b>{{.Seller.Street}}</b>, {{.Seller.PostalCode}} {{.Seller.City}}<br>
+    PIB: <b>{{.Seller.Pib}}</b> · MB: <b>{{.Seller.Mb}}</b><br>
+    {{if .Seller.Phone}}Tel: {{.Seller.Phone}}{{end}}{{if and .Seller.Phone .Seller.Email}} · {{end}}{{if .Seller.Email}}{{.Seller.Email}}{{end}}{{if or .Seller.Phone .Seller.Email}}<br>{{end}}
+    {{if .Seller.Website}}{{.Seller.Website}}<br>{{end}}
+    Tekući račun: <b>{{.Seller.BankAccount}}</b>{{if .Seller.BankName}} ({{.Seller.BankName}}){{end}}
+  </div>
+</div>
+<div class="accent-bar"></div>
+
+<h1>Račun br. {{.Number}}</h1>
+
+<div class="meta">
+  <table class="dates">
+    <tr><td>Datum izdavanja računa:</td><td>{{date .IssueDate}}</td></tr>
+    <tr><td>Mesto izdavanja računa:</td><td>{{.IssuePlace}}</td></tr>
+    <tr><td>Datum prometa usluga:</td><td>{{date .SupplyDate}}</td></tr>
+    <tr><td>Mesto prometa usluga:</td><td>{{.SupplyPlace}}</td></tr>
+    <tr><td>Valuta plaćanja:</td><td>{{date .DueDate}}</td></tr>
+  </table>
+  <div class="buyer">
+    <div class="buyer-top"><span>Kupac</span>{{if .PartnerCode}}<span>Šifra partnera: <b>{{.PartnerCode}}</b></span>{{end}}</div>
+    <div class="buyer-name">{{.Buyer.Name}}</div>
+    {{if or .Buyer.Street .Buyer.City}}<div class="buyer-line">{{.Buyer.Street}}{{if and .Buyer.Street .Buyer.City}} · {{end}}{{.Buyer.PostalCode}} {{.Buyer.City}}</div>{{end}}
+    {{if or .Buyer.Pib .Buyer.Mb}}<div class="buyer-line">{{if .Buyer.Pib}}PIB: {{.Buyer.Pib}}{{end}}{{if and .Buyer.Pib .Buyer.Mb}} · {{end}}{{if .Buyer.Mb}}MB: {{.Buyer.Mb}}{{end}}</div>{{end}}
+  </div>
+</div>
+
+{{if .ContractRef}}<div class="ref">Osnov: {{.ContractRef}}</div>{{else}}<div class="ref"></div>{{end}}
+
+<table class="items">
+  <thead>
+    <tr>
+      <th style="width:4%">Rb</th>
+      <th style="width:8%">Šifra</th>
+      <th>Naziv usluge</th>
+      <th style="width:5%">JM</th>
+      <th class="num" style="width:8%">Količina</th>
+      <th class="num" style="width:11%">Cena bez PDV</th>
+      <th class="num" style="width:6%">Rabat %</th>
+      <th class="num" style="width:5%">PDV %</th>
+      <th class="num" style="width:9%">Iznos PDV</th>
+      <th class="num" style="width:12%">Vrednost sa PDV</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $i, $l := .Lines}}
+    <tr>
+      <td>{{inc $i}}.</td>
+      <td>{{$l.Code}}</td>
+      <td class="name">{{$l.Name}}</td>
+      <td>{{$l.Unit}}</td>
+      <td class="num">{{qty $l.Quantity}}</td>
+      <td class="num">{{price $l.Price}}</td>
+      <td class="num">{{pct $l.DiscountPercent}}</td>
+      <td class="num">{{pct $l.VatPercent}}%</td>
+      <td class="num">{{money $l.Vat}}</td>
+      <td class="num">{{money $l.Total}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="8" class="num">Ukupno:</td>
+      <td class="num">{{money .Totals.Vat}}</td>
+      <td class="num">{{money .Totals.Total}}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="summary">
+  <div class="spec">
+    <h2>Specifikacija poreza</h2>
+    <table>
+      <tr><th>Broj računa</th><th>Iznos</th><th>Osnovica 20%</th><th>PDV 20%</th><th>Osnovica 10%</th><th>PDV 10%</th><th>Bez PDV</th></tr>
+      <tr>
+        <td>{{.Number}}</td>
+        <td class="num">{{money .Totals.Total}}</td>
+        <td class="num">{{money .Base20}}</td>
+        <td class="num">{{money .Vat20}}</td>
+        <td class="num">{{money .Base10}}</td>
+        <td class="num">{{money .Vat10}}</td>
+        <td class="num">{{money .BaseFree}}</td>
+      </tr>
+      <tr class="sum">
+        <td colspan="2">Ukupno za obračun:</td>
+        <td class="num">{{money .Base20}}</td>
+        <td class="num">{{money .Vat20}}</td>
+        <td class="num">{{money .Base10}}</td>
+        <td class="num">{{money .Vat10}}</td>
+        <td class="num">{{money .BaseFree}}</td>
+      </tr>
+    </table>
+  </div>
+  <div class="recap">
+    <h2>Rekapitulacija iznosa</h2>
+    <table>
+      <tr><td>Vrednost bez rabata:</td><td class="num">{{money .Gross}}</td></tr>
+      <tr><td>Rabat:</td><td class="num">{{money .Totals.Discount}}</td></tr>
+      <tr><td>Vrednost bez PDV:</td><td class="num">{{money .Totals.Base}}</td></tr>
+      <tr><td>Iznos PDV:</td><td class="num">{{money .Totals.Vat}}</td></tr>
+      <tr class="strong"><td>Vrednost sa PDV:</td><td class="num">{{money .Totals.Total}}</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="due">
+  <span>UKUPAN IZNOS ZA UPLATU</span>
+  <b>{{money .Totals.Total}}<small>RSD</small></b>
+</div>
+
+<div class="payment">
+  <div>
+    <h2>Valute plaćanja</h2>
+    <table>
+      <tr><th>Valuta</th><th class="num">Iznos</th><th>Model</th><th>Poziv na broj</th></tr>
+      <tr><td>{{date .DueDate}}</td><td class="num">{{money .Totals.Total}}</td><td>{{.PaymentModel}}</td><td>{{.PaymentReference}}</td></tr>
+    </table>
+    <div class="account">Uplatu izvršiti na račun: {{.Seller.BankAccount}}</div>
+  </div>
+</div>
+
+<div class="notes">
+  {{if .Note}}<b>Napomena:</b> {{.Note}}<br>{{end}}
+  Faktura je važeća bez pečata i potpisa.<br>
+  {{if .VatExemptNote}}<b>Napomena o poreskom oslobođenju:</b> {{.VatExemptNote}}<br>{{end}}
+</div>
+
+<div class="signatures">
+  <div><div class="line">(fakturisao){{if .Seller.AuthorizedPerson}}<br>{{.Seller.AuthorizedPerson}}{{end}}</div></div>
+  <div><div class="mp">M.P.</div></div>
+  <div><div class="line">(primio)</div></div>
+</div>
+
+</body>
+</html>
