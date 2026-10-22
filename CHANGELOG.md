@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.18.0 — 2026-10-22
+
+### Minor
+
+- irisctl invoice prints Pingwin Software's sales invoice (račun) to a client organization as a PDF.
+
 ## 2.17.1 — 2026-10-22
 
 ### Patch
