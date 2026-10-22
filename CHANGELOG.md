@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.20.0 — 2026-10-22
+
+### Minor
+
+- irisctl invoice and offer bill a one-time licence per module and a subscription that grows by a small fee per module (-modules, -bill, -licence-price, -module-fee), replacing -plan and -onboarding.
+
 ## 2.19.0 — 2026-10-22
 
 ### Minor
