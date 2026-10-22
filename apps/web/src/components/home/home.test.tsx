@@ -6,8 +6,6 @@ import "@testing-library/jest-dom/vitest";
 import { WorkOrderDemo } from "./WorkOrderDemo";
 import { StatusExplorer } from "./StatusExplorer";
 import { ModulePlayground } from "./ModulePlayground";
-import { RoleSwitcher } from "./RoleSwitcher";
-import { PriceCalculator, parseNumber } from "./PriceCalculator";
 import { Faq } from "./Faq";
 import { PricingPlans, formatRsd } from "./PricingPlans";
 
@@ -112,54 +110,6 @@ describe("ModulePlayground", () => {
     expect(sw("Prisustvo")).toBeChecked();
     expect(menu().queryByText("Moj red", { selector: "li" })).not.toBeInTheDocument();
     expect(menu().getByText("Prisustvo", { selector: "li" })).toBeInTheDocument();
-  });
-});
-
-describe("RoleSwitcher", () => {
-  it("hides cost, profit and finance from the operator view", async () => {
-    render(<RoleSwitcher />);
-    const preview = () => within(screen.getByTestId("role-preview"));
-    expect(preview().getByText("Nabavna")).toBeInTheDocument();
-    expect(preview().getByText("Prihod (mesec)")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("tab", { name: "Operater" }));
-    expect(preview().queryByText("Nabavna")).not.toBeInTheDocument();
-    expect(preview().queryByText("Zarada")).not.toBeInTheDocument();
-    expect(preview().getByText("Moji nalozi")).toBeInTheDocument();
-    expect(preview().getByText("Prodajna")).toBeInTheDocument();
-  });
-});
-
-describe("PriceCalculator", () => {
-  it("recomputes from the inputs and the tax group, and narrows the operator view", async () => {
-    render(<PriceCalculator />);
-    const row = (label: string | RegExp) => screen.getByText(label).nextElementSibling;
-    expect(row("Prodajna cena (neto, osnovica)")).toHaveTextContent("6.500,00 RSD");
-    expect(row("Klijent plaća (bruto)")).toHaveTextContent("7.800,00 RSD");
-    expect(row("Zarada")).toHaveTextContent("3.300,00 RSD");
-
-    await userEvent.click(screen.getByRole("radio", { name: /A · 0%/ }));
-    expect(row("Klijent plaća (bruto)")).toHaveTextContent("6.500,00 RSD");
-
-    const price = screen.getByLabelText("Prodajna cena po komadu (neto)");
-    await userEvent.clear(price);
-    await userEvent.type(price, "2");
-    expect(row("Prodajna cena (neto, osnovica)")).toHaveTextContent("2.000,00 RSD");
-    expect(row("Zarada")).toHaveTextContent("-1.200,00 RSD");
-    expect(screen.getByText(/Prodajna cena je ispod troška/)).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("radio", { name: "Operater" }));
-    expect(screen.queryByText("Zarada")).not.toBeInTheDocument();
-    expect(screen.queryByText("Trošak")).not.toBeInTheDocument();
-    expect(row("Prodajna cena (neto, osnovica)")).toHaveTextContent("2.000,00 RSD");
-  });
-
-  it("reads Serbian and plain decimal notation", () => {
-    expect(parseNumber("6,50")).toBe(6.5);
-    expect(parseNumber("6.50")).toBe(6.5);
-    expect(parseNumber("1.000,5")).toBe(1000.5);
-    expect(parseNumber("")).toBe(0);
-    expect(parseNumber("abc")).toBe(0);
   });
 });
 

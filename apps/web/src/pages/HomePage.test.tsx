@@ -26,20 +26,24 @@ describe("HomePage", () => {
     renderHome();
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Svaki posao vaše firme, na jednom mestu.",
+      "Svaki posao Vaše firme, na jednom mestu.",
     );
     for (const name of [
-      "Sve što vaša firma radi svaki dan",
+      "Sve što Vaša firma radi svaki dan",
       "Nalog uvek ide u jednom smeru",
       "Kako Iris računa cenu",
       "Sastavite svoj Iris",
       "Administrator vidi sve, operater ono što mu treba",
-      "Vaši podaci su vaši",
+      "Vaši podaci su Vaši",
       "Jasna cena, bez iznenađenja",
       "Od prvog razgovora do prvog naloga",
-      "Ono što nas prvo pitaju",
+      "Ono što nas najčešće pitaju",
     ]) {
       expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
+    }
+    // The price and role sections are short term lists.
+    for (const term of ["Nabavna cena", "Prodajna cena", "PDV i ukupno", "Administrator", "Operater"]) {
+      expect(screen.getByText(term, { selector: "dt" })).toBeInTheDocument();
     }
     // Every optional module is a switch, with its requirements spelled out.
     for (const module of ["Magacin", "Procesi rada", "Prisustvo", "Planiranje"]) {

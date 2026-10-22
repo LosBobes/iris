@@ -156,9 +156,9 @@ export function PricingPlans(): React.JSX.Element {
       </ul>
 
       <p className="mt-4 max-w-[80ch] text-[12px] leading-[1.6] text-[color:var(--iris-ink-mute)]">
-        Dodatni korisnik je 490 RSD mesečno. Pretplata se plaća godišnje ili kvartalno unapred, a
-        uz godišnje plaćanje uvođenje je 30% jeftinije. Probni period traje 30 dana i ne obavezuje
-        vas ni na šta. Cene su u dinarima i konačne, jer nismo u sistemu PDV-a.
+        Dodatni korisnik je 490 RSD mesečno. Pretplata se plaća godišnje ili kvartalno, a uz
+        godišnju pretplatu uvođenje je 30% jeftinije. Probni period je 30 dana. Cene su konačne,
+        jer nismo u sistemu PDV-a.
       </p>
 
       <div className="mt-10 grid gap-4 md:grid-cols-3">
