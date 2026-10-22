@@ -88,7 +88,7 @@ vars and must not be committed.
   sheets in `components/planning/DispatchList.tsx`, print rules `dispatch-print-*` in `main.css`).
 - **Landing page** (`/home`, public, outside the auth gate next to the public tracking route):
   `pages/HomePage.tsx` composes `components/home/` (the hero's live work order, status explorer,
-  price example, module playground, role switcher, FAQ, scroll spy) over pure helpers in
+  price example, module playground, role switcher, price list `PricingPlans`, FAQ, scroll spy) over pure helpers in
   `lib/home/` (`pricing.ts`, `modules.ts` mirror the app's VAT and module-dependency rules; keep
   them in step). Long-form Serbian only (no i18n keys), no API calls. Its call to action goes to
   the sign-in (or into the app when `signedIn`); the contact address has a built-in default,

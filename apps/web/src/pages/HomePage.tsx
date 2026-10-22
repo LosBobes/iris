@@ -22,6 +22,7 @@ import { IrisMark } from "@/components/brand/IrisMark";
 import { Faq, type FaqItem } from "@/components/home/Faq";
 import { ModulePlayground } from "@/components/home/ModulePlayground";
 import { PriceCalculator } from "@/components/home/PriceCalculator";
+import { PricingPlans } from "@/components/home/PricingPlans";
 import { RoleSwitcher } from "@/components/home/RoleSwitcher";
 import { StatusExplorer } from "@/components/home/StatusExplorer";
 import { useScrollSpy } from "@/components/home/useScrollSpy";
@@ -40,8 +41,9 @@ import { staggerStyle } from "@/lib/motion";
  * chapters) is long-form Serbian only.
  *
  * The interactive pieces live in `components/home/`: the hero's live work
- * order, the status explorer, the price example, the module playground and
- * the role switcher. The contact address is the product owner's, overridable
+ * order, the status explorer, the price example, the module playground, the
+ * role switcher and the price list. The contact address is the product
+ * owner's, overridable
  * per deployment with `VITE_HOME_CONTACT_EMAIL` (see .env.example).
  */
 
@@ -195,6 +197,10 @@ const FAQ: FaqItem[] = [
     link: { to: REGULATIONS_BASE_PATH, label: "Pročitajte vodič kroz propise →" },
   },
   {
+    q: "Koliko košta Iris?",
+    a: "Od 3.900 RSD mesečno za firmu do 5 korisnika, uz jednokratno uvođenje od 30.000 RSD. Svi paketi, period besplatnih izmena i cene dorada su u cenovniku iznad. Prvih 30 dana je probni period, bez obaveze.",
+  },
+  {
     q: "Na kom je jeziku?",
     a: "Na srpskom. Svako za sebe može da prebaci aplikaciju na engleski; dokumentacija je na srpskom.",
   },
@@ -328,6 +334,15 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
         </Section>
 
         <Section
+          id="cenovnik"
+          eyebrow="Cenovnik"
+          title="Jasna cena, bez iznenađenja"
+          lead="Pretplata je po firmi, sa korisnicima uključenim u paket, pa operateri u radionici ne poskupljuju Iris. Uvođenje se plaća jednom, po fiksnoj ceni, a podrška i nove verzije su uključene."
+        >
+          <PricingPlans />
+        </Section>
+
+        <Section
           id="pocetak"
           eyebrow="Kako da počnete"
           title="Od prvog razgovora do prvog naloga"
@@ -394,6 +409,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
             <a href="#mogucnosti" className="iris-focusable hover:text-foreground">Mogućnosti</a>
             <a href="#moduli" className="iris-focusable hover:text-foreground">Moduli</a>
             <a href="#bezbednost" className="iris-focusable hover:text-foreground">Bezbednost</a>
+            <a href="#cenovnik" className="iris-focusable hover:text-foreground">Cenovnik</a>
             <a href="#pitanja" className="iris-focusable hover:text-foreground">Pitanja</a>
             <Link to={REGULATIONS_BASE_PATH} className="iris-focusable hover:text-foreground">
               Propisi
@@ -419,6 +435,7 @@ const NAV_LINKS: Array<{ id: string; label: string }> = [
   { id: "moduli", label: "Moduli" },
   { id: "uloge", label: "Uloge" },
   { id: "bezbednost", label: "Bezbednost" },
+  { id: "cenovnik", label: "Cenovnik" },
   { id: "pocetak", label: "Kako da počnete" },
 ];
 

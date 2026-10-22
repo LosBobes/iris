@@ -35,6 +35,7 @@ describe("HomePage", () => {
       "Sastavite svoj Iris",
       "Administrator vidi sve, operater ono što mu treba",
       "Vaši podaci su vaši",
+      "Jasna cena, bez iznenađenja",
       "Od prvog razgovora do prvog naloga",
       "Ono što nas prvo pitaju",
     ]) {
