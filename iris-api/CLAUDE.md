@@ -30,12 +30,12 @@ vs Postgres `ALTER`, see v30 `impersonationHistoryMigration`).
 | Path | Role |
 | --- | --- |
 | `cmd/server/` | HTTP server wiring |
-| `cmd/irisctl/` | CLI: migrate, seed-demo, seed-cobanovic, create-tenant, import-csv, import-stock, create-user, set-modules, create-platform-admin, reset-platform-2fa, backup, migrate-to-postgres, export-tenant, delete-tenant, invoice (vendor račun PDF) |
+| `cmd/irisctl/` | CLI: migrate, seed-demo, seed-cobanovic, create-tenant, import-csv, import-stock, create-user, set-modules, create-platform-admin, reset-platform-2fa, backup, migrate-to-postgres, export-tenant, delete-tenant, invoice / offer (vendor račun / ponuda PDF) |
 | `internal/api/` | chi router, auth middleware, handlers (thin) |
 | `internal/domain/` | Go structs — contract with OpenAPI |
 | `internal/store/` | SQL store (SQLite + Postgres), migrations, seed; fixture store for tests |
 | `internal/reports/` | work-order PDF generation; `RenderHTMLToPDF` (shared headless Chromium) |
-| `internal/invoice/` | the vendor's sales invoice (račun) to a client organization, used by `irisctl invoice` |
+| `internal/invoice/` | the vendor's sales invoice (račun) and offer (ponuda) to a client organization, used by `irisctl invoice` / `irisctl offer` |
 | `internal/backups/` | SQLite backup copies for the Backoffice: create, list, prune, schedule (`IRIS_BACKUP_*`) |
 | `internal/testutil/` | shared test helpers |
 

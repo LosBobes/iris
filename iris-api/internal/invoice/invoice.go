@@ -61,8 +61,20 @@ type Item struct {
 	VatPercent float64
 }
 
-// Invoice is everything printed on the document.
+// Kind is the document printed from the same data and layout.
+type Kind string
+
+const (
+	// KindInvoice is the račun: a supply that happened, payable by DueDate.
+	KindInvoice Kind = "invoice"
+	// KindOffer is the ponuda: a priced proposal, valid until DueDate.
+	KindOffer Kind = "offer"
+)
+
+// Invoice is everything printed on the document. For an offer DueDate is
+// the validity date (ponuda važi do) and SupplyDate is not printed.
 type Invoice struct {
+	Kind         Kind
 	Number       string
 	IssueDate    string // YYYY-MM-DD
 	SupplyDate   string // YYYY-MM-DD, datum prometa
@@ -76,10 +88,19 @@ type Invoice struct {
 	Items        []Item
 	Note         string
 	PaymentModel string // "97" (computed control) or "00"
+	// Offer terms; empty ones are left out.
+	PaymentTerms  string // način plaćanja
+	DeliveryTerms string // rok isporuke / implementacije
 }
+
+// IsOffer reports whether the document is a ponuda.
+func (inv Invoice) IsOffer() bool { return inv.Kind == KindOffer }
 
 // vatExemptNote is printed when the seller is outside the VAT system.
 const vatExemptNote = "PDV nije obračunat na fakturi u skladu sa članom 33. Zakona o PDV-u."
+
+// offerVatExemptNote is the same exemption on an offer.
+const offerVatExemptNote = "Prodavac nije u sistemu PDV-a; PDV se ne obračunava u skladu sa članom 33. Zakona o PDV-u."
 
 // LoadSeller reads the seller identity from a JSON file (see
 // deploy/invoice/seller.example.json).
@@ -152,7 +173,7 @@ func (inv Invoice) Validate() error {
 	s := inv.Seller
 	switch {
 	case strings.TrimSpace(inv.Number) == "":
-		return errors.New("broj računa je obavezan (-number)")
+		return errors.New("broj dokumenta je obavezan (-number)")
 	case strings.TrimSpace(s.Name) == "":
 		return errors.New("prodavac: naziv je obavezan")
 	case !domain.ValidatePIB(s.Pib):
@@ -168,7 +189,7 @@ func (inv Invoice) Validate() error {
 	case inv.Buyer.Mb != "" && !domain.ValidateMB(inv.Buyer.Mb):
 		return fmt.Errorf("kupac: matični broj %q nije ispravan", inv.Buyer.Mb)
 	case len(inv.Items) == 0:
-		return errors.New("račun mora imati bar jednu stavku (-item)")
+		return errors.New("dokument mora imati bar jednu stavku (-item)")
 	}
 	for i, item := range inv.Items {
 		switch {

@@ -2,7 +2,7 @@
 <html lang="sr-Latn">
 <head>
 <meta charset="utf-8">
-<title>Račun {{.Number}}</title>
+<title>{{if .IsOffer}}Ponuda{{else}}Račun{{end}} {{.Number}}</title>
 <style>
   @page { size: A4; }
   :root {
@@ -39,7 +39,7 @@
 
   /* Dates + buyer */
   .meta { display: flex; gap: 14px; align-items: stretch; }
-  .dates { flex: 0 0 42%; border-collapse: collapse; }
+  .dates { flex: 0 0 42%; border-collapse: collapse; align-self: flex-start; }
   .dates td { padding: 1.5px 0; vertical-align: top; }
   .dates td:first-child { color: var(--muted); padding-right: 8px; white-space: nowrap; text-align: right; }
   .buyer { flex: 1; border: 1px solid var(--line); border-left: 4px solid var(--ink); border-radius: 3px; padding: 7px 10px; background: var(--soft); }
@@ -94,6 +94,8 @@
   .payment td { padding: 3px 12px 3px 0; }
   .payment th { padding-right: 12px; }
   .account { font-size: 9.5pt; font-weight: 700; margin-top: 6px; }
+  .payment table.terms td { padding: 3px 12px 3px 0; border-bottom: 1px dotted var(--line); }
+  .payment table.terms td:first-child { color: var(--muted); white-space: nowrap; width: 1%; }
 
   .notes { margin-top: 14px; font-size: 7.8pt; line-height: 1.5; break-inside: avoid; }
   .notes b { color: var(--ink); }
@@ -125,15 +127,21 @@
 </div>
 <div class="accent-bar"></div>
 
-<h1>Račun br. {{.Number}}</h1>
+<h1>{{if .IsOffer}}Ponuda{{else}}Račun{{end}} br. {{.Number}}</h1>
 
 <div class="meta">
   <table class="dates">
+    {{if .IsOffer}}
+    <tr><td>Datum ponude:</td><td>{{date .IssueDate}}</td></tr>
+    <tr><td>Mesto izdavanja:</td><td>{{.IssuePlace}}</td></tr>
+    <tr><td>Ponuda važi do:</td><td>{{date .DueDate}}</td></tr>
+    {{else}}
     <tr><td>Datum izdavanja računa:</td><td>{{date .IssueDate}}</td></tr>
     <tr><td>Mesto izdavanja računa:</td><td>{{.IssuePlace}}</td></tr>
     <tr><td>Datum prometa usluga:</td><td>{{date .SupplyDate}}</td></tr>
     <tr><td>Mesto prometa usluga:</td><td>{{.SupplyPlace}}</td></tr>
     <tr><td>Valuta plaćanja:</td><td>{{date .DueDate}}</td></tr>
+    {{end}}
   </table>
   <div class="buyer">
     <div class="buyer-top"><span>Kupac</span>{{if .PartnerCode}}<span>Šifra partnera: <b>{{.PartnerCode}}</b></span>{{end}}</div>
@@ -189,7 +197,7 @@
   <div class="spec">
     <h2>Specifikacija poreza</h2>
     <table>
-      <tr><th>Broj računa</th><th>Iznos</th><th>Osnovica 20%</th><th>PDV 20%</th><th>Osnovica 10%</th><th>PDV 10%</th><th>Bez PDV</th></tr>
+      <tr><th>{{if .IsOffer}}Broj ponude{{else}}Broj računa{{end}}</th><th>Iznos</th><th>Osnovica 20%</th><th>PDV 20%</th><th>Osnovica 10%</th><th>PDV 10%</th><th>Bez PDV</th></tr>
       <tr>
         <td>{{.Number}}</td>
         <td class="num">{{money .Totals.Total}}</td>
@@ -222,10 +230,23 @@
 </div>
 
 <div class="due">
-  <span>UKUPAN IZNOS ZA UPLATU</span>
+  <span>{{if .IsOffer}}UKUPNA VREDNOST PONUDE{{else}}UKUPAN IZNOS ZA UPLATU{{end}}</span>
   <b>{{money .Totals.Total}}<small>RSD</small></b>
 </div>
 
+{{if .IsOffer}}
+<div class="payment">
+  <div>
+    <h2>Uslovi ponude</h2>
+    <table class="terms">
+      <tr><td>Ponuda važi do:</td><td>{{date .DueDate}}</td></tr>
+      {{if .PaymentTerms}}<tr><td>Način plaćanja:</td><td>{{.PaymentTerms}}</td></tr>{{end}}
+      {{if .DeliveryTerms}}<tr><td>Rok isporuke:</td><td>{{.DeliveryTerms}}</td></tr>{{end}}
+      <tr><td>Uplata na račun:</td><td>{{.Seller.BankAccount}}{{if .Seller.BankName}} ({{.Seller.BankName}}){{end}}</td></tr>
+    </table>
+  </div>
+</div>
+{{else}}
 <div class="payment">
   <div>
     <h2>Valute plaćanja</h2>
@@ -236,17 +257,18 @@
     <div class="account">Uplatu izvršiti na račun: {{.Seller.BankAccount}}</div>
   </div>
 </div>
+{{end}}
 
 <div class="notes">
   {{if .Note}}<b>Napomena:</b> {{.Note}}<br>{{end}}
-  Faktura je važeća bez pečata i potpisa.<br>
+  {{if .IsOffer}}Ponudu prihvatate potpisom ovlašćenog lica ispod ili potvrdom elektronskom poštom; na osnovu prihvaćene ponude izdajemo račun.<br>{{else}}Faktura je važeća bez pečata i potpisa.<br>{{end}}
   {{if .VatExemptNote}}<b>Napomena o poreskom oslobođenju:</b> {{.VatExemptNote}}<br>{{end}}
 </div>
 
 <div class="signatures">
-  <div><div class="line">(fakturisao){{if .Seller.AuthorizedPerson}}<br>{{.Seller.AuthorizedPerson}}{{end}}</div></div>
+  <div><div class="line">{{if .IsOffer}}(za Pingwin){{else}}(fakturisao){{end}}{{if .Seller.AuthorizedPerson}}<br>{{.Seller.AuthorizedPerson}}{{end}}</div></div>
   <div><div class="mp">M.P.</div></div>
-  <div><div class="line">(primio)</div></div>
+  <div><div class="line">{{if .IsOffer}}(prihvata, za kupca){{else}}(primio){{end}}</div></div>
 </div>
 
 </body>

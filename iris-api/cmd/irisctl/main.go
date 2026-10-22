@@ -302,6 +302,8 @@ func main() {
 		must(deleteTenant(ctx, dataStore, *tenantSlug, *confirm, *suspend))
 	case "invoice":
 		must(runInvoice(ctx, os.Args[2:]))
+	case "offer":
+		must(runOffer(ctx, os.Args[2:]))
 	default:
 		usage()
 		os.Exit(2)
@@ -662,6 +664,7 @@ func usage() {
   irisctl export-tenant -tenant oznaka [-out iris-oznaka.json]
   irisctl delete-tenant -tenant oznaka -confirm oznaka [-suspend]
   irisctl invoice -seller prodavac.json -number 26-PW0001 (-tenant oznaka | -buyer-name … -buyer-pib …) -item "naziv;jm;količina;cena" […]
+  irisctl offer -seller prodavac.json -number 26-PN0001 (-tenant oznaka | -buyer-name …) -item "naziv;jm;količina;cena" [-valid-days 15] [-delivery …]
 
 export-tenant upisuje sve podatke organizacije u jedan JSON fajl (bez lozinki i sesija).
 delete-tenant trajno briše suspendovanu organizaciju i sve njene podatke (-suspend je prvo
@@ -669,7 +672,8 @@ suspenduje); Backoffice aktivnost zadržava zapis. Oba se beleže u aktivnost ka
 
 invoice pravi PDF račun koji izdavalac Iris-a šalje organizaciji-klijentu (prodavac iz JSON-a,
 vidi deploy/invoice/seller.example.json; -tenant uzima kupca iz podataka organizacije za e-fakture).
-Svi parametri: irisctl invoice -h.
+offer pravi ponudu u istom izgledu (rok važenja i uslovi umesto valute i poziva na broj).
+Svi parametri: irisctl invoice -h, irisctl offer -h.
 
 import-stock čita CSV (code,quantity[,note]; zarez ili tačka-zarez, decimalni zarez),
 a --apply upisuje stanje kao popis (početno stanje za artikle bez prometa).

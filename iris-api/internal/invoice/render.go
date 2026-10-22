@@ -50,7 +50,8 @@ type templateData struct {
 	Generated        string
 }
 
-// RenderHTML renders the invoice as a self-contained A4 HTML document.
+// RenderHTML renders the invoice (or offer) as a self-contained A4 HTML
+// document.
 func RenderHTML(inv Invoice) (string, error) {
 	model, reference := inv.ReferenceNumber()
 	data := templateData{
@@ -63,6 +64,9 @@ func RenderHTML(inv Invoice) (string, error) {
 	}
 	if !inv.Seller.VatPayer {
 		data.VatExemptNote = vatExemptNote
+		if inv.IsOffer() {
+			data.VatExemptNote = offerVatExemptNote
+		}
 	}
 	var sb strings.Builder
 	if err := parsedTemplate.Execute(&sb, data); err != nil {

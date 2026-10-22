@@ -20,4 +20,6 @@ docs/DEPLOYMENT.md
 # irisctl invoice output and the real seller identity
 racun-*.pdf
 racun-*.html
+ponuda-*.pdf
+ponuda-*.html
 deploy/invoice/seller.json

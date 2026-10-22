@@ -1,4 +1,4 @@
-# Vendor invoices (`irisctl invoice`)
+# Vendor invoices and offers (`irisctl invoice`, `irisctl offer`)
 
 `irisctl invoice` prints the sales invoice (račun) Pingwin Software issues to a
 client organization for Iris, as an A4 PDF in the layout of a classic Serbian
@@ -39,3 +39,25 @@ go run ./cmd/irisctl invoice -seller ../deploy/invoice/seller.json \
   `-supply-date` the date of supply, `-place` the place of issue (default: the
   seller's city), `-note` an extra note, `-model 00` a plain reference, `-html`
   writes the HTML instead of the PDF.
+
+## Offers (`irisctl offer`)
+
+`irisctl offer` prints a ponuda in the same layout and with the same seller,
+buyer and `-item` flags. Instead of the payment slip it has "Uslovi ponude":
+validity, payment terms, delivery time and the account. The acceptance
+signature reads "prihvata, za kupca".
+
+```bash
+go run ./cmd/irisctl offer -seller ../deploy/invoice/seller.json \
+  -number 26-PN0001 -tenant cobanovic -valid-days 15 \
+  -payment "Avansno, 50% pri prihvatanju ponude" \
+  -delivery "10 radnih dana od prihvatanja ponude" \
+  -item "Iris - godišnja pretplata;MES;12;24.000;10" \
+  -item "Iris - obuka zaposlenih;SAT;8;4.500"
+```
+
+- `-valid-until YYYY-MM-DD` or `-valid-days N` (default 15) sets the validity
+  date.
+- `-payment` defaults to "Po ispostavljenom računu, u roku od 8 dana";
+  `-delivery` is printed only when it is set.
+- The output defaults to `ponuda-<broj>.pdf`.
