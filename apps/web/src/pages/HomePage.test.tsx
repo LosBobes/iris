@@ -26,11 +26,11 @@ describe("HomePage", () => {
     renderHome();
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Svaki posao Vaše firme, na jednom mestu.",
+      "Znajte šta Vam donosi novac.",
     );
     for (const name of [
+      "Vidite gde se zarađuje, a gde gubi vreme",
       "Sve što Vaša firma radi svaki dan",
-      "Nalog uvek ide u jednom smeru",
       "Kako Iris računa cenu",
       "Sastavite svoj Iris",
       "Administrator vidi sve, operater ono što mu treba",
@@ -51,16 +51,12 @@ describe("HomePage", () => {
     }
     expect(screen.getByText("Prvo uključite: Magacin")).toBeInTheDocument();
     expect(screen.getByText("Prvo uključite: Procesi rada i Prisustvo")).toBeInTheDocument();
-    // The status explorer lists the lifecycle in order, with the side exit.
-    const flow = screen.getByRole("tablist", { name: "Statusi naloga" });
-    expect(within(flow).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-      "Nov",
-      "Dodeljen",
-      "U toku",
-      "Završen",
-      "Fakturisan",
-      "Otkazan",
-    ]);
+    // The value section sits right under the hero, before the feature list.
+    const value = screen.getByRole("region", { name: "Vidite gde se zarađuje, a gde gubi vreme" });
+    const features = screen.getByRole("region", { name: "Sve što Vaša firma radi svaki dan" });
+    expect(value.compareDocumentPosition(features) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(value).getByRole("heading", { level: 3, name: "Ko i šta Vam donosi zaradu" })).toBeInTheDocument();
+    expect(within(value).getByRole("heading", { level: 3, name: "Gde radionica gubi vreme" })).toBeInTheDocument();
     // The contact address is the product owner's by default.
     expect(screen.getByRole("link", { name: "vladbatocanin@gmail.com" })).toHaveAttribute(
       "href",

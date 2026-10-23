@@ -18,8 +18,8 @@ import { IrisMark } from "@/components/brand/IrisMark";
 import { Faq, type FaqItem } from "@/components/home/Faq";
 import { ModulePlayground } from "@/components/home/ModulePlayground";
 import { PricingPlans } from "@/components/home/PricingPlans";
-import { StatusExplorer } from "@/components/home/StatusExplorer";
 import { useScrollSpy } from "@/components/home/useScrollSpy";
+import { ValueShowcase } from "@/components/home/ValueShowcase";
 import { WorkOrderDemo } from "@/components/home/WorkOrderDemo";
 import { cn } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/app-version";
@@ -35,7 +35,9 @@ import { staggerStyle } from "@/lib/motion";
  * chapters) is long-form Serbian only.
  *
  * The interactive pieces live in `components/home/`: the hero's live work
- * order, the status explorer, the module playground and the price list. The
+ * order, the value showcase (profit and production samples, right under the
+ * hero because they are why a business buys Iris), the module playground and
+ * the price list. The
  * copy follows the `srpski-prirodno` skill: short, and addressing the reader
  * formally as "Vi". The contact address is the product owner's, overridable
  * per deployment with `VITE_HOME_CONTACT_EMAIL` (see .env.example).
@@ -202,22 +204,21 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
         <Hero primaryHref={primaryHref} primaryLabel={primaryLabel} />
 
         <Section
+          id="vrednost"
+          eyebrow="Šta dobijate"
+          title="Vidite gde se zarađuje, a gde gubi vreme"
+          lead="Iz naloga koje ionako vodite Iris sklapa sliku firme: koji klijenti i artikli donose novac i gde proizvodnja zapinje."
+        >
+          <ValueShowcase />
+        </Section>
+
+        <Section
           id="mogucnosti"
           eyebrow="Mogućnosti"
           title="Sve što Vaša firma radi svaki dan"
           lead="Od upita i naloga do isporuke i naplate."
         >
           <PointGrid points={CORE_FEATURES} columns="three" />
-        </Section>
-
-        <Section
-          id="tok"
-          eyebrow="Put naloga"
-          title="Nalog uvek ide u jednom smeru"
-          lead="Pet statusa, od novog do fakturisanog. Izaberite status da vidite šta znači."
-          tone="card"
-        >
-          <StatusExplorer />
         </Section>
 
         <Section
@@ -324,6 +325,7 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
             </span>
           </div>
           <nav aria-label="Podnožje" className="flex flex-wrap gap-x-5 gap-y-2">
+            <a href="#vrednost" className="iris-focusable hover:text-foreground">Šta dobijate</a>
             <a href="#mogucnosti" className="iris-focusable hover:text-foreground">Mogućnosti</a>
             <a href="#moduli" className="iris-focusable hover:text-foreground">Moduli</a>
             <a href="#bezbednost" className="iris-focusable hover:text-foreground">Bezbednost</a>
@@ -347,8 +349,8 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
 // ---------------------------------------------------------------------------
 
 const NAV_LINKS: Array<{ id: string; label: string }> = [
+  { id: "vrednost", label: "Šta dobijate" },
   { id: "mogucnosti", label: "Mogućnosti" },
-  { id: "tok", label: "Put naloga" },
   { id: "cena", label: "Cena naloga" },
   { id: "moduli", label: "Moduli" },
   { id: "uloge", label: "Uloge" },
@@ -414,28 +416,28 @@ function Hero({ primaryHref, primaryLabel }: { primaryHref: string; primaryLabel
             Iris · sistem za proizvodnju i usluge
           </div>
           <h1 className="mt-4 max-w-[14ch] text-[38px] font-normal leading-[1.05] tracking-[-1.2px] sm:text-[52px] sm:tracking-[-1.8px] lg:text-[60px]">
-            Svaki posao Vaše firme, na jednom mestu.
+            Znajte šta Vam donosi novac.
           </h1>
           <div
             className="my-6 h-0.5 w-10 origin-left bg-[color:var(--iris-accent)]"
             style={{ animation: "iris-rule-grow 520ms var(--iris-ease-out-decisive) both 180ms" }}
           />
           <p className="max-w-[52ch] text-[15px] leading-[1.65] text-[color:var(--iris-ink-soft)] sm:text-[16px]">
-            Iris vodi radne naloge od upita do fakture, sa klijentima, katalogom i
-            kontrolnom tablom na jednom mestu. Kad proizvodnja poraste, uključujete
-            magacin, procese rada, prisustvo i planiranje.
+            Iris vodi radne naloge od upita do fakture i iz njih Vam pokazuje
+            zaradu po klijentu i artiklu i gde proizvodnja gubi vreme. Kad firma
+            poraste, uključujete magacin, procese rada, prisustvo i planiranje.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <PrimaryLink to={primaryHref}>{primaryLabel}</PrimaryLink>
             <a
-              href="#mogucnosti"
+              href="#vrednost"
               className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-card px-5 py-2.5 text-[13px] font-medium tracking-[0.3px] text-foreground hover:border-foreground"
             >
-              Pogledajte mogućnosti
+              Pogledajte šta dobijate
             </a>
           </div>
           <dl className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-[color:var(--iris-border-soft)] pt-6 text-[12px] text-[color:var(--iris-ink-soft)]">
-            <HeroFact label="Statusa naloga" value="5 + otkazan" />
+            <HeroFact label="Zarada" value="po klijentu i artiklu" />
             <HeroFact label="Modula po izboru" value="4" />
             <HeroFact label="Instalacija" value="nijedna" />
           </dl>
