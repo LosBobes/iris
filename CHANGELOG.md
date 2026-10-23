@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.21.2 — 2026-10-23
+
+### Patch
+
+- Feature cards on the landing page now show a short animation of what each feature does.
+
 ## 2.21.1 — 2026-10-23
 
 ### Patch
