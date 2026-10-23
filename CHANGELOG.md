@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.21.0 — 2026-10-23
+
+### Minor
+
+- Landing page: a new section right under the hero shows what Iris brings, profit by client and item and where production loses time, as interactive samples. The order-status section is gone.
+
 ## 2.20.0 — 2026-10-22
 
 ### Minor
