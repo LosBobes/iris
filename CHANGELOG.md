@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.21.1 — 2026-10-23
+
+### Patch
+
+- Uklonjena je sekcija „Kako Iris računa cenu“ sa početne stranice.
+
 ## 2.21.0 — 2026-10-23
 
 ### Minor
