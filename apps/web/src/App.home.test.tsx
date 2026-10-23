@@ -40,7 +40,7 @@ describe("App /home", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
-      "Svaki posao Vaše firme, na jednom mestu.",
+      "Znajte šta Vam donosi novac.",
     );
     expect(window.location.pathname).toBe("/home");
     expect(screen.getAllByRole("link", { name: /Prijavite se/ })[0]).toHaveAttribute("href", "/login");
@@ -51,7 +51,7 @@ describe("App /home", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent(
-      "Svaki posao Vaše firme, na jednom mestu.",
+      "Znajte šta Vam donosi novac.",
     );
     expect(window.location.pathname).toBe("/home");
     expect(screen.getAllByRole("link", { name: /Otvori aplikaciju/ })[0]).toHaveAttribute("href", "/");

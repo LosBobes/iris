@@ -4,7 +4,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { WorkOrderDemo } from "./WorkOrderDemo";
-import { StatusExplorer } from "./StatusExplorer";
+import { ValueShowcase } from "./ValueShowcase";
 import { ModulePlayground } from "./ModulePlayground";
 import { Faq } from "./Faq";
 import { PricingPlans, formatRsd } from "./PricingPlans";
@@ -60,21 +60,29 @@ describe("WorkOrderDemo", () => {
   });
 });
 
-describe("StatusExplorer", () => {
-  it("lists the lifecycle in order and explains the selected status", async () => {
-    render(<StatusExplorer />);
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Nov", "Dodeljen", "U toku", "Završen", "Fakturisan", "Otkazan"]);
-    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+describe("ValueShowcase", () => {
+  it("shows profit by client, then by item, with the margin that stands out", async () => {
+    render(<ValueShowcase />);
+    const byClient = screen.getByRole("list", { name: "Po klijentu" });
+    expect(within(byClient).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(byClient).getByText("Pekara Zlatno Zrno")).toBeInTheDocument();
+    expect(screen.getByText(/Najveći klijent Vam donosi najmanju maržu/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("tab", { name: "Otkazan" }));
-    expect(screen.getByRole("tab", { name: "Otkazan" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tabpanel")).toHaveTextContent("Posao je otpao");
+    await userEvent.click(screen.getByRole("button", { name: "Po artiklu" }));
+    expect(screen.getByRole("button", { name: "Po artiklu" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(screen.getByRole("list", { name: "Po artiklu" })).getByText("Katalozi A4")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Po klijentu" })).not.toBeInTheDocument();
+  });
 
-    // Arrow keys move between statuses, wrapping around.
-    screen.getByRole("tab", { name: "Otkazan" }).focus();
-    await userEvent.keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: "Nov" })).toHaveAttribute("aria-selected", "true");
+  it("shows step times against the plan, then machine load against the shift", async () => {
+    render(<ValueShowcase />);
+    const steps = screen.getByRole("list", { name: "Vreme po koraku" });
+    expect(within(steps).getByText("88 min umesto 40")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Zauzetost mašina" }));
+    const load = screen.getByRole("list", { name: "Zauzetost mašina" });
+    expect(within(load).getByText("111% smene")).toBeInTheDocument();
+    expect(screen.getByText(/Giljotina je zakazana preko smene/)).toBeInTheDocument();
   });
 });
 
