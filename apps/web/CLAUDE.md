@@ -87,7 +87,7 @@ vars and must not be committed.
   (`pages/PlanningPrintPage.tsx`, rendered outside the app shell; grouping in pure `lib/planning/dispatch.ts`,
   sheets in `components/planning/DispatchList.tsx`, print rules `dispatch-print-*` in `main.css`).
 - **Landing page** (`/home`, public, outside the auth gate next to the public tracking route):
-  `pages/HomePage.tsx` composes `components/home/` (the hero's live work order, status explorer,
+  `pages/HomePage.tsx` composes `components/home/` (the hero's live work order, status explorer, feature cards with looping SVG scenes `FeatureScene` + `feature-scenes.css` (paused off screen, finished frame under reduced motion),
   module playground, price list `PricingPlans`, FAQ, scroll spy) over the pure helper
   `lib/home/modules.ts` (mirrors the app's module-dependency rules; keep them in step). Serbian only
   (no i18n keys), written with the `srpski-prirodno` skill: professional register, „mi“ for us and a

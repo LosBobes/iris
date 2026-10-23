@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { CalendarClock, Link2, PackageCheck, Tags, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FeatureCard, type Feature } from "@/components/home/FeatureScene";
 import { formatPercent, formatWhole } from "@/lib/home/format";
-import { staggerStyle } from "@/lib/motion";
 
 /**
  * "What you get": the two things Iris tells an owner that a spreadsheet
@@ -83,30 +82,24 @@ const PRODUCTION_VIEWS = {
   },
 } as const;
 
-interface Win {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}
-
-const MORE_WINS: Win[] = [
+const MORE_WINS: Feature[] = [
   {
-    icon: CalendarClock,
+    scene: "deadlines",
     title: "Rokovi pod kontrolom",
     body: "Nalozi koji kasne ili dospevaju danas vidite pre nego što klijent pozove.",
   },
   {
-    icon: PackageCheck,
+    scene: "stock",
     title: "Materijal na vreme",
     body: "Završen korak sam skida materijal sa stanja, a niske zalihe stižu na kontrolnu tablu.",
   },
   {
-    icon: Link2,
+    scene: "calls",
     title: "Manje poziva",
     body: "Klijent prati posao preko linka, pa ne zove da pita dokle se stiglo.",
   },
   {
-    icon: Tags,
+    scene: "frozen",
     title: "Zarada po tadašnjoj ceni",
     body: "Nalog pamti nabavnu cenu iz dana kad je rađen, pa poskupljenje ne kvari staru računicu.",
   },
@@ -121,15 +114,7 @@ export function ValueShowcase(): React.JSX.Element {
       </div>
       <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {MORE_WINS.map((win, index) => (
-          <li
-            key={win.title}
-            className="animate-iris-rise iris-stagger border border-border bg-card px-5 py-5"
-            style={staggerStyle(index)}
-          >
-            <win.icon aria-hidden className="h-5 w-5 text-[color:var(--iris-accent)]" strokeWidth={1.75} />
-            <h3 className="mt-3 text-[15px] font-medium tracking-[-0.2px]">{win.title}</h3>
-            <p className="mt-1.5 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">{win.body}</p>
-          </li>
+          <FeatureCard key={win.title} feature={win} index={index} />
         ))}
       </ul>
     </div>

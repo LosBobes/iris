@@ -1,21 +1,9 @@
 import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import {
-  ArrowRight,
-  Building2,
-  ClipboardList,
-  Download,
-  History,
-  LayoutDashboard,
-  Link2,
-  Package,
-  ShieldCheck,
-  Smartphone,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { IrisMark } from "@/components/brand/IrisMark";
 import { Faq, type FaqItem } from "@/components/home/Faq";
+import { FeatureCard, type Feature } from "@/components/home/FeatureScene";
 import { ModulePlayground } from "@/components/home/ModulePlayground";
 import { PricingPlans } from "@/components/home/PricingPlans";
 import { useScrollSpy } from "@/components/home/useScrollSpy";
@@ -25,7 +13,6 @@ import { cn } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/app-version";
 import { loginEntryPath } from "@/lib/organization-login";
 import { REGULATIONS_BASE_PATH } from "@/lib/regulations/paths";
-import { staggerStyle } from "@/lib/motion";
 
 /**
  * The public landing page (/home): what Iris is, for whom, and everything it
@@ -59,40 +46,34 @@ interface HomePageProps {
 // Content
 // ---------------------------------------------------------------------------
 
-interface Point {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}
-
-const CORE_FEATURES: Point[] = [
+const CORE_FEATURES: Feature[] = [
   {
-    icon: ClipboardList,
+    scene: "orders",
     title: "Radni nalozi",
     body: "Klijent, posao, materijal, rok i izvršilac na jednom mestu, uz štampani nalog za radionicu.",
   },
   {
-    icon: Users,
+    scene: "clients",
     title: "Klijenti",
     body: "Firme sa PIB-om, matičnim brojem, kontaktima i više adresa za isporuku.",
   },
   {
-    icon: Package,
+    scene: "catalog",
     title: "Katalog",
     body: "Usluge i roba sa nabavnom i prodajnom cenom. Nove cene važe od datuma koji odredite.",
   },
   {
-    icon: LayoutDashboard,
+    scene: "dashboard",
     title: "Kontrolna tabla",
     body: "Nalozi koji kasne, dospevaju ili čekaju izvršioca, uz prihod i maržu po mesecu.",
   },
   {
-    icon: Link2,
+    scene: "tracking",
     title: "Praćenje za klijenta",
     body: "Vaš klijent proverava status posla preko linka, bez prijave i bez uvida u cene.",
   },
   {
-    icon: Smartphone,
+    scene: "devices",
     title: "Svi uređaji",
     body: "Računar, tablet ili telefon, bez ikakve instalacije.",
   },
@@ -109,24 +90,24 @@ const ROLES: Array<{ title: string; body: string }> = [
   },
 ];
 
-const SECURITY_POINTS: Point[] = [
+const SECURITY_POINTS: Feature[] = [
   {
-    icon: Building2,
+    scene: "isolation",
     title: "Odvojeni podaci",
     body: "Svaka firma ima zasebnu organizaciju i niko izvan nje ne vidi Vaše podatke.",
   },
   {
-    icon: ShieldCheck,
+    scene: "server",
     title: "Provera na serveru",
     body: "Svaku radnju server proverava prema ulozi korisnika.",
   },
   {
-    icon: History,
+    scene: "audit",
     title: "Zabeležen pristup",
     body: "Vašoj organizaciji pristupamo samo kad nam zatražite pomoć, i svaki pristup se beleži.",
   },
   {
-    icon: Download,
+    scene: "export",
     title: "Izvoz podataka",
     body: "Potpun izvoz svih podataka dobijate kad god ga zatražite.",
   },
@@ -484,19 +465,11 @@ function Section({
   );
 }
 
-function PointGrid({ points, columns }: { points: Point[]; columns: "two" | "three" }): React.JSX.Element {
+function PointGrid({ points, columns }: { points: Feature[]; columns: "two" | "three" }): React.JSX.Element {
   return (
     <ul className={cn("grid gap-4 sm:grid-cols-2", columns === "three" && "lg:grid-cols-3")}>
       {points.map((point, index) => (
-        <li
-          key={point.title}
-          className="animate-iris-rise iris-stagger border border-border bg-card px-5 py-5"
-          style={staggerStyle(index)}
-        >
-          <point.icon aria-hidden className="h-5 w-5 text-[color:var(--iris-accent)]" strokeWidth={1.75} />
-          <h3 className="mt-3 text-[15px] font-medium tracking-[-0.2px]">{point.title}</h3>
-          <p className="mt-1.5 text-[13px] leading-[1.6] text-[color:var(--iris-ink-soft)]">{point.body}</p>
-        </li>
+        <FeatureCard key={point.title} feature={point} index={index} />
       ))}
     </ul>
   );

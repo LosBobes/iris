@@ -1,0 +1,358 @@
+/*
+ * Landing page feature scenes (components/home/FeatureScene.tsx).
+ *
+ * Most parts of a scene "build in" at a point of the shared cycle and all of
+ * them reset together at the end: an `hs-at-N` class animates the element's
+ * own --hs-p from 0 to 1 starting at N% of the cycle (holding until 88%, gone
+ * by 96%), and an `hs-fx-*` class turns --hs-p into the visible effect. Parts
+ * that travel (packets, cursors, paper) have keyframes of their own below.
+ * --hs-p rests at 1, so with reduced motion (no animation) every scene shows
+ * its finished frame; `hs-transient` parts that only exist in motion are hidden.
+ */
+
+@property --hs-p {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+.iris-scene {
+  --hs-cycle: 7s;
+  --hs-probe: 5s;
+}
+
+.iris-scene svg * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.iris-scene[data-playing="false"] * {
+  animation-play-state: paused !important;
+}
+
+/* --- Paint ------------------------------------------------------------- */
+
+.iris-scene .hs-card { fill: var(--card); stroke: var(--iris-ink-faint); stroke-width: 1.25; }
+.iris-scene .hs-frame { fill: none; stroke: color-mix(in oklch, var(--iris-ink-faint) 70%, transparent); stroke-width: 1.25; }
+.iris-scene .hs-line,
+.iris-scene .hs-ink-line,
+.iris-scene .hs-acc-line,
+.iris-scene .hs-ok-line,
+.iris-scene .hs-bad-line,
+.iris-scene .hs-on-line,
+.iris-scene .hs-acc-ring,
+.iris-scene .hs-bad-ring {
+  fill: none;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.iris-scene .hs-line { stroke: var(--iris-ink-faint); }
+.iris-scene .hs-ink-line { stroke: var(--iris-ink-soft); stroke-width: 1.75; }
+.iris-scene .hs-acc-line,
+.iris-scene .hs-acc-ring { stroke: var(--iris-accent); }
+.iris-scene .hs-ok-line { stroke: var(--iris-status-done); }
+.iris-scene .hs-bad-line,
+.iris-scene .hs-bad-ring { stroke: var(--iris-status-cancelled); }
+.iris-scene .hs-on-line { stroke: var(--card); }
+.iris-scene .hs-thick { stroke-width: 2; }
+.iris-scene .hs-acc-stroke { stroke: var(--iris-accent); }
+.iris-scene .hs-no-fill { fill: none; }
+.iris-scene .hs-dashed { stroke-dasharray: 3 3; }
+.iris-scene .hs-dotted { stroke-dasharray: 1 4; }
+
+.iris-scene .hs-bg { fill: var(--background); }
+.iris-scene .hs-soft { fill: color-mix(in oklch, var(--iris-ink-faint) 45%, transparent); }
+.iris-scene .hs-mute { fill: var(--iris-ink-faint); }
+.iris-scene .hs-ink { fill: var(--iris-ink-soft); }
+.iris-scene .hs-acc { fill: var(--iris-accent); }
+.iris-scene .hs-acc-soft { fill: color-mix(in oklch, var(--iris-accent) 35%, transparent); }
+.iris-scene .hs-acc-wash {
+  fill: color-mix(in oklch, var(--iris-accent) 14%, transparent);
+  stroke: var(--iris-accent);
+  stroke-width: 1.25;
+}
+.iris-scene .hs-ok { fill: var(--iris-status-done); }
+.iris-scene .hs-bad { fill: var(--iris-status-cancelled); }
+.iris-scene .hs-bad-wash { fill: color-mix(in oklch, var(--iris-status-cancelled) 16%, transparent); }
+.iris-scene .hs-warn { fill: var(--iris-status-active); }
+.iris-scene .hs-blue { fill: var(--iris-proc-step); }
+.iris-scene .hs-green { fill: var(--iris-proc-input); }
+
+.iris-scene text { font-family: inherit; }
+.iris-scene .hs-text { fill: var(--iris-ink-mute); font-size: 7.5px; letter-spacing: 0.2px; }
+.iris-scene .hs-text-ink { fill: var(--iris-ink-soft); }
+.iris-scene .hs-caps { font-size: 6px; letter-spacing: 1.2px; }
+.iris-scene .hs-tnum { font-variant-numeric: tabular-nums; }
+.iris-scene .hs-text-strong { fill: var(--foreground); font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.iris-scene .hs-acc-text { fill: var(--iris-accent); }
+.iris-scene .hs-text-on { fill: var(--card); font-size: 8px; font-weight: 700; }
+
+/* --- Build-in effects (driven by --hs-p) -------------------------------- */
+
+.iris-scene .hs-fx-grow-x { transform: scaleX(var(--hs-p)); transform-origin: left center; }
+.iris-scene .hs-fx-grow-y { transform: scaleY(var(--hs-p)); transform-origin: center bottom; }
+.iris-scene .hs-fx-fade { opacity: var(--hs-p); }
+.iris-scene .hs-fx-fade-out { opacity: calc(1 - var(--hs-p)); }
+.iris-scene .hs-fx-pop { opacity: var(--hs-p); transform: scale(calc(0.5 + 0.5 * var(--hs-p))); }
+.iris-scene .hs-fx-draw { stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--hs-p)); }
+.iris-scene .hs-fx-slide { opacity: var(--hs-p); transform: translateX(calc((1 - var(--hs-p)) * -8px)); }
+.iris-scene .hs-fx-drop { opacity: var(--hs-p); transform: translateY(calc((1 - var(--hs-p)) * -6px)); }
+
+.iris-scene [class*="hs-at-"] {
+  animation-duration: var(--hs-cycle);
+  animation-timing-function: var(--iris-ease-out);
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+.iris-scene .hs-at-0 { animation-name: hs-at-0; }
+@keyframes hs-at-0 { 0% { --hs-p: 0; } 8%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-5 { animation-name: hs-at-5; }
+@keyframes hs-at-5 { 0%, 5% { --hs-p: 0; } 13%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-10 { animation-name: hs-at-10; }
+@keyframes hs-at-10 { 0%, 10% { --hs-p: 0; } 18%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-15 { animation-name: hs-at-15; }
+@keyframes hs-at-15 { 0%, 15% { --hs-p: 0; } 23%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-20 { animation-name: hs-at-20; }
+@keyframes hs-at-20 { 0%, 20% { --hs-p: 0; } 28%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-25 { animation-name: hs-at-25; }
+@keyframes hs-at-25 { 0%, 25% { --hs-p: 0; } 33%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-30 { animation-name: hs-at-30; }
+@keyframes hs-at-30 { 0%, 30% { --hs-p: 0; } 38%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-35 { animation-name: hs-at-35; }
+@keyframes hs-at-35 { 0%, 35% { --hs-p: 0; } 43%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-40 { animation-name: hs-at-40; }
+@keyframes hs-at-40 { 0%, 40% { --hs-p: 0; } 48%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-45 { animation-name: hs-at-45; }
+@keyframes hs-at-45 { 0%, 45% { --hs-p: 0; } 53%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-50 { animation-name: hs-at-50; }
+@keyframes hs-at-50 { 0%, 50% { --hs-p: 0; } 58%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-55 { animation-name: hs-at-55; }
+@keyframes hs-at-55 { 0%, 55% { --hs-p: 0; } 63%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-60 { animation-name: hs-at-60; }
+@keyframes hs-at-60 { 0%, 60% { --hs-p: 0; } 68%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-65 { animation-name: hs-at-65; }
+@keyframes hs-at-65 { 0%, 65% { --hs-p: 0; } 73%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+.iris-scene .hs-at-70 { animation-name: hs-at-70; }
+@keyframes hs-at-70 { 0%, 70% { --hs-p: 0; } 78%, 88% { --hs-p: 1; } 96%, 100% { --hs-p: 0; } }
+
+/* --- Scene-specific motion --------------------------------------------- */
+
+.iris-scene .hs-ping { animation: hs-ping 2s var(--iris-ease-out) infinite; }
+@keyframes hs-ping {
+  0% { transform: scale(1); opacity: 0.8; }
+  70%, 100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Radni nalozi */
+.iris-scene .hs-orders-paper { animation: hs-orders-paper var(--hs-cycle) var(--iris-ease-out) infinite both; }
+@keyframes hs-orders-paper {
+  0%, 50% { transform: translateY(-34px); opacity: 1; }
+  70%, 90% { transform: translateY(0); opacity: 1; }
+  97%, 100% { transform: translateY(0); opacity: 0; }
+}
+.iris-scene .hs-orders-led { animation: hs-orders-led var(--hs-cycle) linear infinite both; }
+@keyframes hs-orders-led {
+  0%, 48% { opacity: 0.25; }
+  52%, 60%, 68% { opacity: 1; }
+  56%, 64%, 72%, 100% { opacity: 0.25; }
+}
+
+/* Katalog */
+.iris-scene .hs-catalog-cursor { animation: hs-catalog-cursor var(--hs-cycle) linear infinite both; }
+@keyframes hs-catalog-cursor {
+  0% { transform: translateX(0); opacity: 0; }
+  5% { transform: translateX(0); opacity: 1; }
+  80%, 90% { transform: translateX(160px); opacity: 1; }
+  97%, 100% { transform: translateX(160px); opacity: 0; }
+}
+.iris-scene .hs-catalog-ring { animation: hs-catalog-ring var(--hs-cycle) var(--iris-ease-out) infinite both; }
+@keyframes hs-catalog-ring {
+  0%, 50% { transform: scale(1); opacity: 0; }
+  53% { transform: scale(1.2); opacity: 0.9; }
+  72%, 100% { transform: scale(3.5); opacity: 0; }
+}
+
+/* Praćenje za klijenta */
+.iris-scene .hs-tracking-packet { animation: hs-tracking-packet var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-tracking-packet {
+  0% { transform: translate(94px, 48px); opacity: 0; }
+  4% { transform: translate(94px, 48px); opacity: 1; }
+  17% { transform: translate(146px, 48px); opacity: 1; }
+  21%, 100% { transform: translate(146px, 48px); opacity: 0; }
+}
+
+/* Odvojeni podaci */
+.iris-scene .hs-iso-orbit { animation: hs-iso-orbit 6s ease-in-out infinite; }
+@keyframes hs-iso-orbit {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(28px, 6px); }
+  50% { transform: translate(22px, 26px); }
+  75% { transform: translate(2px, 20px); }
+}
+.iris-scene .hs-iso-orbit-rev { animation: hs-iso-orbit-rev 6s ease-in-out infinite; }
+@keyframes hs-iso-orbit-rev {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-16px, 18px); }
+  50% { transform: translate(10px, 22px); }
+  75% { transform: translate(14px, -8px); }
+}
+.iris-scene .hs-iso-probe { animation: hs-iso-probe var(--hs-probe) var(--iris-ease-out-soft) infinite both; }
+@keyframes hs-iso-probe {
+  0%, 20% { transform: translateX(0); }
+  38% { transform: translateX(18.5px); }
+  46% { transform: translateX(6px); }
+  60%, 100% { transform: translateX(0); }
+}
+.iris-scene .hs-iso-flash { stroke-width: 2; animation: hs-iso-flash var(--hs-probe) linear infinite both; }
+@keyframes hs-iso-flash {
+  0%, 36% { opacity: 0; }
+  39% { opacity: 1; }
+  52%, 100% { opacity: 0; }
+}
+
+/* Provera na serveru */
+.iris-scene .hs-server-a { animation: hs-server-a var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-server-a {
+  0% { transform: translate(74px, 30px); opacity: 0; }
+  3% { transform: translate(74px, 30px); opacity: 1; }
+  18%, 22% { transform: translate(124px, 46px); opacity: 1; }
+  34% { transform: translate(180px, 48px); opacity: 1; }
+  38%, 100% { transform: translate(180px, 48px); opacity: 0; }
+}
+.iris-scene .hs-server-ok { animation: hs-server-ok var(--hs-cycle) linear infinite both; }
+@keyframes hs-server-ok {
+  0%, 18% { opacity: 0; }
+  21%, 34% { opacity: 1; }
+  40%, 100% { opacity: 0; }
+}
+.iris-scene .hs-server-b { animation: hs-server-b var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-server-b {
+  0%, 42% { transform: translate(80px, 72px); opacity: 0; }
+  45% { transform: translate(80px, 72px); opacity: 1; }
+  58%, 62% { transform: translate(124px, 50px); opacity: 1; }
+  72% { transform: translate(96px, 62px); opacity: 1; }
+  78%, 100% { transform: translate(92px, 64px); opacity: 0; }
+}
+.iris-scene .hs-server-deny { animation: hs-server-deny var(--hs-cycle) linear infinite both; }
+@keyframes hs-server-deny {
+  0%, 58% { opacity: 0; }
+  61%, 74% { opacity: 1; }
+  80%, 100% { opacity: 0; }
+}
+
+/* Zabeležen pristup */
+.iris-scene .hs-audit-door {
+  transform-origin: left center;
+  animation: hs-audit-door var(--hs-cycle) var(--iris-ease-out-soft) infinite both;
+}
+@keyframes hs-audit-door {
+  0%, 12% { transform: scaleX(1); }
+  20%, 40% { transform: scaleX(0.3); }
+  48%, 100% { transform: scaleX(1); }
+}
+
+/* Izvoz podataka */
+.iris-scene .hs-export-fly { animation: hs-export-fly var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-export-fly {
+  0% { transform: translate(26px, 34px) scale(1); opacity: 0; }
+  5% { transform: translate(26px, 34px) scale(1); opacity: 1; }
+  30% { transform: translate(162px, 40px) scale(0.6); opacity: 1; }
+  34%, 100% { transform: translate(162px, 40px) scale(0.6); opacity: 0; }
+}
+
+/* Rokovi pod kontrolom */
+.iris-scene .hs-deadline-today { animation: hs-deadline-today var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-deadline-today {
+  0% { transform: translateX(0); opacity: 0; }
+  5% { transform: translateX(0); opacity: 1; }
+  25%, 90% { transform: translateX(90px); opacity: 1; }
+  97%, 100% { transform: translateX(90px); opacity: 0; }
+}
+
+/* Materijal na vreme */
+.iris-scene .hs-stock-take { animation: hs-stock-take var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-stock-take {
+  0%, 14% { transform: translate(110px, 40px); opacity: 0; }
+  17% { transform: translate(110px, 40px); opacity: 1; }
+  31% { transform: translate(70px, 45px); opacity: 1; }
+  35%, 100% { transform: translate(70px, 45px); opacity: 0; }
+}
+.iris-scene .hs-stock-level {
+  fill: var(--iris-proc-input);
+  transform-origin: center bottom;
+  animation: hs-stock-level var(--hs-cycle) var(--iris-ease-out-soft) infinite both;
+}
+@keyframes hs-stock-level {
+  0%, 15% { transform: scaleY(1); fill: var(--iris-proc-input); }
+  34% { fill: var(--iris-proc-input); }
+  38%, 90% { transform: scaleY(0.3); fill: var(--iris-status-cancelled); }
+  100% { transform: scaleY(1); fill: var(--iris-proc-input); }
+}
+.iris-scene .hs-stock-alert { animation: hs-stock-alert var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-stock-alert {
+  0%, 40% { transform: translate(111px, 52px); opacity: 0; }
+  43% { transform: translate(111px, 52px); opacity: 1; }
+  57% { transform: translate(178px, 57px); opacity: 1; }
+  61%, 100% { transform: translate(178px, 57px); opacity: 0; }
+}
+
+/* Manje poziva */
+.iris-scene .hs-calls-shake { animation: hs-calls-shake var(--hs-cycle) linear infinite both; }
+@keyframes hs-calls-shake {
+  0%, 15%, 30%, 100% { transform: rotate(0); }
+  3%, 9%, 18%, 24% { transform: rotate(-6deg); }
+  6%, 12%, 21%, 27% { transform: rotate(6deg); }
+}
+.iris-scene .hs-calls-wave { animation: hs-calls-wave var(--hs-cycle) linear infinite both; }
+@keyframes hs-calls-wave {
+  0% { opacity: 0; }
+  4%, 14%, 24% { opacity: 1; }
+  9%, 19% { opacity: 0.15; }
+  30%, 100% { opacity: 0; }
+}
+.iris-scene .hs-calls-link { animation: hs-calls-link var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-calls-link {
+  0%, 34% { transform: translate(78px, 41px); opacity: 0; }
+  38% { transform: translate(78px, 41px); opacity: 1; }
+  54% { transform: translate(144px, 41px); opacity: 1; }
+  58%, 100% { transform: translate(144px, 41px); opacity: 0; }
+}
+
+/* Zarada po tadašnjoj ceni */
+.iris-scene .hs-frozen-line {
+  stroke-dasharray: 1;
+  animation: hs-frozen-line var(--hs-cycle) linear infinite both;
+}
+@keyframes hs-frozen-line {
+  0% { stroke-dashoffset: 1; opacity: 1; }
+  40%, 90% { stroke-dashoffset: 0; opacity: 1; }
+  97%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+.iris-scene .hs-frozen-shackle { animation: hs-frozen-shackle var(--hs-cycle) var(--iris-ease-out-decisive) infinite both; }
+@keyframes hs-frozen-shackle {
+  0%, 22% { transform: translateY(-3px); }
+  26%, 100% { transform: translateY(0); }
+}
+.iris-scene .hs-frozen-ghost { animation: hs-frozen-ghost var(--hs-cycle) ease-in-out infinite both; }
+@keyframes hs-frozen-ghost {
+  0%, 28% { transform: translateY(0); opacity: 0; }
+  30% { transform: translateY(0); opacity: 0.8; }
+  37% { transform: translateY(-16px); opacity: 0.6; }
+  44%, 100% { transform: translateY(0); opacity: 0; }
+}
+
+/* Reduced motion: no loops. Each scene rests on its finished frame. */
+@media (prefers-reduced-motion: reduce) {
+  .iris-scene * {
+    animation: none !important;
+  }
+
+  .iris-scene .hs-transient {
+    display: none;
+  }
+
+  .iris-scene .hs-catalog-cursor { transform: translateX(120px); }
+  .iris-scene .hs-deadline-today { transform: translateX(90px); }
+  .iris-scene .hs-stock-level { transform: scaleY(0.3); fill: var(--iris-status-cancelled); }
+}
