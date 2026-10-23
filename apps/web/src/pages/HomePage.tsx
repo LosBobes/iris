@@ -98,12 +98,6 @@ const CORE_FEATURES: Point[] = [
   },
 ];
 
-const PRICE_TERMS: Array<{ title: string; body: string }> = [
-  { title: "Nabavna cena", body: "Koliko Vas posao košta." },
-  { title: "Prodajna cena", body: "Koliko ga naplaćujete, bez PDV-a." },
-  { title: "PDV i ukupno", body: "Iris ih računa prema poreskoj grupi svake stavke." },
-];
-
 const ROLES: Array<{ title: string; body: string }> = [
   {
     title: "Administrator",
@@ -219,15 +213,6 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
           lead="Od upita i naloga do isporuke i naplate."
         >
           <PointGrid points={CORE_FEATURES} columns="three" />
-        </Section>
-
-        <Section
-          id="cena"
-          eyebrow="Cena naloga"
-          title="Kako Iris računa cenu"
-          lead="Cena naloga je zbir njegovih stavki. Iz razlike između prodajne i nabavne cene Iris računa zaradu i maržu, po nalogu, klijentu i mesecu."
-        >
-          <TermList items={PRICE_TERMS} columns="three" />
         </Section>
 
         <Section
@@ -351,7 +336,6 @@ function HomePage({ signedIn = false }: HomePageProps): React.JSX.Element {
 const NAV_LINKS: Array<{ id: string; label: string }> = [
   { id: "vrednost", label: "Šta dobijate" },
   { id: "mogucnosti", label: "Mogućnosti" },
-  { id: "cena", label: "Cena naloga" },
   { id: "moduli", label: "Moduli" },
   { id: "uloge", label: "Uloge" },
   { id: "bezbednost", label: "Bezbednost" },

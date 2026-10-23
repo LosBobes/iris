@@ -31,7 +31,6 @@ describe("HomePage", () => {
     for (const name of [
       "Vidite gde se zarađuje, a gde gubi vreme",
       "Sve što Vaša firma radi svaki dan",
-      "Kako Iris računa cenu",
       "Sastavite svoj Iris",
       "Administrator vidi sve, operater ono što mu treba",
       "Vaši podaci su Vaši",
@@ -41,8 +40,8 @@ describe("HomePage", () => {
     ]) {
       expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
     }
-    // The price and role sections are short term lists.
-    for (const term of ["Nabavna cena", "Prodajna cena", "PDV i ukupno", "Administrator", "Operater"]) {
+    // The role section is a short term list.
+    for (const term of ["Administrator", "Operater"]) {
       expect(screen.getByText(term, { selector: "dt" })).toBeInTheDocument();
     }
     // Every optional module is a switch, with its requirements spelled out.
