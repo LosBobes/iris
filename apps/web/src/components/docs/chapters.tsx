@@ -423,6 +423,7 @@ function WorkOrdersChapter(): React.JSX.Element {
           { term: "Opis posla", body: "Kratko i jasno šta radimo, npr. „Vizit karte, 4/4, mat plastifikacija“. Ovo vidi i klijent preko javnog linka, pa piši pristojno." },
           { term: "Šifra proizvoda, gramatura, format", body: "Tehnički podaci za radionicu: koji papir, koje debljine, koje veličine." },
           { term: "Dorada", body: "Sve što se radi posle glavnog dela posla: sečenje na meru, završna obrada, sklapanje, pakovanje." },
+          { term: "Paketi i poštarina", body: "Kad se posao šalje, onaj ko pakuje robu upiše koliko paketa ide klijentu i koliko je težak svaki (dugme Dodaj paket), a po želji i okvirnu poštarinu. To se štampa na nalogu, u odeljku PAKETI desno, pa se odatle lako popuni specifikacija za Post Express." },
           { term: "Izvršilac", body: "Ko radi posao. Dok ga nema, nalog se na kontrolnoj tabli vodi kao „nedodeljen“." },
           { term: "Prioritet", body: "Nizak, normalan, visok ili hitno. Da li operater sme da ga menja, odlučuje administrator." },
           { term: "Rok i planirani datum", body: "Rok je kada klijent očekuje posao, i on pali upozorenja. Planirani datum je naš interni plan i koristi se ako rok nije upisan." },

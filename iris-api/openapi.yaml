@@ -5964,12 +5964,22 @@ components:
     Shipping:
       type: object
       required:
-        [deliveryMethod, hasPackaging, hasLabeling, isFragile, requiresSignature, hasInsurance, shippingAddress]
+        [deliveryMethod, drivesOut, postagePaymentType, waitForPayment, hasPackaging, hasLabeling, isFragile, requiresSignature, hasInsurance, shippingAddress, packages, estimatedPostage]
       properties:
         deliveryMethod:
           type: [string, 'null']
           enum: [pickup, postExpress, cityExpress, fieldVisit, null]
           example: postExpress
+        drivesOut:
+          type: boolean
+        postagePaymentType:
+          type: [string, 'null']
+          description: >-
+            Built-in cod, ourAccount, advance or viaInvoice, or a value an admin
+            added in the settings.
+          example: cod
+        waitForPayment:
+          type: boolean
         hasPackaging:
           type: boolean
         hasLabeling:
@@ -5983,6 +5993,29 @@ components:
         shippingAddress:
           type: [string, 'null']
           example: Bulevar 1
+        packages:
+          type: array
+          maxItems: 100
+          description: >-
+            The parcels the order is sent in, each with its own weight, entered
+            when the goods are packed (for the courier's shipment
+            specification, which prices the postage). Empty until then.
+          items:
+            $ref: '#/components/schemas/ShippingPackage'
+        estimatedPostage:
+          type: [number, 'null']
+          minimum: 0
+          description: Expected postage in RSD (okvirna poštarina).
+          example: 650
+    ShippingPackage:
+      type: object
+      required: [weightKg]
+      properties:
+        weightKg:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+          description: Package weight in kilograms; null until weighed.
+          example: 2.5
     Customer:
       type: object
       required: [id, name, contactName, email, phone, pib, mb, emails, contacts]

@@ -27,6 +27,8 @@ const baseShipping: WorkOrder["shipping"] = {
   requiresSignature: false,
   hasInsurance: false,
   shippingAddress: null,
+  packages: [],
+  estimatedPostage: null,
 };
 
 const baseOrder: WorkOrder = {

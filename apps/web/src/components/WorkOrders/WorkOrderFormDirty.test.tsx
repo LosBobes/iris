@@ -52,6 +52,8 @@ const values: WorkOrderFormValues = {
     requiresSignature: false,
     hasInsurance: false,
     shippingAddress: null,
+    packages: [],
+    estimatedPostage: null,
   },
   assignment: { assignedTo: null, priority: "normal" },
   price: 12000,

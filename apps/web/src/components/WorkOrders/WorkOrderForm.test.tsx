@@ -6,6 +6,7 @@ import {
   normalizeWorkOrderFormDefaultValues,
   resolveLocationAddress,
   resolveShippingAddress,
+  summarizePackages,
 } from "./WorkOrderForm";
 import {
   workOrderFormSchema,
@@ -34,6 +35,8 @@ const duplicateValues: WorkOrderFormValues = {
     requiresSignature: false,
     hasInsurance: false,
     shippingAddress: null,
+    packages: [],
+    estimatedPostage: null,
   },
   assignment: {
     assignedTo: null,
@@ -157,6 +160,35 @@ describe("getInvoiceUnitOptions", () => {
 
   it("allows only kom and m2 for goods", () => {
     expect(getInvoiceUnitOptions("goods")).toEqual(["kom", "m2"]);
+  });
+
+  it("validates package weights and the estimated postage", () => {
+    const parse = (
+      packages: Array<{ weightKg: number | null }>,
+      estimatedPostage: number | null,
+    ) =>
+      workOrderFormSchema.safeParse({
+        ...duplicateValues,
+        shipping: { ...duplicateValues.shipping, packages, estimatedPostage },
+      }).success;
+
+    expect(parse([], null)).toBe(true);
+    expect(parse([{ weightKg: 2.5 }, { weightKg: null }], 650)).toBe(true);
+    expect(parse([{ weightKg: 0 }], null)).toBe(false);
+    expect(parse([{ weightKg: Number.NaN }], null)).toBe(false);
+    expect(parse([], -1)).toBe(false);
+  });
+
+  it("totals the package weights once every package is weighed", () => {
+    const t = (key: string, options?: Record<string, unknown>) =>
+      `${key}:${JSON.stringify(options)}`;
+    expect(summarizePackages([], t)).toBeNull();
+    expect(summarizePackages([{ weightKg: 2.5 }, { weightKg: null }], t)).toBe(
+      'workOrders.form.packagesTotalUnweighed:{"count":2}',
+    );
+    expect(summarizePackages([{ weightKg: 2.5 }, { weightKg: 1.25 }], t)).toBe(
+      'workOrders.form.packagesTotal:{"count":2,"weight":"3,75"}',
+    );
   });
 
   it("rejects set for goods in form validation", () => {

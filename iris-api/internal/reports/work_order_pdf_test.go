@@ -599,3 +599,39 @@ func TestRenderWorkOrderPDFReportsMissingBrowser(t *testing.T) {
 		t.Fatalf("err = %v, want ErrBrowserUnavailable", err)
 	}
 }
+
+func TestRenderWorkOrderHTMLParcels(t *testing.T) {
+	weight := 1250.5
+	postage := 1650.0
+	order := domain.WorkOrder{
+		OrderNumber:    "RN-2026-00002",
+		ClientName:     "Pekara Liman",
+		JobDescription: "Kese",
+		Shipping: domain.Shipping{
+			Packages:         []domain.ShippingPackage{{WeightKg: &weight}, {}},
+			EstimatedPostage: &postage,
+		},
+	}
+	html, err := RenderWorkOrderHTML(order, PrintContext{}, printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()))
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	box := html[strings.Index(html, `<div class="work-order-print-delivery-box">`):]
+	for _, want := range []string{"PAKETI", "2 KOM", "1. 1.250,5 KG", "2. ? KG", "POŠTARINA ~ 1.650 DIN"} {
+		if !strings.Contains(box, want) {
+			t.Fatalf("delivery column missing %q", want)
+		}
+	}
+	if strings.Contains(html, "UKUPNO:") {
+		t.Fatalf("total weight printed although a package is not weighed")
+	}
+
+	if got := ResolvePrintParcels(domain.Shipping{}); got != nil {
+		t.Fatalf("empty shipping parcels = %+v, want nil", got)
+	}
+	one, two := 2.5, 1.25
+	weighed := ResolvePrintParcels(domain.Shipping{Packages: []domain.ShippingPackage{{WeightKg: &one}, {WeightKg: &two}}})
+	if weighed.TotalWeight != "3,75" || weighed.Compact {
+		t.Fatalf("weighed parcels = %+v, want total 3,75 listed per row", weighed)
+	}
+}

@@ -43,6 +43,20 @@ const shippingSchema = z.object({
   requiresSignature: z.boolean(),
   hasInsurance: z.boolean(),
   shippingAddress: z.string().nullable(),
+  packages: z
+    .array(
+      z.object({
+        weightKg: z
+          .number({ message: i18n.t('validation.weightNumber') })
+          .positive({ message: i18n.t('validation.weightPositive') })
+          .nullable(),
+      }),
+    )
+    .max(100, { message: i18n.t('validation.packagesMax') }),
+  estimatedPostage: z
+    .number({ message: i18n.t('validation.postageNumber') })
+    .min(0, { message: i18n.t('validation.postageNegative') })
+    .nullable(),
 })
 
 const assignmentSchema = z.object({

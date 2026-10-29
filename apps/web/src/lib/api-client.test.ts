@@ -29,6 +29,8 @@ const baseInput: CreateWorkOrderInput = {
     requiresSignature: false,
     hasInsurance: false,
     shippingAddress: null,
+    packages: [],
+    estimatedPostage: null,
   },
   assignment: {
     assignedTo: 'ana.jovic',
