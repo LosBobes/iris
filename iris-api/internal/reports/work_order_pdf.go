@@ -119,6 +119,7 @@ type WorkOrderPrintData struct {
 	BillingRows     []PrintCheckRow
 	NoteLines       []string
 	ShippingAddress string
+	Parcels         *PrintParcels
 	Completed       bool
 	CompletionDate  string
 	ExecutedBy      string
@@ -909,6 +910,39 @@ const htmlTemplateStr = `<!DOCTYPE html>
       overflow-wrap: anywhere;
     }
 
+    /* The PAKETI box sits in the otherwise empty top of the delivery column. */
+    .work-order-print-parcels {
+      padding: 2mm 3mm;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.35;
+      border-bottom: 1px solid #000;
+      overflow-wrap: anywhere;
+    }
+
+    .work-order-print-address-box .work-order-print-parcels {
+      margin-top: 2mm;
+      padding: 0;
+      border-bottom: 0;
+    }
+
+    .work-order-print-parcels-count {
+      margin-top: 1mm;
+      font-size: 18px;
+    }
+
+    .work-order-print-parcels-list {
+      margin: 1mm 0;
+    }
+
+    .work-order-print-parcels-summary {
+      margin-top: 1mm;
+    }
+
+    .work-order-print-delivery-spacer {
+      flex: 1 1 auto;
+    }
+
     .work-order-print-signatures {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1038,6 +1072,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
             {{if .ShippingAddress}}
               <div class="work-order-print-address">{{.ShippingAddress}}</div>
             {{end}}
+            {{if and .Parcels (not .ShowDelivery)}}{{template "parcels" .Parcels}}{{end}}
           </div>
           {{end}}
         </div>
@@ -1045,6 +1080,8 @@ const htmlTemplateStr = `<!DOCTYPE html>
 
       {{if .ShowDelivery}}
       <div class="work-order-print-delivery-box">
+        {{if .Parcels}}{{template "parcels" .Parcels}}{{end}}
+        <div class="work-order-print-delivery-spacer"></div>
         {{range .DeliveryRows}}
           <div class="work-order-print-check-row">
             <span>{{.Label}}</span>
@@ -1098,7 +1135,24 @@ const htmlTemplateStr = `<!DOCTYPE html>
     })();
   </script>
 </body>
-</html>`
+</html>
+{{define "parcels"}}
+<div class="work-order-print-parcels">
+  <div class="work-order-print-label">PAKETI</div>
+  {{if .Count}}
+    <div class="work-order-print-parcels-count">{{.Count}} KOM</div>
+    {{if .Compact}}
+      <div class="work-order-print-parcels-list">{{range $i, $w := .Weights}}{{if $i}} · {{end}}{{$w}}{{end}} KG</div>
+    {{else}}
+      <div class="work-order-print-parcels-list">
+        {{range $i, $w := .Weights}}<div>{{inc $i}}. {{$w}} KG</div>{{end}}
+      </div>
+    {{end}}
+    {{if .TotalWeight}}<div class="work-order-print-parcels-summary">UKUPNO: {{.TotalWeight}} KG</div>{{end}}
+  {{end}}
+  {{if .Postage}}<div class="work-order-print-parcels-summary">POŠTARINA ~ {{.Postage}} DIN</div>{{end}}
+</div>
+{{end}}`
 
 var parsedTemplate = template.Must(template.New("work_order").Funcs(template.FuncMap{
 	// inc renders a 1-based ordinal for enumerated stavke entries.
@@ -1111,6 +1165,51 @@ var parsedTemplate = template.Must(template.New("work_order").Funcs(template.Fun
 // address is shown at the top of the nalog (under the client name).
 func ResolvePrintShippingAddress(order domain.WorkOrder) string {
 	return uppercaseLine(order.Shipping.ShippingAddress)
+}
+
+// PrintParcels is the "PAKETI" box: the packages the order is sent in with each
+// weight, their total once every package is weighed, and the estimated postage.
+type PrintParcels struct {
+	Count       int
+	Weights     []string // per package, "?" until weighed
+	Compact     bool     // many packages: weights print as one wrapped line
+	TotalWeight string   // empty until every package is weighed
+	Postage     string   // empty when not estimated
+}
+
+// printParcelsCompactFrom is the package count from which the weights print on
+// one wrapped line instead of one row each, so the box never outgrows its column.
+const printParcelsCompactFrom = 9
+
+// ResolvePrintParcels builds the "PAKETI" box, or nil when the order has no
+// packages and no estimated postage. Mirrors getPrintParcels in the web print
+// sheet.
+func ResolvePrintParcels(shipping domain.Shipping) *PrintParcels {
+	if len(shipping.Packages) == 0 && shipping.EstimatedPostage == nil {
+		return nil
+	}
+	parcels := &PrintParcels{
+		Count:   len(shipping.Packages),
+		Compact: len(shipping.Packages) >= printParcelsCompactFrom,
+	}
+	total := 0.0
+	allWeighed := len(shipping.Packages) > 0
+	for _, pkg := range shipping.Packages {
+		if pkg.WeightKg == nil {
+			parcels.Weights = append(parcels.Weights, "?")
+			allWeighed = false
+			continue
+		}
+		parcels.Weights = append(parcels.Weights, formatQuantity(*pkg.WeightKg))
+		total += *pkg.WeightKg
+	}
+	if allWeighed {
+		parcels.TotalWeight = formatQuantity(total)
+	}
+	if shipping.EstimatedPostage != nil {
+		parcels.Postage = formatAmount(*shipping.EstimatedPostage)
+	}
+	return parcels
 }
 
 // RenderWorkOrderHTML renders the printable nalog. Everything shop-configurable
@@ -1165,6 +1264,7 @@ func RenderWorkOrderHTML(order domain.WorkOrder, printCtx PrintContext, settings
 		BillingRows:        getPrintBillingRows(resolveBillingDocumentType(order, settings.BillingDefaults), printCtx.EnumValues, order.IsPaid),
 		NoteLines:          buildPrintNoteLines(order),
 		ShippingAddress:    ResolvePrintShippingAddress(order),
+		Parcels:            ResolvePrintParcels(order.Shipping),
 		Completed:          completed,
 		CompletionDate:     formatOptionalDate(order.CompletionDate),
 		ExecutedBy:         execBy,

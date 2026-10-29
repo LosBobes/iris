@@ -390,6 +390,24 @@ export function resolveShippingAddress(
   return currentAddress && currentAddress.trim() !== "" ? currentAddress : null;
 }
 
+// "Ukupno: 3 kom, 7,5 kg" under the package list; the weight appears once every
+// package is weighed (a valid, positive number).
+export function summarizePackages(
+  packages: WorkOrderFormValues["shipping"]["packages"],
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string | null {
+  if (packages.length === 0) return null;
+  const weights = packages.map((pkg) => pkg.weightKg);
+  if (weights.some((w) => w === null || !Number.isFinite(w) || w <= 0)) {
+    return t("workOrders.form.packagesTotalUnweighed", { count: packages.length });
+  }
+  const total = (weights as number[]).reduce((sum, w) => sum + w, 0);
+  return t("workOrders.form.packagesTotal", {
+    count: packages.length,
+    weight: new Intl.NumberFormat("sr-Latn-RS", { maximumFractionDigits: 3 }).format(total),
+  });
+}
+
 export function resolveLocationAddress(
   locationId: string | null,
   locations: Location[],
@@ -419,6 +437,8 @@ const EMPTY_SHIPPING: WorkOrderFormValues["shipping"] = {
   requiresSignature: false,
   hasInsurance: false,
   shippingAddress: null,
+  packages: [],
+  estimatedPostage: null,
 };
 
 export function normalizeWorkOrderFormDefaultValues(
@@ -593,6 +613,14 @@ export function WorkOrderForm({
     control,
     name: "invoiceDraft.lineItems",
   });
+  const {
+    fields: packageFields,
+    append: appendPackage,
+    remove: removePackage,
+  } = useFieldArray({
+    control,
+    name: "shipping.packages",
+  });
 
   const { optionsFor } = useEnumValues();
   // Admin-added units of measure, selectable on any line kind.
@@ -606,6 +634,8 @@ export function WorkOrderForm({
   const selectedCustomerId = watch("customerId");
   const selectedLocationId = watch("locationId");
   const shippingAddress = watch("shipping.shippingAddress");
+  const shippingPackages = watch("shipping.packages");
+  const estimatedPostage = watch("shipping.estimatedPostage");
   const billingDocumentTypeValue = watch("billingDocumentType");
   // useWatch subscribes to the control store directly (not via a mounted input),
   // so the derived total stays correct even when a line's qty/price inputs are
@@ -972,6 +1002,7 @@ export function WorkOrderForm({
     deliveryMethod !== null && deliveryMethod !== "pickup";
   const showPostageOptions =
     deliveryMethod === "postExpress" || deliveryMethod === "cityExpress";
+  const packagesSummary = summarizePackages(shippingPackages, t);
 
   // The live PDF preview is available to every role (the API strips money from
   // the render for operators) and can be hidden to give the form full width.
@@ -1063,7 +1094,15 @@ export function WorkOrderForm({
     if (nextAddress !== shippingAddress) {
       setValue("shipping.shippingAddress", nextAddress);
     }
-  }, [deliveryMethod, setValue, shippingAddress]);
+    // Parcel details only apply while the order is sent, like the address.
+    const isSent = deliveryMethod !== null && deliveryMethod !== "pickup";
+    if (!isSent && shippingPackages.length > 0) {
+      setValue("shipping.packages", []);
+    }
+    if (!isSent && estimatedPostage !== null) {
+      setValue("shipping.estimatedPostage", null);
+    }
+  }, [deliveryMethod, setValue, shippingAddress, shippingPackages, estimatedPostage]);
 
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
@@ -2347,6 +2386,98 @@ export function WorkOrderForm({
                     {t("workOrders.form.useClientFirmAddress")}
                   </button>
                 )}
+              </FieldShell>
+            )}
+
+            {/* Parcels for the courier: whoever packs the goods enters how many
+                packages go to the client and how heavy each one is (for the Post
+                Express shipment specification, which prices the postage). */}
+            {showShippingAddress && (
+              <FieldShell
+                id="shipping.packages"
+                label={t("workOrders.form.packages")}
+                hint={t("workOrders.form.packagesHint")}
+                error={errors.shipping?.packages?.message}
+                full
+              >
+                <div className="flex flex-col gap-2">
+                  {packageFields.map((field, index) => (
+                    <div key={field.id} className="flex items-end gap-3">
+                      <span className="w-16 shrink-0 pb-2 text-[12px] text-[color:var(--iris-ink-soft)]">
+                        {t("workOrders.form.packageLabel", { n: index + 1 })}
+                      </span>
+                      <div className="w-32">
+                        <input
+                          id={`shipping.packages.${index}.weightKg`}
+                          type="number"
+                          min="0"
+                          // step="any" accepts fractional weights such as 2.5 kg.
+                          step="any"
+                          inputMode="decimal"
+                          aria-label={t("workOrders.form.packageWeight", { n: index + 1 })}
+                          aria-invalid={Boolean(errors.shipping?.packages?.[index]?.weightKg)}
+                          className={`${underlineInput} tnum`}
+                          {...register(`shipping.packages.${index}.weightKg` as const, {
+                            setValueAs: (v: string | number | null) =>
+                              v === "" || v === null ? null : Number(v),
+                          })}
+                        />
+                      </div>
+                      <span className="-ml-1 pb-2 text-[12px] text-[color:var(--iris-ink-soft)]">
+                        kg
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={t("workOrders.form.removePackage", { n: index + 1 })}
+                        onClick={() => removePackage(index)}
+                        className="iris-focusable iris-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[color:var(--iris-ink-mute)] hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      {errors.shipping?.packages?.[index]?.weightKg?.message && (
+                        <p className="pb-2 text-[10px] text-destructive">
+                          {errors.shipping.packages[index]?.weightKg?.message}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => appendPackage({ weightKg: null })}
+                      className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+                    >
+                      <Package className="h-3.5 w-3.5" />
+                      {t("workOrders.form.addPackage")}
+                    </button>
+                    {packagesSummary && (
+                      <span className="tnum text-[12px] text-[color:var(--iris-ink-soft)]">
+                        {packagesSummary}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </FieldShell>
+            )}
+
+            {showShippingAddress && (
+              <FieldShell
+                id="shipping.estimatedPostage"
+                label={t("workOrders.form.estimatedPostage")}
+                error={errors.shipping?.estimatedPostage?.message}
+              >
+                <input
+                  id="shipping.estimatedPostage"
+                  type="number"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  className={`${underlineInput} tnum`}
+                  {...register("shipping.estimatedPostage", {
+                    setValueAs: (v: string | number | null) =>
+                      v === "" || v === null ? null : Number(v),
+                  })}
+                />
               </FieldShell>
             )}
 

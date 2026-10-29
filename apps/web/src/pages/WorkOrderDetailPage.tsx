@@ -40,6 +40,7 @@ import { WorkOrderPrintSheet } from "@/components/WorkOrders/WorkOrderPrintSheet
 import type { Customer, Location, WorkOrder } from "@/types/work-order";
 import { formatActionError, reportUnexpectedError } from "@/lib/errors";
 import { lineMargin, workOrderMargin } from "@/lib/work-orders/margin";
+import { formatParcelSummary, formatPostageSummary } from "@/lib/work-orders/parcels";
 import {
   buildWorkOrderCustomerNotice,
   countsTowardWorkQueue,
@@ -558,6 +559,8 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
         ? getWorkOrderDeliveryLabel(order.shipping.deliveryMethod)
         : "-",
     ],
+    [t("workOrders.form.packages"), formatParcelSummary(order.shipping) ?? "-"],
+    [t("workOrders.form.estimatedPostage"), formatPostageSummary(order.shipping) ?? "-"],
     [
       t("workOrders.detail.documentNumber"),
       order.billingDocumentNumber ? order.billingDocumentNumber : "-",

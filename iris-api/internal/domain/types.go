@@ -839,6 +839,29 @@ type Shipping struct {
 	RequiresSignature  bool                `json:"requiresSignature"`
 	HasInsurance       bool                `json:"hasInsurance"`
 	ShippingAddress    *string             `json:"shippingAddress"`
+	// Packages lists the parcels the order is sent in, each with its own
+	// weight: whoever packs the goods enters them for the courier's shipment
+	// specification (e.g. the Post Express app), which prices the postage.
+	Packages []ShippingPackage `json:"packages"`
+	// EstimatedPostage is the expected postage in RSD (okvirna poštarina).
+	EstimatedPostage *float64 `json:"estimatedPostage"`
+}
+
+// ShippingPackage is one parcel of a shipment; WeightKg stays nil until the
+// package is weighed.
+type ShippingPackage struct {
+	WeightKg *float64 `json:"weightKg"`
+}
+
+// MarshalJSON emits packages as an empty array (never null) for orders stored
+// before the field existed, as the contract requires.
+func (s Shipping) MarshalJSON() ([]byte, error) {
+	type plain Shipping
+	value := plain(s)
+	if value.Packages == nil {
+		value.Packages = []ShippingPackage{}
+	}
+	return json.Marshal(value)
 }
 
 type Customer struct {

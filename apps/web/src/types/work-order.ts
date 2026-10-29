@@ -83,6 +83,18 @@ export interface Shipping {
   requiresSignature: boolean
   hasInsurance: boolean
   shippingAddress: string | null
+  /**
+   * The parcels the order is sent in, each with its own weight, entered when
+   * the goods are packed (for the courier's shipment specification).
+   */
+  packages: ShippingPackage[]
+  /** Expected postage in RSD (okvirna poštarina). */
+  estimatedPostage: number | null
+}
+
+export interface ShippingPackage {
+  /** Package weight in kilograms; null until weighed. */
+  weightKg: number | null
 }
 
 export interface CustomerEmail {

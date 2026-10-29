@@ -215,6 +215,8 @@ function normalizeShipping(shipping: Partial<Shipping> | null | undefined): Ship
     requiresSignature: shipping?.requiresSignature ?? false,
     hasInsurance: shipping?.hasInsurance ?? false,
     shippingAddress: normalizeNullableString(shipping?.shippingAddress),
+    packages: (shipping?.packages ?? []).map((pkg) => ({ weightKg: pkg.weightKg ?? null })),
+    estimatedPostage: shipping?.estimatedPostage ?? null,
   }
 }
 

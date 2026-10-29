@@ -1694,12 +1694,26 @@ func decodeField(raw json.RawMessage, target any) error {
 	return nil
 }
 
+// maxShippingPackages bounds the package list of one order.
+const maxShippingPackages = 100
+
 func validateShipping(shipping domain.Shipping, custom customEnumSet) error {
 	if shipping.DeliveryMethod != nil && !isValidDeliveryMethod(*shipping.DeliveryMethod, custom) {
 		return newValidationError(invalidWorkOrderMessage)
 	}
 	if shipping.PostagePaymentType != nil && !isValidPostagePaymentType(*shipping.PostagePaymentType, custom) {
 		return newValidationError(invalidWorkOrderMessage)
+	}
+	if len(shipping.Packages) > maxShippingPackages {
+		return newValidationError(fmt.Sprintf("Najviše %d paketa po nalogu.", maxShippingPackages))
+	}
+	for _, pkg := range shipping.Packages {
+		if pkg.WeightKg != nil && !(*pkg.WeightKg > 0) {
+			return newValidationError("Težina paketa mora biti veća od 0.")
+		}
+	}
+	if shipping.EstimatedPostage != nil && *shipping.EstimatedPostage < 0 {
+		return newValidationError("Okvirna poštarina ne može biti negativna.")
 	}
 
 	return nil
@@ -1942,6 +1956,23 @@ func diffDate(value *string) string {
 }
 
 // diffPrice renders a RSD amount with sr-Latn grouping ("67.000 RSD").
+// diffPackages renders the package list as its count and each weight with a
+// decimal comma, e.g. "2 (1,5 kg; ? kg)".
+func diffPackages(packages []domain.ShippingPackage) string {
+	if len(packages) == 0 {
+		return emptyDiffValue
+	}
+	weights := make([]string, len(packages))
+	for i, pkg := range packages {
+		weights[i] = "?"
+		if pkg.WeightKg != nil {
+			weights[i] = strings.Replace(strconv.FormatFloat(*pkg.WeightKg, 'f', -1, 64), ".", ",", 1)
+		}
+		weights[i] += " kg"
+	}
+	return fmt.Sprintf("%d (%s)", len(packages), strings.Join(weights, "; "))
+}
+
 func diffPrice(price *float64) string {
 	if price == nil {
 		return emptyDiffValue
@@ -1994,6 +2025,8 @@ func appendWorkOrderChangeEvents(current, updated *domain.WorkOrder) {
 	add("Operater", diffOptionalString(current.Assignment.AssignedTo), diffOptionalString(updated.Assignment.AssignedTo))
 	add("Prioritet", workOrderPriorityLabel(current.Assignment.Priority), workOrderPriorityLabel(updated.Assignment.Priority))
 	add("Način dostave", deliveryMethodLabel(current.Shipping.DeliveryMethod), deliveryMethodLabel(updated.Shipping.DeliveryMethod))
+	add("Paketi", diffPackages(current.Shipping.Packages), diffPackages(updated.Shipping.Packages))
+	add("Okvirna poštarina", diffPrice(current.Shipping.EstimatedPostage), diffPrice(updated.Shipping.EstimatedPostage))
 	add("Datum izdavanja", diffDate(&current.IssueDate), diffDate(&updated.IssueDate))
 	add("Rok izdavanja predračuna", diffDate(current.ProformaDueDate), diffDate(updated.ProformaDueDate))
 	add("Rok završetka posla", diffDate(current.DueDate), diffDate(updated.DueDate))
@@ -2180,6 +2213,13 @@ func cloneShipping(value domain.Shipping) domain.Shipping {
 	cloned.DeliveryMethod = clonePtrDeliveryMethod(value.DeliveryMethod)
 	cloned.PostagePaymentType = clonePtrPostagePaymentType(value.PostagePaymentType)
 	cloned.ShippingAddress = clonePtrString(value.ShippingAddress)
+	if value.Packages != nil {
+		cloned.Packages = make([]domain.ShippingPackage, len(value.Packages))
+		for i, pkg := range value.Packages {
+			cloned.Packages[i] = domain.ShippingPackage{WeightKg: clonePtrFloat64(pkg.WeightKg)}
+		}
+	}
+	cloned.EstimatedPostage = clonePtrFloat64(value.EstimatedPostage)
 	return cloned
 }
 

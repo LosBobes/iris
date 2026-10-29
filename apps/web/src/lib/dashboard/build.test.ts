@@ -39,6 +39,8 @@ function order(overrides: Partial<WorkOrder>, lineItems: InvoiceLineItem[]): Wor
       requiresSignature: false,
       hasInsurance: false,
       shippingAddress: null,
+      packages: [],
+      estimatedPostage: null,
     },
     issuedBy: 'ana',
     executedBy: null,

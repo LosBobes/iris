@@ -188,6 +188,9 @@ func (b *demoContentBuilder) liveOrderSpecs() []demoOrder {
 				DeliveryMethod: &post, PostagePaymentType: &advance, DrivesOut: true, WaitForPayment: true,
 				HasPackaging: true, HasLabeling: true, IsFragile: true, RequiresSignature: true, HasInsurance: true,
 				ShippingAddress: str("Pekara Liman, Narodnog fronta 45, Novi Sad"),
+				// Two roll-ups weighed, the cut-outs still being packed.
+				Packages:         []domain.ShippingPackage{{WeightKg: num(6.5)}, {WeightKg: num(6.5)}, {}},
+				EstimatedPostage: num(1450),
 			},
 			statuses: assigned,
 		},

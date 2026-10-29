@@ -30,6 +30,8 @@ function makeOrder(overrides: Partial<WorkOrder>): WorkOrder {
       requiresSignature: false,
       hasInsurance: false,
       shippingAddress: null,
+      packages: [],
+      estimatedPostage: null,
     },
     issuedBy: "ana",
     executedBy: null,

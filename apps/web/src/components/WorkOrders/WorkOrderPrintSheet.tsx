@@ -23,6 +23,7 @@ import { useOrganization } from "@/hooks/useOrganization";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
+import { getPrintParcels, type PrintParcels } from "@/lib/work-orders/parcels";
 
 interface PrintCheckRow {
   label: string;
@@ -108,6 +109,41 @@ export function resolvePrintClientAddress(
   if (!order.locationId) return null;
   const location = locations.find((entry) => entry.id === order.locationId);
   return uppercaseLine(location?.address);
+}
+
+// The "PAKETI" box: in the otherwise empty top of the delivery column, or under
+// the delivery address when the delivery section is turned off.
+function PrintParcelsBox({ parcels }: { parcels: PrintParcels }): React.JSX.Element {
+  return (
+    <div className="work-order-print-parcels">
+      <div className="work-order-print-label">{i18n.t("workOrders.print.parcels")}</div>
+      {parcels.count > 0 && (
+        <>
+          <div className="work-order-print-parcels-count">
+            {i18n.t("workOrders.print.parcelsCount", { count: parcels.count })}
+          </div>
+          <div className="work-order-print-parcels-list">
+            {parcels.compact
+              ? `${parcels.weights.join(" · ")} KG`
+              : parcels.weights.map((weight, index) => (
+                  // Weights repeat, so the position is the key.
+                  <div key={index}>{`${index + 1}. ${weight} KG`}</div>
+                ))}
+          </div>
+          {parcels.totalWeight && (
+            <div className="work-order-print-parcels-summary">
+              {i18n.t("workOrders.print.parcelsTotal", { value: parcels.totalWeight })}
+            </div>
+          )}
+        </>
+      )}
+      {parcels.postage && (
+        <div className="work-order-print-parcels-summary">
+          {i18n.t("workOrders.print.parcelsPostage", { value: parcels.postage })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function getPrintDeliveryRows(
@@ -378,6 +414,7 @@ export function WorkOrderPrintSheet({
   );
   const noteLines = buildPrintNoteLines(order);
   const shippingAddress = resolvePrintShippingAddress(order);
+  const parcels = getPrintParcels(order.shipping);
   const clientAddress = resolvePrintClientAddress(order, locations);
   // Firm identifiers only print for the registry client this order points at,
   // so a stale/mismatched customer prop never leaks onto the sheet.
@@ -579,6 +616,9 @@ export function WorkOrderPrintSheet({
                     {shippingAddress}
                   </div>
                 )}
+                {parcels && !pdfSections.delivery && (
+                  <PrintParcelsBox parcels={parcels} />
+                )}
               </div>
             )}
           </div>
@@ -586,6 +626,8 @@ export function WorkOrderPrintSheet({
 
         {pdfSections.delivery && (
           <div className="work-order-print-delivery-box">
+            {parcels && <PrintParcelsBox parcels={parcels} />}
+            <div className="work-order-print-delivery-spacer" />
             {deliveryRows.map((row) => (
               <div className="work-order-print-check-row" key={row.label}>
                 <span>{row.label}</span>

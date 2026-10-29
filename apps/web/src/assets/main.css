@@ -972,6 +972,39 @@
     overflow-wrap: anywhere;
   }
 
+  /* The PAKETI box sits in the otherwise empty top of the delivery column. */
+  .work-order-print-parcels {
+    padding: 2mm 3mm;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.35;
+    border-bottom: 1px solid #000;
+    overflow-wrap: anywhere;
+  }
+
+  .work-order-print-address-box .work-order-print-parcels {
+    margin-top: 2mm;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .work-order-print-parcels-count {
+    margin-top: 1mm;
+    font-size: 18px;
+  }
+
+  .work-order-print-parcels-list {
+    margin: 1mm 0;
+  }
+
+  .work-order-print-parcels-summary {
+    margin-top: 1mm;
+  }
+
+  .work-order-print-delivery-spacer {
+    flex: 1 1 auto;
+  }
+
   .work-order-print-signatures {
     display: grid;
     grid-template-columns: 1fr 1fr;
