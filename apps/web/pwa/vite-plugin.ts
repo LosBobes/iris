@@ -5,9 +5,10 @@ import type { Plugin, ResolvedConfig } from 'vite'
 
 const TEMPLATE_PATH = resolve(import.meta.dirname, 'service-worker.js')
 
-// Source maps are never fetched by the app, and the worker itself must not
-// precache itself.
-const EXCLUDED = [/\.map$/, /^sw\.js$/]
+// Source maps are never fetched by the app, the worker must not precache
+// itself, and version.json must always come from the network: it is how an
+// open tab learns that a newer build was deployed (src/lib/app-update.ts).
+const EXCLUDED = [/\.map$/, /^sw\.js$/, /^version\.json$/]
 
 function listPublicFiles(publicDir: string): string[] {
   const walk = (dir: string): string[] =>
@@ -69,6 +70,25 @@ export function irisServiceWorker(): Plugin {
           config.base,
           files,
         ),
+      })
+    },
+  }
+}
+
+/**
+ * Emits /version.json ({"version": "2.22.0"}) for production builds. An open
+ * tab polls it and offers a reload once a newer build is deployed, since a tab
+ * left open across a deploy keeps running the old code (src/lib/app-update.ts).
+ */
+export function irisVersionFile(version: string): Plugin {
+  return {
+    name: 'iris-version-file',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ version }),
       })
     },
   }

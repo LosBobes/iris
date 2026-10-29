@@ -1001,6 +1001,11 @@
     margin-top: 1mm;
   }
 
+  /* Nothing entered: room to write the count and weights in by pen. */
+  .work-order-print-parcels-blank {
+    line-height: 2.1;
+  }
+
   .work-order-print-delivery-spacer {
     flex: 1 1 auto;
   }

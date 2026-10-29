@@ -1620,6 +1620,10 @@ export const en: typeof sr = {
     by: 'Backoffice: {{admin}}',
     stop: 'Stop impersonating',
   },
+  appUpdate: {
+    available: 'A new version of Iris is out ({{version}}). Reload the page to get it, after saving what you are working on.',
+    reload: 'Reload',
+  },
   announcements: {
     region: 'Platform announcements',
     severity: {
@@ -2739,7 +2743,7 @@ export const en: typeof sr = {
       note: 'NOTE',
       shipTo: 'DELIVERY ADDRESS:',
       parcels: 'PACKAGES',
-      parcelsCount: '{{count}} PCS',
+      parcelsCount: '{{value}} PCS',
       parcelsTotal: 'TOTAL: {{value}} KG',
       parcelsPostage: 'POSTAGE ~ {{value}} RSD',
       completed: 'WORK ORDER COMPLETED',

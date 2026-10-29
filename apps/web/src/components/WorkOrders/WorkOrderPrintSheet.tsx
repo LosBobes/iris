@@ -112,36 +112,36 @@ export function resolvePrintClientAddress(
 }
 
 // The "PAKETI" box: in the otherwise empty top of the delivery column, or under
-// the delivery address when the delivery section is turned off.
+// the delivery address when the delivery section is turned off. Blank lines
+// stand in for whatever the packer writes in by pen.
 function PrintParcelsBox({ parcels }: { parcels: PrintParcels }): React.JSX.Element {
   return (
-    <div className="work-order-print-parcels">
-      <div className="work-order-print-label">{i18n.t("workOrders.print.parcels")}</div>
-      {parcels.count > 0 && (
-        <>
-          <div className="work-order-print-parcels-count">
-            {i18n.t("workOrders.print.parcelsCount", { count: parcels.count })}
-          </div>
-          <div className="work-order-print-parcels-list">
-            {parcels.compact
-              ? `${parcels.weights.join(" · ")} KG`
-              : parcels.weights.map((weight, index) => (
-                  // Weights repeat, so the position is the key.
-                  <div key={index}>{`${index + 1}. ${weight} KG`}</div>
-                ))}
-          </div>
-          {parcels.totalWeight && (
-            <div className="work-order-print-parcels-summary">
-              {i18n.t("workOrders.print.parcelsTotal", { value: parcels.totalWeight })}
-            </div>
-          )}
-        </>
+    <div
+      className={cn(
+        "work-order-print-parcels",
+        parcels.blank && "work-order-print-parcels-blank",
       )}
-      {parcels.postage && (
+    >
+      <div className="work-order-print-label">{i18n.t("workOrders.print.parcels")}</div>
+      <div className="work-order-print-parcels-count">
+        {i18n.t("workOrders.print.parcelsCount", { value: parcels.count })}
+      </div>
+      <div className="work-order-print-parcels-list">
+        {parcels.compact
+          ? `${parcels.weights.join(" · ")} KG`
+          : parcels.weights.map((weight, index) => (
+              // Weights repeat, so the position is the key.
+              <div key={index}>{`${index + 1}. ${weight} KG`}</div>
+            ))}
+      </div>
+      {parcels.totalWeight && (
         <div className="work-order-print-parcels-summary">
-          {i18n.t("workOrders.print.parcelsPostage", { value: parcels.postage })}
+          {i18n.t("workOrders.print.parcelsTotal", { value: parcels.totalWeight })}
         </div>
       )}
+      <div className="work-order-print-parcels-summary">
+        {i18n.t("workOrders.print.parcelsPostage", { value: parcels.postage })}
+      </div>
     </div>
   );
 }

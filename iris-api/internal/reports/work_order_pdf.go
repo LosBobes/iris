@@ -939,6 +939,11 @@ const htmlTemplateStr = `<!DOCTYPE html>
       margin-top: 1mm;
     }
 
+    /* Nothing entered: room to write the count and weights in by pen. */
+    .work-order-print-parcels-blank {
+      line-height: 2.1;
+    }
+
     .work-order-print-delivery-spacer {
       flex: 1 1 auto;
     }
@@ -1137,20 +1142,18 @@ const htmlTemplateStr = `<!DOCTYPE html>
 </body>
 </html>
 {{define "parcels"}}
-<div class="work-order-print-parcels">
+<div class="work-order-print-parcels{{if .Blank}} work-order-print-parcels-blank{{end}}">
   <div class="work-order-print-label">PAKETI</div>
-  {{if .Count}}
-    <div class="work-order-print-parcels-count">{{.Count}} KOM</div>
-    {{if .Compact}}
-      <div class="work-order-print-parcels-list">{{range $i, $w := .Weights}}{{if $i}} · {{end}}{{$w}}{{end}} KG</div>
-    {{else}}
-      <div class="work-order-print-parcels-list">
-        {{range $i, $w := .Weights}}<div>{{inc $i}}. {{$w}} KG</div>{{end}}
-      </div>
-    {{end}}
-    {{if .TotalWeight}}<div class="work-order-print-parcels-summary">UKUPNO: {{.TotalWeight}} KG</div>{{end}}
+  <div class="work-order-print-parcels-count">{{.Count}} KOM</div>
+  {{if .Compact}}
+    <div class="work-order-print-parcels-list">{{range $i, $w := .Weights}}{{if $i}} · {{end}}{{$w}}{{end}} KG</div>
+  {{else}}
+    <div class="work-order-print-parcels-list">
+      {{range $i, $w := .Weights}}<div>{{inc $i}}. {{$w}} KG</div>{{end}}
+    </div>
   {{end}}
-  {{if .Postage}}<div class="work-order-print-parcels-summary">POŠTARINA ~ {{.Postage}} DIN</div>{{end}}
+  {{if .TotalWeight}}<div class="work-order-print-parcels-summary">UKUPNO: {{.TotalWeight}} KG</div>{{end}}
+  <div class="work-order-print-parcels-summary">POŠTARINA ~ {{.Postage}} DIN</div>
 </div>
 {{end}}`
 
@@ -1169,42 +1172,66 @@ func ResolvePrintShippingAddress(order domain.WorkOrder) string {
 
 // PrintParcels is the "PAKETI" box: the packages the order is sent in with each
 // weight, their total once every package is weighed, and the estimated postage.
+// Whatever is not filled in yet prints as a blank line to write on by hand.
 type PrintParcels struct {
-	Count       int
-	Weights     []string // per package, "?" until weighed
+	Count       string   // number of packages, or a blank line
+	Weights     []string // per package (a blank line until weighed), or blank lines
 	Compact     bool     // many packages: weights print as one wrapped line
 	TotalWeight string   // empty until every package is weighed
-	Postage     string   // empty when not estimated
+	Postage     string   // estimated postage, or a blank line
+	Blank       bool     // no packages entered: spaced out for handwriting
 }
+
+// printBlank is the line printed where a value is to be written in by hand.
+const printBlank = "______"
+
+// printBlankPackageLines is how many blank weight lines an order sent with no
+// packages entered gets.
+const printBlankPackageLines = 5
 
 // printParcelsCompactFrom is the package count from which the weights print on
 // one wrapped line instead of one row each, so the box never outgrows its column.
 const printParcelsCompactFrom = 9
 
-// ResolvePrintParcels builds the "PAKETI" box, or nil when the order has no
-// packages and no estimated postage. Mirrors getPrintParcels in the web print
-// sheet.
+// isShippingSent reports whether the order is sent to the client (any delivery
+// method except pickup), the case in which packages matter.
+func isShippingSent(shipping domain.Shipping) bool {
+	return shipping.DeliveryMethod != nil && *shipping.DeliveryMethod != "" &&
+		*shipping.DeliveryMethod != domain.DeliveryMethodPickup
+}
+
+// ResolvePrintParcels builds the "PAKETI" box. An order that is sent always
+// gets it, with blank lines for whatever is not entered so the packer can write
+// it in by pen; any other order only when packages or postage were entered.
+// nil means no box. Mirrors getPrintParcels in the web print sheet.
 func ResolvePrintParcels(shipping domain.Shipping) *PrintParcels {
-	if len(shipping.Packages) == 0 && shipping.EstimatedPostage == nil {
+	hasData := len(shipping.Packages) > 0 || shipping.EstimatedPostage != nil
+	if !hasData && !isShippingSent(shipping) {
 		return nil
 	}
-	parcels := &PrintParcels{
-		Count:   len(shipping.Packages),
-		Compact: len(shipping.Packages) >= printParcelsCompactFrom,
-	}
-	total := 0.0
-	allWeighed := len(shipping.Packages) > 0
-	for _, pkg := range shipping.Packages {
-		if pkg.WeightKg == nil {
-			parcels.Weights = append(parcels.Weights, "?")
-			allWeighed = false
-			continue
+	parcels := &PrintParcels{Count: printBlank, Postage: printBlank}
+	if len(shipping.Packages) == 0 {
+		parcels.Blank = true
+		for range printBlankPackageLines {
+			parcels.Weights = append(parcels.Weights, printBlank)
 		}
-		parcels.Weights = append(parcels.Weights, formatQuantity(*pkg.WeightKg))
-		total += *pkg.WeightKg
-	}
-	if allWeighed {
-		parcels.TotalWeight = formatQuantity(total)
+	} else {
+		parcels.Count = strconv.Itoa(len(shipping.Packages))
+		parcels.Compact = len(shipping.Packages) >= printParcelsCompactFrom
+		total := 0.0
+		allWeighed := true
+		for _, pkg := range shipping.Packages {
+			if pkg.WeightKg == nil {
+				parcels.Weights = append(parcels.Weights, printBlank)
+				allWeighed = false
+				continue
+			}
+			parcels.Weights = append(parcels.Weights, formatQuantity(*pkg.WeightKg))
+			total += *pkg.WeightKg
+		}
+		if allWeighed {
+			parcels.TotalWeight = formatQuantity(total)
+		}
 	}
 	if shipping.EstimatedPostage != nil {
 		parcels.Postage = formatAmount(*shipping.EstimatedPostage)

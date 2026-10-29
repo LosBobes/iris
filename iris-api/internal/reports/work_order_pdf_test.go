@@ -617,7 +617,7 @@ func TestRenderWorkOrderHTMLParcels(t *testing.T) {
 		t.Fatalf("render: %v", err)
 	}
 	box := html[strings.Index(html, `<div class="work-order-print-delivery-box">`):]
-	for _, want := range []string{"PAKETI", "2 KOM", "1. 1.250,5 KG", "2. ? KG", "POŠTARINA ~ 1.650 DIN"} {
+	for _, want := range []string{"PAKETI", "2 KOM", "1. 1.250,5 KG", "2. ______ KG", "POŠTARINA ~ 1.650 DIN"} {
 		if !strings.Contains(box, want) {
 			t.Fatalf("delivery column missing %q", want)
 		}
@@ -626,12 +626,41 @@ func TestRenderWorkOrderHTMLParcels(t *testing.T) {
 		t.Fatalf("total weight printed although a package is not weighed")
 	}
 
-	if got := ResolvePrintParcels(domain.Shipping{}); got != nil {
-		t.Fatalf("empty shipping parcels = %+v, want nil", got)
+	pickup := domain.DeliveryMethodPickup
+	for name, shipping := range map[string]domain.Shipping{
+		"no delivery method": {},
+		"pickup":             {DeliveryMethod: &pickup},
+	} {
+		if got := ResolvePrintParcels(shipping); got != nil {
+			t.Fatalf("%s: parcels = %+v, want no box", name, got)
+		}
 	}
 	one, two := 2.5, 1.25
 	weighed := ResolvePrintParcels(domain.Shipping{Packages: []domain.ShippingPackage{{WeightKg: &one}, {WeightKg: &two}}})
 	if weighed.TotalWeight != "3,75" || weighed.Compact {
 		t.Fatalf("weighed parcels = %+v, want total 3,75 listed per row", weighed)
+	}
+}
+
+func TestRenderWorkOrderHTMLBlankParcelsForSentOrder(t *testing.T) {
+	post := domain.DeliveryMethodPostExpress
+	order := domain.WorkOrder{
+		OrderNumber:    "RN-2026-00003",
+		ClientName:     "Pekara Liman",
+		JobDescription: "Kese",
+		Shipping:       domain.Shipping{DeliveryMethod: &post},
+	}
+	html, err := RenderWorkOrderHTML(order, PrintContext{}, printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults()))
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	box := html[strings.Index(html, `<div class="work-order-print-delivery-box">`):]
+	for _, want := range []string{"PAKETI", "______ KOM", "1. ______ KG", "5. ______ KG", "POŠTARINA ~ ______ DIN", "work-order-print-parcels-blank"} {
+		if !strings.Contains(box, want) {
+			t.Fatalf("sent order without packages: delivery column missing %q", want)
+		}
+	}
+	if strings.Contains(box, "6. ______ KG") {
+		t.Fatalf("expected %d blank package lines", printBlankPackageLines)
 	}
 }
