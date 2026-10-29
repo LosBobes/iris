@@ -28,6 +28,7 @@ import type { OrganizationModules } from "@/types/settings";
 import { IrisMark } from "@/components/brand/IrisMark";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import { UpdateBanner } from "./UpdateBanner";
 import { APP_VERSION, formatVersion } from "@/lib/app-version";
 import {
   Tooltip,
@@ -194,6 +195,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground">
       <ImpersonationBanner />
       <AnnouncementBanner />
+      <UpdateBanner />
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Always rendered on mobile (hidden on lg) so its opacity can transition
             both ways, fading in/out in step with the drawer's slide. */}

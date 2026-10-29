@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { irisServiceWorker } from './pwa/vite-plugin'
+import { irisServiceWorker, irisVersionFile } from './pwa/vite-plugin'
 
 // The app version lives in the repository-root VERSION file, bumped on every
 // merge to main from .changeset/ entries (see .changeset/README.md).
@@ -31,7 +31,7 @@ export default defineConfig({
       allow: [searchForWorkspaceRoot(process.cwd()), regulationDocsDir],
     },
   },
-  plugins: [react(), tailwindcss(), irisServiceWorker()],
+  plugins: [react(), tailwindcss(), irisServiceWorker(), irisVersionFile(appVersion)],
   build: {
     // Recharts + its d3-*/victory-vendor dependencies alone dwarf the rest of
     // the vendor graph, so it gets its own chunk (loaded lazily, see

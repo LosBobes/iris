@@ -8,12 +8,13 @@ function parse(source: string): { version: string; urls: string[] } {
 }
 
 describe('buildServiceWorkerSource', () => {
-  it('prefixes the base, sorts, dedupes and drops source maps and the worker itself', () => {
+  it('prefixes the base, sorts, dedupes and drops source maps, the worker and version.json', () => {
     const source = buildServiceWorkerSource('// template', '/', [
       'assets/index-abc.js',
       'index.html',
       'assets/index-abc.js.map',
       'sw.js',
+      'version.json',
       'icons/icon-192.png',
       'index.html',
     ])

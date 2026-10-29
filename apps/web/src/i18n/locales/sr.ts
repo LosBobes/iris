@@ -1619,6 +1619,10 @@ export const sr = {
     by: 'Backoffice: {{admin}}',
     stop: 'Prekini impersonaciju',
   },
+  appUpdate: {
+    available: 'Stigla je nova verzija Irisa ({{version}}). Osvežite stranicu da biste je dobili, a pre toga sačuvajte ono na čemu radite.',
+    reload: 'Osveži',
+  },
   announcements: {
     region: 'Obaveštenja platforme',
     severity: {
@@ -2738,7 +2742,7 @@ export const sr = {
       note: 'NAPOMENA',
       shipTo: 'ADRESA ZA DOSTAVU:',
       parcels: 'PAKETI',
-      parcelsCount: '{{count}} KOM',
+      parcelsCount: '{{value}} KOM',
       parcelsTotal: 'UKUPNO: {{value}} KG',
       parcelsPostage: 'POŠTARINA ~ {{value}} DIN',
       completed: 'RADNI NALOG ZAVRŠEN',
