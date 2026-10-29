@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.23.0 — 2026-10-29
+
+### Minor
+
+- A sent work order always prints the PAKETI box, with blank lines to fill in by pen when nothing is entered, and an open app now shows a banner with a reload button once a new version is deployed.
+
 ## 2.22.0 — 2026-10-29
 
 ### Minor
