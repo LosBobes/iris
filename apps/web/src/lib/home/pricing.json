@@ -46,9 +46,9 @@
     "Ispravke grešaka i nove verzije su uvek besplatne"
   ],
   "changes": [
-    { "label": "Dorada po satu", "price": "6.000 RSD" },
-    { "label": "Paket 10 sati", "price": "50.000 RSD" },
-    { "label": "Paket 25 sati", "price": "112.500 RSD" },
+    { "label": "Dorada po satu", "price": "3.000 RSD" },
+    { "label": "Paket 10 sati", "price": "26.000 RSD" },
+    { "label": "Paket 25 sati", "price": "60.000 RSD" },
     { "label": "Prioritetna podrška, mesečno", "price": "4.900 RSD" },
     { "label": "Dan na terenu", "price": "15.000 RSD + put" }
   ],

@@ -1,6 +1,7 @@
 package invoice
 
 import (
+	"encoding/json"
 	"os"
 	"regexp"
 	"strconv"
@@ -102,18 +103,40 @@ func TestApplyDiscountKeepsOwnRabat(t *testing.T) {
 }
 
 // TestPricesMatchLandingPage keeps the base subscription and the extra-user
-// price in step with the public price list.
+// price in step with the public price list, which the landing page and its
+// PDF read from apps/web/src/lib/home/pricing.json.
 func TestPricesMatchLandingPage(t *testing.T) {
-	src, err := os.ReadFile("../../../apps/web/src/components/home/PricingPlans.tsx")
+	src, err := os.ReadFile("../../../apps/web/src/lib/home/pricing.json")
 	if err != nil {
 		t.Skipf("landing page not in this checkout: %v", err)
 	}
-	num := func(s string) int64 { n, _ := strconv.ParseInt(s, 10, 64); return n }
-	base := regexp.MustCompile(`name: "Osnovni",[\s\S]*?monthly: (\d+),[\s\S]*?users: (\d+),`).FindSubmatch(src)
-	if base == nil || num(string(base[1])) != BaseMonthly || int(num(string(base[2]))) != BaseUsers {
-		t.Errorf("Osnovni on the landing page = %q, want %d RSD for %d users", base, BaseMonthly, BaseUsers)
+	var pricing struct {
+		Plans []struct {
+			Name    string `json:"name"`
+			Monthly int64  `json:"monthly"`
+			Users   int    `json:"users"`
+		} `json:"plans"`
+		Terms string `json:"terms"`
 	}
-	if extra := regexp.MustCompile(`Dodatni korisnik je (\d+) RSD`).FindSubmatch(src); extra == nil || num(string(extra[1])) != ExtraUserMonthly {
+	if err := json.Unmarshal(src, &pricing); err != nil {
+		t.Fatalf("pricing.json: %v", err)
+	}
+	found := false
+	for _, plan := range pricing.Plans {
+		if plan.Name != "Osnovni" {
+			continue
+		}
+		found = true
+		if plan.Monthly != BaseMonthly || plan.Users != BaseUsers {
+			t.Errorf("Osnovni on the landing page = %d RSD for %d users, want %d RSD for %d users",
+				plan.Monthly, plan.Users, BaseMonthly, BaseUsers)
+		}
+	}
+	if !found {
+		t.Error("no Osnovni plan on the landing page")
+	}
+	extra := regexp.MustCompile(`Dodatni korisnik je (\d+) RSD`).FindStringSubmatch(pricing.Terms)
+	if extra == nil || extra[1] != strconv.FormatInt(ExtraUserMonthly, 10) {
 		t.Errorf("extra user price on the landing page = %q, want %d", extra, ExtraUserMonthly)
 	}
 }
