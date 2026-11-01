@@ -11,7 +11,7 @@ import (
 // provider is outside the VAT system.
 //
 // BaseMonthly and ExtraUserMonthly mirror the landing page's price list
-// (apps/web/src/components/home/PricingPlans.tsx); TestPricesMatchLandingPage
+// (apps/web/src/lib/home/pricing.json); TestPricesMatchLandingPage
 // fails when they drift.
 
 // Billing is how the subscription is invoiced.

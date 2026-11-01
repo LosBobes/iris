@@ -74,7 +74,7 @@ go run ./cmd/irisctl offer -seller ../deploy/invoice/seller.json \
   -payment "Avansno, 50% pri prihvatanju ponude" \
   -delivery "10 radnih dana od prihvatanja ponude" \
   -modules pro -bill oba -billing godisnje -discount 30 \
-  -item "Dorada po satu;SAT;8;6.000"
+  -item "Dorada po satu;SAT;8;3.000"
 ```
 
 - `-valid-until YYYY-MM-DD` or `-valid-days N` (default 15) sets the validity
