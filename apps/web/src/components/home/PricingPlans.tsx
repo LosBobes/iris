@@ -1,92 +1,18 @@
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { Check, FileDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PRICE_LIST_PDF_PATH, PRICING } from "@/lib/home/pricing";
 
 /**
  * The public price list: the three subscription plans with a monthly/annual
  * switch, the one-time onboarding price of each, and the terms for the
- * adoption period, support and paid changes. Prices are whole dinars and
- * final (the provider is outside the VAT system); keep them in step with the
- * signed price list and terms of use.
+ * adoption period, support and paid changes, plus a link to the same list as
+ * a PDF. The numbers come from lib/home/pricing.json, shared with the PDF.
  */
 
 export type Billing = "monthly" | "annual";
 
-export interface Plan {
-  name: string;
-  tagline: string;
-  /** Monthly price in RSD. */
-  monthly: number;
-  /** Annual price in RSD (ten months for twelve). */
-  annual: number;
-  users: number;
-  /** One-time onboarding price in RSD. */
-  onboarding: number;
-  includes: string[];
-  highlighted?: boolean;
-}
-
-export const PLANS: Plan[] = [
-  {
-    name: "Osnovni",
-    tagline: "Za firmu koja želi red u nalozima.",
-    monthly: 3900,
-    annual: 39000,
-    users: 5,
-    onboarding: 30000,
-    includes: [
-      "Radni nalozi, klijenti i lokacije",
-      "Katalog usluga i artikala",
-      "Kontrolna tabla",
-      "Javni link za praćenje naloga",
-    ],
-  },
-  {
-    name: "Proizvodnja",
-    tagline: "Za radionicu koja vodi materijal i korake rada.",
-    monthly: 8900,
-    annual: 89000,
-    users: 15,
-    onboarding: 80000,
-    includes: [
-      "Sve iz paketa Osnovni",
-      "Magacin",
-      "Procesi rada",
-      "e-Fakture i e-Otpremnice",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Pro",
-    tagline: "Za proizvodnju koja planira mašine i ljude.",
-    monthly: 13900,
-    annual: 139000,
-    users: 25,
-    onboarding: 160000,
-    includes: ["Sve iz paketa Proizvodnja", "Prisustvo", "Dnevno planiranje i „Moj red“"],
-  },
-];
-
-const ADOPTION: Array<{ plan: string; days: number; hours: number }> = [
-  { plan: "Osnovni", days: 30, hours: 4 },
-  { plan: "Proizvodnja", days: 45, hours: 8 },
-  { plan: "Pro", days: 60, hours: 16 },
-];
-
-const SUPPORT_POINTS: string[] = [
-  "Radnim danima od 9 do 17 h, porukom, e-poštom ili telefonom",
-  "Odgovor u roku od 1 radnog dana",
-  "Kad kvar zaustavi rad, počinjemo u roku od 4 sata",
-  "Ispravke grešaka i nove verzije su uvek besplatne",
-];
-
-const CHANGE_POINTS: Array<{ label: string; price: string }> = [
-  { label: "Dorada po satu", price: "6.000 RSD" },
-  { label: "Paket 10 sati", price: "50.000 RSD" },
-  { label: "Paket 25 sati", price: "112.500 RSD" },
-  { label: "Prioritetna podrška, mesečno", price: "4.900 RSD" },
-  { label: "Dan na terenu", price: "15.000 RSD + put" },
-];
+const { plans: PLANS, adoption: ADOPTION, support: SUPPORT_POINTS, changes: CHANGE_POINTS } = PRICING;
 
 const RSD = new Intl.NumberFormat("sr-Latn-RS", { maximumFractionDigits: 0 });
 
@@ -156,10 +82,16 @@ export function PricingPlans(): React.JSX.Element {
       </ul>
 
       <p className="mt-4 max-w-[80ch] text-[12px] leading-[1.6] text-[color:var(--iris-ink-mute)]">
-        Dodatni korisnik je 490 RSD mesečno. Pretplata se plaća godišnje ili kvartalno, a uz
-        godišnju pretplatu uvođenje je 30% jeftinije. Probni period je 30 dana. Cene su konačne,
-        jer nismo u sistemu PDV-a.
+        {PRICING.terms}
       </p>
+      <a
+        href={PRICE_LIST_PDF_PATH}
+        download
+        className="iris-focusable mt-3 inline-flex items-center gap-2 text-[13px] text-foreground underline underline-offset-4 hover:text-[color:var(--iris-accent)]"
+      >
+        <FileDown aria-hidden className="h-4 w-4" />
+        Preuzmite ceo cenovnik (PDF)
+      </a>
 
       <div className="mt-10 grid gap-4 md:grid-cols-3">
         <TermsCard title="Period usvajanja" lead="Posle početka rada manje izmene radimo besplatno, u okviru fonda sati.">

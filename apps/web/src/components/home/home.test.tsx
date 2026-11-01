@@ -147,6 +147,13 @@ describe("PricingPlans", () => {
     expect(within(plan("Pro")).getByText("RSD godišnje")).toBeInTheDocument();
   });
 
+  it("links the same price list as a downloadable PDF", () => {
+    render(<PricingPlans />);
+    const link = screen.getByRole("link", { name: /Preuzmite ceo cenovnik \(PDF\)/ });
+    expect(link).toHaveAttribute("href", "/cenovnik-iris.pdf");
+    expect(link).toHaveAttribute("download");
+  });
+
   it("formats dinars with a dot as the thousands separator", () => {
     expect(formatRsd(112500)).toBe("112.500 RSD");
     expect(formatRsd(490)).toBe("490 RSD");
