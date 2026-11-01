@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.24.0 — 2026-11-01
+
+### Minor
+
+- The landing page price list can be downloaded as a PDF (Cenovnik), generated from the same prices the page shows.
+
 ## 2.23.0 — 2026-10-29
 
 ### Minor
