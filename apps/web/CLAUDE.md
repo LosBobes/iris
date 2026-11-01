@@ -88,7 +88,8 @@ vars and must not be committed.
   sheets in `components/planning/DispatchList.tsx`, print rules `dispatch-print-*` in `main.css`).
 - **Landing page** (`/home`, public, outside the auth gate next to the public tracking route):
   `pages/HomePage.tsx` composes `components/home/` (the hero's live work order, status explorer, feature cards with looping SVG scenes `FeatureScene` + `feature-scenes.css` (paused off screen, finished frame under reduced motion),
-  module playground, price list `PricingPlans`, FAQ, scroll spy) over the pure helper
+  module playground, price list `PricingPlans` (data in `lib/home/pricing.json`, shared with the downloadable
+  `public/cenovnik-iris.pdf`: after a price change run `node scripts/generate-price-list.mjs`, a test fails until you do), FAQ, scroll spy) over the pure helper
   `lib/home/modules.ts` (mirrors the app's module-dependency rules; keep them in step). Serbian only
   (no i18n keys), written with the `srpski-prirodno` skill: professional register, „mi“ for us and a
   formal, capitalized „Vi“ for the reader, short descriptions with nothing self-evident. No API calls. Its call to action goes to

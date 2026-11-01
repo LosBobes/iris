@@ -1,0 +1,56 @@
+{
+  "plans": [
+    {
+      "name": "Osnovni",
+      "tagline": "Za firmu koja želi red u nalozima.",
+      "monthly": 3900,
+      "annual": 39000,
+      "users": 5,
+      "onboarding": 30000,
+      "includes": [
+        "Radni nalozi, klijenti i lokacije",
+        "Katalog usluga i artikala",
+        "Kontrolna tabla",
+        "Javni link za praćenje naloga"
+      ]
+    },
+    {
+      "name": "Proizvodnja",
+      "tagline": "Za radionicu koja vodi materijal i korake rada.",
+      "monthly": 8900,
+      "annual": 89000,
+      "users": 15,
+      "onboarding": 80000,
+      "includes": ["Sve iz paketa Osnovni", "Magacin", "Procesi rada", "e-Fakture i e-Otpremnice"],
+      "highlighted": true
+    },
+    {
+      "name": "Pro",
+      "tagline": "Za proizvodnju koja planira mašine i ljude.",
+      "monthly": 13900,
+      "annual": 139000,
+      "users": 25,
+      "onboarding": 160000,
+      "includes": ["Sve iz paketa Proizvodnja", "Prisustvo", "Dnevno planiranje i „Moj red“"]
+    }
+  ],
+  "adoption": [
+    { "plan": "Osnovni", "days": 30, "hours": 4 },
+    { "plan": "Proizvodnja", "days": 45, "hours": 8 },
+    { "plan": "Pro", "days": 60, "hours": 16 }
+  ],
+  "support": [
+    "Radnim danima od 9 do 17 h, porukom, e-poštom ili telefonom",
+    "Odgovor u roku od 1 radnog dana",
+    "Kad kvar zaustavi rad, počinjemo u roku od 4 sata",
+    "Ispravke grešaka i nove verzije su uvek besplatne"
+  ],
+  "changes": [
+    { "label": "Dorada po satu", "price": "6.000 RSD" },
+    { "label": "Paket 10 sati", "price": "50.000 RSD" },
+    { "label": "Paket 25 sati", "price": "112.500 RSD" },
+    { "label": "Prioritetna podrška, mesečno", "price": "4.900 RSD" },
+    { "label": "Dan na terenu", "price": "15.000 RSD + put" }
+  ],
+  "terms": "Dodatni korisnik je 490 RSD mesečno. Pretplata se plaća godišnje ili kvartalno, a uz godišnju pretplatu uvođenje je 30% jeftinije. Probni period je 30 dana. Cene su konačne, jer nismo u sistemu PDV-a."
+}
