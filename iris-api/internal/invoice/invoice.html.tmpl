@@ -2,7 +2,7 @@
 <html lang="sr-Latn">
 <head>
 <meta charset="utf-8">
-<title>{{if .IsOffer}}Ponuda{{else}}Račun{{end}} {{.Number}}</title>
+<title>{{.Title}} {{.Number}}</title>
 <style>
   @page { size: A4; }
   :root {
@@ -127,7 +127,7 @@
 </div>
 <div class="accent-bar"></div>
 
-<h1>{{if .IsOffer}}Ponuda{{else}}Račun{{end}} br. {{.Number}}</h1>
+<h1>{{.Title}} br. {{.Number}}</h1>
 
 <div class="meta">
   <table class="dates">
@@ -135,6 +135,10 @@
     <tr><td>Datum ponude:</td><td>{{date .IssueDate}}</td></tr>
     <tr><td>Mesto izdavanja:</td><td>{{.IssuePlace}}</td></tr>
     <tr><td>Ponuda važi do:</td><td>{{date .DueDate}}</td></tr>
+    {{else if .IsProforma}}
+    <tr><td>Datum izdavanja profakture:</td><td>{{date .IssueDate}}</td></tr>
+    <tr><td>Mesto izdavanja profakture:</td><td>{{.IssuePlace}}</td></tr>
+    <tr><td>Rok za uplatu:</td><td>{{date .DueDate}}</td></tr>
     {{else}}
     <tr><td>Datum izdavanja računa:</td><td>{{date .IssueDate}}</td></tr>
     <tr><td>Mesto izdavanja računa:</td><td>{{.IssuePlace}}</td></tr>
@@ -197,7 +201,7 @@
   <div class="spec">
     <h2>Specifikacija poreza</h2>
     <table>
-      <tr><th>{{if .IsOffer}}Broj ponude{{else}}Broj računa{{end}}</th><th>Iznos</th><th>Osnovica 20%</th><th>PDV 20%</th><th>Osnovica 10%</th><th>PDV 10%</th><th>Bez PDV</th></tr>
+      <tr><th>{{if .IsOffer}}Broj ponude{{else if .IsProforma}}Broj profakture{{else}}Broj računa{{end}}</th><th>Iznos</th><th>Osnovica 20%</th><th>PDV 20%</th><th>Osnovica 10%</th><th>PDV 10%</th><th>Bez PDV</th></tr>
       <tr>
         <td>{{.Number}}</td>
         <td class="num">{{money .Totals.Total}}</td>
@@ -261,7 +265,7 @@
 
 <div class="notes">
   {{if .Note}}<b>Napomena:</b> {{.Note}}<br>{{end}}
-  {{if .IsOffer}}Ponudu prihvatate potpisom ovlašćenog lica ispod ili potvrdom elektronskom poštom; na osnovu prihvaćene ponude izdajemo račun.<br>{{else}}Faktura je važeća bez pečata i potpisa.<br>{{end}}
+  {{if .IsOffer}}Ponudu prihvatate potpisom ovlašćenog lica ispod ili potvrdom elektronskom poštom; na osnovu prihvaćene ponude izdajemo račun.<br>{{else if .IsProforma}}Profaktura nije poreski dokument; po prijemu uplate izdajemo račun.<br>Profaktura je važeća bez pečata i potpisa.<br>{{else}}Faktura je važeća bez pečata i potpisa.<br>{{end}}
   {{if .VatExemptNote}}<b>Napomena o poreskom oslobođenju:</b> {{.VatExemptNote}}<br>{{end}}
 </div>
 

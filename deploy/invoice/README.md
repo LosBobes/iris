@@ -1,4 +1,4 @@
-# Vendor invoices and offers (`irisctl invoice`, `irisctl offer`)
+# Vendor invoices, proformas and offers (`irisctl invoice`, `irisctl proforma`, `irisctl offer`)
 
 `irisctl invoice` prints the sales invoice (račun) Pingwin Software issues to a
 client organization for Iris, as an A4 PDF in the layout of a classic Serbian
@@ -60,6 +60,19 @@ plus a **monthly subscription** that grows by a small fee per module:
 
 A test in `internal/invoice` fails when the base subscription or the
 extra-user price drift from `apps/web/src/components/home/PricingPlans.tsx`.
+
+## Proformas (`irisctl proforma`)
+
+`irisctl proforma` prints a profaktura (advance payment request) with the same
+flags as `irisctl invoice`. It keeps the payment slip (model 97 reference) but
+has no supply date, shows "Rok za uplatu" and notes that it is not a tax
+document and that the račun follows the payment. The output defaults to
+`profaktura-<broj>.pdf`.
+
+```bash
+go run ./cmd/irisctl proforma -seller ../deploy/invoice/seller.json \
+  -number 26-PF0001 -tenant cobanovic -modules osnovni -bill pretplata -discount 30
+```
 
 ## Offers (`irisctl offer`)
 

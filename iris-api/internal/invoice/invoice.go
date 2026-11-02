@@ -69,6 +69,9 @@ const (
 	KindInvoice Kind = "invoice"
 	// KindOffer is the ponuda: a priced proposal, valid until DueDate.
 	KindOffer Kind = "offer"
+	// KindProforma is the profaktura: an advance payment request, payable by
+	// DueDate. Nothing has been supplied yet, so SupplyDate is not printed.
+	KindProforma Kind = "proforma"
 )
 
 // Invoice is everything printed on the document. For an offer DueDate is
@@ -95,6 +98,20 @@ type Invoice struct {
 
 // IsOffer reports whether the document is a ponuda.
 func (inv Invoice) IsOffer() bool { return inv.Kind == KindOffer }
+
+// IsProforma reports whether the document is a profaktura.
+func (inv Invoice) IsProforma() bool { return inv.Kind == KindProforma }
+
+// Title is the document's name as printed in its heading.
+func (inv Invoice) Title() string {
+	switch inv.Kind {
+	case KindOffer:
+		return "Ponuda"
+	case KindProforma:
+		return "Profaktura"
+	}
+	return "Račun"
+}
 
 // vatExemptNote is printed when the seller is outside the VAT system.
 const vatExemptNote = "PDV nije obračunat na fakturi u skladu sa članom 33. Zakona o PDV-u."

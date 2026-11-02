@@ -28,6 +28,11 @@ func runInvoice(ctx context.Context, args []string) error {
 	return runDocument(ctx, invoice.KindInvoice, args)
 }
 
+// runProforma issues the vendor's advance payment request (profaktura).
+func runProforma(ctx context.Context, args []string) error {
+	return runDocument(ctx, invoice.KindProforma, args)
+}
+
 // runOffer issues the vendor's offer (ponuda) to a prospective client.
 func runOffer(ctx context.Context, args []string) error {
 	return runDocument(ctx, invoice.KindOffer, args)
@@ -39,8 +44,11 @@ func runOffer(ctx context.Context, args []string) error {
 func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 	offer := kind == invoice.KindOffer
 	name, noun, prefix := "invoice", "računa", "racun-"
-	if offer {
+	switch kind {
+	case invoice.KindOffer:
 		name, noun, prefix = "offer", "ponude", "ponuda-"
+	case invoice.KindProforma:
+		name, noun, prefix = "proforma", "profakture", "profaktura-"
 	}
 	cmd := flag.NewFlagSet(name, flag.ExitOnError)
 	sellerPath := cmd.String("seller", os.Getenv(invoiceSellerEnv), "JSON sa podacima prodavca (ili "+invoiceSellerEnv+")")
@@ -210,7 +218,9 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		return err
 	}
 	total := inv.Compute().Total
-	if offer {
+	if kind == invoice.KindProforma {
+		fmt.Printf("Profaktura %s za %s: %s RSD, rok za uplatu %s → %s\n", inv.Number, inv.Buyer.Name, invoice.FormatMoney(total), inv.DueDate, path)
+	} else if offer {
 		fmt.Printf("Ponuda %s za %s: %s RSD, važi do %s → %s\n", inv.Number, inv.Buyer.Name, invoice.FormatMoney(total), inv.DueDate, path)
 	} else {
 		fmt.Printf("Račun %s za %s: %s RSD, valuta %s → %s\n", inv.Number, inv.Buyer.Name, invoice.FormatMoney(total), inv.DueDate, path)
