@@ -95,6 +95,7 @@ iris-api/
 | `DATABASE_PATH` | SQLite database path. Docker uses `/data/iris.db`. | `./data/iris.db` outside production |
 | `IRIS_DB_PATH` | Legacy SQLite database path fallback when `DATABASE_PATH` is empty. | empty |
 | `IRIS_ENV` | Runtime environment. `production` requires an explicit database path, sets `Secure` cookies and turns off the dev-only localhost CORS fallback. | `development` |
+| `IRIS_SECURE_COOKIES` | Overrides the `Secure` flag on session cookies: `false` turns it off, `true` turns it on. Empty follows `IRIS_ENV` (on in production). Set `false` only for a production install served over plain `http://` on a LAN (browsers drop Secure cookies on http, so sign-in fails); see `deploy/README.md`. | empty |
 | `IRIS_SESSION_SECRET` | Unused (reserved). Session tokens are random and stored hashed, so nothing is signed; a value left by older deployments is accepted and ignored. | empty |
 | `IRIS_ALLOWED_ORIGINS` | Comma-separated CORS origins. Empty allows local dev origins. | empty |
 | `IRIS_WEB_DIR` | Static web build directory for SPA fallback. | empty |

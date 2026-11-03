@@ -95,7 +95,7 @@ func main() {
 	server := api.NewServer(persistence, api.Config{
 		AllowedOrigins:    splitCSV(os.Getenv("IRIS_ALLOWED_ORIGINS")),
 		SessionCookieName: "iris_session",
-		SecureCookies:     env == "production",
+		SecureCookies:     secureCookiesFromEnv(env),
 		Production:        env == "production",
 		WebDir:            os.Getenv("IRIS_WEB_DIR"),
 		Release:           os.Getenv("IRIS_RELEASE"),
@@ -177,6 +177,22 @@ func databasePathFromEnv(env string) (string, bool) {
 		return "", false
 	}
 	return defaultDatabasePath, false
+}
+
+// secureCookiesFromEnv decides whether session cookies carry the Secure flag.
+// Production defaults to Secure, but browsers refuse to store a Secure cookie
+// over plain http on anything except localhost, so an on-premises install
+// reached as http://<lan-ip>/ could never sign in. IRIS_SECURE_COOKIES=false
+// turns the flag off for that case only; every other production safeguard
+// (demo-login refusal, no localhost CORS fallback) stays on.
+func secureCookiesFromEnv(env string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("IRIS_SECURE_COOKIES"))) {
+	case "false", "0", "no", "off":
+		return false
+	case "true", "1", "yes", "on":
+		return true
+	}
+	return env == "production"
 }
 
 func getenv(name string, fallback string) string {

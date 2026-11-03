@@ -11,6 +11,38 @@
 # Build context is the repository root (..), one level up from this file.
 
 services:
+  db:
+    # PostgreSQL, opt-in: starts only with the "postgres" profile, switched on
+    # by COMPOSE_PROFILES=postgres in the deploy directory's .env (README,
+    # "PostgreSQL"). Without it the backend keeps using SQLite as before.
+    profiles: ["postgres"]
+    # Same pin as docker-compose.prod.yml, so a pg_dump from the Hetzner box
+    # restores here unchanged. Debian-based (not -alpine) for the ICU "nocase"
+    # collation. Do NOT move to Postgres 18: its image keeps data under a
+    # different path than the volume mounted below. See deploy/POSTGRES.md.
+    image: "postgres:16.15"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "iris"
+      POSTGRES_USER: "iris"
+      # Not `:?`: compose interpolates the whole file before filtering by
+      # profile, so a required variable would break SQLite installs too.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-}"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    # Internal only: never published to the host or the LAN.
+    expose:
+      - "5432"
+    volumes:
+      # A named volume (inside Docker Desktop's WSL2 disk), not a bind mount
+      # to a Windows folder: Postgres needs Linux file permissions and fsync.
+      - iris_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iris -d iris"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
   backend:
     image: ghcr.io/losbobes/iris-backend:latest
     build:
@@ -19,7 +51,17 @@ services:
     restart: unless-stopped
     environment:
       IRIS_ENV: "${IRIS_ENV:-production}"
+      # Empty means SQLite at DATABASE_PATH. With the postgres profile on, set
+      # it in .env to postgres://iris:<POSTGRES_PASSWORD>@db:5432/iris?sslmode=disable
+      # (no depends_on for db, because of the profile: if Postgres is not up
+      # yet the API exits and `restart: unless-stopped` retries it).
+      DATABASE_URL: "${DATABASE_URL:-}"
       DATABASE_PATH: "/data/iris.db"
+      # The LAN is reached over plain http://<server>/, and browsers drop
+      # Secure cookies on http (except localhost), so sign-in would silently
+      # fail. Set IRIS_SECURE_COOKIES=false in .env for a plain-http LAN
+      # install; leave it empty when the stack is served over HTTPS.
+      IRIS_SECURE_COOKIES: "${IRIS_SECURE_COOKIES:-}"
       # Same-origin: the browser hits nginx, which proxies /api/ to this
       # service, so no cross-origin allow-list is required.
       IRIS_ALLOWED_ORIGINS: "${IRIS_ALLOWED_ORIGINS:-}"
@@ -33,7 +75,8 @@ services:
       # SENTRY_DSN: "${SENTRY_DSN:-}"
       # Optional release identifier shown in Sentry (e.g. the git sha or tag).
       IRIS_RELEASE: "${IRIS_RELEASE:-}"
-      # SQLite backups (Backoffice "Sistem" tab). Copies go to /data/backups on
+      # SQLite backups (ignored with DATABASE_URL; on Postgres use backup.ps1)
+      # (Backoffice "Sistem" tab). Copies go to /data/backups on
       # the data volume; empty values take the defaults (keep 14, warn after
       # 24 h). IRIS_BACKUP_INTERVAL (e.g. 24h) turns on automatic copies.
       IRIS_BACKUP_DIR: "${IRIS_BACKUP_DIR:-}"
@@ -78,3 +121,4 @@ services:
 
 volumes:
   iris_sqlite_data:
+  iris_postgres_data:
