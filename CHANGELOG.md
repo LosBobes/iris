@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.27.1 — 2026-11-03
+
+### Patch
+
+- deploy/VM.md: Windows Server 2012 / 2012 R2 variant and a remote-access section (Remote Desktop over Tailscale, with the Iris VM as the gateway on 2012).
+
 ## 2.27.0 — 2026-11-03
 
 ### Minor
