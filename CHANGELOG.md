@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.27.0 — 2026-11-03
+
+### Minor
+
+- On-premises install in a Hyper-V Ubuntu VM (works on Windows Server 2016-2025): step-by-step guide and bash scripts for nightly backups, updates and restoring the Hetzner database.
+
 ## 2.26.0 — 2026-11-03
 
 ### Minor
