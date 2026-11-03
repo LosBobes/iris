@@ -5,14 +5,17 @@ import (
 	"strings"
 )
 
-// Iris is sold as a one-time licence per module plus a monthly subscription
-// that grows by a small fee for every module the organization runs. The
-// licence also covers onboarding. Prices are whole dinars and final: the
-// provider is outside the VAT system.
+// Iris is sold as a one-time licence (the base system plus one per module)
+// and a monthly subscription that grows by a small fee for every module the
+// organization runs. The licence also covers onboarding. An organization can
+// run Iris on its own server (on-premises): instead of the subscription it pays
+// once what OnPremYears of the annual subscription cost, which covers the
+// installation and that many years of updates and support. Prices are whole dinars
+// and final: the provider is outside the VAT system.
 //
-// BaseMonthly and ExtraUserMonthly mirror the landing page's price list
-// (apps/web/src/lib/home/pricing.json); TestPricesMatchLandingPage
-// fails when they drift.
+// BaseMonthly, BaseLicence, ExtraUserMonthly and the field day mirror
+// the landing page's price list (apps/web/src/lib/home/pricing.json);
+// TestPricesMatchLandingPage fails when they drift.
 
 // Billing is how the subscription is invoiced.
 type Billing string
@@ -25,7 +28,10 @@ const (
 
 const (
 	// BaseMonthly is the subscription without modules (the Osnovni plan).
-	BaseMonthly int64 = 3900
+	BaseMonthly int64 = 3375
+	// BaseLicence is the one-time licence of the base system with onboarding
+	// (the Osnovni plan's onboarding).
+	BaseLicence int64 = 71625
 	// BaseUsers is how many users the subscription includes.
 	BaseUsers = 5
 	// ExtraUserMonthly is the price of a user over BaseUsers.
@@ -34,6 +40,11 @@ const (
 	DefaultModuleLicence int64 = 12500
 	// DefaultModuleMonthly is what each module adds to the monthly subscription.
 	DefaultModuleMonthly int64 = 300
+	// OnPremYears is how many years of the annual subscription an
+	// on-premises installation costs (and covers with updates and support).
+	OnPremYears = 3
+	// FieldDay is a day of work at the client's site (travel billed apart).
+	FieldDay int64 = 15000
 	// annualMonths is what a year costs in months (ten months for twelve).
 	annualMonths = 10
 )
@@ -101,33 +112,64 @@ func ParseModules(spec string) ([]Module, error) {
 // PricingOptions selects the generated lines.
 type PricingOptions struct {
 	Modules []Module
-	// Licence adds one licence line per module; Subscription adds the
-	// subscription for Billing.
+	// Licence adds the base system licence and one line per module;
+	// Subscription adds the subscription for Billing.
 	Licence, Subscription bool
 	Billing               Billing
 	Period                string // e.g. "oktobar 2026", appended to the subscription
 	ExtraUsers            int
 	ModuleLicence         int64 // RSD per module, one-time
 	ModuleMonthly         int64 // RSD per module and month
+	// OnPremises replaces the subscription with the installation on the
+	// client's server, priced as OnPremYears of the annual subscription.
+	OnPremises bool
+	// FieldDays bills days at the client's site with the licence.
+	FieldDays int
 }
 
-// PricingItems returns the licence lines (one per module) and the
-// subscription: the base line, one line for all modules (quantity = module
-// count) and extra users.
+// PricingItems returns the licence lines (the base system, one per module and
+// field days) and the subscription: the base line, one line for all modules
+// (quantity = module count) and extra users; or, on-premises, one line priced
+// as OnPremYears of that subscription billed annually.
 func PricingItems(opts PricingOptions) ([]Item, error) {
 	var items []Item
 	if opts.Licence {
-		if len(opts.Modules) == 0 {
-			return nil, fmt.Errorf("licenca se naplaćuje po modulu: zadajte -modules")
-		}
+		items = append(items, Item{
+			Code: "IR-LOSN", Name: "Iris - licenca za osnovni sistem, sa uvođenjem i obukom (jednokratno)",
+			Unit: "KOM", Quantity: 1, Price: float64(BaseLicence),
+		})
 		for _, module := range opts.Modules {
 			items = append(items, Item{
 				Code: "IR-L" + module.Code, Name: "Iris - licenca za modul " + module.Name + ", sa uvođenjem (jednokratno)",
 				Unit: "KOM", Quantity: 1, Price: float64(opts.ModuleLicence),
 			})
 		}
+		if opts.FieldDays > 0 {
+			items = append(items, Item{
+				Code: "IR-TER", Name: "Dan na terenu: instalacija i obuka kod kupca (bez troškova puta)",
+				Unit: "DAN", Quantity: float64(opts.FieldDays), Price: float64(FieldDay),
+			})
+		}
 	}
 	if !opts.Subscription {
+		return items, nil
+	}
+	if opts.OnPremises {
+		// Priced as the annual subscription times OnPremYears, whatever the billing.
+		annual := opts
+		annual.Licence, annual.OnPremises, annual.Billing, annual.Period = false, false, BillingAnnual, ""
+		subscription, err := PricingItems(annual)
+		if err != nil {
+			return nil, err
+		}
+		var perYear float64
+		for _, item := range subscription {
+			perYear += item.Quantity * item.Price
+		}
+		items = append(items, Item{
+			Code: "IR-ONP", Name: fmt.Sprintf("Iris - instalacija na serveru kupca (on-premises): Linux server, baza PostgreSQL, HTTPS, automatski backup i nadzor, uputstvo za oporavak; ažuriranja i podrška %d godine (vrednost %d godišnje pretplate)", OnPremYears, OnPremYears),
+			Unit: "KOM", Quantity: 1, Price: perYear * OnPremYears,
+		})
 		return items, nil
 	}
 

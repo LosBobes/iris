@@ -1,4 +1,4 @@
-# Vendor invoices and offers (`irisctl invoice`, `irisctl offer`)
+# Vendor invoices, offers and proformas (`irisctl invoice`, `irisctl offer`, `irisctl proforma`)
 
 `irisctl invoice` prints the sales invoice (račun) Pingwin Software issues to a
 client organization for Iris, as an A4 PDF in the layout of a classic Serbian
@@ -35,15 +35,22 @@ go run ./cmd/irisctl invoice -seller ../deploy/invoice/seller.json \
 
 ## Licences, subscription and discounts
 
-Iris is billed as a one-time **licence per module** (it covers onboarding)
-plus a **monthly subscription** that grows by a small fee per module:
+Iris is billed as a one-time **licence** for the base system and each module
+(it covers onboarding) plus a **monthly subscription** that grows by a small
+fee per module. A client can also run Iris **on its own server** (on-premises):
+instead of the subscription it pays once what three years of the annual
+subscription cost, which covers the installation and three years of updates
+and support.
 
 | Line | Default |
 | --- | --- |
+| Licence, base system, one-time (`IR-LOSN`) | 71.625 RSD (Osnovni onboarding on the landing page) |
 | Licence per module, one-time (`IR-L…`, one line per module) | 12.500 RSD (`-licence-price`) |
-| Subscription, base system (`IR-PRE`) | 3.900 RSD a month (Osnovni on the landing page) |
+| Subscription, base system (`IR-PRE`) | 3.375 RSD a month (Osnovni on the landing page) |
 | Subscription, per module (`IR-PMO`, quantity = number of modules) | 300 RSD a month (`-module-fee`) |
 | Extra user over 5 (`IR-KOR`) | 490 RSD a month |
+| On-premises installation, replaces the subscription (`IR-ONP`, `-onprem`) | 3 × the annual subscription (Osnovni: 101.250 RSD) |
+| Field day, with the licence (`IR-TER`, `-field-days N`) | 15.000 RSD a day, travel apart |
 
 - `-modules magacin,procesi,efakture,eotpremnice,prisustvo,planiranje` picks
   the client's modules; `osnovni`, `proizvodnja` and `pro` are shortcuts for
@@ -55,11 +62,35 @@ plus a **monthly subscription** that grows by a small fee per module:
 - `-period "oktobar 2026"` is appended to the base line.
 - `-extra-users N` adds users over the 5 included.
 - `-discount N` is the client's rabat in percent. It applies to every line
-  without its own rabat, e.g. `-discount 30` for Grafika Čobanović.
+  without its own rabat, e.g. `-discount 20` for Grafika Čobanović.
 - `-item` lines can be added next to these (extra work, field days).
 
-A test in `internal/invoice` fails when the base subscription or the
-extra-user price drift from `apps/web/src/components/home/PricingPlans.tsx`.
+A test in `internal/invoice` fails when the base subscription and licence,
+the extra-user price or the on-premises prices drift from
+`apps/web/src/lib/home/pricing.json` (the landing page price list). Another
+pins the Grafika Čobanović numbers below.
+
+## Proformas (`irisctl proforma`)
+
+`irisctl proforma` prints a profaktura (predračun) for advance payment: the
+same layout and flags as the invoice, with "Rok za uplatu" (`-due` or
+`-due-days`, default 8) and the payment slip with the model 97 reference, but
+no supply date. It notes that it is not a tax document and that the račun
+follows the payment.
+
+Grafika Čobanović (Osnovni, rabat 20%):
+
+```bash
+# 1) licence + first month: 57.300 + 2.700 = 60.000 RSD
+go run ./cmd/irisctl proforma -seller ../deploy/invoice/seller.json \
+  -number 26-PF0001 -tenant cobanovic -modules osnovni -bill oba -period "novembar 2026" -discount 20
+# 2) licence + a year (10 months for 12): 57.300 + 27.000 = 84.300 RSD
+go run ./cmd/irisctl proforma -seller ../deploy/invoice/seller.json \
+  -number 26-PF0002 -tenant cobanovic -modules osnovni -bill oba -billing godisnje -period "2026/2027" -discount 20
+# 3) on-premises: licence + three years of subscription: 57.300 + 81.000 = 138.300 RSD
+go run ./cmd/irisctl proforma -seller ../deploy/invoice/seller.json \
+  -number 26-PF0003 -tenant cobanovic -modules osnovni -bill oba -onprem -discount 20
+```
 
 ## Offers (`irisctl offer`)
 
