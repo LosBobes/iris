@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.26.0 — 2026-11-03
+
+### Minor
+
+- On-premises Windows install: PostgreSQL in the deploy stack, nightly pg_dump backups, a restore script for moving the Hetzner database, and IRIS_SECURE_COOKIES for plain-http LAN sign-in.
+
 ## 2.25.0 — 2026-11-03
 
 ### Minor
