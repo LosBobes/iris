@@ -202,7 +202,8 @@ Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
   the user's other sessions; mutating requests with a foreign `Origin` get 403.
   `IRIS_SESSION_SECRET` is unused (ignored if set). Cookies are `Secure` in
   production unless `IRIS_SECURE_COOKIES=false` (plain-http LAN installs: the
-  on-premises Windows/Docker Desktop stack in `deploy/README.md`).
+  on-premises stacks: Docker Desktop in `deploy/README.md`, Hyper-V VM in
+  `deploy/VM.md`).
 - **Multi-tenancy:** login takes `{ orgSlug, username, password }`; store queries
   are scoped by the tenant resolved from the session (`tenantFromContext`), and a
   missing tenant returns `ErrNoTenant`. `irisctl create-user` / `import-csv --apply`

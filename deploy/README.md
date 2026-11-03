@@ -1,5 +1,10 @@
 # Iris on-premises deployment (Windows Server, Docker Desktop)
 
+> **Which guide?** This one runs Docker Desktop directly on Windows Server
+> 2022 or newer. On Windows Server 2019 or older (no WSL2), or whenever you
+> prefer Docker to run as a proper service with no signed-in user, follow
+> **[VM.md](VM.md)**: an Ubuntu VM in Hyper-V with the same compose file.
+
 This runs Iris on a client's own Windows Server as Linux containers under
 **Docker Desktop** (WSL2 backend). The app is reachable only on the client's
 LAN, at `http://<server>/`. Updates are automatic: you merge to `main`, CI
@@ -28,7 +33,7 @@ Files in this folder that go to the server:
 | File | Purpose |
 | --- | --- |
 | `docker-compose.yml` | The stack |
-| `windows.env.example` | Template for the server's `.env` |
+| `onprem.env.example` | Template for the server's `.env` |
 | `update.ps1` | Pull new images and recreate containers (nightly task) |
 | `backup.ps1` | `pg_dump` into `backups\`, keep 14, copy off the machine (nightly task) |
 | `restore.ps1` | Load a dump into the database (the Hetzner cutover, or a backup) |
@@ -103,7 +108,7 @@ escaping in the connection string):
 ```powershell
 cd C:\apps\iris
 $pw = -join ((1..24) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
-(Get-Content windows.env.example) -replace '<hex-password>', $pw | Set-Content -Encoding ascii .env
+(Get-Content onprem.env.example) -replace '<hex-password>', $pw | Set-Content -Encoding ascii .env
 ```
 
 Use `Set-Content -Encoding ascii`, not `>`: Windows PowerShell's `>` writes
