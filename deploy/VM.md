@@ -2,8 +2,10 @@
 
 This runs Iris on the client's Windows Server inside a small **Ubuntu Server
 VM** (Hyper-V), with Docker Engine running the same `docker-compose.yml` as
-every other install. It works on **Windows Server 2016, 2019, 2022 and 2025**,
-and needs no signed-in user: the VM starts with the host, Docker starts with
+every other install. It works on **Windows Server 2016, 2019, 2022 and 2025**
+(2012 and 2012 R2 with the changes in
+[Windows Server 2012 / 2012 R2](#windows-server-2012--2012-r2)), and needs no
+signed-in user: the VM starts with the host, Docker starts with
 the VM, the containers start with Docker.
 
 ```
@@ -28,6 +30,32 @@ before), **B. cutover** (about 15 minutes of downtime), **C. after**.
 
 ---
 
+## Windows Server 2012 / 2012 R2
+
+It works, with three changes. **Weigh it first:** Microsoft ended support for
+2012 and 2012 R2 in October 2023, and the paid extended security updates
+ended in October 2026, so the host no longer gets security fixes. A separate
+small machine running Ubuntu directly (skip the Hyper-V steps, start at A7)
+is the safer home for Iris. If it has to be this server:
+
+1. **Creating the VM (A4) differs.** Plain 2012 has only Generation 1 VMs;
+   2012 R2 has Generation 2 but no Secure Boot template for Linux (that came
+   with 2016), so Secure Boot is switched off. Both variants are in A4.
+2. **Tailscale does not run on the host.** The current client needs Windows
+   10 or Server 2016 or newer
+   ([Tailscale](https://tailscale.com/docs/reference/troubleshooting/windows/supported-windows-versions)).
+   The Iris VM becomes the gateway instead: it advertises a route to the
+   host, and you reach the host's Remote Desktop through it (A7b).
+3. **The first steps happen on site** (or by their IT person): until the VM
+   exists there is no Tailscale gateway. Enable RDP, install Hyper-V and
+   create the VM there; from A7b on everything works remotely. An always-on
+   Windows 10/11 PC in the shop can serve as a temporary gateway with the
+   same route (A7b).
+
+Everything else (Hyper-V role, switch, address, Docker, backups, cutover) is
+the same. Download the Ubuntu ISO on another PC and copy it over: the old
+browser on 2012 may not manage the download.
+
 ## A. Prepare
 
 ### A1. Check the host
@@ -35,8 +63,12 @@ before), **B. cutover** (about 15 minutes of downtime), **C. after**.
 On the Windows Server, in PowerShell:
 
 ```powershell
+winver
 (Get-CimInstance Win32_ComputerSystem).Model
 ```
+
+On 2012 or 2012 R2, read
+[Windows Server 2012 / 2012 R2](#windows-server-2012--2012-r2) first.
 
 If it prints `Virtual Machine`, the Windows Server is itself a VM: Hyper-V
 then needs nested virtualization enabled by whoever runs that host. Ask
@@ -93,6 +125,29 @@ required: Ubuntu does not boot with the default (Windows-only) template.
 
 Open the console: Hyper-V Manager → `iris` → Connect.
 
+**Windows Server 2012 R2** (Generation 2, Secure Boot off; there is no Linux
+template):
+
+```powershell
+New-VM -Name iris -Generation 2 -MemoryStartupBytes 4GB -SwitchName "LAN" -NewVHDPath "C:\Hyper-V\iris.vhdx" -NewVHDSizeBytes 60GB
+Set-VM -Name iris -ProcessorCount 2 -StaticMemory -AutomaticStartAction Start -AutomaticStartDelay 60 -AutomaticStopAction ShutDown
+Set-VMFirmware -VMName iris -EnableSecureBoot Off
+Add-VMDvdDrive -VMName iris -Path "C:\ISO\ubuntu-24.04-live-server-amd64.iso"
+Set-VMFirmware -VMName iris -FirstBootDevice (Get-VMDvdDrive -VMName iris)
+Start-VM -Name iris
+```
+
+**Windows Server 2012** (not R2; Generation 1 only, so no `-Generation` and
+no `Set-VMFirmware`, which do not exist there). A Generation 1 VM already has
+a DVD drive and boots from it first:
+
+```powershell
+New-VM -Name iris -MemoryStartupBytes 4GB -SwitchName "LAN" -NewVHDPath "C:\Hyper-V\iris.vhdx" -NewVHDSizeBytes 60GB
+Set-VM -Name iris -ProcessorCount 2 -StaticMemory -AutomaticStartAction Start -AutomaticStartDelay 60 -AutomaticStopAction ShutDown
+Set-VMDvdDrive -VMName iris -Path "C:\ISO\ubuntu-24.04-live-server-amd64.iso"
+Start-VM -Name iris
+```
+
 ### A5. Install Ubuntu
 
 Go through the installer with the defaults, except:
@@ -110,7 +165,8 @@ Go through the installer with the defaults, except:
   version does not work with this setup.
 
 Reboot when asked. In Hyper-V Manager, if the installer ISO boots again, remove
-it: `Get-VMDvdDrive -VMName iris | Remove-VMDvdDrive`.
+it: `Get-VMDvdDrive -VMName iris | Remove-VMDvdDrive` (on plain 2012, eject it
+instead: `Set-VMDvdDrive -VMName iris -Path $null`).
 
 ### A6. Pin the address
 
@@ -152,6 +208,66 @@ to also let it reboot for kernel updates at a quiet hour, set in
 Unattended-Upgrade::Automatic-Reboot "true";
 Unattended-Upgrade::Automatic-Reboot-Time "04:30";
 ```
+
+### A7b. Remote access (Remote Desktop and Tailscale)
+
+For maintenance from outside the shop. **Never forward port 3389 (RDP) on
+their router**: exposed RDP is attacked within hours. Outside access goes
+through [Tailscale](https://tailscale.com), a private network between your
+devices that only makes outbound connections. The free plan is enough.
+
+**Remote Desktop on the host** (once, on site or by their IT, any version
+including 2012):
+
+```powershell
+Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
+Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 1
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+```
+
+Use a named admin account for yourself, not a shared `Administrator`.
+
+**Tailscale on the VM** (every version):
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+Open the printed link and sign in. In the Tailscale admin console, **Machines
+→ the VM → Disable key expiry**, or it drops off after about 180 days. From
+then on: `ssh iris@iris` (MagicDNS name) or `ssh iris@100.x.y.z`, and Iris
+itself at `http://100.x.y.z/` for support.
+
+**Reaching the host's Remote Desktop:**
+
+- **Server 2016 or newer:** install Tailscale on the host too
+  (`tailscale.com/download`). Sign in, or let their IT connect it with a
+  one-time auth key (admin console → Settings → Keys) in an admin PowerShell:
+  `& "C:\Program Files\Tailscale\tailscale.exe" up --authkey=tskey-auth-... --unattended`.
+  `--unattended` keeps it connected with nobody signed in. Disable key expiry
+  for it as well, then `mstsc /v:<server-tailscale-name>`.
+- **Server 2012 / 2012 R2:** the VM forwards to the host (a Tailscale
+  *subnet router*). On the VM:
+
+  ```bash
+  echo 'net.ipv4.ip_forward = 1' | sudo tee /etc/sysctl.d/99-tailscale.conf && sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
+  sudo tailscale up --advertise-routes=<host-lan-ip>/32
+  ```
+
+  Approve the route in the admin console (**Machines → the VM → Edit route
+  settings**). `/32` exposes only the host, not the shop's whole network.
+  Then, from your laptop with Tailscale on: `mstsc /v:<host-lan-ip>`. On a
+  Linux laptop, accept routes first: `sudo tailscale set --accept-routes`.
+  Before the VM exists, an always-on Windows 10/11 PC in the shop can do the
+  same job: install Tailscale there and run
+  `& "C:\Program Files\Tailscale\tailscale.exe" up --advertise-routes=<host-lan-ip>/32 --unattended`.
+
+If RDP works on the LAN but not over Tailscale, the firewall rule is limited
+to some network profiles: re-run
+`Enable-NetFirewallRule -DisplayGroup "Remote Desktop"` on the host. Keep a
+list of who has access, and remove devices from the Tailscale console when
+they are no longer needed.
 
 ### A8. Copy the files
 
