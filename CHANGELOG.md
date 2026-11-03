@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.25.0 — 2026-11-03
+
+### Minor
+
+- irisctl proforma issues a profaktura for advance payment; the price list gets a base-system licence (Osnovni 3.375 RSD a month, 71.625 RSD onboarding) and an on-premises installation priced as three years of subscription.
+
 ## 2.24.1 — 2026-11-01
 
 ### Patch
