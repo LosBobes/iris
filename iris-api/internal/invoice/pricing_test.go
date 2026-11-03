@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -51,16 +52,53 @@ func TestParseModules(t *testing.T) {
 	}
 }
 
-func TestLicenceIsOneLinePerModule(t *testing.T) {
+func TestLicenceIsBasePlusOneLinePerModule(t *testing.T) {
 	items := pricing(t, "pro", PricingOptions{Licence: true})
-	if len(items) != 6 || lineSum(items) != 6*DefaultModuleLicence {
+	if len(items) != 7 || lineSum(items) != BaseLicence+6*DefaultModuleLicence {
 		t.Fatalf("licence lines = %d, sum %d", len(items), lineSum(items))
 	}
-	if items[0].Code != "IR-LMAG" || items[5].Code != "IR-LPLN" || items[0].Unit != "KOM" {
+	if items[0].Code != "IR-LOSN" || items[1].Code != "IR-LMAG" || items[6].Code != "IR-LPLN" || items[1].Unit != "KOM" {
 		t.Errorf("licence lines: %+v", items)
 	}
-	if _, err := PricingItems(PricingOptions{Licence: true}); err == nil {
-		t.Error("expected an error for a licence without modules")
+	if items := pricing(t, "osnovni", PricingOptions{Licence: true}); len(items) != 1 || lineSum(items) != BaseLicence {
+		t.Errorf("osnovni licence: %+v", items)
+	}
+}
+
+func TestOnPremisesIsThreeYearsOfSubscription(t *testing.T) {
+	items := pricing(t, "osnovni", PricingOptions{Licence: true, Subscription: true, OnPremises: true, FieldDays: 2})
+	want := BaseLicence + 2*FieldDay + OnPremYears*annualMonths*BaseMonthly
+	if got := lineSum(items); got != want || items[len(items)-1].Code != "IR-ONP" {
+		t.Fatalf("on-premises sum %d, want %d: %+v", got, want, items)
+	}
+	pro := pricing(t, "pro", PricingOptions{Subscription: true, OnPremises: true, Billing: BillingMonthly, ExtraUsers: 1})
+	if len(pro) != 1 || lineSum(pro) != OnPremYears*annualMonths*(BaseMonthly+6*DefaultModuleMonthly+ExtraUserMonthly) {
+		t.Errorf("pro on-premises: %+v", pro)
+	}
+}
+
+// TestCobanovicProforma pins the agreed Grafika Čobanović numbers: with the
+// 20% rabat the base licence and the first month come to 60.000 RSD, the
+// month alone to 2.700 RSD, a year to 27.000 RSD and the on-premises
+// installation (three years of subscription) with the licence to 138.300 RSD.
+func TestCobanovicProforma(t *testing.T) {
+	discounted := func(opts PricingOptions) int64 {
+		items := pricing(t, "osnovni", opts)
+		ApplyDiscount(items, 20)
+		return lineSum(items)
+	}
+	for name, c := range map[string]struct {
+		opts PricingOptions
+		want int64
+	}{
+		"first month": {PricingOptions{Licence: true, Subscription: true}, 60000},
+		"month":       {PricingOptions{Subscription: true}, 2700},
+		"year":        {PricingOptions{Subscription: true, Billing: BillingAnnual}, 27000},
+		"on-premises": {PricingOptions{Licence: true, Subscription: true, OnPremises: true}, 60000 - 2700 + 3*27000},
+	} {
+		if got := discounted(c.opts); got != c.want {
+			t.Errorf("%s: %d RSD, want %d", name, got, c.want)
+		}
 	}
 }
 
@@ -70,10 +108,10 @@ func TestSubscriptionGrowsByModule(t *testing.T) {
 		billing Billing
 		want    int64
 	}{
-		{"osnovni", BillingMonthly, 3900},
-		{"pro", BillingMonthly, 3900 + 6*300},
-		{"magacin,procesi", BillingQuarterly, 3 * (3900 + 2*300)},
-		{"pro", BillingAnnual, 10 * (3900 + 6*300)},
+		{"osnovni", BillingMonthly, BaseMonthly},
+		{"pro", BillingMonthly, BaseMonthly + 6*300},
+		{"magacin,procesi", BillingQuarterly, 3 * (BaseMonthly + 2*300)},
+		{"pro", BillingAnnual, 10 * (BaseMonthly + 6*300)},
 	}
 	for _, c := range cases {
 		items := pricing(t, c.spec, PricingOptions{Subscription: true, Billing: c.billing})
@@ -112,10 +150,16 @@ func TestPricesMatchLandingPage(t *testing.T) {
 	}
 	var pricing struct {
 		Plans []struct {
-			Name    string `json:"name"`
-			Monthly int64  `json:"monthly"`
-			Users   int    `json:"users"`
+			Name       string `json:"name"`
+			Monthly    int64  `json:"monthly"`
+			Annual     int64  `json:"annual"`
+			Users      int    `json:"users"`
+			Onboarding int64  `json:"onboarding"`
 		} `json:"plans"`
+		Changes []struct {
+			Label string `json:"label"`
+			Price string `json:"price"`
+		} `json:"changes"`
 		Terms string `json:"terms"`
 	}
 	if err := json.Unmarshal(src, &pricing); err != nil {
@@ -131,12 +175,29 @@ func TestPricesMatchLandingPage(t *testing.T) {
 			t.Errorf("Osnovni on the landing page = %d RSD for %d users, want %d RSD for %d users",
 				plan.Monthly, plan.Users, BaseMonthly, BaseUsers)
 		}
+		if plan.Annual != annualMonths*BaseMonthly || plan.Onboarding != BaseLicence {
+			t.Errorf("Osnovni on the landing page: annual %d, onboarding %d; want %d, %d",
+				plan.Annual, plan.Onboarding, annualMonths*BaseMonthly, BaseLicence)
+		}
 	}
 	if !found {
 		t.Error("no Osnovni plan on the landing page")
+	}
+	changes := map[string]string{}
+	for _, change := range pricing.Changes {
+		changes[change.Label] = change.Price
+	}
+	if got := changes["Instalacija na vašem serveru (on-premises)"]; !strings.Contains(got, strconv.Itoa(OnPremYears)+" godine pretplate") {
+		t.Errorf("on-premises on the landing page = %q, want the price of %d years of subscription", got, OnPremYears)
+	}
+	if got := changes["Dan na terenu"]; !strings.HasPrefix(got, wholeRSD(FieldDay)) {
+		t.Errorf("field day on the landing page = %q, want %d RSD", got, FieldDay)
 	}
 	extra := regexp.MustCompile(`Dodatni korisnik je (\d+) RSD`).FindStringSubmatch(pricing.Terms)
 	if extra == nil || extra[1] != strconv.FormatInt(ExtraUserMonthly, 10) {
 		t.Errorf("extra user price on the landing page = %q, want %d", extra, ExtraUserMonthly)
 	}
 }
+
+// wholeRSD prints dinars as the price list does: 120000 -> "120.000 RSD".
+func wholeRSD(rsd int64) string { return groupThousands(rsd) + " RSD" }

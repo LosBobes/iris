@@ -33,14 +33,22 @@ func runOffer(ctx context.Context, args []string) error {
 	return runDocument(ctx, invoice.KindOffer, args)
 }
 
-// runDocument issues a račun or a ponuda as a PDF, or as HTML with -html. The
+// runProforma issues the vendor's profaktura (predračun) for advance payment.
+func runProforma(ctx context.Context, args []string) error {
+	return runDocument(ctx, invoice.KindProforma, args)
+}
+
+// runDocument issues a račun, a ponuda or a profaktura as a PDF, or as HTML with -html. The
 // buyer comes from flags or, with -tenant, from that organization's saved
 // seller identity (its legal name, address, PIB, MB).
 func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
-	offer := kind == invoice.KindOffer
+	offer, proforma := kind == invoice.KindOffer, kind == invoice.KindProforma
 	name, noun, prefix := "invoice", "računa", "racun-"
-	if offer {
+	switch {
+	case offer:
 		name, noun, prefix = "offer", "ponude", "ponuda-"
+	case proforma:
+		name, noun, prefix = "proforma", "profakture", "profaktura-"
 	}
 	cmd := flag.NewFlagSet(name, flag.ExitOnError)
 	sellerPath := cmd.String("seller", os.Getenv(invoiceSellerEnv), "JSON sa podacima prodavca (ili "+invoiceSellerEnv+")")
@@ -54,6 +62,10 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		paymentTerms = cmd.String("payment", "Po ispostavljenom računu, u roku od 8 dana", "način plaćanja")
 		deliveryTerms = cmd.String("delivery", "", "rok isporuke ili implementacije")
 		supplyDate = new(string)
+	} else if proforma {
+		dueDate = cmd.String("due", "", "rok za uplatu GGGG-MM-DD (podrazumevano datum + -due-days)")
+		dueDays = cmd.Int("due-days", 8, "rok za uplatu u danima kad -due nije zadat")
+		supplyDate, paymentTerms, deliveryTerms = new(string), new(string), new(string)
 	} else {
 		supplyDate = cmd.String("supply-date", "", "datum prometa GGGG-MM-DD (podrazumevano datum izdavanja)")
 		dueDate = cmd.String("due", "", "valuta plaćanja GGGG-MM-DD (podrazumevano datum + -due-days)")
@@ -86,6 +98,8 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 	extraUsers := cmd.Int("extra-users", 0, "broj dodatnih korisnika preko osnovnih")
 	licencePrice := cmd.Float64("licence-price", float64(invoice.DefaultModuleLicence), "jednokratna licenca po modulu, RSD")
 	moduleFee := cmd.Float64("module-fee", float64(invoice.DefaultModuleMonthly), "mesečni dodatak pretplate po modulu, RSD")
+	onPrem := cmd.Bool("onprem", false, "instalacija na serveru kupca (on-premises) umesto pretplate: cena 3 godine godišnje pretplate")
+	fieldDays := cmd.Int("field-days", 0, "broj dana na terenu uz licencu (bez troškova puta)")
 	discount := cmd.Float64("discount", 0, "rabat klijenta u % za sve stavke bez sopstvenog rabata")
 	var items stringList
 	cmd.Var(&items, "item", "stavka \"naziv;jm;količina;cena[;rabat%][;pdv%][;šifra]\" (ponovljivo)")
@@ -145,7 +159,7 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		}
 	}
 
-	if *modules != "" || *bill != "" {
+	if *modules != "" || *bill != "" || *onPrem || *fieldDays > 0 {
 		selected, err := invoice.ParseModules(*modules)
 		if err != nil {
 			return err
@@ -153,6 +167,7 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		opts := invoice.PricingOptions{
 			Modules: selected, Billing: invoice.Billing(*billing), Period: *period, ExtraUsers: *extraUsers,
 			ModuleLicence: int64(*licencePrice), ModuleMonthly: int64(*moduleFee),
+			OnPremises: *onPrem, FieldDays: *fieldDays,
 		}
 		switch *bill {
 		case "", "pretplata":
@@ -210,9 +225,12 @@ func runDocument(ctx context.Context, kind invoice.Kind, args []string) error {
 		return err
 	}
 	total := inv.Compute().Total
-	if offer {
+	switch {
+	case proforma:
+		fmt.Printf("Profaktura %s za %s: %s RSD, rok za uplatu %s → %s\n", inv.Number, inv.Buyer.Name, invoice.FormatMoney(total), inv.DueDate, path)
+	case offer:
 		fmt.Printf("Ponuda %s za %s: %s RSD, važi do %s → %s\n", inv.Number, inv.Buyer.Name, invoice.FormatMoney(total), inv.DueDate, path)
-	} else {
+	default:
 		fmt.Printf("Račun %s za %s: %s RSD, valuta %s → %s\n", inv.Number, inv.Buyer.Name, invoice.FormatMoney(total), inv.DueDate, path)
 	}
 	return nil

@@ -159,3 +159,22 @@ func TestRenderOfferHTML(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderProformaHTML(t *testing.T) {
+	proforma := testInvoice(false, Item{Name: "Iris pretplata", Unit: "MES", Quantity: 1, Price: 3375, DiscountPercent: 20})
+	proforma.Kind = KindProforma
+	html, err := RenderHTML(proforma)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Profaktura br. 26-PW0001", "Rok za uplatu:", "Broj profakture", "Poziv na broj", "UKUPAN IZNOS ZA UPLATU", "2.700,00", "nije poreski dokument", "(izdao)"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("proforma HTML is missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"Račun br.", "Datum prometa", "Faktura je važeća", "na fakturi"} {
+		if strings.Contains(html, unwanted) {
+			t.Errorf("proforma HTML must not contain %q", unwanted)
+		}
+	}
+}

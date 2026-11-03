@@ -64,7 +64,7 @@ func RenderHTML(inv Invoice) (string, error) {
 	}
 	if !inv.Seller.VatPayer {
 		data.VatExemptNote = vatExemptNote
-		if inv.IsOffer() {
+		if inv.IsOffer() || inv.IsProforma() {
 			data.VatExemptNote = offerVatExemptNote
 		}
 	}

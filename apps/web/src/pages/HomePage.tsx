@@ -131,7 +131,7 @@ const START_STEPS: Array<{ title: string; body: string }> = [
 const FAQ: FaqItem[] = [
   {
     q: "Koliko košta Iris?",
-    a: "Od 3.900 RSD mesečno za firmu do 5 korisnika, uz jednokratno uvođenje. Prvih 30 dana Iris možete probati besplatno.",
+    a: "Od 3.375 RSD mesečno za firmu do 5 korisnika, uz jednokratno uvođenje. Prvih 30 dana Iris možete probati besplatno.",
   },
   {
     q: "Šta ako prestanemo da koristimo Iris?",
