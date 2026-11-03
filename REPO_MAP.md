@@ -297,6 +297,7 @@ curl http://localhost:8080/healthz
 | `DATABASE_PATH` | **Primary** SQLite path (default dev: `./data/iris.db`) |
 | `IRIS_DB_PATH` | Legacy fallback if `DATABASE_PATH` unset |
 | `IRIS_ENV` | `development` \| `production` - production requires explicit DB path; blocks demo `admin`/`admin123`; `Secure` cookies; no localhost CORS fallback |
+| `IRIS_SECURE_COOKIES` | `false`/`true` overrides the session cookies' `Secure` flag (empty = on in production). `false` only for plain-http LAN installs (`deploy/README.md`) |
 | `IRIS_SESSION_SECRET` | Unused (reserved; ignored if set). Session tokens are random and stored hashed |
 | `IRIS_API_ADDR` | Listen address (default `:8080`) |
 | `IRIS_ALLOWED_ORIGINS` | CORS allowlist (comma-separated) |
