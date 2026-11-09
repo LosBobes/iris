@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.28.0 — 2026-11-09
+
+### Minor
+
+- Dashboard: with a company selected, the services & articles breakdown lists that company's work orders in the period (revenue and profit per order), each linking to the order. GET /dashboard adds finance.companyOrders.
+
 ## 2.27.1 — 2026-11-03
 
 ### Patch
