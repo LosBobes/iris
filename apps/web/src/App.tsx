@@ -75,6 +75,7 @@ const WorkOrderDetailPage = lazy(() => import("@/pages/WorkOrderDetailPage"));
 const WorkOrderEditPage = lazy(() => import("@/pages/WorkOrderEditPage"));
 const WorkOrdersPage = lazy(() => import("@/pages/WorkOrdersPage"));
 const CostReviewPage = lazy(() => import("@/pages/CostReviewPage"));
+const CostReviewBulkPage = lazy(() => import("@/pages/CostReviewBulkPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const ProcessTemplatePage = lazy(() => import("@/pages/ProcessTemplatePage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
@@ -490,6 +491,7 @@ function AppContent(): React.JSX.Element {
                             {currentUser.role === "admin" && (
                               <>
                                 <Route path="/cost-review" element={<CostReviewPage />} />
+                                <Route path="/cost-review/bulk" element={<CostReviewBulkPage />} />
                                 <Route path="/users" element={<UsersPage />} />
                                 <Route path="/settings/processes/new" element={<ModuleGate module="processes"><ProcessTemplatePage /></ModuleGate>} />
                                 <Route path="/settings/processes/:id" element={<ModuleGate module="processes"><ProcessTemplatePage /></ModuleGate>} />

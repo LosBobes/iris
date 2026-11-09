@@ -650,6 +650,12 @@ function DashboardChapter(): React.JSX.Element {
         <Ui>Čeka unos troška</Ui>, a broj takvih naloga stoji u meniju. To vidi samo
         administrator. Kad je lista prazna, brojevi o zaradi su pouzdani.
       </P>
+      <P>
+        Kad treba popuniti mnogo naloga odjednom, dugme <Ui>Masovni unos troškova</Ui>{" "}
+        otvara sve stavke bez troška u jednoj tabeli. Trošak se upisuje po jedinici, a
+        stavke istog naziva mogu dobiti isti trošak odjednom. Prazna polja se mogu popuniti
+        i kao procenat cene (npr. 60%). Na kraju se sve čuva jednim klikom.
+      </P>
     </>
   );
 }
