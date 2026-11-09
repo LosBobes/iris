@@ -1641,6 +1641,26 @@ export const en: typeof sr = {
     done: 'Done',
     close: 'Close',
     entries: {
+      livePdv: {
+        title: 'VAT works itself out, live',
+        body: 'On a work order every line shows its **VAT**, and under the items you get the **net amount, VAT and total**. Change a price or a quantity and the numbers follow at once. The calculator can take a break.',
+      },
+      catalogPrices: {
+        title: 'Order prices go straight to the catalog',
+        body: 'Change an item’s price on an order, save, and that is the new **catalog price**. If **open orders** use the same item, Iris asks whether they should get it too. **Special items** with a price join the catalog, so next time you just pick them.',
+      },
+      catalogLinks: {
+        title: 'Click an item, land in the catalog',
+        body: 'A catalog item’s name on an order is now a **link** to it in the **catalog**. While editing an order, the **Catalog** tag does the same, in a new tab, so your order stays where you left it.',
+      },
+      bulkCosts: {
+        title: 'Costs in bulk',
+        body: 'The **Awaiting cost entry** page has a **Bulk cost entry** button: every line without a cost in one table. Type a cost once and lines with the **same name** get it too, or fill the empty ones as a **percentage of the price**. One click saves it all.',
+      },
+      companySort: {
+        title: 'Companies in A to Z',
+        body: 'The company picker on the **dashboard** is now sorted **by name**. The most profitable list keeps its profit order; it knows who is first anyway.',
+      },
       whatsNew: {
         title: 'Iris now tells you what is new',
         body: "When something new lands, Iris shows it once, with a small animation, and then leaves you alone. Missed something? It is all in **Help**, under **What's new**.",

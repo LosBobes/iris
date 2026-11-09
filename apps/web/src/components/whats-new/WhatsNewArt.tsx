@@ -117,7 +117,118 @@ const updateBanner = (
   </>
 );
 
+/** Live PDV: a price is retyped and the PDV and total under the lines follow. */
+const livePdv = (
+  <>
+    <rect className="hs-card" x="12" y="10" width="216" height="22" rx="2" />
+    <rect className="hs-mute" x="20" y="19" width="70" height="4" />
+    <rect className="hs-card" x="140" y="15" width="40" height="12" />
+    <text className={`hs-text hs-tnum ${fx("fade-out", 20)}`} x="176" y="24" textAnchor="end">1.000</text>
+    <text className={`hs-text-strong hs-tnum hs-acc-text ${fx("fade", 20)}`} x="176" y="24" textAnchor="end">1.500</text>
+    <text className={`hs-text hs-tnum ${fx("fade", 30)}`} x="220" y="24" textAnchor="end">PDV 20%</text>
+    <line className="hs-line" x1="120" y1="44" x2="228" y2="44" />
+    <text className="hs-text" x="124" y="56">Osnovica</text>
+    <text className="hs-text" x="124" y="70">PDV 20%</text>
+    <text className="hs-text-strong" x="124" y="86">Ukupno</text>
+    <text className={`hs-text hs-tnum ${fx("fade-out", 35)}`} x="226" y="56" textAnchor="end">1.000</text>
+    <text className={`hs-text hs-tnum ${fx("fade", 35)}`} x="226" y="56" textAnchor="end">1.500</text>
+    <text className={`hs-text hs-tnum ${fx("fade-out", 45)}`} x="226" y="70" textAnchor="end">200</text>
+    <text className={`hs-text hs-tnum ${fx("fade", 45)}`} x="226" y="70" textAnchor="end">300</text>
+    <text className={`hs-text-strong hs-tnum ${fx("fade-out", 55)}`} x="226" y="86" textAnchor="end">1.200</text>
+    <text className={`hs-text-strong hs-tnum hs-acc-text ${fx("fade", 55)}`} x="226" y="86" textAnchor="end">1.800</text>
+  </>
+);
+
+/** Catalog prices: the new price flies from the order into the catalog card. */
+const catalogPrices = (
+  <>
+    <rect className="hs-card" x="12" y="16" width="96" height="64" rx="2" />
+    <text className="hs-text hs-caps" x="20" y="29">NALOG</text>
+    <rect className="hs-mute" x="20" y="40" width="44" height="4" />
+    <text className="hs-text-strong hs-tnum hs-acc-text" x="100" y="45" textAnchor="end">1.500</text>
+    <rect className="hs-soft" x="20" y="54" width="60" height="4" />
+    <rect className="hs-soft" x="20" y="64" width="50" height="4" />
+    <path className={`hs-acc-line ${fx("draw", 15)}`} pathLength={1} d="M108 42 C130 42 132 30 150 30" />
+    <rect className="hs-card" x="150" y="12" width="78" height="36" rx="2" />
+    <text className="hs-text hs-caps" x="158" y="25">KATALOG</text>
+    <text className={`hs-text hs-tnum ${fx("fade-out", 35)}`} x="220" y="40" textAnchor="end">1.200</text>
+    <text className={`hs-text-strong hs-tnum hs-acc-text ${fx("fade", 35)}`} x="220" y="40" textAnchor="end">1.500</text>
+    <g className={fx("pop", 55)}>
+      <rect className="hs-acc-wash" x="150" y="56" width="78" height="28" rx="2" />
+      <text className="hs-text" x="158" y="68">Otvoreni nalozi?</text>
+      <rect className="hs-acc" x="196" y="73" width="26" height="7" rx="1" />
+    </g>
+  </>
+);
+
+/** Catalog links: the cursor clicks an item name and its catalog card opens. */
+const catalogLinks = (
+  <>
+    <rect className="hs-card" x="12" y="14" width="110" height="68" rx="2" />
+    {[0, 1, 2].map((row) => (
+      <g key={row}>
+        <rect className={row === 1 ? "hs-acc" : "hs-mute"} x="20" y={26 + row * 18} width={[56, 64, 48][row]} height="4" />
+        <line className={`hs-acc-line ${row === 1 ? fx("grow-x", 15) : "hs-no-fill"}`} x1="20" y1={33 + row * 18} x2={row === 1 ? 84 : 20} y2={33 + row * 18} />
+      </g>
+    ))}
+    <path className={`hs-ink-line ${fx("pop", 20)}`} d="M70 48 l0 9 l3 -3 l3 5 l2 -1 l-3 -5 l4 0 Z" />
+    <path className={`hs-acc-line ${fx("draw", 35)}`} pathLength={1} d="M122 46 C138 46 140 30 150 30" />
+    <g className={fx("pop", 50)}>
+      <rect className="hs-card" x="150" y="14" width="78" height="68" rx="2" />
+      <text className="hs-text hs-caps" x="158" y="27">KATALOG</text>
+      <rect className="hs-acc" x="158" y="36" width="54" height="5" />
+      <rect className="hs-soft" x="158" y="48" width="60" height="4" />
+      <rect className="hs-soft" x="158" y="58" width="44" height="4" />
+      <text className="hs-text-strong hs-tnum" x="220" y="76" textAnchor="end">1.500</text>
+    </g>
+  </>
+);
+
+/** Bulk costs: one cost typed, the same-named rows fill in, one save. */
+const bulkCosts = (
+  <>
+    <rect className="hs-card" x="12" y="8" width="216" height="80" rx="2" />
+    {[0, 1, 2, 3].map((row) => (
+      <g key={row}>
+        <line className="hs-line" x1="20" y1={26 + row * 16} x2="220" y2={26 + row * 16} />
+        <rect className="hs-acc" x="20" y={17 + row * 16} width="20" height="4" />
+        <rect className="hs-mute" x="48" y={17 + row * 16} width={row % 2 ? 40 : 52} height="4" />
+        <rect className="hs-card" x="176" y={13 + row * 16} width="36" height="11" />
+        <text className={`hs-text hs-tnum hs-acc-text ${fx("fade", row === 0 ? 10 : 25 + row * 5)}`} x="208" y={21 + row * 16} textAnchor="end">
+          {row % 2 ? "240" : "400"}
+        </text>
+      </g>
+    ))}
+    <g className={fx("pop", 60)}>
+      <rect className="hs-acc" x="176" y="74" width="44" height="10" rx="1" />
+      <text className="hs-text-on" x="198" y="81.5" textAnchor="middle">✓</text>
+    </g>
+  </>
+);
+
+/** Company picker: a jumbled list settles into A to Z. */
+const companySort = (
+  <>
+    <rect className="hs-card" x="60" y="8" width="120" height="16" rx="2" />
+    <rect className="hs-mute" x="68" y="14" width="60" height="4" />
+    <path className="hs-ink-line" d="M166 13 l4 4 l4 -4" />
+    <rect className="hs-card" x="60" y="26" width="120" height="62" />
+    {["Žika", "ABC", "Čačak", "Cvet"].map((name, row) => (
+      <text key={name} className={`hs-text ${fx("fade-out", 25)}`} x="70" y={40 + row * 14}>{name}</text>
+    ))}
+    {["ABC", "Cvet", "Čačak", "Žika"].map((name, row) => (
+      <text key={name} className={`hs-text-strong ${fx("slide", 30 + row * 8)}`} x="70" y={40 + row * 14}>{name}</text>
+    ))}
+    <text className={`hs-text hs-acc-text ${fx("pop", 70)}`} x="172" y="82" textAnchor="end">A→Ž</text>
+  </>
+);
+
 const SCENES: Record<WhatsNewId, React.JSX.Element> = {
+  livePdv,
+  catalogPrices,
+  catalogLinks,
+  bulkCosts,
+  companySort,
   whatsNew,
   companyOrders,
   packages,

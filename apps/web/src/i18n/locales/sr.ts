@@ -1640,6 +1640,26 @@ export const sr = {
     done: 'Gotovo',
     close: 'Zatvori',
     entries: {
+      livePdv: {
+        title: 'PDV se računa sam, uživo',
+        body: 'Na nalogu svaka stavka pokazuje svoj **PDV**, a ispod stavki stoje **osnovica, PDV i ukupno**. Promenite cenu ili količinu i brojevi se odmah preračunaju. Kalkulator može malo da odmori.',
+      },
+      catalogPrices: {
+        title: 'Cena sa naloga ide pravo u katalog',
+        body: 'Promenite cenu stavke na nalogu, sačuvajte, i to je nova **cena u katalogu**. Ako istu stavku imaju i **otvoreni nalozi**, Iris pita da li i njima da je promeni. **Posebne stavke** sa cenom same uđu u katalog, pa ih sledeći put samo izaberete.',
+      },
+      catalogLinks: {
+        title: 'Klik na stavku, pravo u katalog',
+        body: 'Naziv stavke iz kataloga na nalogu je sad **link** do nje u **katalogu**. Dok menjate nalog, isto radi oznaka **Katalog**, i to u novom tabu, da Vam nalog ostane gde je bio.',
+      },
+      bulkCosts: {
+        title: 'Troškovi na veliko',
+        body: 'Na stranici **Čeka unos troška** je dugme **Masovni unos troškova**: sve stavke bez troška u jednoj tabeli. Upišete jednom i stavke **istog naziva** dobiju isti trošak, ili prazne popunite kao **procenat cene**. Jedan klik i sve je sačuvano.',
+      },
+      companySort: {
+        title: 'Firme po abecedi',
+        body: 'Izbor firme na **kontrolnoj tabli** je sad poređan **po nazivu**, sa Č, Ć i Ž tamo gde im je mesto. Lista najisplativijih firmi ostaje po zaradi, ona ionako zna ko je prvi.',
+      },
       whatsNew: {
         title: 'Iris sad sama kaže šta je novo',
         body: 'Kad stigne nešto novo, Iris to pokaže jednom, uz malu animaciju, i posle Vas ostavi na miru. Ako ste nešto preskočili, sve stoji u **Pomoći**, pod **Šta je novo**.',

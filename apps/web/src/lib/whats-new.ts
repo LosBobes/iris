@@ -11,7 +11,16 @@
  * only handed the last `FRESH_DAYS` of news, not the whole history.
  */
 
-export type WhatsNewId = 'whatsNew' | 'companyOrders' | 'packages' | 'updateBanner'
+export type WhatsNewId =
+  | 'livePdv'
+  | 'catalogPrices'
+  | 'catalogLinks'
+  | 'bulkCosts'
+  | 'companySort'
+  | 'whatsNew'
+  | 'companyOrders'
+  | 'packages'
+  | 'updateBanner'
 
 export type Audience = 'admins' | 'operators'
 
@@ -28,6 +37,11 @@ export interface WhatsNewEntry {
 }
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: 'livePdv', date: '2026-11-09' },
+  { id: 'catalogPrices', date: '2026-11-09', for: 'admins' },
+  { id: 'catalogLinks', date: '2026-11-09' },
+  { id: 'bulkCosts', date: '2026-11-09', for: 'admins' },
+  { id: 'companySort', date: '2026-11-09', for: 'admins' },
   { id: 'whatsNew', date: '2026-11-09' },
   { id: 'companyOrders', date: '2026-11-09', for: 'admins' },
   { id: 'packages', date: '2026-10-29' },
