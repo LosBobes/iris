@@ -253,4 +253,32 @@ describe("WorkOrderForm catalog lines", () => {
     await waitFor(() => expect(prices()[1]).toHaveValue(1100));
     expect(prices()[0]).toHaveValue(1200);
   });
+
+  // PDV is shown on the order itself and follows every price change:
+  // special lines at the general 20% rate, catalog lines at their own rate.
+  it("recalculates the PDV breakdown live as prices change", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkOrderForm onSubmit={vi.fn().mockResolvedValue(undefined)} onCancel={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: strings.specialService }));
+    const price = () => screen.getAllByRole("spinbutton", { name: strings.colPrice })[0];
+    await user.clear(price());
+    await user.type(price(), "1000");
+
+    expect(screen.getByTestId("line-vat-0")).toHaveTextContent("PDV 20%: 200,00");
+    expect(screen.getByTestId("vat-total")).toHaveTextContent("1.200,00");
+
+    await user.clear(price());
+    await user.type(price(), "1500");
+    expect(screen.getByTestId("vat-total")).toHaveTextContent("1.800,00");
+
+    // A 10% catalog article adds its own rate row once its rate is known.
+    await addCatalogArticle(user);
+    await waitFor(() =>
+      expect(screen.getByTestId("vat-total")).toHaveTextContent("2.900,00"),
+    );
+    expect(screen.getByText("PDV 10%")).toBeInTheDocument();
+  });
 });

@@ -438,6 +438,27 @@ function WorkOrdersChapter(): React.JSX.Element {
         <Ui>Posebna usluga</Ui> / <Ui>Posebna roba</Ui> kad nečega nema u katalogu. Svaka
         stavka ima količinu, jedinicu mere i cenu, a cena naloga je njihov zbir.
       </P>
+      <P>
+        Ispod stavki je obračun PDV-a: osnovica, PDV po stopi i ukupno sa PDV-om. Svaka
+        stavka pokazuje i svoj PDV. Sve se preračunava čim promeniš cenu ili količinu.
+        Posebne stavke idu po opštoj stopi (20%), a stavke iz kataloga po svojoj poreskoj
+        grupi.
+      </P>
+      <P>
+        Kad administrator na nalogu promeni cenu stavke iz kataloga i sačuva nalog, ta
+        cena odmah postaje nova prodajna cena u katalogu (kod otkupa se za artikle upisuje
+        cena bez PDV-a). Ako tu stavku imaju i drugi nalozi koji još nisu završeni, Iris
+        pita da li i njima da promeni cenu. Završeni i fakturisani nalozi se ne diraju.
+      </P>
+      <P>
+        Posebnu stavku kojoj administrator upiše cenu Iris pri čuvanju dodaje u katalog
+        (ili ažurira stavku istog naziva) i povezuje je sa nalogom. Kad cenu promeni
+        operater, katalog ostaje kakav je.
+      </P>
+      <P>
+        Naziv stavke iz kataloga na nalogu je link: svako može da ga otvori i vidi stavku u
+        katalogu.
+      </P>
       <Callout kind="tip">
         Ako se nešto radi stalno, neka administrator to doda u katalog. Brže je za sve, a
         zarada po stavci se onda lepo vidi na kontrolnoj tabli.
@@ -628,6 +649,12 @@ function DashboardChapter(): React.JSX.Element {
         nije upisan (npr. posebna usluga dodata ručno), nalog upada u listu{" "}
         <Ui>Čeka unos troška</Ui>, a broj takvih naloga stoji u meniju. To vidi samo
         administrator. Kad je lista prazna, brojevi o zaradi su pouzdani.
+      </P>
+      <P>
+        Kad treba popuniti mnogo naloga odjednom, dugme <Ui>Masovni unos troškova</Ui>{" "}
+        otvara sve stavke bez troška u jednoj tabeli. Trošak se upisuje po jedinici, a
+        stavke istog naziva mogu dobiti isti trošak odjednom. Prazna polja se mogu popuniti
+        i kao procenat cene (npr. 60%). Na kraju se sve čuva jednim klikom.
       </P>
     </>
   );

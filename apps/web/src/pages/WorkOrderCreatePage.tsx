@@ -223,8 +223,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
         consumedRef.current = true;
         clearWorkOrderDraft();
         toast.success(t("workOrders.toast.created", { order: result.orderNumber }));
-        allowNavigation();
-        navigate(`/work-orders/${result.id}`);
+        return result;
       } catch (error) {
         // Surface what the API rejected (and its request reference) instead of a
         // bare "greška": a save that will not go through has to tell the
@@ -232,7 +231,15 @@ function WorkOrderCreatePage(): React.JSX.Element {
         toast.error(formatActionError(t("workOrders.toast.createError"), error));
       }
     },
-    [allowNavigation, currentUser.username, isInteractiveTour, navigate, reservedOrderNumber, t],
+    [currentUser.username, isInteractiveTour, reservedOrderNumber, t],
+  );
+  // Runs once the form has finished its post-save steps (catalog prices).
+  const handleSaved = useCallback(
+    (saved: WorkOrder) => {
+      allowNavigation();
+      navigate(`/work-orders/${saved.id}`);
+    },
+    [allowNavigation, navigate],
   );
 
   const handleCancel = useCallback(() => {
@@ -282,6 +289,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
           <WorkOrderForm
             initialValues={initialValues}
             onSubmit={handleSubmit}
+            onSaved={handleSaved}
             onCancel={handleCancel}
             onValuesChange={isInteractiveTour ? undefined : handleValuesChange}
             onDirtyChange={setDirty}

@@ -33,6 +33,20 @@ export function billingDocumentIncludesVat(
   return type === "cashCollection";
 }
 
+/**
+ * PDV rate for one work-order line. Catalog lines use their item's tax group
+ * (`catalogRate`); special (ad-hoc) lines, or a catalog rate not yet looked up,
+ * use the general rate. On otkup only articles carry PDV — services carry none.
+ */
+export function lineVatRate(
+  catalogRate: number | null | undefined,
+  kind: string | null | undefined,
+  type: BillingDocumentType | null | undefined,
+): number {
+  if (billingDocumentIncludesVat(type) && kind === "service") return 0;
+  return catalogRate ?? vatRateForTaxGroup(null);
+}
+
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }

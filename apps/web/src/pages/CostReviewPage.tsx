@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { Coins, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Coins, ListChecks, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { WorkOrdersFilters } from "@/components/WorkOrders/WorkOrdersFilters";
 import { WorkOrdersTable } from "@/components/WorkOrders/WorkOrdersTable";
@@ -188,6 +188,15 @@ function CostReviewPage(): React.JSX.Element {
             </h1>
             <div className="text-[12px] text-[color:var(--iris-ink-soft)]">
               {t("workOrders.costReview.subtitle")}
+            </div>
+            <div className="mt-3">
+              <Link
+                to="/cost-review/bulk"
+                className="iris-focusable iris-press inline-flex items-center gap-1.5 border border-border bg-background px-3 py-1.5 text-[11px] text-foreground hover:border-foreground"
+              >
+                <ListChecks className="h-3.5 w-3.5" />
+                {t("workOrders.costReview.bulk.open")}
+              </Link>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useForm,
@@ -63,18 +63,38 @@ import {
 import {
   addVat,
   billingDocumentIncludesVat,
+  computeVatBreakdown,
+  lineVatRate,
+  splitLineVat,
   repriceForBillingDocument,
   vatRateForTaxGroup,
 } from "@/shared/utils/vat";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  findOpenOrdersWithItems,
+  syncCatalogFromOrder,
+  type AppliedPriceChange,
+  type PriceSyncBaseline,
+} from "@/lib/work-orders/catalog-price-sync";
+import { OpenOrdersPriceDialog } from "@/components/WorkOrders/OpenOrdersPriceDialog";
 import { useOrganization } from "@/hooks/useOrganization";
 import { WorkOrderPdfPreview } from "@/components/WorkOrders/WorkOrderPdfPreview";
 
 interface WorkOrderFormProps {
   initialData?: WorkOrder | null;
   initialValues?: WorkOrderFormValues;
-  onSubmit: (values: WorkOrderFormValues) => Promise<void>;
+  /**
+   * Saves the order and resolves with the saved order (nothing on failure):
+   * an admin's pricing is then written back to the catalog.
+   */
+  onSubmit: (values: WorkOrderFormValues) => Promise<WorkOrder | void>;
+  /**
+   * Called with the saved order once the form's post-save steps are done (an
+   * admin's prices written to the catalog, the open-orders question answered).
+   * Pages navigate away here, not in onSubmit.
+   */
+  onSaved?: (order: WorkOrder) => void;
   onCancel: () => void;
   /**
    * Called with the current form values on mount and on every subsequent change.
@@ -471,6 +491,7 @@ export function WorkOrderForm({
   initialData,
   initialValues,
   onSubmit,
+  onSaved,
   onCancel,
   onValuesChange,
   onDirtyChange,
@@ -1039,6 +1060,56 @@ export function WorkOrderForm({
     vatRateByCatalogItemId.current.set(catalogItemId, rate);
     return rate;
   };
+  // Catalog PDV rates for the lines on screen, so the live breakdown below the
+  // items re-renders once each rate is known (special lines need no lookup).
+  const [catalogVatRates, setCatalogVatRates] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  const catalogVatKey = [
+    ...new Set(
+      invoiceLineItems
+        .map((line) => line?.catalogItemId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ]
+    .sort()
+    .join(",");
+  useEffect(() => {
+    const missing = catalogVatKey
+      .split(",")
+      .filter((id) => id && !catalogVatRates.has(id));
+    if (missing.length === 0) return;
+    let active = true;
+    void Promise.all(
+      missing.map(async (id) => [id, await resolveVatRate(id)] as const),
+    ).then((entries) => {
+      if (!active) return;
+      setCatalogVatRates((prev) => new Map([...prev, ...entries]));
+    });
+    return () => {
+      active = false;
+    };
+  }, [catalogVatKey, catalogVatRates]);
+  const pricesIncludeVat = billingDocumentIncludesVat(billingDocumentTypeValue);
+  const rateForLine = (line: { catalogItemId?: string | null; kind?: string } | undefined): number =>
+    lineVatRate(
+      line?.catalogItemId ? catalogVatRates.get(line.catalogItemId) : null,
+      line?.kind,
+      billingDocumentTypeValue,
+    );
+  // Osnovica / PDV / total, recomputed on every quantity, price, kind or
+  // document-type change so the order shows its PDV while it is being priced.
+  const formVatBreakdown = computeVatBreakdown(
+    invoiceLineItems.map((line) => ({
+      quantity: Number(line?.quantity) || 0,
+      unitPrice: Number(line?.unitPrice) || 0,
+      rate: rateForLine(line),
+    })),
+    pricesIncludeVat,
+  );
+  const formatMoney = (value: number): string =>
+    value.toLocaleString("sr-RS", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const repriceCatalogLines = async (
     from: BillingDocumentType | null,
     to: BillingDocumentType | null,
@@ -1104,10 +1175,31 @@ export function WorkOrderForm({
     }
   }, [deliveryMethod, setValue, shippingAddress, shippingPackages, estimatedPostage]);
 
+  // Catalog-line prices as last saved, so an admin's save writes back to the
+  // catalog only the prices actually changed (see syncCatalogPrices).
+  const savedLinePrices = useRef<Map<string, PriceSyncBaseline>>(
+    new Map(
+      (initialData?.invoiceDraft.lineItems ?? []).map((line) => [
+        line.id,
+        {
+          unitPrice: line.unitPrice,
+          billingDocumentType: initialData?.billingDocumentType ?? null,
+        },
+      ]),
+    ),
+  );
+
+  // Shown after an admin's save changed catalog prices that other open orders use.
+  const [openOrdersPrompt, setOpenOrdersPrompt] = useState<{
+    changes: AppliedPriceChange[];
+    orders: WorkOrder[];
+    order: WorkOrder;
+  } | null>(null);
+
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
     try {
-      await onSubmit({
+      const saved = await onSubmit({
         ...values,
         // Issuer and executor are one consolidated field in the UI: mirror the
         // chosen operator onto issuedBy, falling back to the existing issuedBy
@@ -1128,6 +1220,51 @@ export function WorkOrderForm({
           ),
         },
       });
+      // Only an admin's price edits update the catalog (the API also refuses
+      // price changes from anyone else).
+      if (!saved) return;
+      let finalOrder = saved;
+      // Only an admin's pricing reaches the catalog (the API also refuses
+      // price changes from anyone else).
+      if (isAdmin) {
+        const lines = values.invoiceDraft?.lineItems ?? [];
+        const baseline = savedLinePrices.current;
+        savedLinePrices.current = new Map(
+          lines.map((line) => [
+            line.id,
+            { unitPrice: line.unitPrice, billingDocumentType: values.billingDocumentType },
+          ]),
+        );
+        try {
+          const result = await syncCatalogFromOrder({
+            order: saved,
+            lines,
+            billingDocumentType: values.billingDocumentType,
+            baseline,
+          });
+          finalOrder = result.order;
+          if (result.created > 0) {
+            toast.success(t("workOrders.form.catalogItemsCreated", { count: result.created }));
+          }
+          if (result.changes.length > 0) {
+            toast.success(
+              t("workOrders.form.catalogPricesUpdated", { count: result.changes.length }),
+            );
+            const openOrders = await findOpenOrdersWithItems(
+              result.changes.map((change) => change.catalogItemId),
+              saved.id,
+            );
+            if (openOrders.length > 0) {
+              // Navigation waits for the admin's answer in the dialog.
+              setOpenOrdersPrompt({ changes: result.changes, orders: openOrders, order: finalOrder });
+              return;
+            }
+          }
+        } catch {
+          toast.error(t("workOrders.form.catalogPricesUpdateError"));
+        }
+      }
+      onSaved?.(finalOrder);
     } finally {
       setSubmitting(false);
     }
@@ -1892,10 +2029,23 @@ export function WorkOrderForm({
                                 (special) line, so the two are distinguishable at
                                 a glance. */}
                             {isCatalogLine ? (
-                              <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-muted px-2 text-[10px] font-medium uppercase tracking-[0.4px] text-[color:var(--iris-ink-mute)]">
+                              // Opens the item's catalog entry (every role) in a
+                              // new tab, so the order being edited is not lost.
+                              <a
+                                href={`/catalog/${invoiceLineItems[index]?.catalogItemId}`}
+                                target="_blank"
+                                rel="noopener"
+                                title={t("workOrders.form.openCatalogItem", {
+                                  name: invoiceLineItems[index]?.description ?? "",
+                                })}
+                                aria-label={t("workOrders.form.openCatalogItem", {
+                                  name: invoiceLineItems[index]?.description ?? "",
+                                })}
+                                className="iris-focusable inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-muted px-2 text-[10px] font-medium uppercase tracking-[0.4px] text-[color:var(--iris-ink-mute)] hover:text-foreground hover:underline"
+                              >
                                 <Package className="h-3 w-3" />
                                 {t("workOrders.form.catalogBadge")}
-                              </span>
+                              </a>
                             ) : (
                               <span
                                 title={t("workOrders.form.specialBadgeHint")}
@@ -2123,12 +2273,52 @@ export function WorkOrderForm({
                               <div className="tnum mt-0.5 text-[13px] font-medium text-foreground">
                                 {lineTotal.toLocaleString("sr-RS")}
                               </div>
+                              {(() => {
+                                const rate = rateForLine(invoiceLineItems[index]);
+                                const vat = splitLineVat(lineTotal, rate, pricesIncludeVat);
+                                return (
+                                  <div
+                                    className="tnum mt-0.5 text-[10px] text-[color:var(--iris-ink-mute)]"
+                                    data-testid={`line-vat-${index}`}
+                                  >
+                                    {rate === 0
+                                      ? t("workOrders.form.lineNoVat")
+                                      : t("workOrders.form.lineVat", {
+                                          rate: Math.round(rate * 100),
+                                          amount: formatMoney(vat.vat),
+                                        })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
                       </div>
                     );
                   })}
+                  <dl
+                    className="tnum ml-auto grid w-full max-w-xs grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-border pt-3 text-[12px]"
+                    aria-label={t("workOrders.form.vatSummary")}
+                  >
+                    <dt className="text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.form.vatBase")}
+                    </dt>
+                    <dd className="text-right">{formatMoney(formVatBreakdown.base)}</dd>
+                    {formVatBreakdown.vatByRate.map(({ rate, amount }) => (
+                      <Fragment key={rate}>
+                        <dt className="text-[color:var(--iris-ink-mute)]">
+                          {t("workOrders.form.vatAmount", { rate: Math.round(rate * 100) })}
+                        </dt>
+                        <dd className="text-right">{formatMoney(amount)}</dd>
+                      </Fragment>
+                    ))}
+                    <dt className="font-medium text-foreground">
+                      {t("workOrders.form.vatTotal")}
+                    </dt>
+                    <dd className="text-right font-medium text-foreground" data-testid="vat-total">
+                      {formatMoney(formVatBreakdown.total)}
+                    </dd>
+                  </dl>
                 </div>
               )}
             </div>
@@ -2722,6 +2912,17 @@ export function WorkOrderForm({
         </div>
       </aside>
       </fieldset>
+      {openOrdersPrompt && (
+        <OpenOrdersPriceDialog
+          changes={openOrdersPrompt.changes}
+          orders={openOrdersPrompt.orders}
+          onDone={() => {
+            const { order } = openOrdersPrompt;
+            setOpenOrdersPrompt(null);
+            onSaved?.(order);
+          }}
+        />
+      )}
     </form>
   );
 }

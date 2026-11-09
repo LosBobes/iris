@@ -55,6 +55,15 @@ export function DashboardCompanyProfit({
     [companies, selectedKey],
   );
   const allAggregate = useMemo(() => aggregateCompanies(companies), [companies]);
+  // The dropdown lists companies by name (Serbian collation, so č/ć/š/ž/đ sort
+  // where people expect them); the ranked list below stays ordered by profit.
+  const companiesByName = useMemo(
+    () =>
+      [...companies].sort((a, b) =>
+        a.name.localeCompare(b.name, "sr-Latn", { sensitivity: "base", numeric: true }),
+      ),
+    [companies],
+  );
   // What the detail panel shows: the picked company, or the all-companies sum.
   const detail = selectedCompany ?? allAggregate;
   const detailName = selectedCompany
@@ -98,7 +107,7 @@ export function DashboardCompanyProfit({
                 className="mt-1 block w-full border border-border bg-background px-2 py-2 text-[13px] text-foreground"
               >
                 <option value="">{t("dashboard.company.allCompanies")}</option>
-                {companies.map((company) => (
+                {companiesByName.map((company) => (
                   <option key={company.groupKey} value={company.groupKey}>
                     {company.name}
                   </option>
