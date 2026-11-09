@@ -72,9 +72,12 @@ import {
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  syncCatalogPrices,
+  findOpenOrdersWithItems,
+  syncCatalogFromOrder,
+  type AppliedPriceChange,
   type PriceSyncBaseline,
 } from "@/lib/work-orders/catalog-price-sync";
+import { OpenOrdersPriceDialog } from "@/components/WorkOrders/OpenOrdersPriceDialog";
 import { useOrganization } from "@/hooks/useOrganization";
 import { WorkOrderPdfPreview } from "@/components/WorkOrders/WorkOrderPdfPreview";
 
@@ -82,10 +85,16 @@ interface WorkOrderFormProps {
   initialData?: WorkOrder | null;
   initialValues?: WorkOrderFormValues;
   /**
-   * Saves the order. Resolve `true` once it is saved: an admin's edited
-   * catalog-line prices are then written back to the catalog.
+   * Saves the order and resolves with the saved order (nothing on failure):
+   * an admin's pricing is then written back to the catalog.
    */
-  onSubmit: (values: WorkOrderFormValues) => Promise<boolean | void>;
+  onSubmit: (values: WorkOrderFormValues) => Promise<WorkOrder | void>;
+  /**
+   * Called with the saved order once the form's post-save steps are done (an
+   * admin's prices written to the catalog, the open-orders question answered).
+   * Pages navigate away here, not in onSubmit.
+   */
+  onSaved?: (order: WorkOrder) => void;
   onCancel: () => void;
   /**
    * Called with the current form values on mount and on every subsequent change.
@@ -482,6 +491,7 @@ export function WorkOrderForm({
   initialData,
   initialValues,
   onSubmit,
+  onSaved,
   onCancel,
   onValuesChange,
   onDirtyChange,
@@ -1179,6 +1189,13 @@ export function WorkOrderForm({
     ),
   );
 
+  // Shown after an admin's save changed catalog prices that other open orders use.
+  const [openOrdersPrompt, setOpenOrdersPrompt] = useState<{
+    changes: AppliedPriceChange[];
+    orders: WorkOrder[];
+    order: WorkOrder;
+  } | null>(null);
+
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
     try {
@@ -1205,7 +1222,11 @@ export function WorkOrderForm({
       });
       // Only an admin's price edits update the catalog (the API also refuses
       // price changes from anyone else).
-      if (saved === true && isAdmin) {
+      if (!saved) return;
+      let finalOrder = saved;
+      // Only an admin's pricing reaches the catalog (the API also refuses
+      // price changes from anyone else).
+      if (isAdmin) {
         const lines = values.invoiceDraft?.lineItems ?? [];
         const baseline = savedLinePrices.current;
         savedLinePrices.current = new Map(
@@ -1215,18 +1236,35 @@ export function WorkOrderForm({
           ]),
         );
         try {
-          const updated = await syncCatalogPrices({
+          const result = await syncCatalogFromOrder({
+            order: saved,
             lines,
             billingDocumentType: values.billingDocumentType,
             baseline,
           });
-          if (updated > 0) {
-            toast.success(t("workOrders.form.catalogPricesUpdated", { count: updated }));
+          finalOrder = result.order;
+          if (result.created > 0) {
+            toast.success(t("workOrders.form.catalogItemsCreated", { count: result.created }));
+          }
+          if (result.changes.length > 0) {
+            toast.success(
+              t("workOrders.form.catalogPricesUpdated", { count: result.changes.length }),
+            );
+            const openOrders = await findOpenOrdersWithItems(
+              result.changes.map((change) => change.catalogItemId),
+              saved.id,
+            );
+            if (openOrders.length > 0) {
+              // Navigation waits for the admin's answer in the dialog.
+              setOpenOrdersPrompt({ changes: result.changes, orders: openOrders, order: finalOrder });
+              return;
+            }
           }
         } catch {
           toast.error(t("workOrders.form.catalogPricesUpdateError"));
         }
       }
+      onSaved?.(finalOrder);
     } finally {
       setSubmitting(false);
     }
@@ -1991,10 +2029,23 @@ export function WorkOrderForm({
                                 (special) line, so the two are distinguishable at
                                 a glance. */}
                             {isCatalogLine ? (
-                              <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-muted px-2 text-[10px] font-medium uppercase tracking-[0.4px] text-[color:var(--iris-ink-mute)]">
+                              // Opens the item's catalog entry (every role) in a
+                              // new tab, so the order being edited is not lost.
+                              <a
+                                href={`/catalog/${invoiceLineItems[index]?.catalogItemId}`}
+                                target="_blank"
+                                rel="noopener"
+                                title={t("workOrders.form.openCatalogItem", {
+                                  name: invoiceLineItems[index]?.description ?? "",
+                                })}
+                                aria-label={t("workOrders.form.openCatalogItem", {
+                                  name: invoiceLineItems[index]?.description ?? "",
+                                })}
+                                className="iris-focusable inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-muted px-2 text-[10px] font-medium uppercase tracking-[0.4px] text-[color:var(--iris-ink-mute)] hover:text-foreground hover:underline"
+                              >
                                 <Package className="h-3 w-3" />
                                 {t("workOrders.form.catalogBadge")}
-                              </span>
+                              </a>
                             ) : (
                               <span
                                 title={t("workOrders.form.specialBadgeHint")}
@@ -2861,6 +2912,17 @@ export function WorkOrderForm({
         </div>
       </aside>
       </fieldset>
+      {openOrdersPrompt && (
+        <OpenOrdersPriceDialog
+          changes={openOrdersPrompt.changes}
+          orders={openOrdersPrompt.orders}
+          onDone={() => {
+            const { order } = openOrdersPrompt;
+            setOpenOrdersPrompt(null);
+            onSaved?.(order);
+          }}
+        />
+      )}
     </form>
   );
 }

@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { CancelWorkOrderDialog } from "@/components/WorkOrders/CancelWorkOrderDialog";
 import { CompleteWorkOrderDialog } from "@/components/WorkOrders/CompleteWorkOrderDialog";
@@ -800,7 +800,20 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                 return (
                   <tr key={line.id} className="border-b border-[color:var(--iris-border-soft)]">
                     <td className="py-3 text-foreground">
-                      <div>{line.description}</div>
+                      <div>
+                        {"catalogItemId" in line && line.catalogItemId ? (
+                          // Every role can open the item's catalog entry.
+                          <Link
+                            to={`/catalog/${line.catalogItemId}`}
+                            className="underline-offset-2 hover:underline"
+                            title={t("workOrders.form.openCatalogItem", { name: line.description })}
+                          >
+                            {line.description}
+                          </Link>
+                        ) : (
+                          line.description
+                        )}
+                      </div>
                       <div className="mt-0.5 text-[10px] uppercase tracking-[0.7px] text-[color:var(--iris-ink-mute)]">
                         {t(`workOrders.lineKind.${line.kind}`)}
                       </div>

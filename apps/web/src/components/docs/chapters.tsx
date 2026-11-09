@@ -447,7 +447,17 @@ function WorkOrdersChapter(): React.JSX.Element {
       <P>
         Kad administrator na nalogu promeni cenu stavke iz kataloga i sačuva nalog, ta
         cena odmah postaje nova prodajna cena u katalogu (kod otkupa se za artikle upisuje
-        cena bez PDV-a). Kad cenu promeni operater, katalog ostaje kakav je.
+        cena bez PDV-a). Ako tu stavku imaju i drugi nalozi koji još nisu završeni, Iris
+        pita da li i njima da promeni cenu. Završeni i fakturisani nalozi se ne diraju.
+      </P>
+      <P>
+        Posebnu stavku kojoj administrator upiše cenu Iris pri čuvanju dodaje u katalog
+        (ili ažurira stavku istog naziva) i povezuje je sa nalogom. Kad cenu promeni
+        operater, katalog ostaje kakav je.
+      </P>
+      <P>
+        Naziv stavke iz kataloga na nalogu je link: svako može da ga otvori i vidi stavku u
+        katalogu.
       </P>
       <Callout kind="tip">
         Ako se nešto radi stalno, neka administrator to doda u katalog. Brže je za sve, a

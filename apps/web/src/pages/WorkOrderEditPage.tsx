@@ -16,7 +16,7 @@ import {
   getWorkOrderStatusLabel,
   requiresWorkOrderCloseConfirm,
 } from "@/shared/utils/work-orders";
-import type { WorkOrderNote } from "@/types/work-order";
+import type { WorkOrder, WorkOrderNote } from "@/types/work-order";
 import type { WorkOrderFormValues } from "@/lib/work-orders/validation";
 import { formatActionError } from "@/lib/errors";
 
@@ -75,14 +75,20 @@ function WorkOrderEditPage(): React.JSX.Element {
           return;
         }
         toast.success(t("workOrders.toast.updated", { order: updated.orderNumber }));
-        allowNavigation();
-        navigate(`/work-orders/${updated.id}`);
-        return true;
+        return updated;
       } catch (error) {
         toast.error(formatActionError(t("workOrders.toast.updateError"), error));
       }
     },
-    [id, order, allowNavigation, navigate, t],
+    [id, order, t],
+  );
+  // Runs once the form has finished its post-save steps (catalog prices).
+  const handleSaved = useCallback(
+    (saved: WorkOrder) => {
+      allowNavigation();
+      navigate(`/work-orders/${saved.id}`);
+    },
+    [allowNavigation, navigate],
   );
 
   const advanceStatus = useCallback(async () => {
@@ -201,6 +207,7 @@ function WorkOrderEditPage(): React.JSX.Element {
             <WorkOrderForm
               initialData={order}
               onSubmit={handleSubmit}
+              onSaved={handleSaved}
               onCancel={handleCancel}
               onDirtyChange={setDirty}
               readOnly={readOnly}
