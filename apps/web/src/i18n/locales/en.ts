@@ -1632,6 +1632,33 @@ export const en: typeof sr = {
     available: 'A new version of Iris is out ({{version}}). Reload the page to get it, after saving what you are working on.',
     reload: 'Reload',
   },
+  whatsNew: {
+    title: "What's new",
+    openFromHelp: "What's new",
+    step: '{{current}} of {{total}}',
+    back: 'Back',
+    next: 'Next',
+    done: 'Done',
+    close: 'Close',
+    entries: {
+      whatsNew: {
+        title: 'Iris now tells you what is new',
+        body: "When something new lands, Iris shows it once, with a small animation, and then leaves you alone. Missed something? It is all in **Help**, under **What's new**.",
+      },
+      companyOrders: {
+        title: 'A company under the magnifying glass',
+        body: 'Pick a company on the **dashboard** and the services and articles breakdown lists its **work orders** in the period, with revenue and profit per order. A click on an order takes you straight to it, no hunting.',
+      },
+      packages: {
+        title: 'Packages hit the scales',
+        body: 'An order that ships records every **package with its weight**, plus an estimated postage. It all prints in the **PAKETI** box, and when nothing is entered, blank lines are left for a pen. Old school still works.',
+      },
+      updateBanner: {
+        title: 'A new version knocks',
+        body: 'When a new version is out, a strip with a **Reload** button appears at the top of the screen. Save what you are working on first, then click. The strip is patient, it waits for you.',
+      },
+    },
+  },
   announcements: {
     region: 'Platform announcements',
     severity: {

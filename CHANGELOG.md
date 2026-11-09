@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.29.0 — 2026-11-09
+
+### Minor
+
+- Šta je novo: the app shows what changed since your last visit (once, with a small animation, admins and operators each seeing their own), and from Help. The tour card no longer changes size or moves its buttons between steps.
+
 ## 2.28.0 — 2026-11-09
 
 ### Minor

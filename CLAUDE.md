@@ -102,6 +102,25 @@ the highest level, prepends them to `CHANGELOG.md`, commits and tags `vX.Y.Z`.
 Never edit `VERSION` or released `CHANGELOG.md` entries by hand. Details:
 [.changeset/README.md](.changeset/README.md).
 
+## What's new (every user-visible PR)
+
+`apps/web/src/lib/whats-new.ts` lists one entry per change people will notice,
+newest first: `{ id, date }` at the top of `WHATS_NEW` (`date` the day it lands),
+its title and a few lines under `whatsNew.entries` in **both** `sr.ts` and `en.ts`
+(`**words**` bold), and a looping demo keyed by the id in
+`components/whats-new/WhatsNewArt.tsx` (the landing page's `feature-scenes.css`
+kit; one 240 × 96 box, the finished frame tells the story under reduced motion).
+Write them a bit tongue in cheek, in natural Serbian (`srpski-prirodno`), while
+still saying plainly what changed and where. **Each entry says who it is for**:
+`for: 'admins'` for what only admins see or do (the dashboard's finance section,
+Settings, users, cost review, planning), `for: 'operators'` for what only
+operators meet, nothing for everyone; `forReader` shows each reader everyone's
+and their own role's, never the other side's. The dialog (`WhatsNewHost`, mounted
+in the app shell) opens once by itself when the account has unseen entries in this
+browser (`iris.whatsNewSeen.<userId>`; a browser with no record gets only the last
+`FRESH_DAYS`), never during the tour or an impersonation, and from Help → "Šta je
+novo". `lib/whats-new.test.ts` checks ids, order, both languages and audiences.
+
 ## Known pitfalls
 
 - Access control gating in the clients is **UI-only** (`role === 'admin'`); the

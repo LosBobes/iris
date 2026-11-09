@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { ArrowRight, BookOpen, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpen, Gift, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { IrisBadge } from "@/components/WorkOrders/IrisBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { useInteractiveTour } from "@/hooks/useInteractiveTour";
+import { openWhatsNew } from "@/lib/whats-new";
 import {
   WORK_ORDER_STATUS_ORDER,
   WORK_ORDER_TRANSITIONS,
@@ -81,6 +82,15 @@ function HelpPage(): React.JSX.Element {
             <p className="text-[11px] leading-relaxed text-[color:var(--iris-ink-mute)]">
               {t("help.tour.hint")}
             </p>
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              onClick={openWhatsNew}
+              className="mt-2 iris-focusable iris-press inline-flex items-center gap-2 border border-border bg-card px-4 py-3 text-[12px] font-medium tracking-[0.3px] text-foreground hover:border-[color:var(--iris-accent)]"
+            >
+              <Gift className="h-4 w-4 text-[color:var(--iris-accent)]" />
+              {t("whatsNew.openFromHelp")}
+            </button>
           </div>
 
           <Link
