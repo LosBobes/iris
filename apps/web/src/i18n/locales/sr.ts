@@ -1631,6 +1631,33 @@ export const sr = {
     available: 'Stigla je nova verzija Irisa ({{version}}). Osvežite stranicu da biste je dobili, a pre toga sačuvajte ono na čemu radite.',
     reload: 'Osveži',
   },
+  whatsNew: {
+    title: 'Šta je novo',
+    openFromHelp: 'Šta je novo',
+    step: '{{current}} od {{total}}',
+    back: 'Nazad',
+    next: 'Dalje',
+    done: 'Gotovo',
+    close: 'Zatvori',
+    entries: {
+      whatsNew: {
+        title: 'Iris sad sama kaže šta je novo',
+        body: 'Kad stigne nešto novo, Iris to pokaže jednom, uz malu animaciju, i posle Vas ostavi na miru. Ako ste nešto preskočili, sve stoji u **Pomoći**, pod **Šta je novo**.',
+      },
+      companyOrders: {
+        title: 'Firma pod lupom',
+        body: 'Izaberite firmu na **kontrolnoj tabli** i pregled usluga i artikala izlistaće njene **radne naloge** u periodu, sa prihodom i zaradom po nalogu. Klik na nalog vodi pravo u njega, bez traženja.',
+      },
+      packages: {
+        title: 'Paketi idu na vagu',
+        body: 'Nalog koji se šalje beleži svaki **paket sa težinom**, uz procenu poštarine. Sve se štampa u polju **PAKETI**, a kad ništa nije uneto, ostaju prazne linije za olovku. Stara škola i dalje radi.',
+      },
+      updateBanner: {
+        title: 'Nova verzija kuca na vrata',
+        body: 'Kad izađe nova verzija, na vrhu ekrana se pojavi traka sa dugmetom **Osveži**. Prvo sačuvajte ono na čemu radite, pa kliknite. Traka je strpljiva, čeka Vas.',
+      },
+    },
+  },
   announcements: {
     region: 'Obaveštenja platforme',
     severity: {

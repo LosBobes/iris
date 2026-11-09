@@ -7,6 +7,8 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
+import { StackedLabel } from "@/components/ui/stacked-label";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -330,19 +332,11 @@ function InteractiveTourOverlay({
         }}
       >
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-accent)]">
-              {t("help.tour.progress", {
-                current: renderedStepIndex + 1,
-                total: INTERACTIVE_TOUR_STEPS.length,
-              })}
-            </div>
-            <h2
-              id={titleId}
-              className="mt-2 text-[20px] font-medium leading-tight tracking-[-0.35px] text-foreground"
-            >
-              {t(step.titleKey)}
-            </h2>
+          <div className="text-[10px] font-medium uppercase tracking-[1.5px] text-[color:var(--iris-accent)]">
+            {t("help.tour.progress", {
+              current: renderedStepIndex + 1,
+              total: INTERACTIVE_TOUR_STEPS.length,
+            })}
           </div>
           <button
             type="button"
@@ -354,12 +348,35 @@ function InteractiveTourOverlay({
           </button>
         </div>
 
-        <p
-          id={bodyId}
-          className="mt-3 text-[13px] leading-relaxed text-[color:var(--iris-ink-soft)]"
-        >
-          {t(step.bodyKey)}
-        </p>
+        {/* Every step's words sit in the same grid cell, the others invisible
+            but keeping their space, so the card is as tall as its longest step
+            on every step: it is placed once and never grows or shrinks under
+            the pointer, and the buttons below stay where they were. */}
+        <div className="-mt-1.5 grid">
+          {INTERACTIVE_TOUR_STEPS.map((item, i) => {
+            const current = i === renderedStepIndex;
+            return (
+              <div
+                key={item.id}
+                aria-hidden={current ? undefined : true}
+                className={cn("col-start-1 row-start-1", !current && "invisible")}
+              >
+                <h2
+                  id={current ? titleId : undefined}
+                  className="pr-10 text-[20px] font-medium leading-tight tracking-[-0.35px] text-foreground"
+                >
+                  {t(item.titleKey)}
+                </h2>
+                <p
+                  id={current ? bodyId : undefined}
+                  className="mt-3 text-[13px] leading-relaxed text-[color:var(--iris-ink-soft)]"
+                >
+                  {t(item.bodyKey)}
+                </p>
+              </div>
+            );
+          })}
+        </div>
 
         <div className="mt-5 h-0.5 overflow-hidden bg-[color:var(--iris-border-soft)]">
           <div
@@ -378,24 +395,38 @@ function InteractiveTourOverlay({
           >
             {t("help.tour.exit")}
           </button>
+          {/* Fixed slots: Nazad is always laid out (invisible on the first
+              step) and Dalje is as wide as its longest label, so it never moves. */}
           <div className="flex items-center gap-2">
-            {renderedStepIndex > 0 && (
-              <button
-                type="button"
-                onClick={onBack}
-                className="iris-focusable iris-press flex items-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium text-foreground hover:bg-black/[0.03]"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                {t("help.tour.previous")}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onBack}
+              disabled={renderedStepIndex === 0}
+              aria-hidden={renderedStepIndex === 0 ? true : undefined}
+              tabIndex={renderedStepIndex === 0 ? -1 : undefined}
+              className={cn(
+                "iris-focusable iris-press flex items-center justify-center gap-1.5 border border-border bg-card px-3 py-2 text-[12px] font-medium text-foreground hover:bg-black/[0.03]",
+                renderedStepIndex === 0 && "invisible",
+              )}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("help.tour.previous")}
+            </button>
             <button
               type="button"
               onClick={onNext}
-              className="iris-focusable iris-press flex items-center gap-1.5 bg-foreground px-3 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
+              className="iris-focusable iris-press bg-foreground px-3 py-2 text-[12px] font-medium text-background hover:bg-foreground/90"
             >
-              {isLastStep ? t("help.tour.finish") : t("help.tour.next")}
-              {!isLastStep && <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
+              <StackedLabel
+                showSecond={isLastStep}
+                first={
+                  <>
+                    {t("help.tour.next")}
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </>
+                }
+                second={t("help.tour.finish")}
+              />
             </button>
           </div>
         </div>
