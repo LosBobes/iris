@@ -543,6 +543,31 @@ func TestBuildFinanceAdminOnlyAndCompanyScope(t *testing.T) {
 	if scoped.Summary.TotalOrders != 2 {
 		t.Fatalf("companyKey must not filter the summary, got %d", scoped.Summary.TotalOrders)
 	}
+	if len(admin.Finance.CompanyOrders) != 0 {
+		t.Fatalf("company orders without companyKey = %+v", admin.Finance.CompanyOrders)
+	}
+	got := scoped.Finance.CompanyOrders
+	if len(got) != 1 || got[0].ID != "b" || got[0].Revenue != 100 || got[0].Profit != 60 {
+		t.Fatalf("scoped company orders = %+v", got)
+	}
+}
+
+func TestCompanyOrdersSortAndTotals(t *testing.T) {
+	orders := []domain.WorkOrder{
+		withLines(func(o *domain.WorkOrder) { o.ID, o.OrderNumber, o.IssueDate = "a", "RN-2", "2026-05-01" },
+			makeLine(nil),
+			makeLine(func(l *domain.InvoiceLineItem) { l.ID, l.Quantity, l.UnitCost = "li-2", 2, nil })),
+		withLines(func(o *domain.WorkOrder) { o.ID, o.OrderNumber, o.IssueDate = "b", "RN-3", "2026-05-01" }),
+		withLines(func(o *domain.WorkOrder) { o.ID, o.OrderNumber, o.IssueDate = "c", "RN-1", "2026-06-01" }),
+	}
+	got := CompanyOrders(orders, newCollator())
+	ids := []string{got[0].ID, got[1].ID, got[2].ID}
+	if !reflect.DeepEqual(ids, []string{"c", "b", "a"}) {
+		t.Fatalf("order = %v", ids)
+	}
+	if got[2].Revenue != 300 || got[2].Profit != 260 {
+		t.Fatalf("totals = %+v", got[2])
+	}
 }
 
 func TestBuildEmptyYieldsNonNilSlices(t *testing.T) {
@@ -550,7 +575,8 @@ func TestBuildEmptyYieldsNonNilSlices(t *testing.T) {
 	if data.MonthlyBuckets == nil || data.DeliveryDistribution == nil || data.TopClients == nil ||
 		data.ClientAttentionRows == nil || data.InternalAttentionRows == nil ||
 		data.Finance.MonthlyProfit == nil || data.Finance.CompanyProfit == nil ||
-		data.Finance.ItemProfit.Services == nil || data.Finance.ItemProfit.Articles == nil {
+		data.Finance.ItemProfit.Services == nil || data.Finance.ItemProfit.Articles == nil ||
+		data.Finance.CompanyOrders == nil {
 		t.Fatalf("expected empty non-nil slices: %+v", data)
 	}
 	if data.HasOrders {

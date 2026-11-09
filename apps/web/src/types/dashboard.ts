@@ -96,6 +96,20 @@ export interface ItemProfitBreakdown {
   articles: ItemProfit[]
 }
 
+/** One work order behind the selected company's figures. */
+export interface CompanyOrder {
+  id: string
+  orderNumber: string
+  /** 'YYYY-MM-DD' */
+  issueDate: string
+  jobDescription: string
+  status: WorkOrderStatus
+  /** Line-item sale revenue of this order. */
+  revenue: number
+  /** Line-item margin of this order. */
+  profit: number
+}
+
 export interface DashboardFinance {
   profitTotals: ProfitTotals
   /** Line-item sale revenue (unitPrice * quantity). */
@@ -104,6 +118,11 @@ export interface DashboardFinance {
   companyProfit: CompanyProfit[]
   /** Scoped to `companyKey` when one is requested. */
   itemProfit: ItemProfitBreakdown
+  /**
+   * Filtered orders of the `companyKey` company (empty when none is given),
+   * issue date descending, then order number descending.
+   */
+  companyOrders: CompanyOrder[]
 }
 
 export interface DashboardQueueSummary {
@@ -124,7 +143,7 @@ export interface DashboardQuery {
   dateFrom?: string | null
   dateTo?: string | null
   issuedBy?: string | null
-  /** Scopes only the per-item profit breakdown to one company group. */
+  /** Scopes only the per-item breakdown and company orders to one company group. */
   companyKey?: string | null
   /** The viewer's local date (YYYY-MM-DD) for attention signals and queues. */
   today?: string

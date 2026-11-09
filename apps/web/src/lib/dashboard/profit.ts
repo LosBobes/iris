@@ -3,6 +3,7 @@ import type {
   WorkOrder,
 } from '@/types/work-order'
 import type {
+  CompanyOrder,
   CompanyProfit,
   ItemProfit,
   ItemProfitBreakdown,
@@ -12,6 +13,7 @@ import type {
 import { normalizeClientGroupName } from '@/lib/dashboard/aggregations'
 
 export type {
+  CompanyOrder,
   CompanyProfit,
   ItemProfit,
   ItemProfitBreakdown,
@@ -209,4 +211,34 @@ export function profitByItem(orders: WorkOrder[]): ItemProfitBreakdown {
     services: all.filter((row) => row.kind !== 'goods').sort(byProfit),
     articles: all.filter((row) => row.kind === 'goods').sort(byProfit),
   }
+}
+
+/**
+ * Lists the orders behind a company's figures with each order's line-item
+ * revenue and profit, newest issue date first, then order number descending.
+ * Mirrors `CompanyOrders` in iris-api/internal/dashboard.
+ */
+export function companyOrders(orders: WorkOrder[]): CompanyOrder[] {
+  return orders
+    .map((order) => {
+      let revenue = 0
+      let profit = 0
+      for (const line of order.invoiceDraft.lineItems) {
+        revenue += lineRevenue(line)
+        profit += lineMargin(line)
+      }
+      return {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        issueDate: order.issueDate,
+        jobDescription: order.jobDescription,
+        status: order.status,
+        revenue,
+        profit,
+      }
+    })
+    .sort((a, b) => {
+      if (a.issueDate !== b.issueDate) return a.issueDate < b.issueDate ? 1 : -1
+      return b.orderNumber.localeCompare(a.orderNumber, 'sr-Latn')
+    })
 }

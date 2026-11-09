@@ -23,6 +23,7 @@ function DashboardPage(): React.JSX.Element {
     monthlyProfit,
     companyProfit,
     itemProfit,
+    companyOrders,
     selectedCompanyKey,
     setSelectedCompanyKey,
     operatorQueue,
@@ -112,6 +113,7 @@ function DashboardPage(): React.JSX.Element {
                 monthlyProfit={monthlyProfit}
                 companyProfit={companyProfit}
                 itemProfit={itemProfit}
+                companyOrders={companyOrders}
                 selectedCompanyKey={selectedCompanyKey}
                 setSelectedCompanyKey={setSelectedCompanyKey}
                 operators={operators}

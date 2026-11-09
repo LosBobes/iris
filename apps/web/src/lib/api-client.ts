@@ -435,6 +435,7 @@ function normalizeDashboardData(data: DashboardData): DashboardData {
             services: readArray(data.finance.itemProfit?.services),
             articles: readArray(data.finance.itemProfit?.articles),
           },
+          companyOrders: readArray(data.finance.companyOrders),
         }
       : null,
   }
