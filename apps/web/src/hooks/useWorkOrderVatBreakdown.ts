@@ -13,7 +13,7 @@ const CATALOG_BATCH_SIZE = 200;
 export interface WorkOrderVat {
   breakdown: VatBreakdown;
   /** PDV rate for a line, by its catalog item (general rate when ad hoc).
-   * Services on an otkup order carry no PDV (0). */
+   * Services on an otkup order and special (ad-hoc) services carry no PDV (0). */
   rateFor: (
     catalogItemId: string | null | undefined,
     kind?: InvoiceLineItemKind,
@@ -24,8 +24,9 @@ export interface WorkOrderVat {
 
 /**
  * Osnovica / PDV / total for a saved work order. Catalog lines are taxed at
- * their catalog item's PDV type (looked up here); ad-hoc lines, and an order
- * with a price but no lines, use the general rate. On otkup only articles
+ * their catalog item's PDV type (looked up here); ad-hoc goods, and an order
+ * with a price but no lines, use the general rate. A special (ad-hoc) service
+ * carries no PDV. On otkup only articles
  * (roba) carry PDV, already included in their price; services carry none.
  * Faktura/predračun prices are net and get PDV added on top.
  */
@@ -77,6 +78,8 @@ export function useWorkOrderVatBreakdown(order: WorkOrder): WorkOrderVat {
       kind?: InvoiceLineItemKind,
     ): number => {
       if (pricesIncludeVat && kind === "service") return 0;
+      // A special (ad-hoc) service is entered without PDV, whatever the document.
+      if (!catalogItemId && kind === "service") return 0;
       return catalogItemId ? (rates.get(catalogItemId) ?? defaultRate) : defaultRate;
     };
     const lines =

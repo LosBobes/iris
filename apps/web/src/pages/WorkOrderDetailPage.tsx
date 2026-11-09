@@ -789,8 +789,12 @@ function DetailBody({ order }: { order: WorkOrder }): React.JSX.Element {
                   "catalogItemId" in line
                     ? vatRateFor(line.catalogItemId, line.kind)
                     : vatRateFor(null);
-                // Services on an otkup order carry no PDV: leave the cell empty.
-                const lineHasNoVat = pricesIncludeVat && lineRate === 0 && line.kind === "service";
+                // Services on an otkup order and special (ad-hoc) services carry
+                // no PDV: leave the cell empty.
+                const lineHasNoVat =
+                  lineRate === 0 &&
+                  line.kind === "service" &&
+                  (pricesIncludeVat || ("catalogItemId" in line && !line.catalogItemId));
                 // Every row reads Iznos (osnovica) + PDV = Ukupno, whether the
                 // entered price was net (faktura) or gross (otkup).
                 const lineVat = splitLineVat(lineTotals.revenue, lineRate, pricesIncludeVat);

@@ -77,6 +77,7 @@ function WorkOrderEditPage(): React.JSX.Element {
         toast.success(t("workOrders.toast.updated", { order: updated.orderNumber }));
         allowNavigation();
         navigate(`/work-orders/${updated.id}`);
+        return true;
       } catch (error) {
         toast.error(formatActionError(t("workOrders.toast.updateError"), error));
       }

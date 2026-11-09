@@ -68,13 +68,21 @@ import {
 } from "@/shared/utils/vat";
 import { useEnumValues } from "@/hooks/useEnumValues";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  syncCatalogPrices,
+  type PriceSyncBaseline,
+} from "@/lib/work-orders/catalog-price-sync";
 import { useOrganization } from "@/hooks/useOrganization";
 import { WorkOrderPdfPreview } from "@/components/WorkOrders/WorkOrderPdfPreview";
 
 interface WorkOrderFormProps {
   initialData?: WorkOrder | null;
   initialValues?: WorkOrderFormValues;
-  onSubmit: (values: WorkOrderFormValues) => Promise<void>;
+  /**
+   * Saves the order. Resolve `true` once it is saved: an admin's edited
+   * catalog-line prices are then written back to the catalog.
+   */
+  onSubmit: (values: WorkOrderFormValues) => Promise<boolean | void>;
   onCancel: () => void;
   /**
    * Called with the current form values on mount and on every subsequent change.
@@ -1104,10 +1112,24 @@ export function WorkOrderForm({
     }
   }, [deliveryMethod, setValue, shippingAddress, shippingPackages, estimatedPostage]);
 
+  // Catalog-line prices as last saved, so an admin's save writes back to the
+  // catalog only the prices actually changed (see syncCatalogPrices).
+  const savedLinePrices = useRef<Map<string, PriceSyncBaseline>>(
+    new Map(
+      (initialData?.invoiceDraft.lineItems ?? []).map((line) => [
+        line.id,
+        {
+          unitPrice: line.unitPrice,
+          billingDocumentType: initialData?.billingDocumentType ?? null,
+        },
+      ]),
+    ),
+  );
+
   const handleFormSubmit = async (values: WorkOrderFormValues): Promise<void> => {
     setSubmitting(true);
     try {
-      await onSubmit({
+      const saved = await onSubmit({
         ...values,
         // Issuer and executor are one consolidated field in the UI: mirror the
         // chosen operator onto issuedBy, falling back to the existing issuedBy
@@ -1128,6 +1150,30 @@ export function WorkOrderForm({
           ),
         },
       });
+      // Only an admin's price edits update the catalog (the API also refuses
+      // price changes from anyone else).
+      if (saved === true && isAdmin) {
+        const lines = values.invoiceDraft?.lineItems ?? [];
+        const baseline = savedLinePrices.current;
+        savedLinePrices.current = new Map(
+          lines.map((line) => [
+            line.id,
+            { unitPrice: line.unitPrice, billingDocumentType: values.billingDocumentType },
+          ]),
+        );
+        try {
+          const updated = await syncCatalogPrices({
+            lines,
+            billingDocumentType: values.billingDocumentType,
+            baseline,
+          });
+          if (updated > 0) {
+            toast.success(t("workOrders.form.catalogPricesUpdated", { count: updated }));
+          }
+        } catch {
+          toast.error(t("workOrders.form.catalogPricesUpdateError"));
+        }
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1734,7 +1780,8 @@ export function WorkOrderForm({
               </div>
 
               <p className="mb-4 text-[11px] text-[color:var(--iris-ink-mute)]">
-                {t("workOrders.form.catalogHint")}
+                {t("workOrders.form.catalogHint")}{" "}
+                {t("workOrders.form.specialServiceVatHint")}
                 {billingDocumentIncludesVat(billingDocumentTypeValue) && (
                   <> {t("workOrders.form.catalogVatHint")}</>
                 )}

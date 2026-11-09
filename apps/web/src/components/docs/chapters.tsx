@@ -438,6 +438,14 @@ function WorkOrdersChapter(): React.JSX.Element {
         <Ui>Posebna usluga</Ui> / <Ui>Posebna roba</Ui> kad nečega nema u katalogu. Svaka
         stavka ima količinu, jedinicu mere i cenu, a cena naloga je njihov zbir.
       </P>
+      <P>
+        <Ui>Posebna usluga</Ui> se unosi i obračunava bez PDV-a: na nju se PDV ne dodaje.
+      </P>
+      <P>
+        Kad administrator na nalogu promeni cenu stavke iz kataloga i sačuva nalog, ta
+        cena odmah postaje nova prodajna cena u katalogu (kod otkupa se za artikle upisuje
+        cena bez PDV-a). Kad cenu promeni operater, katalog ostaje kakav je.
+      </P>
       <Callout kind="tip">
         Ako se nešto radi stalno, neka administrator to doda u katalog. Brže je za sve, a
         zarada po stavci se onda lepo vidi na kontrolnoj tabli.

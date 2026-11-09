@@ -225,6 +225,7 @@ function WorkOrderCreatePage(): React.JSX.Element {
         toast.success(t("workOrders.toast.created", { order: result.orderNumber }));
         allowNavigation();
         navigate(`/work-orders/${result.id}`);
+        return true;
       } catch (error) {
         // Surface what the API rejected (and its request reference) instead of a
         // bare "greška": a save that will not go through has to tell the
