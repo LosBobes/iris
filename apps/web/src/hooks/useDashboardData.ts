@@ -103,6 +103,7 @@ export function useDashboardData() {
     monthlyProfit: finance?.monthlyProfit ?? [],
     companyProfit: finance?.companyProfit ?? [],
     itemProfit: finance?.itemProfit ?? EMPTY_ITEM_PROFIT,
+    companyOrders: finance?.companyOrders ?? [],
     selectedCompanyKey,
     setSelectedCompanyKey,
     queueSummary: data.queueSummary,

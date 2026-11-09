@@ -616,7 +616,7 @@ function DashboardChapter(): React.JSX.Element {
           <><strong>Operativa</strong>: šta je za obradu, šta je nedodeljeno, i rokovi po klijentu od najhitnijeg.</>,
           <><strong>Zarada (marža)</strong>: prihod, trošak i zarada, posebno za usluge i za artikle, i po mesecima.</>,
           <><strong>Zarada po firmi</strong>: koji klijenti nam donose najviše, a ne samo koji najviše naručuju.</>,
-          <><strong>Zarada po stavci</strong>: na kojim uslugama i artiklima stvarno zarađujemo.</>,
+          <><strong>Zarada po stavci</strong>: na kojim uslugama i artiklima stvarno zarađujemo. Kad izaberete firmu, ispod se vide i svi njeni radni nalozi iz perioda, sa prihodom i zaradom po nalogu; klik na nalog ga otvara.</>,
           <><strong>Trendovi</strong>: prihod i broj naloga po mesecu, raspodela statusa, način isporuke, top klijenti.</>,
           <>Ako je uključen Magacin, i <strong>niske zalihe</strong>.</>,
         ]}

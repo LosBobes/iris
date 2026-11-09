@@ -9,6 +9,7 @@ import { DashboardProfitHero } from "@/components/dashboard/DashboardProfitHero"
 import { DashboardSummaryCards } from "@/components/dashboard/DashboardSummaryCards";
 import type { ClientCount, DeliveryCount } from "@/lib/dashboard/aggregations";
 import type {
+  CompanyOrder,
   CompanyProfit,
   ItemProfitBreakdown,
   MonthlyProfit,
@@ -36,6 +37,7 @@ interface DashboardFinanceSectionProps {
   monthlyProfit: MonthlyProfit[];
   companyProfit: CompanyProfit[];
   itemProfit: ItemProfitBreakdown;
+  companyOrders: CompanyOrder[];
   selectedCompanyKey: string | null;
   setSelectedCompanyKey: (key: string | null) => void;
   operators: string[];
@@ -55,6 +57,7 @@ export function DashboardFinanceSection({
   monthlyProfit,
   companyProfit,
   itemProfit,
+  companyOrders,
   selectedCompanyKey,
   setSelectedCompanyKey,
   operators,
@@ -113,10 +116,11 @@ export function DashboardFinanceSection({
           </div>
 
           {/* Per-item drill-down of the usluge/artikli profit components,
-              scoped to the company selected above. */}
+              scoped to the company selected above, plus that company's orders. */}
           <DashboardItemBreakdown
             breakdown={itemProfit}
             companyName={selectedCompanyName}
+            orders={companyOrders}
           />
 
           {/* Secondary trends, collapsed by default to keep the heroes prominent. */}

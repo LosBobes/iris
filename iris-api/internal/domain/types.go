@@ -1214,6 +1214,21 @@ type DashboardFinance struct {
 	MonthlyProfit []DashboardMonthlyProfit     `json:"monthlyProfit"`
 	CompanyProfit []DashboardCompanyProfit     `json:"companyProfit"`
 	ItemProfit    DashboardItemProfitBreakdown `json:"itemProfit"`
+	// CompanyOrders lists the filtered orders of the company selected by
+	// companyKey (empty when none is selected), newest issue date first.
+	CompanyOrders []DashboardCompanyOrder `json:"companyOrders"`
+}
+
+// DashboardCompanyOrder is one work order behind a company's figures, with its
+// own line-item revenue and profit.
+type DashboardCompanyOrder struct {
+	ID             string          `json:"id"`
+	OrderNumber    string          `json:"orderNumber"`
+	IssueDate      string          `json:"issueDate"`
+	JobDescription string          `json:"jobDescription"`
+	Status         WorkOrderStatus `json:"status"`
+	Revenue        float64         `json:"revenue"`
+	Profit         float64         `json:"profit"`
 }
 
 type DashboardSignalCounts struct {

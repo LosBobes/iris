@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { Pager } from "@/components/Pager";
 import { formatRsd } from "@/lib/dashboard/format";
-import type { ItemProfit, ItemProfitBreakdown } from "@/lib/dashboard/profit";
+import type {
+  CompanyOrder,
+  ItemProfit,
+  ItemProfitBreakdown,
+} from "@/lib/dashboard/profit";
+import { getWorkOrderStatusLabel } from "@/shared/utils/work-orders";
 
 interface DashboardItemBreakdownProps {
   breakdown: ItemProfitBreakdown;
   /** Name of the company scoping the breakdown; null = all companies. */
   companyName: string | null;
+  /** The selected company's orders in the period; empty with no company. */
+  orders: CompanyOrder[];
 }
 
 const PAGE_SIZE = 6;
@@ -17,10 +25,13 @@ const PAGE_SIZE = 6;
  * services and articles that make them up — two ranked, side-by-side lists of
  * the most profitable line items per kind. Scoped to a single company's orders
  * when one is selected in the company-profit widget, otherwise across all.
+ * With a company selected it also lists the work orders behind its figures,
+ * each linking to the order.
  */
 export function DashboardItemBreakdown({
   breakdown,
   companyName,
+  orders,
 }: DashboardItemBreakdownProps): React.JSX.Element {
   const { t } = useTranslation();
   const { services, articles } = breakdown;
@@ -55,6 +66,8 @@ export function DashboardItemBreakdown({
           <ItemColumn title={t("dashboard.profit.articles")} items={articles} />
         </div>
       )}
+
+      <CompanyOrderList companyName={companyName} orders={orders} />
     </section>
   );
 }
@@ -135,6 +148,109 @@ function ItemColumn({
             onNext={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
           />
         </div>
+      )}
+    </div>
+  );
+}
+
+const ORDER_PAGE_SIZE = 10;
+
+/** Formats a stored YYYY-MM-DD date as DD.MM.YYYY. */
+function formatIssueDate(iso: string): string {
+  const [year, month, day] = iso.split("-");
+  return year && month && day ? `${day}.${month}.${year}` : iso;
+}
+
+/**
+ * The work orders that make up the selected company's business in the period;
+ * each row opens the order. Without a selected company it only hints how to
+ * get the list.
+ */
+function CompanyOrderList({
+  companyName,
+  orders,
+}: {
+  companyName: string | null;
+  orders: CompanyOrder[];
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const totalPages = Math.max(1, Math.ceil(orders.length / ORDER_PAGE_SIZE));
+  const [page, setPage] = useState(0);
+  useEffect(() => setPage(0), [orders]);
+  const safePage = Math.min(page, totalPages - 1);
+  const pageStart = safePage * ORDER_PAGE_SIZE;
+  const pageRows = orders.slice(pageStart, pageStart + ORDER_PAGE_SIZE);
+
+  return (
+    <div className="border-t border-border px-5 py-5 sm:px-6">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <span className="text-[11px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)]">
+          {t("dashboard.items.ordersTitle")}
+        </span>
+        {companyName && (
+          <span className="tnum text-[12px] text-[color:var(--iris-ink-soft)]">
+            {t("dashboard.charts.ordersCount", { count: orders.length })}
+          </span>
+        )}
+      </div>
+
+      {!companyName ? (
+        <p className="py-4 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
+          {t("dashboard.items.ordersPickCompany")}
+        </p>
+      ) : orders.length === 0 ? (
+        <p className="py-4 text-center text-[12px] text-[color:var(--iris-ink-mute)]">
+          {t("dashboard.items.ordersEmpty")}
+        </p>
+      ) : (
+        <>
+          <div className="hidden grid-cols-[88px_1fr_110px_110px_110px] gap-3 px-2 pb-1.5 text-[10px] uppercase tracking-[1px] text-[color:var(--iris-ink-mute)] md:grid">
+            <span>{t("dashboard.items.ordersDate")}</span>
+            <span>{t("dashboard.items.ordersOrder")}</span>
+            <span>{t("dashboard.items.ordersStatus")}</span>
+            <span className="text-right">{t("dashboard.items.ordersRevenue")}</span>
+            <span className="text-right">{t("dashboard.items.ordersProfit")}</span>
+          </div>
+          <ul className="divide-y divide-[color:var(--iris-border-soft)] border-y border-[color:var(--iris-border-soft)]">
+            {pageRows.map((order) => (
+              <li key={order.id}>
+                <Link
+                  to={`/work-orders/${order.id}`}
+                  className="iris-focusable grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 px-2 py-2 text-[12px] hover:bg-[color:var(--iris-accent)]/5 md:grid-cols-[88px_1fr_110px_110px_110px] md:items-center"
+                >
+                  <span className="tnum order-3 text-[11px] text-[color:var(--iris-ink-mute)] md:order-none md:text-[12px]">
+                    {formatIssueDate(order.issueDate)}
+                    <span className="md:hidden"> · {getWorkOrderStatusLabel(order.status)}</span>
+                  </span>
+                  <span className="order-1 min-w-0 truncate text-foreground md:order-none" title={order.jobDescription}>
+                    <span className="tnum font-medium">{order.orderNumber}</span>
+                    {order.jobDescription ? ` · ${order.jobDescription}` : ""}
+                  </span>
+                  <span className="hidden text-[color:var(--iris-ink-mute)] md:block">
+                    {getWorkOrderStatusLabel(order.status)}
+                  </span>
+                  <span className="tnum order-4 text-right text-[11px] text-[color:var(--iris-ink-mute)] md:order-none md:text-[12px] md:text-[color:var(--iris-ink-soft)]">
+                    <span className="md:hidden">{t("dashboard.items.ordersRevenue")}: </span>
+                    {formatRsd(order.revenue)}
+                  </span>
+                  <span className="tnum order-2 text-right text-foreground md:order-none">
+                    {formatRsd(order.profit)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {totalPages > 1 && (
+            <Pager
+              page={safePage}
+              totalPages={totalPages}
+              total={orders.length}
+              pageSize={ORDER_PAGE_SIZE}
+              onPrev={() => setPage((p) => Math.max(0, p - 1))}
+              onNext={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            />
+          )}
+        </>
       )}
     </div>
   );

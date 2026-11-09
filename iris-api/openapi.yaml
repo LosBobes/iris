@@ -762,8 +762,9 @@ paths:
         - name: companyKey
           in: query
           description: >-
-            Scopes only `finance.itemProfit` to orders whose company group key
-            (customerId, else the normalized client name) equals this value.
+            Scopes only `finance.itemProfit` and `finance.companyOrders` to
+            orders whose company group key (customerId, else the normalized
+            client name) equals this value.
           schema:
             type: string
         - name: today
@@ -5737,7 +5738,7 @@ components:
           type: integer
     DashboardFinance:
       type: object
-      required: [profitTotals, revenue, monthlyProfit, companyProfit, itemProfit]
+      required: [profitTotals, revenue, monthlyProfit, companyProfit, itemProfit, companyOrders]
       properties:
         profitTotals:
           $ref: '#/components/schemas/DashboardProfitTotals'
@@ -5756,6 +5757,32 @@ components:
             $ref: '#/components/schemas/DashboardCompanyProfit'
         itemProfit:
           $ref: '#/components/schemas/DashboardItemProfitBreakdown'
+        companyOrders:
+          type: array
+          description: >-
+            Filtered orders of the company selected by `companyKey` (empty when
+            none is given), issue date descending, then order number descending.
+          items:
+            $ref: '#/components/schemas/DashboardCompanyOrder'
+    DashboardCompanyOrder:
+      type: object
+      required: [id, orderNumber, issueDate, jobDescription, status, revenue, profit]
+      properties:
+        id: {type: string}
+        orderNumber: {type: string}
+        issueDate: {type: string, format: date}
+        jobDescription: {type: string}
+        status:
+          type: string
+          enum: [new, assigned, inProgress, completed, cancelled, invoiced]
+        revenue:
+          type: number
+          format: double
+          description: Line-item sale revenue of this order.
+        profit:
+          type: number
+          format: double
+          description: Line-item margin of this order.
     DashboardProfitTotals:
       type: object
       required: [service, article, total]

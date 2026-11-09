@@ -118,6 +118,22 @@ describe('buildDashboardData', () => {
     expect(data.finance?.itemProfit.articles).toHaveLength(0)
   })
 
+  it('lists the requested company orders only when a company is given', () => {
+    expect(buildDashboardData(orders, { today }, admin).finance?.companyOrders).toEqual([])
+    const data = buildDashboardData(orders, { today, companyKey: 'c1' }, admin)
+    expect(data.finance?.companyOrders).toEqual([
+      {
+        id: 'a',
+        orderNumber: 'RN-1',
+        issueDate: '2026-05-01',
+        jobDescription: expect.any(String),
+        status: expect.any(String),
+        revenue: 200,
+        profit: 150,
+      },
+    ])
+  })
+
   it('filters charts but computes attention over every order', () => {
     const data = buildDashboardData(orders, { today, dateFrom: '2026-06-01' }, admin)
     expect(data.hasOrders).toBe(true)

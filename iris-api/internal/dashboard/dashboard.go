@@ -25,7 +25,8 @@ type Filters struct {
 	DateFrom string
 	DateTo   string
 	IssuedBy string
-	// CompanyKey scopes only the per-item profit breakdown.
+	// CompanyKey scopes only the per-item profit breakdown and the company
+	// order list.
 	CompanyKey string
 }
 
@@ -164,6 +165,10 @@ func Build(orders []domain.WorkOrder, opts Options) domain.DashboardData {
 			MonthlyProfit: MonthlyProfit(filtered),
 			CompanyProfit: ProfitByCompany(filtered, col),
 			ItemProfit:    ProfitByItem(scoped, col),
+			CompanyOrders: make([]domain.DashboardCompanyOrder, 0),
+		}
+		if opts.Filters.CompanyKey != "" {
+			data.Finance.CompanyOrders = CompanyOrders(scoped, col)
 		}
 	}
 	return data
@@ -702,4 +707,34 @@ func ProfitByItem(orders []domain.WorkOrder, col *collate.Collator) domain.Dashb
 	sort.SliceStable(services, less(services))
 	sort.SliceStable(articles, less(articles))
 	return domain.DashboardItemProfitBreakdown{Services: services, Articles: articles}
+}
+
+// CompanyOrders projects the orders behind a company's figures with each
+// order's line-item revenue and profit, newest issue date first, then order
+// number descending (collated).
+func CompanyOrders(orders []domain.WorkOrder, col *collate.Collator) []domain.DashboardCompanyOrder {
+	out := make([]domain.DashboardCompanyOrder, 0, len(orders))
+	for i := range orders {
+		order := &orders[i]
+		row := domain.DashboardCompanyOrder{
+			ID:             order.ID,
+			OrderNumber:    order.OrderNumber,
+			IssueDate:      order.IssueDate,
+			JobDescription: order.JobDescription,
+			Status:         order.Status,
+		}
+		lines := order.InvoiceDraft.LineItems
+		for j := range lines {
+			row.Revenue += LineRevenue(&lines[j])
+			row.Profit += LineMargin(&lines[j])
+		}
+		out = append(out, row)
+	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if out[a].IssueDate != out[b].IssueDate {
+			return out[a].IssueDate > out[b].IssueDate
+		}
+		return col.CompareString(out[a].OrderNumber, out[b].OrderNumber) > 0
+	})
+	return out
 }

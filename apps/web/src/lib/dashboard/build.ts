@@ -12,6 +12,7 @@ import {
   topClients,
 } from '@/lib/dashboard/aggregations'
 import {
+  companyOrders,
   monthlyProfit,
   profitByCompany,
   profitByItem,
@@ -55,6 +56,7 @@ export function buildDashboardData(
       monthlyProfit: monthlyProfit(filtered),
       companyProfit: profitByCompany(filtered),
       itemProfit: profitByItem(scoped),
+      companyOrders: query.companyKey ? companyOrders(scoped) : [],
     }
   }
 
