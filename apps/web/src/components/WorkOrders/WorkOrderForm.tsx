@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   useForm,
@@ -63,6 +63,9 @@ import {
 import {
   addVat,
   billingDocumentIncludesVat,
+  computeVatBreakdown,
+  lineVatRate,
+  splitLineVat,
   repriceForBillingDocument,
   vatRateForTaxGroup,
 } from "@/shared/utils/vat";
@@ -1047,6 +1050,56 @@ export function WorkOrderForm({
     vatRateByCatalogItemId.current.set(catalogItemId, rate);
     return rate;
   };
+  // Catalog PDV rates for the lines on screen, so the live breakdown below the
+  // items re-renders once each rate is known (special lines need no lookup).
+  const [catalogVatRates, setCatalogVatRates] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  const catalogVatKey = [
+    ...new Set(
+      invoiceLineItems
+        .map((line) => line?.catalogItemId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ]
+    .sort()
+    .join(",");
+  useEffect(() => {
+    const missing = catalogVatKey
+      .split(",")
+      .filter((id) => id && !catalogVatRates.has(id));
+    if (missing.length === 0) return;
+    let active = true;
+    void Promise.all(
+      missing.map(async (id) => [id, await resolveVatRate(id)] as const),
+    ).then((entries) => {
+      if (!active) return;
+      setCatalogVatRates((prev) => new Map([...prev, ...entries]));
+    });
+    return () => {
+      active = false;
+    };
+  }, [catalogVatKey, catalogVatRates]);
+  const pricesIncludeVat = billingDocumentIncludesVat(billingDocumentTypeValue);
+  const rateForLine = (line: { catalogItemId?: string | null; kind?: string } | undefined): number =>
+    lineVatRate(
+      line?.catalogItemId ? catalogVatRates.get(line.catalogItemId) : null,
+      line?.kind,
+      billingDocumentTypeValue,
+    );
+  // Osnovica / PDV / total, recomputed on every quantity, price, kind or
+  // document-type change so the order shows its PDV while it is being priced.
+  const formVatBreakdown = computeVatBreakdown(
+    invoiceLineItems.map((line) => ({
+      quantity: Number(line?.quantity) || 0,
+      unitPrice: Number(line?.unitPrice) || 0,
+      rate: rateForLine(line),
+    })),
+    pricesIncludeVat,
+  );
+  const formatMoney = (value: number): string =>
+    value.toLocaleString("sr-RS", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const repriceCatalogLines = async (
     from: BillingDocumentType | null,
     to: BillingDocumentType | null,
@@ -1780,8 +1833,7 @@ export function WorkOrderForm({
               </div>
 
               <p className="mb-4 text-[11px] text-[color:var(--iris-ink-mute)]">
-                {t("workOrders.form.catalogHint")}{" "}
-                {t("workOrders.form.specialServiceVatHint")}
+                {t("workOrders.form.catalogHint")}
                 {billingDocumentIncludesVat(billingDocumentTypeValue) && (
                   <> {t("workOrders.form.catalogVatHint")}</>
                 )}
@@ -2170,12 +2222,52 @@ export function WorkOrderForm({
                               <div className="tnum mt-0.5 text-[13px] font-medium text-foreground">
                                 {lineTotal.toLocaleString("sr-RS")}
                               </div>
+                              {(() => {
+                                const rate = rateForLine(invoiceLineItems[index]);
+                                const vat = splitLineVat(lineTotal, rate, pricesIncludeVat);
+                                return (
+                                  <div
+                                    className="tnum mt-0.5 text-[10px] text-[color:var(--iris-ink-mute)]"
+                                    data-testid={`line-vat-${index}`}
+                                  >
+                                    {rate === 0
+                                      ? t("workOrders.form.lineNoVat")
+                                      : t("workOrders.form.lineVat", {
+                                          rate: Math.round(rate * 100),
+                                          amount: formatMoney(vat.vat),
+                                        })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </div>
                       </div>
                     );
                   })}
+                  <dl
+                    className="tnum ml-auto grid w-full max-w-xs grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-border pt-3 text-[12px]"
+                    aria-label={t("workOrders.form.vatSummary")}
+                  >
+                    <dt className="text-[color:var(--iris-ink-mute)]">
+                      {t("workOrders.form.vatBase")}
+                    </dt>
+                    <dd className="text-right">{formatMoney(formVatBreakdown.base)}</dd>
+                    {formVatBreakdown.vatByRate.map(({ rate, amount }) => (
+                      <Fragment key={rate}>
+                        <dt className="text-[color:var(--iris-ink-mute)]">
+                          {t("workOrders.form.vatAmount", { rate: Math.round(rate * 100) })}
+                        </dt>
+                        <dd className="text-right">{formatMoney(amount)}</dd>
+                      </Fragment>
+                    ))}
+                    <dt className="font-medium text-foreground">
+                      {t("workOrders.form.vatTotal")}
+                    </dt>
+                    <dd className="text-right font-medium text-foreground" data-testid="vat-total">
+                      {formatMoney(formVatBreakdown.total)}
+                    </dd>
+                  </dl>
                 </div>
               )}
             </div>

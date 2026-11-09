@@ -439,7 +439,10 @@ function WorkOrdersChapter(): React.JSX.Element {
         stavka ima količinu, jedinicu mere i cenu, a cena naloga je njihov zbir.
       </P>
       <P>
-        <Ui>Posebna usluga</Ui> se unosi i obračunava bez PDV-a: na nju se PDV ne dodaje.
+        Ispod stavki je obračun PDV-a: osnovica, PDV po stopi i ukupno sa PDV-om. Svaka
+        stavka pokazuje i svoj PDV. Sve se preračunava čim promeniš cenu ili količinu.
+        Posebne stavke idu po opštoj stopi (20%), a stavke iz kataloga po svojoj poreskoj
+        grupi.
       </P>
       <P>
         Kad administrator na nalogu promeni cenu stavke iz kataloga i sačuva nalog, ta
