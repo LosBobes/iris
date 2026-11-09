@@ -19,6 +19,7 @@ import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { InteractiveTourProvider } from "@/components/tour/InteractiveTourProvider";
 import { ModuleGate } from "@/components/ModuleGate";
 import { AppShell } from "@/components/layout/AppShell";
+import { WhatsNewHost } from "@/components/whats-new/WhatsNewHost";
 import { AuthContext } from "@/contexts/AuthContext";
 import { OrganizationContext } from "@/contexts/OrganizationContext";
 import {
@@ -113,6 +114,7 @@ function AppShellLayout(): React.JSX.Element {
   return (
     <AppShell>
       <Outlet />
+      <WhatsNewHost />
     </AppShell>
   );
 }
