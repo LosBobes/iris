@@ -2,6 +2,17 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.30.0 — 2026-11-09
+
+### Minor
+
+- Nalog prikazuje obračun PDV-a i preračunava ga pri svakoj promeni cene. Cena koju admin promeni na nalogu odmah se upisuje u katalog, uz pitanje da li da se promeni i na otvorenim nalozima; posebne stavke sa cenom dodaju se u katalog. Nazivi stavki iz kataloga vode na stavku u katalogu.
+- Masovni unos troškova: sve stavke bez troška sa svih naloga u jednoj tabeli, sa popunjavanjem po nazivu ili kao procenat cene i čuvanjem jednim klikom.
+
+### Patch
+
+- Izbor firme na kontrolnoj tabli je poređan po nazivu.
+
 ## 2.29.0 — 2026-11-09
 
 ### Minor
