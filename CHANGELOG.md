@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.30.2 — 2026-11-12
+
+### Patch
+
+- The print preview beside a work order now shows the continuation page of a long item list instead of cutting it off after the first page.
+
 ## 2.30.1 — 2026-11-12
 
 ### Patch
