@@ -2,6 +2,12 @@
 
 All notable changes to Iris. Generated from `.changeset/` files on merge to main; do not edit released entries by hand.
 
+## 2.30.1 — 2026-11-12
+
+### Patch
+
+- Work orders with more items than fit on one sheet now print the rest on a continuation page instead of cutting them off.
+
 ## 2.30.0 — 2026-11-09
 
 ### Minor
