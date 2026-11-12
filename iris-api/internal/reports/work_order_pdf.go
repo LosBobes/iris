@@ -991,6 +991,16 @@ const htmlTemplateStr = `<!DOCTYPE html>
       display: none;
     }
 
+    /* On screen (the in-app preview) there is no page break, so a grey band
+       marks where the first sheet ends and the continuation page starts. */
+    @media screen {
+      .work-order-print-continuation {
+        margin-top: 6mm;
+        border-top: 8mm solid #e4e0d8;
+        padding-top: 8mm;
+      }
+    }
+
     .work-order-print-continuation-title {
       display: flex;
       align-items: baseline;
