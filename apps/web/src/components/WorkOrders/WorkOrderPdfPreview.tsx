@@ -114,6 +114,15 @@ export function WorkOrderPreviewPane({
     };
   }, [orderKey]);
 
+  // The print HTML grows past one A4 page when a long item list continues on a
+  // second page; size the frame to the rendered document so every page shows.
+  const [docHeight, setDocHeight] = useState(PAGE_HEIGHT_PX);
+  const handleFrameLoad = (event: React.SyntheticEvent<HTMLIFrameElement>): void => {
+    const doc = event.currentTarget.contentDocument;
+    const height = doc?.body?.scrollHeight ?? 0;
+    setDocHeight(Math.max(PAGE_HEIGHT_PX, height));
+  };
+
   // Scale the A4 page to the pane width.
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(0.45);
@@ -142,16 +151,17 @@ export function WorkOrderPreviewPane({
       <div
         ref={frameRef}
         className="relative w-full overflow-hidden border border-border bg-[#f7f3eb]"
-        style={{ height: PAGE_HEIGHT_PX * scale }}
+        style={{ height: docHeight * scale }}
       >
         <iframe
           title={t("workOrders.detail.pdfPreviewTitle")}
           srcDoc={html}
+          onLoad={handleFrameLoad}
           aria-label={t("workOrders.detail.pdfPreviewTitle")}
           className="origin-top-left border-0 bg-white"
           style={{
             width: PAGE_WIDTH_PX,
-            height: PAGE_HEIGHT_PX,
+            height: docHeight,
             transform: `scale(${scale})`,
           }}
         />

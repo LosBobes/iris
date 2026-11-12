@@ -1642,7 +1642,7 @@ export const sr = {
     entries: {
       longOrderPrint: {
         title: 'Dugačak nalog više ne beži sa papira',
-        body: 'Kad nalog ima toliko stavki da ne stanu na jedan list, ostatak se odštampa na **drugoj strani**, pod naslovom **Stavke (nastavak)**. Na prvoj piše koliko je stavki prešlo, a **ukupna cena** i kontakt ostaju gde su i bili. Makaze i selotejp možete da vratite u fioku.',
+        body: 'Kad nalog ima toliko stavki da ne stanu na jedan list, ostatak se odštampa na **drugoj strani**, pod naslovom **Stavke (nastavak)**. Na prvoj piše koliko je stavki prešlo, a **ukupna cena** i kontakt ostaju gde su i bili. I **pregled** pored naloga pokazuje obe strane. Makaze i selotejp možete da vratite u fioku.',
       },
       livePdv: {
         title: 'PDV se računa sam, uživo',
