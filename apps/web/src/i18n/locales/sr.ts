@@ -1640,6 +1640,10 @@ export const sr = {
     done: 'Gotovo',
     close: 'Zatvori',
     entries: {
+      longOrderPrint: {
+        title: 'Dugačak nalog više ne beži sa papira',
+        body: 'Kad nalog ima toliko stavki da ne stanu na jedan list, ostatak se odštampa na **drugoj strani**, pod naslovom **Stavke (nastavak)**. Na prvoj piše koliko je stavki prešlo, a **ukupna cena** i kontakt ostaju gde su i bili. Makaze i selotejp možete da vratite u fioku.',
+      },
       livePdv: {
         title: 'PDV se računa sam, uživo',
         body: 'Na nalogu svaka stavka pokazuje svoj **PDV**, a ispod stavki stoje **osnovica, PDV i ukupno**. Promenite cenu ili količinu i brojevi se odmah preračunaju. Kalkulator može malo da odmori.',

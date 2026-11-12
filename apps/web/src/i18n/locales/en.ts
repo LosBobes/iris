@@ -1641,6 +1641,10 @@ export const en: typeof sr = {
     done: 'Done',
     close: 'Close',
     entries: {
+      longOrderPrint: {
+        title: 'Long orders no longer run off the paper',
+        body: 'When an order has more items than fit on one sheet, the rest print on a **second page** headed **Stavke (nastavak)** (items, continued). The first page says how many moved over, and the **total price** and contact stay right where they were. The scissors and tape can go back in the drawer.',
+      },
       livePdv: {
         title: 'VAT works itself out, live',
         body: 'On a work order every line shows its **VAT**, and under the items you get the **net amount, VAT and total**. Change a price or a quantity and the numbers follow at once. The calculator can take a break.',

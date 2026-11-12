@@ -12,6 +12,7 @@
  */
 
 export type WhatsNewId =
+  | 'longOrderPrint'
   | 'livePdv'
   | 'catalogPrices'
   | 'catalogLinks'
@@ -37,6 +38,7 @@ export interface WhatsNewEntry {
 }
 
 export const WHATS_NEW: readonly WhatsNewEntry[] = [
+  { id: 'longOrderPrint', date: '2026-11-12' },
   { id: 'livePdv', date: '2026-11-09' },
   { id: 'catalogPrices', date: '2026-11-09', for: 'admins' },
   { id: 'catalogLinks', date: '2026-11-09' },
