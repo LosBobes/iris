@@ -967,17 +967,35 @@ const htmlTemplateStr = `<!DOCTYPE html>
       text-align: right;
     }
 
-    /* Stavke that do not fit the one-page sheet even at the smallest font move
-       to this continuation page (filled by the script below); page 1 says how
-       many moved. It flows freely, so a very long list spans further pages with
-       the column headers repeated. */
-    .work-order-print-items-continued {
-      flex: 0 0 auto;
-      margin-top: 1.5mm;
-      font-size: 13px;
-      font-weight: 700;
+    /* When the stavke do not fit the one-page sheet even at the smallest font,
+       the script below moves all of them to a page of their own and the panel
+       on page 1 shows this notice instead (with the item count). */
+    .work-order-print-items-elsewhere {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3mm;
+      margin: 2mm 0 4mm;
+      border: 2px dashed #000;
+      padding: 6mm 4mm;
+      text-align: center;
     }
 
+    .work-order-print-items-elsewhere-title {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .work-order-print-items-elsewhere-count {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    /* The items page flows freely, so a very long list spans further pages
+       with the column headers repeated. */
     .work-order-print-continuation {
       width: 194mm;
       margin: 0 auto;
@@ -992,22 +1010,56 @@ const htmlTemplateStr = `<!DOCTYPE html>
     }
 
     .work-order-print-continuation-title {
+      position: relative;
+      margin: 0;
+      border-bottom: 2px solid #000;
+      padding: 0 0 2mm;
+      text-align: center;
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .work-order-print-continuation-title .work-order-print-number {
+      position: absolute;
+      top: 0;
+      right: 0;
+      border: 1px solid #000;
+      padding: 1mm 2.5mm;
+      font-size: 16px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .work-order-print-continuation-meta {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
       gap: 4mm;
+      border-bottom: 1px solid #000;
+      padding: 3mm 0;
       margin-bottom: 3mm;
-      border-bottom: 2px solid #000;
-      padding-bottom: 2mm;
-      font-size: 20px;
-      font-weight: 800;
     }
 
     .work-order-print-continuation-client {
-      margin-bottom: 4mm;
-      font-size: 14px;
-      font-weight: 700;
+      font-size: 18px;
+      font-weight: 800;
       overflow-wrap: anywhere;
+    }
+
+    .work-order-print-continuation-count {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .work-order-print-continuation-lines {
+      font-size: 14px;
+      line-height: 1.22;
+      overflow-wrap: anywhere;
+    }
+
+    .work-order-print-continuation .work-order-print-items-table .work-order-print-col-num {
+      width: 25mm;
     }
 
     .work-order-print-continuation .work-order-print-items-table tr {
@@ -1157,11 +1209,14 @@ const htmlTemplateStr = `<!DOCTYPE html>
     {{end}}
   </section>
   <section class="work-order-print-continuation" hidden>
-    <div class="work-order-print-continuation-title">
-      <span>RADNI NALOG {{.OrderNumber}}</span>
-      <span>STAVKE (NASTAVAK)</span>
+    <h1 class="work-order-print-continuation-title">
+      STAVKE NALOGA
+      <span class="work-order-print-number">{{.OrderNumber}}</span>
+    </h1>
+    <div class="work-order-print-continuation-meta">
+      <div class="work-order-print-continuation-client">{{.ClientName}}</div>
+      <div class="work-order-print-continuation-count"></div>
     </div>
-    <div class="work-order-print-continuation-client">{{.ClientName}}</div>
     <div class="work-order-print-continuation-lines">
       <table class="work-order-print-items-table">
         <thead>
@@ -1180,41 +1235,36 @@ const htmlTemplateStr = `<!DOCTYPE html>
     // layout. Mirrors fitPanelFont in apps/web WorkOrderPrintSheet.tsx.
     (function () {
       var MIN = 9;
-      // Font for both pages once the stavke are split: no longer squeezed to
-      // the floor, since the rest has a page of its own.
-      var SPLIT_FONT = 11;
-
-      // When the stavke still overflow at the floor, move trailing rows to the
-      // continuation page until the first sheet fits, leaving a note on the
-      // first sheet saying how many moved.
-      function splitItems() {
+      // When the stavke still overflow the one-page sheet at the floor, all of
+      // them move to a page of their own (a list split across two sheets is
+      // hard to follow), and the stavke panel on page 1 says where they went.
+      function stavkeLabel(n) {
+        var lastTwo = n % 100, last = n % 10;
+        if (last === 1 && lastTwo !== 11) return n + ' STAVKA';
+        if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return n + ' STAVKE';
+        return n + ' STAVKI';
+      }
+      function moveItemsToOwnPage() {
         var panel = document.querySelector('.work-order-print-job-items');
         var lines = panel && panel.querySelector('.work-order-print-job-lines');
         var body = lines && lines.querySelector('tbody');
         var cont = document.querySelector('.work-order-print-continuation');
-        var contLines = cont && cont.querySelector('.work-order-print-continuation-lines');
         var contBody = cont && cont.querySelector('tbody');
         if (!panel || !body || !contBody) return;
         if (panel.scrollHeight <= panel.clientHeight) return;
-        lines.style.fontSize = SPLIT_FONT + 'px';
-        contLines.style.fontSize = SPLIT_FONT + 'px';
-        var note = document.createElement('div');
-        note.className = 'work-order-print-items-continued';
-        lines.parentNode.insertBefore(note, lines.nextSibling);
+        var count = body.rows.length;
+        while (body.rows.length) contBody.appendChild(body.rows[0]);
+        var notice = document.createElement('div');
+        notice.className = 'work-order-print-items-elsewhere';
+        notice.innerHTML =
+          '<div class="work-order-print-items-elsewhere-title">STAVKE SU NA SLEDEĆOJ STRANI</div>' +
+          '<div class="work-order-print-items-elsewhere-count"></div>';
+        notice.lastChild.textContent = stavkeLabel(count) + ' · SPISAK NA STRANI 2 →';
+        lines.parentNode.replaceChild(notice, lines);
+        cont.querySelector('.work-order-print-continuation-count').textContent = 'UKUPNO ' + stavkeLabel(count);
         cont.hidden = false;
-        var moved = 0;
-        function label() {
-          note.textContent = 'NASTAVAK NA SLEDEĆOJ STRANI: JOŠ ' + moved + ' ' +
-            (moved % 10 === 1 && moved % 100 !== 11 ? 'STAVKA' :
-              (moved % 10 >= 2 && moved % 10 <= 4 && (moved % 100 < 12 || moved % 100 > 14) ? 'STAVKE' : 'STAVKI')) + ' →';
-        }
-        label();
-        while (body.rows.length > 1 && panel.scrollHeight > panel.clientHeight) {
-          contBody.insertBefore(body.rows[body.rows.length - 1], contBody.firstChild);
-          moved++;
-          label();
-        }
       }
+
       function fit(panelSelector, contentSelector) {
         var panel = document.querySelector(panelSelector);
         var content = panel && panel.querySelector(contentSelector);
@@ -1228,7 +1278,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
       }
       fit('.work-order-print-job-description', '.work-order-print-description-lines');
       fit('.work-order-print-job-items', '.work-order-print-job-lines');
-      splitItems();
+      moveItemsToOwnPage();
       // Shrink any numeric stavke cell whose value is too wide for its fixed
       // column, so large figures scale down instead of overflowing.
       var cells = document.querySelectorAll('.work-order-print-job-lines .work-order-print-col-num');

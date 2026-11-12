@@ -673,7 +673,7 @@ func pdfPageCount(pdf []byte) int {
 }
 
 // TestRenderWorkOrderPDFLongItemListContinues proves stavke that do not fit the
-// one-page sheet move to a continuation page instead of being cut off, while a
+// one-page sheet all move to a page of their own instead of being cut off, while a
 // short order still prints on a single page.
 func TestRenderWorkOrderPDFLongItemListContinues(t *testing.T) {
 	orderWithItems := func(n int) domain.WorkOrder {
@@ -709,6 +709,6 @@ func TestRenderWorkOrderPDFLongItemListContinues(t *testing.T) {
 		t.Fatalf("render long order: %v", err)
 	}
 	if got := pdfPageCount(long); got < 2 {
-		t.Errorf("long order: expected a continuation page, got %d page(s)", got)
+		t.Errorf("long order: expected the items on a page of their own, got %d page(s)", got)
 	}
 }
