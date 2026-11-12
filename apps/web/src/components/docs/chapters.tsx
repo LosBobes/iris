@@ -215,6 +215,8 @@ function JobJourneyChapter(): React.JSX.Element {
         (kod nas u Irisu, a može i da se odštampa) na kome piše sve što izvršilac treba da
         zna: za koga je, šta se tačno radi, od kog materijala, u kojoj meri, sa kojom
         doradom, ko radi i do kada. Ako nešto nije na nalogu, za proizvodnju to ne postoji.
+        Odštampan nalog staje na jedan list A4; ako ima toliko stavki da ne stanu, ostatak
+        ide na drugu stranu (<strong>Stavke (nastavak)</strong>), a na prvoj piše koliko ih je prešlo.
       </P>
       <H3>4. Priprema</H3>
       <P>

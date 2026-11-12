@@ -3,9 +3,11 @@ package reports
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -662,5 +664,51 @@ func TestRenderWorkOrderHTMLBlankParcelsForSentOrder(t *testing.T) {
 	}
 	if strings.Contains(box, "6. ______ KG") {
 		t.Fatalf("expected %d blank package lines", printBlankPackageLines)
+	}
+}
+
+// pdfPageCount counts the page objects in a rendered PDF.
+func pdfPageCount(pdf []byte) int {
+	return len(regexp.MustCompile(`/Type\s*/Page[^s]`).FindAll(pdf, -1))
+}
+
+// TestRenderWorkOrderPDFLongItemListContinues proves stavke that do not fit the
+// one-page sheet move to a continuation page instead of being cut off, while a
+// short order still prints on a single page.
+func TestRenderWorkOrderPDFLongItemListContinues(t *testing.T) {
+	orderWithItems := func(n int) domain.WorkOrder {
+		items := make([]domain.InvoiceLineItem, 0, n)
+		for i := 0; i < n; i++ {
+			items = append(items, domain.InvoiceLineItem{
+				Description: fmt.Sprintf("Vizit karte 350g mat plastifikacija obostrano %d", i+1),
+				Quantity:    float64(100 * (i + 1)),
+				Unit:        "kom",
+				UnitPrice:   12.5,
+			})
+		}
+		return domain.WorkOrder{
+			OrderNumber:    "RN-2026-00099",
+			ClientName:     "Grafika Test",
+			JobDescription: "Etikete",
+			InvoiceDraft:   domain.InvoiceDraft{LineItems: items},
+		}
+	}
+	settings := printSettings(domain.DefaultPDFSections(), "", domain.DefaultBillingDefaults())
+	ctx := context.Background()
+
+	short, err := RenderWorkOrderPDF(ctx, orderWithItems(3), PrintContext{}, settings)
+	if err != nil {
+		t.Skipf("no headless browser: %v", err)
+	}
+	if got := pdfPageCount(short); got != 1 {
+		t.Errorf("short order: expected 1 page, got %d", got)
+	}
+
+	long, err := RenderWorkOrderPDF(ctx, orderWithItems(25), PrintContext{}, settings)
+	if err != nil {
+		t.Fatalf("render long order: %v", err)
+	}
+	if got := pdfPageCount(long); got < 2 {
+		t.Errorf("long order: expected a continuation page, got %d page(s)", got)
 	}
 }

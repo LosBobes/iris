@@ -117,6 +117,27 @@ const updateBanner = (
   </>
 );
 
+/** Long order print: rows fill the first sheet, the rest drop onto a second one. */
+const longOrderPrint = (
+  <>
+    <rect className="hs-card" x="28" y="6" width="72" height="86" rx="2" />
+    <rect className="hs-ink" x="44" y="12" width="40" height="5" />
+    {[0, 1, 2, 3, 4].map((row) => (
+      <rect key={row} className={`hs-mute ${fx("grow-x", 5 + row * 5)}`} x="36" y={26 + row * 8} width="56" height="3" />
+    ))}
+    <rect className={`hs-acc ${fx("fade", 30)}`} x="36" y="68" width="40" height="3" />
+    <rect className="hs-ink" x="36" y="78" width="48" height="5" />
+    <path className={`hs-acc-line ${fx("draw", 35)}`} pathLength={1} d="M100 70 C118 70 122 40 140 40" />
+    <g className={fx("drop", 40)}>
+      <rect className="hs-card" x="140" y="6" width="72" height="86" rx="2" />
+      <rect className="hs-ink" x="148" y="12" width="56" height="4" />
+    </g>
+    {[0, 1, 2, 3, 4, 5].map((row) => (
+      <rect key={row} className={`hs-mute ${fx("grow-x", 45 + row * 5)}`} x="148" y={26 + row * 8} width="56" height="3" />
+    ))}
+  </>
+);
+
 /** Live PDV: a price is retyped and the PDV and total under the lines follow. */
 const livePdv = (
   <>
@@ -224,6 +245,7 @@ const companySort = (
 );
 
 const SCENES: Record<WhatsNewId, React.JSX.Element> = {
+  longOrderPrint,
   livePdv,
   catalogPrices,
   catalogLinks,

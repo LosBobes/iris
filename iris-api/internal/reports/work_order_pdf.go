@@ -731,9 +731,11 @@ const htmlTemplateStr = `<!DOCTYPE html>
       table-layout: fixed;
     }
 
+    /* Row padding is relative to the font so it shrinks with the auto-fit
+       script; a fixed padding kept long lists overflowing even at the floor. */
     .work-order-print-items-table th,
     .work-order-print-items-table td {
-      padding: 1.8mm 0;
+      padding: 0.28em 0;
       vertical-align: baseline;
     }
 
@@ -965,6 +967,54 @@ const htmlTemplateStr = `<!DOCTYPE html>
       text-align: right;
     }
 
+    /* Stavke that do not fit the one-page sheet even at the smallest font move
+       to this continuation page (filled by the script below); page 1 says how
+       many moved. It flows freely, so a very long list spans further pages with
+       the column headers repeated. */
+    .work-order-print-items-continued {
+      flex: 0 0 auto;
+      margin-top: 1.5mm;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .work-order-print-continuation {
+      width: 194mm;
+      margin: 0 auto;
+      break-before: page;
+      page-break-before: always;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.12;
+    }
+
+    .work-order-print-continuation[hidden] {
+      display: none;
+    }
+
+    .work-order-print-continuation-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 4mm;
+      margin-bottom: 3mm;
+      border-bottom: 2px solid #000;
+      padding-bottom: 2mm;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .work-order-print-continuation-client {
+      margin-bottom: 4mm;
+      font-size: 14px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .work-order-print-continuation .work-order-print-items-table tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
     .work-order-print-signature-value {
       min-height: 10mm;
       border-bottom: 1px solid #000;
@@ -1106,12 +1156,65 @@ const htmlTemplateStr = `<!DOCTYPE html>
     </div>
     {{end}}
   </section>
+  <section class="work-order-print-continuation" hidden>
+    <div class="work-order-print-continuation-title">
+      <span>RADNI NALOG {{.OrderNumber}}</span>
+      <span>STAVKE (NASTAVAK)</span>
+    </div>
+    <div class="work-order-print-continuation-client">{{.ClientName}}</div>
+    <div class="work-order-print-continuation-lines">
+      <table class="work-order-print-items-table">
+        <thead>
+          <tr>
+            <th class="work-order-print-col-name">NAZIV</th>
+            {{range .ItemHeaders}}<th class="work-order-print-col-num">{{.}}</th>{{end}}
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
   <script>
     // Shrink the opis posla and stavke text until it fits its fixed-height panel.
     // Runs synchronously before the load event so chromedp captures the fitted
     // layout. Mirrors fitPanelFont in apps/web WorkOrderPrintSheet.tsx.
     (function () {
       var MIN = 9;
+      // Font for both pages once the stavke are split: no longer squeezed to
+      // the floor, since the rest has a page of its own.
+      var SPLIT_FONT = 11;
+
+      // When the stavke still overflow at the floor, move trailing rows to the
+      // continuation page until the first sheet fits, leaving a note on the
+      // first sheet saying how many moved.
+      function splitItems() {
+        var panel = document.querySelector('.work-order-print-job-items');
+        var lines = panel && panel.querySelector('.work-order-print-job-lines');
+        var body = lines && lines.querySelector('tbody');
+        var cont = document.querySelector('.work-order-print-continuation');
+        var contLines = cont && cont.querySelector('.work-order-print-continuation-lines');
+        var contBody = cont && cont.querySelector('tbody');
+        if (!panel || !body || !contBody) return;
+        if (panel.scrollHeight <= panel.clientHeight) return;
+        lines.style.fontSize = SPLIT_FONT + 'px';
+        contLines.style.fontSize = SPLIT_FONT + 'px';
+        var note = document.createElement('div');
+        note.className = 'work-order-print-items-continued';
+        lines.parentNode.insertBefore(note, lines.nextSibling);
+        cont.hidden = false;
+        var moved = 0;
+        function label() {
+          note.textContent = 'NASTAVAK NA SLEDEĆOJ STRANI: JOŠ ' + moved + ' ' +
+            (moved % 10 === 1 && moved % 100 !== 11 ? 'STAVKA' :
+              (moved % 10 >= 2 && moved % 10 <= 4 && (moved % 100 < 12 || moved % 100 > 14) ? 'STAVKE' : 'STAVKI')) + ' →';
+        }
+        label();
+        while (body.rows.length > 1 && panel.scrollHeight > panel.clientHeight) {
+          contBody.insertBefore(body.rows[body.rows.length - 1], contBody.firstChild);
+          moved++;
+          label();
+        }
+      }
       function fit(panelSelector, contentSelector) {
         var panel = document.querySelector(panelSelector);
         var content = panel && panel.querySelector(contentSelector);
@@ -1125,6 +1228,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
       }
       fit('.work-order-print-job-description', '.work-order-print-description-lines');
       fit('.work-order-print-job-items', '.work-order-print-job-lines');
+      splitItems();
       // Shrink any numeric stavke cell whose value is too wide for its fixed
       // column, so large figures scale down instead of overflowing.
       var cells = document.querySelectorAll('.work-order-print-job-lines .work-order-print-col-num');

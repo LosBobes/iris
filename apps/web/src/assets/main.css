@@ -793,9 +793,10 @@
     table-layout: fixed;
   }
 
+  /* Row padding is relative to the font so it shrinks with the auto-fit. */
   .work-order-print-items-table th,
   .work-order-print-items-table td {
-    padding: 1.8mm 0;
+    padding: 0.28em 0;
     vertical-align: baseline;
   }
 
