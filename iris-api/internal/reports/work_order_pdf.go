@@ -969,29 +969,15 @@ const htmlTemplateStr = `<!DOCTYPE html>
 
     /* When the stavke do not fit the one-page sheet even at the smallest font,
        the script below moves all of them to a page of their own and the panel
-       on page 1 shows this notice instead (with the item count). */
+       on page 1 shows this one-line notice instead (with the item count). */
     .work-order-print-items-elsewhere {
-      display: flex;
-      flex: 1 1 auto;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 3mm;
-      margin: 2mm 0 4mm;
-      border: 2px dashed #000;
-      padding: 6mm 4mm;
-      text-align: center;
-    }
-
-    .work-order-print-items-elsewhere-title {
-      font-size: 26px;
-      font-weight: 800;
-      line-height: 1.1;
-    }
-
-    .work-order-print-items-elsewhere-count {
-      font-size: 15px;
-      font-weight: 500;
+      align-self: flex-start;
+      flex: 0 0 auto;
+      border: 1px solid #000;
+      padding: 1mm 2.5mm;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
     }
 
     /* The items page flows freely, so a very long list spans further pages
@@ -1256,10 +1242,7 @@ const htmlTemplateStr = `<!DOCTYPE html>
         while (body.rows.length) contBody.appendChild(body.rows[0]);
         var notice = document.createElement('div');
         notice.className = 'work-order-print-items-elsewhere';
-        notice.innerHTML =
-          '<div class="work-order-print-items-elsewhere-title">STAVKE SU NA SLEDEĆOJ STRANI</div>' +
-          '<div class="work-order-print-items-elsewhere-count"></div>';
-        notice.lastChild.textContent = stavkeLabel(count) + ' · SPISAK NA STRANI 2 →';
+        notice.textContent = stavkeLabel(count) + ' · NA SLEDEĆOJ STRANI →';
         lines.parentNode.replaceChild(notice, lines);
         cont.querySelector('.work-order-print-continuation-count').textContent = 'UKUPNO ' + stavkeLabel(count);
         cont.hidden = false;
